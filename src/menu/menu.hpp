@@ -32,3 +32,13 @@ void render_menu(int width, int height);
 // Step logic for menu interaction
 void step_menu_logic(int width, int height);
 
+// Input profiles helpers used outside menu module
+bool ensure_active_binds_profile_writeable();
+void autosave_active_binds_profile();
+bool binds_profile_is_read_only(const std::string& name);
+void refresh_binds_profiles();
+bool menu_is_text_input_active();
+void menu_text_input_append(char c);
+void menu_text_input_backspace();
+void menu_text_input_submit();
+void menu_text_input_cancel();

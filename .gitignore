@@ -47,3 +47,5 @@ CMakeFiles/
 Testing/
 CTestTestfile.cmake
 compile_commands.json
+
+config/*

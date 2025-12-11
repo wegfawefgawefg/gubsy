@@ -12,10 +12,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
-#include <random>
 
 namespace {
 constexpr float SAFE_M = 0.05f; // safe margin on all sides
+constexpr int kMaxBindsProfiles = 50;
+constexpr float kTextInputErrorDuration = 1.5f;
 
 // Pages
 enum Page { MAIN=0, SETTINGS=1, AUDIO=2, VIDEO=3, CONTROLS=4, BINDS=5, OTHER=6, VIDEO2=7, BINDS_LOAD=8, PLAYERS=9 };
@@ -189,7 +190,23 @@ static inline NavNode nav_binds_list_for_id(int id) {
     if (id >= 720 && id <= 724) {
         int up = (id == 720) ? -1 : id - 1;
         int down = (id == 724) ? 799 : id + 1;
-        return NavNode{up, down, id, id};
+        int right = 730 + (id - 720);
+        return NavNode{up, down, id, right};
+    }
+    if (id >= 730 && id <= 734) {
+        int row = id - 730;
+        int up = (id == 730) ? -1 : id - 1;
+        int down = (id == 734) ? 799 : id + 1;
+        int left = 720 + row;
+        int right = 740 + row;
+        return NavNode{up, down, left, right};
+    }
+    if (id >= 740 && id <= 744) {
+        int row = id - 740;
+        int up = (id == 740) ? -1 : id - 1;
+        int down = (id == 744) ? 799 : id + 1;
+        int left = 730 + row;
+        return NavNode{up, down, left, id};
     }
     switch (id) {
         case 799: return NavNode{724, -1, 799, 799};
@@ -211,6 +228,228 @@ inline void ensure_focus_default(const std::vector<ButtonDesc>& btns) {
 }
 
 } // namespace
+
+bool binds_profile_is_read_only(const std::string& name) {
+    return name.empty() || name == default_input_profile_name();
+}
+
+void refresh_binds_profiles() {
+    if (!ss) return;
+    ss->menu.binds_profiles = list_input_profiles();
+}
+
+bool ensure_active_binds_profile_writeable() {
+    if (!ss) return false;
+    if (!binds_profile_is_read_only(ss->menu.binds_current_preset))
+        return true;
+    refresh_binds_profiles();
+    if ((int)ss->menu.binds_profiles.size() >= kMaxBindsProfiles) {
+        ss->menu.binds_toast = "Preset limit reached (50)";
+        ss->menu.binds_toast_timer = 1.5f;
+        if (aa) play_sound("base:ui_cant");
+        return false;
+    }
+    std::string base = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset + " Copy";
+    base = sanitize_profile_name(base);
+    if (base.empty()) base = "Custom";
+    std::string unique = make_unique_profile_name(base);
+    if (unique.empty())
+        unique = "Preset";
+    if (!save_input_profile(unique, ss->input_binds, false)) {
+        ss->menu.binds_toast = "Failed to create preset";
+        ss->menu.binds_toast_timer = 1.5f;
+        if (aa) play_sound("base:ui_cant");
+        return false;
+    }
+    refresh_binds_profiles();
+    ss->menu.binds_current_preset = unique;
+    ss->menu.binds_snapshot = ss->input_binds;
+    ss->menu.binds_dirty = false;
+    save_active_input_profile_name(unique);
+    ss->menu.binds_toast = std::string("Created preset: ") + unique;
+    ss->menu.binds_toast_timer = 1.2f;
+    return true;
+}
+
+void autosave_active_binds_profile() {
+    if (!ss) return;
+    if (ss->menu.binds_current_preset.empty())
+        ss->menu.binds_current_preset = default_input_profile_name();
+    ensure_input_profiles_dir();
+    save_input_profile(ss->menu.binds_current_preset, ss->input_binds, true);
+    save_active_input_profile_name(ss->menu.binds_current_preset);
+}
+
+static bool profile_name_exists(const std::string& name) {
+    if (!ss) return false;
+    for (auto const& info : ss->menu.binds_profiles) {
+        if (info.name == name)
+            return true;
+    }
+    return false;
+}
+
+static bool set_active_binds_profile(const std::string& name) {
+    if (!ss) return false;
+    InputBindings tmp{};
+    if (!load_input_profile(name, &tmp))
+        return false;
+    ss->input_binds = tmp;
+    ss->menu.binds_current_preset = name;
+    ss->menu.binds_snapshot = tmp;
+    ss->menu.binds_dirty = false;
+    save_active_input_profile_name(name);
+    refresh_binds_profiles();
+    return true;
+}
+
+static void delete_binds_profile(const std::string& name) {
+    if (binds_profile_is_read_only(name))
+        return;
+    delete_input_profile(name);
+    refresh_binds_profiles();
+    if (ss && ss->menu.binds_current_preset == name) {
+        set_active_binds_profile(default_input_profile_name());
+    }
+}
+
+static void apply_default_bindings_to_active() {
+    if (!ss) return;
+    InputBindings defaults{};
+    if (!load_input_profile(default_input_profile_name(), &defaults))
+        defaults = InputBindings{};
+    if (!ensure_active_binds_profile_writeable())
+        return;
+    ss->input_binds = defaults;
+    autosave_active_binds_profile();
+    ss->menu.binds_dirty = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
+    ss->menu.binds_toast = "Applied default controls";
+    ss->menu.binds_toast_timer = 1.2f;
+}
+
+static void undo_active_bind_changes() {
+    if (!ss) return;
+    if (!ensure_active_binds_profile_writeable())
+        return;
+    ss->input_binds = ss->menu.binds_snapshot;
+    autosave_active_binds_profile();
+    ss->menu.binds_dirty = false;
+    ss->menu.binds_toast = "Reverted changes";
+    ss->menu.binds_toast_timer = 1.0f;
+}
+
+static constexpr int BINDS_TEXT_INPUT_NONE = 0;
+static constexpr int BINDS_TEXT_INPUT_NEW = 1;
+static constexpr int BINDS_TEXT_INPUT_RENAME = 2;
+static constexpr int kPresetNameMaxLen = 16;
+
+static void show_text_input_error(const std::string& msg) {
+    if (!ss) return;
+    ss->menu.binds_text_input_error = msg;
+    ss->menu.binds_text_input_error_timer = kTextInputErrorDuration;
+}
+
+static void open_binds_text_input(int mode, const std::string& initial, const std::string& target) {
+    if (!ss) return;
+    ss->menu.binds_text_input_active = true;
+    ss->menu.binds_text_input_mode = mode;
+    ss->menu.binds_text_input_limit = kPresetNameMaxLen;
+    ss->menu.binds_text_input_buffer = initial;
+    if ((int)ss->menu.binds_text_input_buffer.size() > ss->menu.binds_text_input_limit)
+        ss->menu.binds_text_input_buffer.resize(static_cast<size_t>(ss->menu.binds_text_input_limit));
+    ss->menu.binds_text_input_target = target;
+    ss->menu.binds_text_input_error.clear();
+    ss->menu.binds_text_input_error_timer = 0.0f;
+}
+
+bool menu_is_text_input_active() {
+    return ss && ss->menu.binds_text_input_active;
+}
+
+void menu_text_input_append(char c) {
+    if (!menu_is_text_input_active()) return;
+    if ((int)ss->menu.binds_text_input_buffer.size() >= ss->menu.binds_text_input_limit)
+        return;
+    ss->menu.binds_text_input_buffer.push_back(c);
+}
+
+void menu_text_input_backspace() {
+    if (!menu_is_text_input_active()) return;
+    if (!ss->menu.binds_text_input_buffer.empty())
+        ss->menu.binds_text_input_buffer.pop_back();
+}
+
+void menu_text_input_cancel() {
+    if (!menu_is_text_input_active()) return;
+    ss->menu.binds_text_input_active = false;
+    ss->menu.binds_text_input_mode = BINDS_TEXT_INPUT_NONE;
+    ss->menu.binds_text_input_buffer.clear();
+    ss->menu.binds_text_input_target.clear();
+    ss->menu.binds_text_input_error.clear();
+    ss->menu.binds_text_input_error_timer = 0.0f;
+}
+
+void menu_text_input_submit() {
+    if (!menu_is_text_input_active()) return;
+    refresh_binds_profiles();
+    std::string raw = sanitize_profile_name(ss->menu.binds_text_input_buffer);
+    if (raw.empty())
+        raw = "Preset";
+    bool completed = false;
+    if (ss->menu.binds_text_input_mode == BINDS_TEXT_INPUT_NEW) {
+        if ((int)ss->menu.binds_profiles.size() >= kMaxBindsProfiles) {
+            show_text_input_error("Preset limit reached (50)");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        }
+        if (profile_name_exists(raw)) {
+            show_text_input_error("Preset already exists");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        }
+        if (!save_input_profile(raw, ss->input_binds, false)) {
+            show_text_input_error("Failed to save preset");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        }
+        refresh_binds_profiles();
+        ss->menu.binds_current_preset = raw;
+        ss->menu.binds_snapshot = ss->input_binds;
+        ss->menu.binds_dirty = false;
+        save_active_input_profile_name(raw);
+        ss->menu.binds_toast = std::string("Saved preset: ") + raw;
+        ss->menu.binds_toast_timer = 1.2f;
+        completed = true;
+    } else if (ss->menu.binds_text_input_mode == BINDS_TEXT_INPUT_RENAME) {
+        std::string target = ss->menu.binds_text_input_target;
+        if (target.empty() || binds_profile_is_read_only(target)) {
+            completed = true;
+        } else if (raw == target) {
+            completed = true;
+        } else if (profile_name_exists(raw)) {
+            show_text_input_error("Preset already exists");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        } else if (!rename_input_profile(target, raw)) {
+            show_text_input_error("Rename failed");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        } else {
+            if (ss->menu.binds_current_preset == target) {
+                ss->menu.binds_current_preset = raw;
+                save_active_input_profile_name(raw);
+            }
+            ss->menu.binds_toast = std::string("Renamed to: ") + raw;
+            ss->menu.binds_toast_timer = 1.2f;
+            completed = true;
+        }
+        refresh_binds_profiles();
+    }
+    if (completed) {
+        ss->menu.suppress_confirm_until_release = true;
+        menu_text_input_cancel();
+    }
+}
 
 std::vector<RectNdc> layout_vlist(RectNdc top_left, float item_w, float item_h, float vgap, int count) {
     std::vector<RectNdc> out;
@@ -285,31 +524,42 @@ std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
         buttons.push_back(ButtonDesc{599, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
     } else if (ss->menu.page == BINDS) {
         auto rows = layout_vlist(RectNdc{0.10f, 0.16f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 5);
-        buttons.push_back(ButtonDesc{700, rows[0], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{701, rows[1], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{702, rows[2], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{703, rows[3], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{704, rows[4], "", ButtonKind::Button, 0.0f, true});
-        // Footer buttons: Back, Reset, Load, New Preset, Undo
-        // Enable/disable Undo based on modification
-        auto eq_binds = [](const InputBindings& a, const InputBindings& b){
-            return a.left==b.left && a.right==b.right && a.up==b.up && a.down==b.down &&
-                   a.use_left==b.use_left && a.use_right==b.use_right && a.use_up==b.use_up && a.use_down==b.use_down && a.use_center==b.use_center &&
-                   a.pick_up==b.pick_up && a.drop==b.drop && a.reload==b.reload && a.dash==b.dash;
-        };
-        bool modified = !eq_binds(ss->input_binds, ss->menu.binds_snapshot);
-        buttons.push_back(ButtonDesc{799, RectNdc{0.00f, 0.82f, 0.18f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{791, RectNdc{0.20f, 0.82f, 0.22f, 0.08f}, "Reset to Defaults", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{792, RectNdc{0.44f, 0.82f, 0.18f, 0.08f}, "Load Preset", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{793, RectNdc{0.64f, 0.82f, 0.18f, 0.08f}, "New Preset", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{794, RectNdc{0.84f, 0.82f, 0.16f, 0.08f}, "Undo Changes", ButtonKind::Button, 0.0f, modified});
+        for (size_t i = 0; i < rows.size(); ++i) {
+            buttons.push_back(ButtonDesc{700 + static_cast<int>(i), rows[i], "", ButtonKind::Button, 0.0f, true});
+        }
+        bool modified = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
+        float footer_w = 0.16f;
+        float footer_gap = 0.02f;
+        float footer_y = 0.82f;
+        RectNdc footer_rects[5];
+        for (int i = 0; i < 5; ++i) {
+            footer_rects[i] = RectNdc{0.00f + static_cast<float>(i) * (footer_w + footer_gap), footer_y, footer_w, 0.08f};
+        }
+        buttons.push_back(ButtonDesc{799, footer_rects[0], "Back", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{791, footer_rects[1], "Reset to Defaults", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{792, footer_rects[2], "Load Preset", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{793, footer_rects[3], "Save As New", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{794, footer_rects[4], "Undo Changes", ButtonKind::Button, 0.0f, modified});
     } else if (ss->menu.page == BINDS_LOAD) {
         auto rows = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 5);
-        buttons.push_back(ButtonDesc{720, rows[0], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{721, rows[1], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{722, rows[2], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{723, rows[3], "", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{724, rows[4], "", ButtonKind::Button, 0.0f, true});
+        const auto& profiles = ss->menu.binds_profiles;
+        int per_page = 5;
+        for (size_t i = 0; i < rows.size(); ++i) {
+            RectNdc main = rows[i];
+            float action_w = 0.12f;
+            float action_gap = 0.01f;
+            float shrink = action_w * 2.0f + action_gap * 2.0f;
+            if (main.w > shrink)
+                main.w -= shrink;
+            int idx = ss->menu.binds_list_page * per_page + static_cast<int>(i);
+            bool has_entry = idx >= 0 && idx < (int)profiles.size();
+            bool read_only = has_entry ? profiles[static_cast<size_t>(idx)].read_only : false;
+            buttons.push_back(ButtonDesc{720 + static_cast<int>(i), main, "", ButtonKind::Button, 0.0f, has_entry});
+            RectNdc rename_rect{main.x + main.w + action_gap, main.y, action_w, main.h};
+            RectNdc delete_rect{rename_rect.x + action_w + action_gap, main.y, action_w, main.h};
+            buttons.push_back(ButtonDesc{730 + static_cast<int>(i), rename_rect, "Rename", ButtonKind::Button, 0.0f, has_entry && !read_only});
+            buttons.push_back(ButtonDesc{740 + static_cast<int>(i), delete_rect, "Delete", ButtonKind::Button, 0.0f, has_entry && !read_only});
+        }
         buttons.push_back(ButtonDesc{799, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
     } else if (ss->menu.page == PLAYERS) {
         // Ensure players_presets size
@@ -412,7 +662,7 @@ void render_menu(int width, int height) {
         // defer hint drawing until draw_text is defined
     } else if (ss->menu.page == BINDS_LOAD) {
         // List paging
-        int count = (int)list_bind_presets().size();
+        int count = (int)ss->menu.binds_profiles.size();
         int per_page = 5;
         int total_pages = std::max(1, (count + per_page - 1) / per_page);
         char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.binds_list_page + 1, total_pages);
@@ -474,14 +724,12 @@ void render_menu(int width, int height) {
 
     // Show current preset on Binds page (+ modified indicator vs snapshot)
     if (ss->menu.page == BINDS) {
-        auto eq_binds = [](const InputBindings& a, const InputBindings& b){
-            return a.left==b.left && a.right==b.right && a.up==b.up && a.down==b.down &&
-                   a.use_left==b.use_left && a.use_right==b.use_right && a.use_up==b.use_up && a.use_down==b.use_down && a.use_center==b.use_center &&
-                   a.pick_up==b.pick_up && a.drop==b.drop && a.reload==b.reload && a.dash==b.dash;
-        };
-        std::string preset = ss->menu.binds_current_preset.empty() ? std::string("Default") : ss->menu.binds_current_preset;
-        bool modified = !eq_binds(ss->input_binds, ss->menu.binds_snapshot);
-        std::string sub = std::string("Preset: ") + preset + (modified ? " (modified)" : "");
+        std::string preset = ss->menu.binds_current_preset.empty() ? default_input_profile_name() : ss->menu.binds_current_preset;
+        bool modified = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
+        bool ro = binds_profile_is_read_only(preset);
+        std::string sub = std::string("Preset: ") + preset;
+        if (ro) sub += " (read-only)";
+        if (modified) sub += " (modified)";
         draw_text(sub.c_str(), hdr_x, hdr_y + 36, SDL_Color{200,200,210,255});
     }
 
@@ -521,12 +769,24 @@ void render_menu(int width, int height) {
                     SDL_Scancode sc = bind_get(ss->input_binds, a);
                     draw_label_value(rr, label, std::string(SDL_GetScancodeName(sc)), focused);
                 }
-            } else if (ss->menu.page == BINDS_LOAD && b.id >= 720 && b.id <= 724) {
-                auto presets = list_bind_presets();
+            } else if (ss->menu.page == BINDS_LOAD) {
+                const auto& profiles = ss->menu.binds_profiles;
                 int per_page = 5;
-                int idx = ss->menu.binds_list_page * per_page + (b.id - 720);
-                if (idx >= 0 && idx < (int)presets.size()) {
-                    draw_label_value(rr, presets[(size_t)idx], std::string(), focused);
+                if (b.id >= 720 && b.id <= 724) {
+                    int idx = ss->menu.binds_list_page * per_page + (b.id - 720);
+                    if (idx >= 0 && idx < (int)profiles.size()) {
+                        const auto& info = profiles[static_cast<size_t>(idx)];
+                        std::string label = info.name;
+                        if (info.name == ss->menu.binds_current_preset) label += " (Active)";
+                        if (info.read_only) label += " (Default)";
+                        draw_label_value(rr, label, std::string(), focused);
+                    }
+                } else if (b.id >= 730 && b.id <= 734) {
+                    draw_label_value(rr, "Rename", std::string(), focused);
+                } else if (b.id >= 740 && b.id <= 744) {
+                    draw_label_value(rr, "Delete", std::string(), focused);
+                } else {
+                    draw_label_value(rr, b.label, std::string(), focused);
                 }
             } else if (b.id == 498) {
                 // Apply button highlight when enabled
@@ -637,11 +897,83 @@ void render_menu(int width, int height) {
             SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
         }
     }
+
+    if (menu_is_text_input_active() && gg && gg->ui_font) {
+        SDL_Rect modal{width / 2 - 220, height / 2 - 90, 440, 180};
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, 15, 15, 25, 235);
+        SDL_RenderFillRect(r, &modal);
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_RenderDrawRect(r, &modal);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        SDL_Color text_col{240, 240, 250, 255};
+        const char* modal_title = "Preset Name";
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, modal_title, text_col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{modal.x + (modal.w - tw)/2, modal.y + 16, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+        SDL_Rect input_box{modal.x + 24, modal.y + 60, modal.w - 48, 48};
+        SDL_SetRenderDrawColor(r, 50, 55, 70, 255);
+        SDL_RenderFillRect(r, &input_box);
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_RenderDrawRect(r, &input_box);
+        std::string buffer = ss->menu.binds_text_input_buffer;
+        if ((int)buffer.size() < ss->menu.binds_text_input_limit)
+            buffer.push_back('_');
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, buffer.c_str(), text_col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{input_box.x + 12, input_box.y + input_box.h/2 - th/2, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+        char count_buf[32];
+        std::snprintf(count_buf, sizeof(count_buf), "%d/%d", (int)ss->menu.binds_text_input_buffer.size(), ss->menu.binds_text_input_limit);
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, count_buf, SDL_Color{180,180,190,255})) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{input_box.x + input_box.w - tw - 8, input_box.y + input_box.h + 8, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+        if (!ss->menu.binds_text_input_error.empty() && ss->menu.binds_text_input_error_timer > 0.0f) {
+            ss->menu.binds_text_input_error_timer = std::max(0.0f, ss->menu.binds_text_input_error_timer - ss->dt);
+            SDL_Color err_col{255, 120, 120, 255};
+            if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, ss->menu.binds_text_input_error.c_str(), err_col)) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                SDL_Rect dst{modal.x + (modal.w - tw)/2, input_box.y + input_box.h + 28, tw, th};
+                SDL_RenderCopy(r, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+                SDL_FreeSurface(surf);
+            }
+            if (ss->menu.binds_text_input_error_timer <= 0.0f)
+                ss->menu.binds_text_input_error.clear();
+        } else if (ss->menu.binds_text_input_error_timer <= 0.0f) {
+            ss->menu.binds_text_input_error.clear();
+        }
+        const char* hint = "Enter = Confirm   Esc = Cancel";
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, hint, SDL_Color{200,200,210,255})) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{modal.x + (modal.w - tw)/2, modal.y + modal.h - th - 12, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+    }
 }
 
 void step_menu_logic(int width, int height) {
     auto buttons = build_menu_buttons(width, height);
     ensure_focus_default(buttons);
+    bool text_input_active = menu_is_text_input_active();
 
     // If capturing a bind, ignore all menu navigation and clicks until capture completes (Esc cancels in input.cpp)
     if (ss->menu.capture_action_id >= 0) {
@@ -683,7 +1015,7 @@ void step_menu_logic(int width, int height) {
             if (ss->menu.mouse_last_used || click) {
                 if (ss->menu.focus_id != b.id) { ss->menu.focus_id = b.id; play_sound("base:ui_cursor_move"); }
             }
-            if (click) {
+    if (click && !text_input_active) {
                 // Activate
                 if (b.id == 100) {
                     ss->mode = ids::MODE_PLAYING;
@@ -721,10 +1053,55 @@ void step_menu_logic(int width, int height) {
                     ss->menu.ignore_mouse_until_release = true;
                 } else if (ss->menu.page == BINDS && b.id == 792) {
                     ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
+                    refresh_binds_profiles();
+                    ss->menu.binds_list_page = 0;
+                } else if (ss->menu.page == BINDS && b.id == 793) {
+                    std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
+                    suggestion = sanitize_profile_name(suggestion);
+                    if (suggestion.empty()) suggestion = "Preset";
+                    open_binds_text_input(BINDS_TEXT_INPUT_NEW, suggestion, std::string{});
+                    ss->menu.ignore_mouse_until_release = true;
+                    if (aa) play_sound("base:ui_confirm");
                 } else if (ss->menu.page == BINDS && b.id == 799) {
                     ss->menu.page = SETTINGS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
                 } else if (ss->menu.page == BINDS && b.id == 791) {
-                    ss->input_binds = InputBindings{}; ss->menu.ignore_mouse_until_release = true;
+                    apply_default_bindings_to_active(); ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == BINDS && b.id == 794) {
+                    undo_active_bind_changes(); ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == BINDS_LOAD && b.id >= 720 && b.id <= 724 && b.enabled) {
+                    int idx = ss->menu.binds_list_page * 5 + (b.id - 720);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        std::string name = ss->menu.binds_profiles[(size_t)idx].name;
+                        if (set_active_binds_profile(name)) {
+                            ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                            ss->menu.binds_toast = std::string("Loaded preset: ") + name;
+                            ss->menu.binds_toast_timer = 1.2f;
+                            if (aa) play_sound("base:ui_confirm");
+                        }
+                    }
+                    ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == BINDS_LOAD && b.id >= 730 && b.id <= 734 && b.enabled) {
+                    int idx = ss->menu.binds_list_page * 5 + (b.id - 730);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        const auto& info = ss->menu.binds_profiles[(size_t)idx];
+                        if (!info.read_only)
+                            open_binds_text_input(BINDS_TEXT_INPUT_RENAME, info.name, info.name);
+                    }
+                    ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == BINDS_LOAD && b.id >= 740 && b.id <= 744 && b.enabled) {
+                    int idx = ss->menu.binds_list_page * 5 + (b.id - 740);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        const auto name = ss->menu.binds_profiles[(size_t)idx].name;
+                        delete_binds_profile(name);
+                        refresh_binds_profiles();
+                        ss->menu.binds_toast = std::string("Deleted preset: ") + name;
+                        ss->menu.binds_toast_timer = 1.2f;
+                        const int per_page = 5;
+                        int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + per_page - 1) / per_page));
+                        ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
+                        if (aa) play_sound("base:ui_confirm");
+                    }
+                    ss->menu.ignore_mouse_until_release = true;
                 } else if (b.kind == ButtonKind::Toggle) {
                     if (b.id == 402) ss->menu.vsync = !ss->menu.vsync;
                     else if (b.id == 503) ss->menu.invert_x = !ss->menu.invert_x;
@@ -776,7 +1153,7 @@ void step_menu_logic(int width, int height) {
                 }
             }
             // Sliders: click/drag
-            if (b.kind == ButtonKind::Slider) {
+            if (!text_input_active && b.kind == ButtonKind::Slider) {
                 if (ss->mouse_inputs.left) {
                     if (!ss->menu.ignore_mouse_until_release) {
                         bool first_drag_frame = (ss->menu.dragging_id != b.id);
@@ -885,7 +1262,7 @@ void step_menu_logic(int width, int height) {
     bool nav_right = repeat_fire(ss->menu.hold_right, ss->menu.prev_hold_right, ss->menu.rpt_right);
 
     int fid = ss->menu.focus_id;
-    if (fid >= 0) {
+    if (!text_input_active && fid >= 0) {
         if (nav_up) {
             int n = nav(fid).up; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
         } else if (nav_down) {
@@ -993,7 +1370,7 @@ void step_menu_logic(int width, int height) {
                 int n = nav(fid).right; if (n >= 0) ss->menu.focus_id = n;
             }
         }
-        if (ss->menu_inputs.confirm) {
+        if (!text_input_active && ss->menu_inputs.confirm) {
             const ButtonDesc* b = find_btn(ss->menu.focus_id);
             if (b) {
                 if (b->id == 100) {
@@ -1045,53 +1422,60 @@ void step_menu_logic(int width, int height) {
                     }
                 }
                 } else if (ss->menu.page == BINDS && b->id == 792) {
-                    ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1; if (aa) play_sound("base:ui_confirm");
+                    ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1; refresh_binds_profiles();
+                    ss->menu.binds_list_page = 0;
+                    if (aa) play_sound("base:ui_confirm");
                 } else if (ss->menu.page == BINDS && b->id == 793) {
-                    auto exists = list_bind_presets();
-                    static const char* nouns[] = {"pickle","sausage","donut","potato","goblin","monkey","hamster","toaster","banana","slime","frog","llama","raccoon","duck","waffle","muffin","taco","snail","jelly","robot","chicken","wizard","shrimp","onion","cactus","pirate","pigeon","chair","noodle","burger","clown","wizard","gnome","sock","crab","pancake","fish","sandwich","gobstopper","eggplant","troll"};
-                    static const char* adjs[] = {"wonky","wobbly","smelly","sneaky","chonky","crispy","bouncy","soggy","tiny","spiky","grumpy","silly","turbo","funky","flappy","derpy","fizzy","greasy","cosmic","loopy","cranky"};
-                    std::mt19937 rng{std::random_device{}()};
-                    std::uniform_int_distribution<int> dn(0, (int)(sizeof(nouns)/sizeof(nouns[0])) - 1);
-                    std::uniform_int_distribution<int> da(0, (int)(sizeof(adjs)/sizeof(adjs[0])) - 1);
-                    std::string base;
-                    for (int attempts = 0; attempts < 5; ++attempts) {
-                        base = std::string(adjs[da(rng)]) + " " + nouns[dn(rng)];
-                        bool clash = false; for (auto const& n : exists) if (n == base) { clash = true; break; }
-                        if (!clash) break;
-                    }
-                    int suffix = 2; std::string name = base;
-                    auto present = [&](const std::string& s){ for (auto const& n : exists) if (n == s) return true; return false; };
-                    while (present(name)) { name = base + " " + std::to_string(suffix++); }
-                    if (save_input_bindings_to_ini(std::string("binds/") + name + ".ini", ss->input_binds)) {
-                        ss->menu.binds_current_preset = name;
-                        ss->menu.binds_snapshot = ss->input_binds;
-                        ss->menu.binds_dirty = false;
-                        ss->menu.binds_toast = std::string("NEW PRESET: ") + name;
-                        ss->menu.binds_toast_timer = 1.2f;
-                        if (aa) play_sound("base:ui_super_confirm");
-                    }
-                } else if (ss->menu.page == BINDS && b->id == 799) {
-                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; if (aa) play_sound("base:ui_confirm");
+                    std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
+                    suggestion = sanitize_profile_name(suggestion);
+                    if (suggestion.empty()) suggestion = "Preset";
+                    open_binds_text_input(BINDS_TEXT_INPUT_NEW, suggestion, std::string{});
                 } else if (ss->menu.page == BINDS && b->id == 794) {
-                    // Undo changes back to snapshot and save to current preset if any
-                    ss->input_binds = ss->menu.binds_snapshot;
-                    if (!ss->menu.binds_current_preset.empty()) {
-                        save_input_bindings_to_ini(std::string("binds/") + ss->menu.binds_current_preset + ".ini", ss->input_binds);
-                    }
-                    ss->menu.binds_dirty = false;
+                    undo_active_bind_changes();
                     if (aa) play_sound("base:ui_confirm");
                 } else if (ss->menu.page == BINDS && b->id == 791) {
-                    ss->input_binds = InputBindings{};
-                    if (!ss->menu.binds_current_preset.empty()) {
-                        save_input_bindings_to_ini(std::string("binds/") + ss->menu.binds_current_preset + ".ini", ss->input_binds);
-                    }
+                    apply_default_bindings_to_active();
                     if (aa) play_sound("base:ui_confirm");
+                } else if (ss->menu.page == BINDS && b->id == 799) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; if (aa) play_sound("base:ui_confirm");
+                } else if (ss->menu.page == BINDS_LOAD && b->id >= 720 && b->id <= 724) {
+                    int idx = ss->menu.binds_list_page * 5 + (b->id - 720);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        std::string name = ss->menu.binds_profiles[(size_t)idx].name;
+                        if (set_active_binds_profile(name)) {
+                            ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                            ss->menu.binds_toast = std::string("Loaded preset: ") + name;
+                            ss->menu.binds_toast_timer = 1.2f;
+                            if (aa) play_sound("base:ui_confirm");
+                        }
+                    }
+                } else if (ss->menu.page == BINDS_LOAD && b->id >= 730 && b->id <= 734) {
+                    int idx = ss->menu.binds_list_page * 5 + (b->id - 730);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        const auto& info = ss->menu.binds_profiles[(size_t)idx];
+                        if (!info.read_only)
+                            open_binds_text_input(BINDS_TEXT_INPUT_RENAME, info.name, info.name);
+                    }
+                } else if (ss->menu.page == BINDS_LOAD && b->id >= 740 && b->id <= 744) {
+                    int idx = ss->menu.binds_list_page * 5 + (b->id - 740);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        const auto name = ss->menu.binds_profiles[(size_t)idx].name;
+                        delete_binds_profile(name);
+                        int per_page = 5;
+                        int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + (size_t)per_page - 1) / (size_t)per_page));
+                        ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
+                        if (aa) play_sound("base:ui_confirm");
+                    }
                 }
             }
         }
 
     // Back button behavior (Esc/Backspace)
-    if (ss->menu_inputs.back) {
+    if (text_input_active) {
+        if (ss->menu_inputs.back) {
+            menu_text_input_cancel();
+        }
+    } else if (ss->menu_inputs.back) {
         if (aa) play_sound("base:ui_confirm");
         if (ss->menu.page == SETTINGS) {
             ss->menu.page = MAIN; ss->menu.focus_id = -1;
@@ -1127,16 +1511,17 @@ void step_menu_logic(int width, int height) {
         int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
         SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
         SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
-        if (click) {
+        if (click && !text_input_active) {
             int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
             auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
             if (in_rect(prevb)) { ss->menu.binds_keys_page = std::max(0, ss->menu.binds_keys_page - 1); if (aa) play_sound("base:ui_left"); }
             if (in_rect(nextb)) { ss->menu.binds_keys_page = std::min(total_pages - 1, ss->menu.binds_keys_page + 1); if (aa) play_sound("base:ui_right"); }
         }
     } else if (ss->menu.page == BINDS_LOAD) {
-        auto presets = list_bind_presets();
+        const auto& profiles = ss->menu.binds_profiles;
         int per_page = 5;
-        int total_pages = std::max(1, (int)((presets.size() + (size_t)per_page - 1) / (size_t)per_page));
+        int total_pages = std::max(1, (int)((profiles.size() + (size_t)per_page - 1) / (size_t)per_page));
+        ss->menu.binds_list_page = std::clamp(ss->menu.binds_list_page, 0, total_pages - 1);
         if (ss->menu.focus_id >= 720 && ss->menu.focus_id <= 724) {
             if (ss->menu_inputs.page_prev || left_edge_now) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
             else if (ss->menu_inputs.page_next || right_edge_now) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
@@ -1144,29 +1529,11 @@ void step_menu_logic(int width, int height) {
         int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
         SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
         SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
-        if (click) {
+        if (click && !text_input_active) {
             int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
             auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
             if (in_rect(prevb)) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
             if (in_rect(nextb)) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
-        }
-        // Allow click or confirm on list item
-        if (ss->menu_inputs.confirm || click) {
-            int fid2 = ss->menu.focus_id;
-            if (fid2 >= 720 && fid2 <= 724) {
-                int idx = ss->menu.binds_list_page * per_page + (fid2 - 720);
-                if (idx >= 0 && idx < (int)presets.size()) {
-                    std::string name = presets[(size_t)idx];
-                    if (load_input_bindings_from_ini(std::string("binds/") + name + ".ini")) {
-                        ss->menu.binds_current_preset = name;
-                        ss->menu.binds_snapshot = ss->input_binds;
-                        ss->menu.binds_dirty = false;
-                        ss->menu.page = BINDS; ss->menu.focus_id = -1;
-                        ss->alerts.push_back({std::string("Loaded preset: ") + name, 0.0f, 1.2f, false});
-                        if (aa) play_sound("base:ui_confirm");
-                    }
-                }
-            }
         }
     }
 
@@ -1181,7 +1548,7 @@ void step_menu_logic(int width, int height) {
         int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
         SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
         SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
-        if (click) {
+        if (click && !text_input_active) {
             int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
             auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
             if (in_rect(prevb)) { ss->menu.page_index = std::max(0, ss->menu.page_index - 1); if (aa) play_sound("base:ui_left"); }

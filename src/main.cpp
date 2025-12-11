@@ -12,6 +12,7 @@
 #include "room.hpp"
 #include "step.hpp"
 #include "render.hpp"
+#include "menu/menu.hpp"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -85,9 +86,31 @@ int main(int argc, char** argv) {
     }
     luam->load_mods();
 
-    if (!load_input_bindings_from_ini("config/input.ini")) {
-        return 1;
+    migrate_legacy_input_config();
+    ensure_input_profiles_dir();
+    auto profiles = list_input_profiles();
+    if (profiles.empty()) {
+        InputBindings defaults{};
+        save_input_profile(default_input_profile_name(), defaults, true);
+        profiles = list_input_profiles();
     }
+    auto profile_exists = [&](const std::string& name) {
+        return std::any_of(profiles.begin(), profiles.end(), [&](const InputProfileInfo& info){ return info.name == name; });
+    };
+    std::string active_profile = load_active_input_profile_name();
+    if (active_profile.empty() || !profile_exists(active_profile))
+        active_profile = default_input_profile_name();
+    InputBindings loaded_binds{};
+    if (!load_input_profile(active_profile, &loaded_binds)) {
+        active_profile = default_input_profile_name();
+        load_input_profile(active_profile, &loaded_binds);
+    }
+    ss->input_binds = loaded_binds;
+    ss->menu.binds_current_preset = active_profile;
+    ss->menu.binds_snapshot = loaded_binds;
+    ss->menu.binds_dirty = false;
+    refresh_binds_profiles();
+    save_active_input_profile_name(active_profile);
 
     generate_room();
 

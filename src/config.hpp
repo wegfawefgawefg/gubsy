@@ -5,6 +5,13 @@
 #include <string>
 #include <vector>
 
+struct InputBindings;
+
+struct InputProfileInfo {
+    std::string name;
+    bool read_only{false};
+};
+
 // Loads a simple key=value .ini for input bindings. Lines starting with # are comments.
 bool load_input_bindings_from_ini(const std::string& path);
 
@@ -18,5 +25,17 @@ bool save_audio_settings_to_ini(const std::string& path);
 // Ensure a directory exists (mkdir -p behavior). Returns true on success or already exists.
 bool ensure_dir(const std::string& dir);
 
-// List available preset names (without extension) in a directory (default: "binds").
-std::vector<std::string> list_bind_presets(const std::string& dir = "binds");
+// Input profiles management (config/input_profiles)
+std::string input_profiles_dir();
+bool ensure_input_profiles_dir();
+std::string sanitize_profile_name(const std::string& raw);
+std::string make_unique_profile_name(const std::string& base);
+std::vector<InputProfileInfo> list_input_profiles();
+bool load_input_profile(const std::string& name, struct InputBindings* out);
+bool save_input_profile(const std::string& name, const struct InputBindings& b, bool allow_overwrite = true);
+bool delete_input_profile(const std::string& name);
+bool rename_input_profile(const std::string& from, const std::string& to);
+std::string default_input_profile_name();
+std::string load_active_input_profile_name();
+void save_active_input_profile_name(const std::string& name);
+void migrate_legacy_input_config();

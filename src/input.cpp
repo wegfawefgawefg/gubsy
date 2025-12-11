@@ -6,6 +6,7 @@
 #include "config.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 // Forward declaration used within this translation unit
 void collect_menu_inputs();
@@ -15,30 +16,65 @@ static bool is_down(SDL_Scancode sc) {
     return ks[sc] != 0;
 }
 
+
 void process_event(SDL_Event& ev) {
     switch (ev.type) {
         case SDL_QUIT:
             ss->running = false;
             break;
         case SDL_KEYDOWN:
+            if (menu_is_text_input_active()) {
+                SDL_Keycode key = ev.key.keysym.sym;
+                SDL_Keymod mods = static_cast<SDL_Keymod>(ev.key.keysym.mod);
+                bool shift = (mods & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+                bool caps = (mods & KMOD_CAPS) != 0;
+                bool upper = shift ^ caps;
+                if (key == SDLK_ESCAPE) {
+                    ss->menu.suppress_back_until_release = true;
+                    menu_text_input_cancel();
+                } else if (key == SDLK_RETURN) {
+                    menu_text_input_submit();
+                } else if (key == SDLK_BACKSPACE) {
+                    menu_text_input_backspace();
+                } else {
+                    char c = 0;
+                    if ((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) {
+                        c = static_cast<char>(key);
+                        if (c >= 'a' && c <= 'z' && upper)
+                            c = static_cast<char>(std::toupper(c));
+                        else if (c >= 'A' && c <= 'Z' && !upper)
+                            c = static_cast<char>(std::tolower(c));
+                    } else if ((key >= '0' && key <= '9') || (key >= SDLK_KP_0 && key <= SDLK_KP_9)) {
+                        if (key >= '0' && key <= '9')
+                            c = static_cast<char>(key);
+                        else
+                            c = static_cast<char>('0' + (key - SDLK_KP_0));
+                    } else if (key == SDLK_MINUS) {
+                        c = shift ? '_' : '-';
+                    }
+                    if (c != 0)
+                        menu_text_input_append(c);
+                }
+                break;
+            }
             // Binds capture: assign the pressed key to the selected action
             if (ss->mode == ids::MODE_TITLE && ss->menu.capture_action_id >= 0) {
                 SDL_Scancode sc = ev.key.keysym.scancode;
                 if (sc == SDL_SCANCODE_ESCAPE) {
                     ss->menu.capture_action_id = -1; // cancel
+                    ss->menu.suppress_back_until_release = true;
+                    break;
+                }
+                if (!ensure_active_binds_profile_writeable()) {
+                    ss->menu.capture_action_id = -1;
                     break;
                 }
                 InputBindings& ib = ss->input_binds;
                 BindAction a = static_cast<BindAction>(ss->menu.capture_action_id);
                 bind_ref(ib, a) = sc;
                 ss->menu.capture_action_id = -1;
-                // Auto-save to current preset if set; else create default preset name
-                if (ss->menu.binds_current_preset.empty()) {
-                    ss->menu.binds_current_preset = "Default";
-                    ss->menu.binds_snapshot = ss->input_binds;
-                }
-                save_input_bindings_to_ini(std::string("binds/") + ss->menu.binds_current_preset + ".ini", ss->input_binds);
-                ss->menu.binds_dirty = true;
+                autosave_active_binds_profile();
+                ss->menu.binds_dirty = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
             }
             break;
         case SDL_MOUSEMOTION:
@@ -123,6 +159,24 @@ void collect_menu_inputs() {
     held.back = kb_back || gp_back;
     held.page_prev = kb_page_prev || gp_page_prev;
     held.page_next = kb_page_next || gp_page_next;
+
+    if (menu_is_text_input_active()) {
+        held.left = held.right = held.up = held.down = false;
+        held.confirm = held.back = false;
+        held.page_prev = held.page_next = false;
+    }
+    if (ss->menu.suppress_confirm_until_release) {
+        if (!held.confirm)
+            ss->menu.suppress_confirm_until_release = false;
+        else
+            held.confirm = false;
+    }
+    if (ss->menu.suppress_back_until_release) {
+        if (!held.back)
+            ss->menu.suppress_back_until_release = false;
+        else
+            held.back = false;
+    }
 
     struct Prev { bool confirm=false, back=false, pprev=false, pnext=false; };
     static Prev prev{};

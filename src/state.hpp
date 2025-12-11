@@ -12,6 +12,7 @@
 #include "stage.hpp"
 #include "types.hpp"
 #include "runtime_settings.hpp"
+#include "config.hpp"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -274,6 +275,14 @@ struct State {
         std::string binds_current_preset; // filename stem (no path/ext)
         InputBindings binds_snapshot{};   // for Undo Changes
         bool binds_dirty{false};
+        std::vector<InputProfileInfo> binds_profiles;
+        bool binds_text_input_active{false};
+        int binds_text_input_mode{0}; // 0=none,1=new,2=rename
+        std::string binds_text_input_buffer;
+        int binds_text_input_limit{0};
+        std::string binds_text_input_target;
+        std::string binds_text_input_error;
+        float binds_text_input_error_timer{0.0f};
         // Device context for hinting: 0=mouse,1=keyboard,2=controller
         int last_input_source{0};
         // Toast overlay for big notifications
@@ -288,6 +297,8 @@ struct State {
         float rpt_left{0.0f}, rpt_right{0.0f}, rpt_up{0.0f}, rpt_down{0.0f};
         // Previous-frame hold states for edge detection
         bool prev_hold_left{false}, prev_hold_right{false}, prev_hold_up{false}, prev_hold_down{false};
+        bool suppress_confirm_until_release{false};
+        bool suppress_back_until_release{false};
     } menu;
 };
 

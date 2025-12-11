@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <vector>
 #include "globals.hpp"
+#include "input.hpp"
 
 static std::unordered_map<std::string, SDL_Scancode> make_scancode_map() {
     using S = SDL_Scancode;
@@ -73,10 +74,7 @@ static std::string trim(const std::string& s) {
     return s.substr(a, b - a);
 }
 
-bool load_input_bindings_from_ini(const std::string& path) {
-    std::ifstream f(path);
-    if (!f.is_open())
-        return false;
+static bool parse_input_bindings_stream(std::istream& f, InputBindings& out_bindings) {
     auto map = make_scancode_map();
     InputBindings b{};
     std::string line;
@@ -123,7 +121,18 @@ bool load_input_bindings_from_ini(const std::string& path) {
         else if (key == "dash")
             b.dash = sc;
     }
-    ss->input_binds = b;
+    out_bindings = b;
+    return true;
+}
+
+bool load_input_bindings_from_ini(const std::string& path) {
+    std::ifstream f(path);
+    if (!f.is_open())
+        return false;
+    InputBindings tmp{};
+    if (!parse_input_bindings_stream(f, tmp))
+        return false;
+    ss->input_binds = tmp;
     return true;
 }
 
@@ -277,18 +286,139 @@ bool save_audio_settings_to_ini(const std::string& path) {
     return true;
 }
 
-std::vector<std::string> list_bind_presets(const std::string& dir) {
-    namespace fs = std::filesystem;
-    std::vector<std::string> out;
-    std::error_code ec;
-    if (!fs::exists(dir, ec)) return out;
-    for (auto& e : fs::directory_iterator(dir, ec)) {
-        if (!e.is_regular_file()) continue;
-        auto p = e.path();
-        if (p.extension() == ".ini" || p.extension() == ".txt") {
-            out.push_back(p.stem().string());
+std::string input_profiles_dir() {
+    return "config/input_profiles";
+}
+
+bool ensure_input_profiles_dir() {
+    return ensure_dir(input_profiles_dir());
+}
+
+std::string sanitize_profile_name(const std::string& raw) {
+    std::string name;
+    name.reserve(raw.size());
+    for (char c : raw) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
+            name.push_back(c);
         }
     }
-    std::sort(out.begin(), out.end());
+    if (name.empty()) name = "Preset";
+    if (name.size() > 24) name.resize(24);
+    return name;
+}
+
+std::string make_unique_profile_name(const std::string& base) {
+    auto profiles = list_input_profiles();
+    auto exists = [&](const std::string& n) {
+        return std::any_of(profiles.begin(), profiles.end(), [&](const InputProfileInfo& info){ return info.name == n; });
+    };
+    std::string sanitized = sanitize_profile_name(base);
+    if (sanitized.empty())
+        sanitized = "Preset";
+    if (!exists(sanitized))
+        return sanitized;
+    int suffix = 2;
+    while (suffix < 1000) {
+        std::string attempt = sanitize_profile_name(sanitized + "_" + std::to_string(suffix));
+        ++suffix;
+        if (attempt.empty())
+            continue;
+        if (!exists(attempt))
+            return attempt;
+    }
+    return sanitized;
+}
+
+static std::string profile_path(const std::string& name) {
+    namespace fs = std::filesystem;
+    return (fs::path(input_profiles_dir()) / (name + ".ini")).string();
+}
+
+std::vector<InputProfileInfo> list_input_profiles() {
+    namespace fs = std::filesystem;
+    std::vector<InputProfileInfo> out;
+    ensure_input_profiles_dir();
+    std::error_code ec;
+    fs::path dir(input_profiles_dir());
+    if (!fs::exists(dir, ec)) return out;
+    for (auto& entry : fs::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        auto p = entry.path();
+        if (p.extension() != ".ini") continue;
+        InputProfileInfo info;
+        info.name = p.stem().string();
+        info.read_only = (info.name == "Default");
+        out.push_back(info);
+    }
+    std::sort(out.begin(), out.end(), [](const InputProfileInfo& a, const InputProfileInfo& b){
+        if (a.name == "Default") return true;
+        if (b.name == "Default") return false;
+        return a.name < b.name;
+    });
     return out;
+}
+
+bool load_input_profile(const std::string& name, InputBindings* out) {
+    if (!out) return false;
+    std::ifstream f(profile_path(name));
+    if (!f.is_open()) return false;
+    return parse_input_bindings_stream(f, *out);
+}
+
+bool save_input_profile(const std::string& name, const InputBindings& b, bool allow_overwrite) {
+    if (!ensure_input_profiles_dir()) return false;
+    namespace fs = std::filesystem;
+    fs::path path = profile_path(name);
+    if (!allow_overwrite && fs::exists(path)) return false;
+    return save_input_bindings_to_ini(path.string(), b);
+}
+
+bool delete_input_profile(const std::string& name) {
+    if (name == "Default") return false;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::remove(profile_path(name), ec);
+    return !ec;
+}
+
+bool rename_input_profile(const std::string& from, const std::string& to) {
+    if (from == "Default" || to == "Default") return false;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::rename(profile_path(from), profile_path(to), ec);
+    return !ec;
+}
+
+std::string default_input_profile_name() {
+    return "Default";
+}
+
+std::string load_active_input_profile_name() {
+    std::ifstream f("config/input_active_profile.txt");
+    if (!f.is_open()) return {};
+    std::string line;
+    std::getline(f, line);
+    line = sanitize_profile_name(line);
+    if (line.empty()) return {};
+    return line;
+}
+
+void save_active_input_profile_name(const std::string& name) {
+    if (name.empty()) return;
+    ensure_dir("config");
+    std::ofstream f("config/input_active_profile.txt");
+    if (!f.is_open()) return;
+    f << name << "\n";
+}
+
+void migrate_legacy_input_config() {
+    namespace fs = std::filesystem;
+    if (!fs::exists("config/input.ini")) return;
+    std::ifstream f("config/input.ini");
+    if (!f.is_open()) return;
+    InputBindings tmp{};
+    if (!parse_input_bindings_stream(f, tmp)) return;
+    ensure_input_profiles_dir();
+    save_input_profile("Default", tmp, true);
+    fs::remove("config/input.ini");
 }

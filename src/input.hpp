@@ -93,6 +93,13 @@ inline const char* bind_label(BindAction a) {
     }
 }
 
+inline bool bindings_equal(const InputBindings& a, const InputBindings& b) {
+    return a.left == b.left && a.right == b.right && a.up == b.up && a.down == b.down &&
+        a.use_left == b.use_left && a.use_right == b.use_right && a.use_up == b.use_up && a.use_down == b.use_down &&
+        a.use_center == b.use_center && a.pick_up == b.pick_up && a.drop == b.drop &&
+        a.reload == b.reload && a.dash == b.dash;
+}
+
 struct InputState {
     float wheel_delta{0.0f};
 };
