@@ -3,7 +3,7 @@
 #include "luamgr.hpp"
 #include "sprites.hpp"
 #include "graphics.hpp"
-#include "audio.hpp"
+#include "engine/audio.hpp"
 #include "mods.hpp"
 #include "state.hpp"
 #include "input.hpp"

@@ -6,7 +6,7 @@
 #include "mods.hpp"
 #include "projectiles.hpp"
 #include "settings.hpp"
-#include "audio.hpp"
+#include "engine/audio.hpp"
 #include "sprites.hpp"
 #include "state.hpp"
 #include "room.hpp"

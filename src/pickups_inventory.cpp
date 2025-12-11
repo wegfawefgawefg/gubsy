@@ -3,7 +3,7 @@
 #include "state.hpp"
 #include "items.hpp"
 #include "guns.hpp"
-#include "audio.hpp"
+#include "engine/audio.hpp"
 #include "room.hpp"
 #include "luamgr.hpp"
 #include "settings.hpp"

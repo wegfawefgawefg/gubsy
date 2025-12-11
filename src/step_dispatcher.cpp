@@ -4,7 +4,7 @@
 #include "step.hpp"
 #include "globals.hpp"
 #include "settings.hpp"
-#include "alerts.hpp"
+#include "engine/alerts.hpp"
 #include "crates.hpp"
 
 // Forwarder: branch to mode-specific steps as they come online.

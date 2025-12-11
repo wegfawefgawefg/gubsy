@@ -1,7 +1,7 @@
 #include "render.hpp"
 
 #include "globals.hpp"
-#include "audio.hpp"
+#include "engine/audio.hpp"
 #include "luamgr.hpp"
 #include "sprites.hpp"
 #include "settings.hpp"

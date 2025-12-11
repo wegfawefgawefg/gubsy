@@ -1,7 +1,7 @@
 // Player combat implementation: shields/reload, reload edges, firing, jam/unjam.
 #include "globals.hpp"
 #include "luamgr.hpp"
-#include "audio.hpp"
+#include "engine/audio.hpp"
 #include "guns.hpp"
 #include "items.hpp"
 #include "settings.hpp"
