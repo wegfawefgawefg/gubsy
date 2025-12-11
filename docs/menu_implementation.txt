@@ -1,0 +1,87 @@
+Menu Implementation — Status and Plan
+====================================
+
+Summary of recent changes
+-------------------------
+- Input flow: Moved all menu input handling into the per-frame input dispatcher (`process_inputs_title`) to avoid fixed-step input drops.
+- Safe area + footer: Standardized 5% safe margin on all sides; Back/Apply buttons padded 5% from corners.
+- Focus policy: Mouse hover only steals focus if mouse was last-used; keyboard/pad navigation retains focus.
+- Video page:
+  - Split Resolution (internal render size) and Window Size (actual OS window size).
+  - Window Size is enabled in Windowed mode and applies immediately on change.
+  - Window Mode cycles { Windowed, Borderless, Fullscreen }.
+  - Apply button lights up only when Resolution or Window Mode differ from current; applies both.
+- Controls page:
+  - Split vibration into Vibration Enabled (toggle) and Vibration Intensity (slider, disabled when off).
+  - UI Scale slider wired to state and left/right adjustments.
+- Navigation:
+  - Settings hub order fixed (Video above Audio) and nav graphs updated.
+  - Video page nav includes UI Scale, with Back ↔ Apply on left/right.
+- Binds menu:
+  - Separate page under Controls with rows (Move Left/Right/Up/Down, Interact/Use, Pick Up, Reload, Dash).
+  - Click/confirm a row enters capture mode; next key binds, Esc cancels; overlay shown while capturing.
+
+Known issues (to fix next)
+-------------------------
+- Directional repeat too aggressive: Holding Up/Down repeats instantly and can skip to the end of the menu.
+  - Desired behavior: First key edge moves once. Only after a hold delay should repeats fire at a steady interval (like OS key repeat).
+  - Fix approach: For each nav direction (up/down/left/right), track:
+    - press_time: when the key was first held
+    - last_repeat_time: last time a repeat fired
+    - constants: initial_delay (e.g., 350 ms), repeat_interval (e.g., 90 ms)
+    - Logic: on hold, if now - press_time >= initial_delay, then if now - last_repeat_time >= repeat_interval, emit a repeat step and update last_repeat_time.
+  - The initial edge event remains unchanged.
+  - Temporary mitigation: repeat disabled (edge events only) so nav is stable while we implement proper timers.
+- Apply action does not yet wire VSync and Frame Rate Limit:
+  - VSync toggle via renderer/swap interval; frame cap via timing/sleep, not physics step.
+- Window mode transitions need polish:
+  - Restoring prior window size when leaving borderless/fullscreen.
+  - Keeping `Graphics` window_dims synced with OS window post-change.
+- OS-provided resolutions are not yet enumerated:
+  - We currently use a small preset list only.
+- Binds:
+  - Currently keyboard-only capture; no presets UI or save/load profiles yet.
+  - Persistence writes remain basic (single `config/input.ini`).
+
+What I’m working on now
+------------------------
+- Designing the improved hold-repeat mechanism for directional inputs, with per-direction timers to avoid rapid skipping.
+- Scaffolding the resolution source abstraction so we can show presets plus system display modes.
+
+What’s next
+-----------
+1) Input repeat (directional):
+   - Implement per-direction timers in `State::menu` (press_time, last_repeat_time) and only emit repeats after `initial_delay`.
+   - Maintain the first edge as immediate, then repeat at `repeat_interval` while held.
+   - Ensure mouse/keyboard focus rules still work cleanly together.
+
+2) Resolutions list:
+   - Build a combined list:
+     - Presets (curated common modes: 1280x720, 1600x900, 1920x1080, 2560x1440, etc.).
+     - OS-provided modes from SDL for the selected display: use `SDL_GetNumDisplayModes` + `SDL_GetDisplayMode`.
+     - Deduplicate and sort by area, then width/height.
+   - Use OS modes for Fullscreen/Borderless where applicable; allow Window Size list separately even in Windowed.
+
+3) Apply wiring:
+   - Resolution: rebuild internal render targets/resources when `gg->dims` changes.
+   - Window mode: apply via `SDL_SetWindowFullscreen` (0, FULLSCREEN_DESKTOP, FULLSCREEN), preserve/restore window size when leaving modes.
+   - VSync: toggle swap interval (renderer-dependent); if needed, recreate renderer with desired flags.
+   - Frame cap: implement configurable sleep in the main loop to clamp FPS without altering fixed timestep.
+
+4) Binds enhancements:
+   - Add gamepad binding capture and display (controller buttons/axes with tokens like PAD_A, PAD_LB, etc.).
+   - Presets UI: list built-in mappings and allow user-defined profiles.
+   - Save/Load profiles: `config/input_<name>.ini`, with “Save As…” to name the preset; make the saved one current default.
+   - Cancel capture on Back/Esc or loss of focus; debounce to avoid accidental overwrites.
+
+5) UX polish:
+   - Disabled Apply should not confirm-activate; already grayed and ignored.
+   - Header indicators for multi-page sections if Video grows (Prev/Next + LB/RB).
+   - Visual feedback for focused vs hovered states remains consistent.
+
+Notes
+-----
+- Resolution vs Window Size:
+  - Resolution controls internal rendering size (render target); Window Size controls OS window size.
+  - In Windowed mode, Window Size applies immediately; in Fullscreen/Borderless, size is tied to display/desktop modes.
+- Current code reflects the split: Apply handles Resolution + Window Mode; Window Size changes immediately in Windowed mode.

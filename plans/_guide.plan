@@ -1,0 +1,15 @@
+Modified version of carmacks plan files.
+
+* means it was completed
+  means it was not completed
+- means it was decided against
+
+Often I will just copy the plan from the previous day and delete all the lines prefixed with *.
+Often start the work session by listing off todos in the plan file. 
+Not used religiously, there are things missing.
+
+currently unused symbols:
+/ 
++
+^
+&

@@ -1,0 +1,1194 @@
+#include "menu.hpp"
+
+#include "globals.hpp"
+#include "graphics.hpp"
+#include "input_defs.hpp"
+#include "input.hpp"
+#include "config.hpp"
+#include "types.hpp"
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <algorithm>
+#include <cstdint>
+#include <cmath>
+#include <random>
+
+namespace {
+constexpr float SAFE_M = 0.05f; // safe margin on all sides
+
+// Pages
+enum Page { MAIN=0, SETTINGS=1, AUDIO=2, VIDEO=3, CONTROLS=4, BINDS=5, OTHER=6, VIDEO2=7, BINDS_LOAD=8, PLAYERS=9 };
+
+inline SDL_FRect ndc_to_pixels(const RectNdc& r, int w, int h) {
+    float x0 = (SAFE_M + r.x) * static_cast<float>(w);
+    float y0 = (SAFE_M + r.y) * static_cast<float>(h);
+    float ww = r.w * static_cast<float>(w);
+    float hh = r.h * static_cast<float>(h);
+    return SDL_FRect{x0, y0, ww, hh};
+}
+
+// Simple nav graphs per page
+static inline NavNode nav_main_for_id(int id) {
+    switch (id) {
+        case 100: return NavNode{-1, 101, 100, 100};
+        case 101: return NavNode{100, 102, 101, 101};
+        case 102: return NavNode{101, -1, 102, 102};
+        default: return NavNode{-1,-1,-1,-1};
+    } 
+}
+static inline NavNode nav_settings_for_id(int id) {
+    switch (id) {
+        case 201: return NavNode{-1, 200, 201, 201}; // Video (top)
+        case 200: return NavNode{201, 202, 200, 200}; // Audio
+        case 202: return NavNode{200, 204, 202, 202}; // Controls
+        case 204: return NavNode{202, 205, 204, 204}; // Binds
+        case 205: return NavNode{204, 203, 205, 205}; // Players
+        case 203: return NavNode{205, 299, 203, 203}; // Other
+        case 299: return NavNode{203, -1, 299, 299}; // Back
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
+static inline NavNode nav_audio_for_id(int id) {
+    switch (id) {
+        case 300: return NavNode{-1, 301, 300, 300};
+        case 301: return NavNode{300, 302, 301, 301};
+        case 302: return NavNode{301, 399, 302, 302};
+        case 399: return NavNode{302, -1, 399, 399};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_video_for_id(int id) {
+    switch (id) {
+        case 400: return NavNode{-1, 405, 400, 400};
+        case 405: return NavNode{400, 401, 405, 405};
+        case 401: return NavNode{405, 402, 401, 401};
+        case 402: return NavNode{401, 403, 402, 402};
+        case 403: return NavNode{402, 404, 403, 403};
+        case 404: return NavNode{403, 499, 404, 404};
+        case 499: return NavNode{404, -1, 499, 498}; // Back ↔ Apply horizontally
+        case 498: return NavNode{404, -1, 499, 498};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_controls_for_id(int id) {
+    switch (id) {
+        case 500: return NavNode{-1, 501, 500, 500};
+        case 501: return NavNode{500, 502, 501, 501};
+        case 502: return NavNode{501, 505, 502, 502};
+        case 505: return NavNode{502, 507, 505, 505};
+        case 507: return NavNode{505, 506, 507, 507};
+        case 506: return NavNode{507, 599, 506, 506};
+        case 599: return NavNode{506, -1, 599, 599};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
+static inline bool is_audio_slider(int id) {
+    return id == 300 || id == 301 || id == 302;
+}
+
+static inline int audio_slider_index(int id) {
+    switch (id) {
+        case 300: return 0;
+        case 301: return 1;
+        case 302: return 2;
+        default: return -1;
+    }
+}
+
+static float* audio_slider_value_ptr(int slider_id) {
+    if (!ss) return nullptr;
+    switch (slider_id) {
+        case 300: return &ss->menu.vol_master;
+        case 301: return &ss->menu.vol_music;
+        case 302: return &ss->menu.vol_sfx;
+        default: return nullptr;
+    }
+}
+
+static void set_audio_slider_anchor(int slider_id, float value) {
+    if (!ss) return;
+    int idx = audio_slider_index(slider_id);
+    if (idx < 0) return;
+    ss->menu.audio_slider_preview_anchor[idx] = value;
+    ss->menu.audio_slider_preview_anchor_valid[idx] = true;
+}
+
+enum class SliderPreviewEvent { Drag, Release };
+static constexpr float kAudioSliderPreviewCooldown = 0.12f;
+
+static void play_audio_slider_preview(int slider_id, float prev_value, float new_value, SliderPreviewEvent evt) {
+    if (!aa || !ss) return;
+    int idx = audio_slider_index(slider_id);
+    if (idx < 0) return;
+    if (!ss->menu.audio_slider_preview_anchor_valid[idx]) {
+        ss->menu.audio_slider_preview_anchor[idx] = prev_value;
+        ss->menu.audio_slider_preview_anchor_valid[idx] = true;
+    }
+    const char* sound = nullptr;
+    if (evt == SliderPreviewEvent::Drag) {
+        float anchor = ss->menu.audio_slider_preview_anchor[idx];
+        float diff = new_value - anchor;
+        if (std::fabs(diff) < 0.004f)
+            return;
+        float& cooldown = ss->menu.audio_slider_preview_cooldown[idx];
+        if (cooldown > 0.0f)
+            return;
+        sound = (diff >= 0.0f) ? "base:ui_right" : "base:ui_left";
+        cooldown = kAudioSliderPreviewCooldown;
+        ss->menu.audio_slider_preview_anchor[idx] = new_value;
+    } else {
+        sound = "base:ui_confirm";
+        ss->menu.audio_slider_preview_anchor[idx] = new_value;
+        ss->menu.audio_slider_preview_anchor_valid[idx] = true;
+    }
+    if (sound)
+        play_sound(sound);
+}
+
+static void flush_audio_settings_if_dirty() {
+    if (ss && ss->menu.audio_settings_dirty) {
+        save_audio_settings_to_ini("config/audio.ini");
+        ss->menu.audio_settings_dirty = false;
+    }
+}
+
+static bool apply_audio_slider_value(int slider_id, float value) {
+    if (!ss)
+        return false;
+    float* target = audio_slider_value_ptr(slider_id);
+    if (!target)
+        return false;
+    float clamped = std::clamp(value, 0.0f, 1.0f);
+    bool changed = std::fabs(*target - clamped) > 0.0005f;
+    *target = clamped;
+    if (changed)
+        ss->menu.audio_settings_dirty = true;
+    return changed;
+}
+static inline NavNode nav_binds_for_id(int id) {
+    // Keys page rows (700..704), then footer buttons in order:
+    // 799 Back, 791 Reset, 792 Load, 794 Undo
+    if (id >= 700 && id <= 704) {
+        int up = (id == 700) ? -1 : id - 1;
+        int down = (id == 704) ? 799 : id + 1;
+        return NavNode{up, down, id, id};
+    }
+    switch (id) {
+        case 799: return NavNode{704, -1, 799, 791};
+        case 791: return NavNode{704, -1, 799, 792};
+        case 792: return NavNode{704, -1, 791, 793};
+        case 793: return NavNode{704, -1, 792, 794};
+        case 794: return NavNode{704, -1, 793, 794};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_binds_list_for_id(int id) {
+    if (id >= 720 && id <= 724) {
+        int up = (id == 720) ? -1 : id - 1;
+        int down = (id == 724) ? 799 : id + 1;
+        return NavNode{up, down, id, id};
+    }
+    switch (id) {
+        case 799: return NavNode{724, -1, 799, 799};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_other_for_id(int id) {
+    switch (id) {
+        case 800: return NavNode{-1, 801, 800, 800};
+        case 801: return NavNode{800, 899, 801, 801};
+        case 899: return NavNode{801, -1, 899, 899};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
+inline void ensure_focus_default(const std::vector<ButtonDesc>& btns) {
+    if (ss->menu.focus_id >= 0) return;
+    for (auto const& b : btns) if (b.enabled) { ss->menu.focus_id = b.id; break; }
+}
+
+} // namespace
+
+std::vector<RectNdc> layout_vlist(RectNdc top_left, float item_w, float item_h, float vgap, int count) {
+    std::vector<RectNdc> out;
+    out.reserve(static_cast<std::size_t>(std::max(0, count)));
+    for (int i = 0; i < count; ++i) {
+        RectNdc r{top_left.x, top_left.y + static_cast<float>(i) * (item_h + vgap), item_w, item_h};
+        out.push_back(r);
+    }
+    return out;
+}
+
+std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
+    (void)width; (void)height;
+    std::vector<ButtonDesc> buttons;
+    const float item_h = 0.08f;
+    const float vgap = 0.02f;
+    if (ss->menu.page == MAIN) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.25f, 0.0f, 0.0f}, 0.40f, item_h, vgap, 3);
+        buttons.push_back(ButtonDesc{100, rects[0], "Play", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{101, rects[1], "Settings", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{102, rects[2], "Quit", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == SETTINGS) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.50f, item_h, vgap, 6);
+        buttons.push_back(ButtonDesc{201, rects[0], "Video", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{200, rects[1], "Audio", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{202, rects[2], "Controls", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{204, rects[3], "Binds", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{205, rects[4], "Players", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{203, rects[5], "Other", ButtonKind::Button, 0.0f, true});
+        // Footer Back button (5% from left/bottom)
+        buttons.push_back(ButtonDesc{299, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == AUDIO) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 3);
+        buttons.push_back(ButtonDesc{300, rects[0], "Master Volume", ButtonKind::Slider, ss->menu.vol_master, true});
+        buttons.push_back(ButtonDesc{301, rects[1], "Music Volume", ButtonKind::Slider, ss->menu.vol_music, true});
+        buttons.push_back(ButtonDesc{302, rects[2], "SFX Volume", ButtonKind::Slider, ss->menu.vol_sfx, true});
+        // Footer buttons (5% from left/bottom)
+        buttons.push_back(ButtonDesc{399, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == VIDEO) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 6);
+        buttons.push_back(ButtonDesc{400, rects[0], "Resolution", ButtonKind::OptionCycle, static_cast<float>(ss->menu.video_res_index), true});
+        bool windowed = (std::clamp(ss->menu.window_mode_index, 0, 2) == 0);
+        buttons.push_back(ButtonDesc{405, rects[1], "Window Size", ButtonKind::OptionCycle, static_cast<float>(ss->menu.window_size_index), windowed});
+        buttons.push_back(ButtonDesc{401, rects[2], "Window Mode", ButtonKind::OptionCycle, static_cast<float>(ss->menu.window_mode_index), true});
+        buttons.push_back(ButtonDesc{402, rects[3], "VSync", ButtonKind::Toggle, ss->menu.vsync ? 1.0f : 0.0f, true});
+        buttons.push_back(ButtonDesc{403, rects[4], "Frame Rate Limit", ButtonKind::OptionCycle, static_cast<float>(ss->menu.frame_limit_index), true});
+        buttons.push_back(ButtonDesc{404, rects[5], "UI Scale", ButtonKind::Slider, ss->menu.ui_scale, true});
+        // Footer buttons: Back (left 5%), Apply (right 5%)
+        bool apply_enabled = false;
+        // Apply needed if internal resolution or window mode differs from current real state.
+        if (gg) {
+            static const int kResW[4] = {1280, 1600, 1920, 2560};
+            static const int kResH[4] = {720,  900,  1080, 1440};
+            int idx = std::clamp(ss->menu.video_res_index, 0, 3);
+            bool res_diff = (gg->dims.x != (unsigned)kResW[idx] || gg->dims.y != (unsigned)kResH[idx]);
+            Uint32 flags = SDL_GetWindowFlags(gg->window);
+            int curr_mode = (flags & SDL_WINDOW_FULLSCREEN) ? 2 : ((flags & SDL_WINDOW_FULLSCREEN_DESKTOP) ? 1 : 0);
+            bool mode_diff = (std::clamp(ss->menu.window_mode_index, 0, 2) != curr_mode);
+            apply_enabled = res_diff || mode_diff;
+        }
+        buttons.push_back(ButtonDesc{499, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{498, RectNdc{0.70f, 0.82f, 0.20f, 0.08f}, "Apply", ButtonKind::Button, 0.0f, apply_enabled});
+    } else if (ss->menu.page == CONTROLS) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.16f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 4);
+        buttons.push_back(ButtonDesc{500, rects[0], "Screen Shake", ButtonKind::Slider, ss->menu.screen_shake, true});
+        buttons.push_back(ButtonDesc{501, rects[1], "Mouse Sensitivity", ButtonKind::Slider, ss->menu.mouse_sens, true});
+        buttons.push_back(ButtonDesc{502, rects[2], "Controller Sensitivity", ButtonKind::Slider, ss->menu.controller_sens, true});
+        buttons.push_back(ButtonDesc{505, rects[3], "Vibration Enabled", ButtonKind::Toggle, ss->menu.vibration_enabled ? 1.0f : 0.0f, true});
+        // Add vibration magnitude slider row
+        auto ctrl_more = layout_vlist(RectNdc{0.10f, 0.16f + 4 * (item_h + vgap), 0.0f, 0.0f}, 0.70f, item_h, vgap, 1);
+        buttons.push_back(ButtonDesc{507, ctrl_more[0], "Vibration Intensity", ButtonKind::Slider, ss->menu.vibration_magnitude, ss->menu.vibration_enabled});
+        buttons.push_back(ButtonDesc{599, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == BINDS) {
+        auto rows = layout_vlist(RectNdc{0.10f, 0.16f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 5);
+        buttons.push_back(ButtonDesc{700, rows[0], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{701, rows[1], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{702, rows[2], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{703, rows[3], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{704, rows[4], "", ButtonKind::Button, 0.0f, true});
+        // Footer buttons: Back, Reset, Load, New Preset, Undo
+        // Enable/disable Undo based on modification
+        auto eq_binds = [](const InputBindings& a, const InputBindings& b){
+            return a.left==b.left && a.right==b.right && a.up==b.up && a.down==b.down &&
+                   a.use_left==b.use_left && a.use_right==b.use_right && a.use_up==b.use_up && a.use_down==b.use_down && a.use_center==b.use_center &&
+                   a.pick_up==b.pick_up && a.drop==b.drop && a.reload==b.reload && a.dash==b.dash;
+        };
+        bool modified = !eq_binds(ss->input_binds, ss->menu.binds_snapshot);
+        buttons.push_back(ButtonDesc{799, RectNdc{0.00f, 0.82f, 0.18f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{791, RectNdc{0.20f, 0.82f, 0.22f, 0.08f}, "Reset to Defaults", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{792, RectNdc{0.44f, 0.82f, 0.18f, 0.08f}, "Load Preset", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{793, RectNdc{0.64f, 0.82f, 0.18f, 0.08f}, "New Preset", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{794, RectNdc{0.84f, 0.82f, 0.16f, 0.08f}, "Undo Changes", ButtonKind::Button, 0.0f, modified});
+    } else if (ss->menu.page == BINDS_LOAD) {
+        auto rows = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 5);
+        buttons.push_back(ButtonDesc{720, rows[0], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{721, rows[1], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{722, rows[2], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{723, rows[3], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{724, rows[4], "", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{799, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == PLAYERS) {
+        // Ensure players_presets size
+        if ((int)ss->menu.players_presets.size() < ss->menu.players_count)
+            ss->menu.players_presets.resize(static_cast<std::size_t>(ss->menu.players_count), ss->menu.binds_current_preset.empty() ? std::string("Default") : ss->menu.binds_current_preset);
+        int per_page = 5;
+        int start = ss->menu.players_page * per_page;
+        int rows = std::min(per_page, ss->menu.players_count - start);
+        auto rows_rect = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.70f, item_h, vgap, std::max(0, rows));
+        for (int i = 0; i < rows; ++i) {
+            buttons.push_back(ButtonDesc{900 + i, rows_rect[static_cast<std::size_t>(i)], "Player", ButtonKind::OptionCycle, 0.0f, true});
+        }
+        // Footer: Add/Remove/Back
+        buttons.push_back(ButtonDesc{981, RectNdc{0.22f, 0.82f, 0.20f, 0.08f}, "Remove Player", ButtonKind::Button, 0.0f, ss->menu.players_count > 1});
+        buttons.push_back(ButtonDesc{980, RectNdc{0.44f, 0.82f, 0.20f, 0.08f}, "Add Player", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{999, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == OTHER) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 0);
+        buttons.push_back(ButtonDesc{899, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    }
+    return buttons;
+}
+
+void render_menu(int width, int height) {
+    SDL_Renderer* r = gg ? gg->renderer : nullptr;
+    if (!r) return;
+
+    auto buttons = build_menu_buttons(width, height);
+    ensure_focus_default(buttons);
+
+    if (ss) {
+        for (float& cd : ss->menu.audio_slider_preview_cooldown)
+            cd = std::max(0.0f, cd - ss->dt);
+    }
+
+    // Draw page header and page indicator
+    auto draw_text_hdr = [&](const char* s, int x, int y){
+        if (!gg->ui_font) return;
+        SDL_Color tc{240, 220, 80, 255};
+        if (SDL_Surface* ts = TTF_RenderUTF8_Blended(gg->ui_font, s, tc)) {
+            SDL_Texture* tt = SDL_CreateTextureFromSurface(r, ts);
+            int tw=0, th=0; SDL_QueryTexture(tt, nullptr, nullptr, &tw, &th);
+            // Scale up header ~1.5x for prominence
+            int sw = (int)std::lround((double)tw * 1.5);
+            int sh = (int)std::lround((double)th * 1.5);
+            SDL_Rect td{x, y, sw, sh}; SDL_RenderCopy(r, tt, nullptr, &td);
+            SDL_DestroyTexture(tt); SDL_FreeSurface(ts);
+        }
+    };
+    int hdr_x = (int)std::lround(SAFE_M * static_cast<float>(width)) + 24;
+    int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+    const char* title = "Main Menu";
+    if (ss->menu.page == SETTINGS) title = "Settings";
+    else if (ss->menu.page == AUDIO) title = "Audio";
+    else if (ss->menu.page == VIDEO) title = "Video";
+    else if (ss->menu.page == CONTROLS) title = "Controls";
+    else if (ss->menu.page == BINDS) title = "Binds";
+    else if (ss->menu.page == BINDS_LOAD) title = "Load Preset";
+    else if (ss->menu.page == PLAYERS) title = "Players";
+    else if (ss->menu.page == OTHER) title = "Other";
+    draw_text_hdr(title, hdr_x, hdr_y);
+    // Page indicator on right
+    if (ss->menu.page == VIDEO) {
+        int total_pages = 1; // extend to >1 when paginating
+        char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.page_index + 1, 1);
+        int x = width - 200; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+        if (total_pages > 1) {
+            // Prev/Next larger buttons near top-right
+            SDL_Rect prevb{width - 320, hdr_y - 4, 90, 32};
+            SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &nextb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &nextb);
+            auto draw_small = [&](const char* s, SDL_Rect rc){ if (!gg->ui_font) return; SDL_Color c{220,220,230,255}; if (SDL_Surface* srf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) { SDL_Texture* tex = SDL_CreateTextureFromSurface(r, srf); int tw=0, th=0; SDL_QueryTexture(tex,nullptr,nullptr,&tw,&th); SDL_Rect d{rc.x + (rc.w - tw)/2, rc.y + (rc.h - th)/2, tw, th}; SDL_RenderCopy(r, tex, nullptr, &d); SDL_DestroyTexture(tex); SDL_FreeSurface(srf);} };
+            draw_small("Prev", prevb);
+            draw_small("Next", nextb);
+        }
+    } else if (ss->menu.page == BINDS) {
+        // Binds keys paging header
+        int total_actions = (int)BindAction::BA_COUNT;
+        int per_page = 5;
+        int total_pages = std::max(1, (total_actions + per_page - 1) / per_page);
+        char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.binds_keys_page + 1, total_pages);
+        int x = width - 380; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+        if (total_pages > 1) {
+            SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+            SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &nextb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &nextb);
+            auto draw_small = [&](const char* s, SDL_Rect rc){ if (!gg->ui_font) return; SDL_Color c{220,220,230,255}; if (SDL_Surface* srf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) { SDL_Texture* tex = SDL_CreateTextureFromSurface(r, srf); int tw=0, th=0; SDL_QueryTexture(tex,nullptr,nullptr,&tw,&th); SDL_Rect d{rc.x + (rc.w - tw)/2, rc.y + (rc.h - th)/2, tw, th}; SDL_RenderCopy(r, tex, nullptr, &d); SDL_DestroyTexture(tex); SDL_FreeSurface(srf);} };
+            draw_small("Prev", prevb);
+            draw_small("Next", nextb);
+        }
+        // Hints: device-specific
+        // defer hint drawing until draw_text is defined
+    } else if (ss->menu.page == BINDS_LOAD) {
+        // List paging
+        int count = (int)list_bind_presets().size();
+        int per_page = 5;
+        int total_pages = std::max(1, (count + per_page - 1) / per_page);
+        char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.binds_list_page + 1, total_pages);
+        int x = width - 380; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+        if (total_pages > 1) {
+            SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+            SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &nextb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &nextb);
+            auto draw_small = [&](const char* s, SDL_Rect rc){ if (!gg->ui_font) return; SDL_Color c{220,220,230,255}; if (SDL_Surface* srf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) { SDL_Texture* tex = SDL_CreateTextureFromSurface(r, srf); int tw=0, th=0; SDL_QueryTexture(tex,nullptr,nullptr,&tw,&th); SDL_Rect d{rc.x + (rc.w - tw)/2, rc.y + (rc.h - th)/2, tw, th}; SDL_RenderCopy(r, tex, nullptr, &d); SDL_DestroyTexture(tex); SDL_FreeSurface(srf);} };
+            draw_small("Prev", prevb);
+            draw_small("Next", nextb);
+        }
+        // defer hint drawing until draw_text is defined
+    }
+
+    auto draw_text = [&](const char* s, int x, int y, SDL_Color col) {
+        if (!gg->ui_font) return;
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s, col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect td{x, y, tw, th}; SDL_RenderCopy(r, tex, nullptr, &td);
+            SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+        }
+    };
+
+    auto draw_label_value = [&](const SDL_Rect& rr, const std::string& label, const std::string& value, bool /*focused*/){
+        SDL_Color lc{220, 220, 230, 255};
+        SDL_Color vc{200, 200, 210, 255};
+        int lx = rr.x + 12; int ly = rr.y + rr.h/2 - 8;
+        draw_text(label.c_str(), lx, ly, lc);
+        if (!value.empty() && gg->ui_font) {
+            if (SDL_Surface* vs = TTF_RenderUTF8_Blended(gg->ui_font, value.c_str(), vc)) {
+                SDL_Texture* vt = SDL_CreateTextureFromSurface(r, vs);
+                int tw=0, th=0; SDL_QueryTexture(vt, nullptr, nullptr, &tw, &th);
+                SDL_Rect vd{rr.x + rr.w - tw - 12, rr.y + rr.h/2 - th/2, tw, th};
+                SDL_RenderCopy(r, vt, nullptr, &vd);
+                SDL_DestroyTexture(vt); SDL_FreeSurface(vs);
+            }
+        }
+    };
+
+    auto draw_slider = [&](const SDL_Rect& rr, float t){
+        t = std::clamp(t, 0.0f, 1.0f);
+        SDL_SetRenderDrawColor(r, 60, 60, 70, 255);
+        int bx = rr.x + 12, bw = rr.w - 24, by = rr.y + rr.h - 16, bh = 6;
+        SDL_Rect bg{bx, by, bw, bh}; SDL_RenderFillRect(r, &bg);
+        SDL_SetRenderDrawColor(r, 240, 220, 80, 220);
+        int fw = (int)std::lround((double)bw * (double)t);
+        SDL_Rect fg{bx, by, fw, bh}; SDL_RenderFillRect(r, &fg);
+        int thw = 8, thh = 14;
+        int tx = bx + fw - thw/2; int ty = by - (thh - bh)/2;
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_Rect thumb{tx, ty, thw, thh}; SDL_RenderFillRect(r, &thumb);
+    };
+
+    // Show current preset on Binds page (+ modified indicator vs snapshot)
+    if (ss->menu.page == BINDS) {
+        auto eq_binds = [](const InputBindings& a, const InputBindings& b){
+            return a.left==b.left && a.right==b.right && a.up==b.up && a.down==b.down &&
+                   a.use_left==b.use_left && a.use_right==b.use_right && a.use_up==b.use_up && a.use_down==b.use_down && a.use_center==b.use_center &&
+                   a.pick_up==b.pick_up && a.drop==b.drop && a.reload==b.reload && a.dash==b.dash;
+        };
+        std::string preset = ss->menu.binds_current_preset.empty() ? std::string("Default") : ss->menu.binds_current_preset;
+        bool modified = !eq_binds(ss->input_binds, ss->menu.binds_snapshot);
+        std::string sub = std::string("Preset: ") + preset + (modified ? " (modified)" : "");
+        draw_text(sub.c_str(), hdr_x, hdr_y + 36, SDL_Color{200,200,210,255});
+    }
+
+    // Draw hints (after draw_text lambda defined)
+    if (ss->menu.page == BINDS || ss->menu.page == BINDS_LOAD) {
+        const char* hint = (ss->menu.last_input_source == 2) ? "Prev: LB  Next: RB  Back: B" : "Prev: Q  Next: E  Back: Esc";
+        draw_text(hint, hdr_x, hdr_y + 58, SDL_Color{160,170,180,255});
+    }
+
+    // Draw buttons and controls
+    for (auto const& b : buttons) {
+        SDL_FRect pr = ndc_to_pixels(b.rect, width, height);
+        bool focused = (b.id == ss->menu.focus_id);
+        SDL_Color fill = focused ? SDL_Color{60, 70, 90, 255} : SDL_Color{40, 45, 55, 255};
+        SDL_Color border = focused ? SDL_Color{240, 220, 80, 255} : SDL_Color{180, 180, 190, 255};
+        if (!b.enabled) {
+            fill = focused ? SDL_Color{50, 55, 65, 255} : SDL_Color{35, 38, 45, 255};
+            border = SDL_Color{110, 110, 120, 255};
+        }
+        SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a);
+        SDL_Rect rr{(int)std::floor(pr.x), (int)std::floor(pr.y), (int)std::ceil(pr.w), (int)std::ceil(pr.h)};
+        SDL_RenderFillRect(r, &rr);
+        SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(r, &rr);
+        if (b.kind == ButtonKind::Button) {
+            if (ss->menu.page == BINDS && b.id >= 700 && b.id <= 704) {
+                static const BindAction order[] = {
+                    BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                    BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                    BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                };
+                int per_page = 5;
+                int idx = ss->menu.binds_keys_page * per_page + (b.id - 700);
+                if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0]))) {
+                    BindAction a = order[idx];
+                    std::string label = bind_label(a);
+                    SDL_Scancode sc = bind_get(ss->input_binds, a);
+                    draw_label_value(rr, label, std::string(SDL_GetScancodeName(sc)), focused);
+                }
+            } else if (ss->menu.page == BINDS_LOAD && b.id >= 720 && b.id <= 724) {
+                auto presets = list_bind_presets();
+                int per_page = 5;
+                int idx = ss->menu.binds_list_page * per_page + (b.id - 720);
+                if (idx >= 0 && idx < (int)presets.size()) {
+                    draw_label_value(rr, presets[(size_t)idx], std::string(), focused);
+                }
+            } else if (b.id == 498) {
+                // Apply button highlight when enabled
+                draw_label_value(rr, b.label, std::string(), focused);
+            } else {
+                draw_label_value(rr, b.label, std::string(), focused);
+            }
+        } else if (b.kind == ButtonKind::Toggle) {
+            bool on = (b.value >= 0.5f);
+            draw_label_value(rr, b.label, on ? std::string("On") : std::string("Off"), focused);
+        } else if (b.kind == ButtonKind::Slider) {
+            char buf[64] = {0};
+            if (b.id == 501 || b.id == 502) {
+                double minv = 0.10, maxv = 10.0;
+                double val = minv + (maxv - minv) * (double)b.value;
+                std::snprintf(buf, sizeof(buf), "%.3f", val);
+            } else {
+                double dv = static_cast<double>(b.value) * 100.0;
+                int pct = (int)std::lround(dv);
+                std::snprintf(buf, sizeof(buf), "%d%%", pct);
+            }
+            draw_label_value(rr, b.label, std::string(buf), focused);
+            draw_slider(rr, b.value);
+        } else if (b.kind == ButtonKind::OptionCycle) {
+            std::string val;
+            if (b.id == 400) {
+                static const char* kRes[] = {"1280x720", "1600x900", "1920x1080", "2560x1440"};
+                int idx = std::clamp(ss->menu.video_res_index, 0, 3);
+                val = kRes[idx];
+            } else if (b.id == 405) {
+                static const char* kWin[] = {"1280x720", "1600x900", "1920x1080", "2560x1440"};
+                int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                val = kWin[idx];
+            } else if (b.id == 401) {
+                static const char* kModes[] = {"Windowed", "Borderless", "Fullscreen"};
+                int idx = std::clamp(ss->menu.window_mode_index, 0, 2);
+                val = kModes[idx];
+            } else if (b.id == 403) {
+                static const char* kFps[] = {"Off", "30", "60", "120", "144", "240"};
+                int idx = std::clamp(ss->menu.frame_limit_index, 0, 5);
+                val = kFps[idx];
+            }
+            // Draw label, value, and left/right arrows
+            SDL_Color lc{220, 220, 230, 255};
+            int lx = rr.x + 12; int ly = rr.y + rr.h/2 - 8; draw_text(b.label.c_str(), lx, ly, lc);
+            // Arrow buttons (larger) with padding from right edge
+            int padR = 16;
+            int aw = std::min(36, rr.w / 6);
+            int ah = std::min(28, rr.h - 8);
+            SDL_Rect leftA{rr.x + rr.w - (aw*2 + padR), rr.y + rr.h/2 - ah/2, aw, ah};
+            SDL_Rect rightA{rr.x + rr.w - (aw + padR/2), rr.y + rr.h/2 - ah/2, aw, ah};
+            SDL_SetRenderDrawColor(r, 60, 60, 70, 255); SDL_RenderFillRect(r, &leftA); SDL_RenderFillRect(r, &rightA);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &leftA); SDL_RenderDrawRect(r, &rightA);
+            draw_text("<", leftA.x + 7, leftA.y + 2, lc);
+            draw_text(">", rightA.x + 7, rightA.y + 2, lc);
+            // Value right-aligned, before arrows
+            if (gg->ui_font) {
+                SDL_Color vc{200, 200, 210, 255};
+                if (SDL_Surface* vs = TTF_RenderUTF8_Blended(gg->ui_font, val.c_str(), vc)) {
+                    SDL_Texture* vt = SDL_CreateTextureFromSurface(r, vs);
+                    int tw=0, th=0; SDL_QueryTexture(vt, nullptr, nullptr, &tw, &th);
+                    SDL_Rect vd{leftA.x - 16 - tw, rr.y + rr.h/2 - th/2, tw, th};
+                    SDL_RenderCopy(r, vt, nullptr, &vd);
+                    SDL_DestroyTexture(vt); SDL_FreeSurface(vs);
+                }
+            }
+        }
+    }
+
+    // Binds capture overlay
+    if (ss->menu.capture_action_id >= 0) {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, 10, 10, 14, 180);
+        SDL_Rect full{0,0,width,height};
+        SDL_RenderFillRect(r, &full);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        const char* msg = "Press a key to bind (Esc to cancel)";
+        auto draw_center = [&](const char* s){
+            if (!gg->ui_font) return;
+            SDL_Color c{240, 220, 80, 255};
+            if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                SDL_Rect td{width/2 - tw/2, height/2 - th/2, tw, th};
+                SDL_RenderCopy(r, tex, nullptr, &td);
+                SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+            }
+        };
+        draw_center(msg);
+    }
+
+    // Toast overlay for binds actions
+    if (ss->menu.binds_toast_timer > 0.0f) {
+        ss->menu.binds_toast_timer = std::max(0.0f, ss->menu.binds_toast_timer - ss->dt);
+        if (!ss->menu.binds_toast.empty() && gg && gg->ui_font) {
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+            SDL_Color c{240, 220, 80, 255};
+            const std::string& s = ss->menu.binds_toast;
+            if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s.c_str(), c)) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                float t = 1.0f - (ss->menu.binds_toast_timer / 1.2f);
+                int yoff = (int)std::lround(-40.0f * t);
+                SDL_Rect td{width/2 - tw/2, height/2 - th/2 + yoff, tw, th};
+                SDL_RenderCopy(r, tex, nullptr, &td);
+                SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+            }
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        }
+    }
+}
+
+void step_menu_logic(int width, int height) {
+    auto buttons = build_menu_buttons(width, height);
+    ensure_focus_default(buttons);
+
+    // If capturing a bind, ignore all menu navigation and clicks until capture completes (Esc cancels in input.cpp)
+    if (ss->menu.capture_action_id >= 0) {
+        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+        return;
+    }
+
+    auto find_btn = [&](int id) -> const ButtonDesc* {
+        for (auto const& b : buttons) {
+            if (b.id == id) return &b;
+        }
+        return nullptr;
+    };
+
+    auto nav = [&](int id) -> NavNode {
+        switch (ss->menu.page) {
+            case MAIN: return nav_main_for_id(id);
+            case SETTINGS: return nav_settings_for_id(id);
+            case AUDIO: return nav_audio_for_id(id);
+            case VIDEO: return nav_video_for_id(id);
+            case CONTROLS: return nav_controls_for_id(id);
+            case BINDS: return nav_binds_for_id(id);
+            case BINDS_LOAD: return nav_binds_list_for_id(id);
+            case OTHER: return nav_other_for_id(id);
+            default: return NavNode{-1,-1,-1,-1};
+        }
+    };
+
+    // Mouse hover/focus
+    bool click = (ss->mouse_inputs.left && !ss->menu.mouse_left_prev);
+    for (auto const& b : buttons) {
+        SDL_FRect pr = ndc_to_pixels(b.rect, width, height);
+        float mx = static_cast<float>(ss->mouse_inputs.pos.x);
+        float my = static_cast<float>(ss->mouse_inputs.pos.y);
+        bool inside = (mx >= pr.x && mx <= pr.x + pr.w && my >= pr.y && my <= pr.y + pr.h);
+        if (inside) {
+            // Only let hover steal focus if mouse was the last-used device,
+            // but always move focus on click.
+            if (ss->menu.mouse_last_used || click) {
+                if (ss->menu.focus_id != b.id) { ss->menu.focus_id = b.id; play_sound("base:ui_cursor_move"); }
+            }
+            if (click) {
+                // Activate
+                if (b.id == 100) {
+                    ss->mode = ids::MODE_PLAYING;
+                } else if (b.id == 101) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
+                } else if (b.id == 102) {
+                    ss->running = false;
+                } else if (b.id == 299) {
+                    ss->menu.page = MAIN; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_cant");
+                } else if (b.id == 200) {
+                    ss->menu.page = AUDIO; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 201) {
+                    ss->menu.page = VIDEO; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 202) {
+                    ss->menu.page = CONTROLS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 204) {
+                    ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 203) {
+                    ss->menu.page = OTHER; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 205) {
+                    ss->menu.page = PLAYERS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 799 && ss->menu.page == BINDS_LOAD) {
+                    ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (b.id == 399 || b.id == 499 || b.id == 599 || b.id == 799 || b.id == 899) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_cant");
+                } else if (ss->menu.page == BINDS && b.id >= 700 && b.id <= 704) {
+                    // map row to action for capture
+                    static const BindAction order[] = {
+                        BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                        BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                        BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                    };
+                    int idx = ss->menu.binds_keys_page * 5 + (b.id - 700);
+                    if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0]))) ss->menu.capture_action_id = (int)order[idx];
+                    ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == BINDS && b.id == 792) {
+                    ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == BINDS && b.id == 799) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true; if (aa) play_sound("base:ui_confirm");
+                } else if (ss->menu.page == BINDS && b.id == 791) {
+                    ss->input_binds = InputBindings{}; ss->menu.ignore_mouse_until_release = true;
+                } else if (b.kind == ButtonKind::Toggle) {
+                    if (b.id == 402) ss->menu.vsync = !ss->menu.vsync;
+                    else if (b.id == 503) ss->menu.invert_x = !ss->menu.invert_x;
+                    else if (b.id == 504) ss->menu.invert_y = !ss->menu.invert_y;
+                    else if (b.id == 505) ss->menu.vibration_enabled = !ss->menu.vibration_enabled;
+                } else if (b.kind == ButtonKind::OptionCycle) {
+                    if (!ss->menu.ignore_mouse_until_release) {
+                        // Determine arrow hit boxes (larger)
+                        SDL_Rect rr{(int)std::floor(pr.x), (int)std::floor(pr.y), (int)std::ceil(pr.w), (int)std::ceil(pr.h)};
+                        int aw = std::min(36, rr.w / 6);
+                        int ah = std::min(28, rr.h - 8);
+                        SDL_Rect leftA{rr.x + rr.w - (aw*2 + 8), rr.y + rr.h/2 - ah/2, aw, ah};
+                        SDL_Rect rightA{rr.x + rr.w - aw, rr.y + rr.h/2 - ah/2, aw, ah};
+                        bool inLeft = (ss->mouse_inputs.pos.x >= leftA.x && ss->mouse_inputs.pos.x <= leftA.x + leftA.w && ss->mouse_inputs.pos.y >= leftA.y && ss->mouse_inputs.pos.y <= leftA.y + leftA.h);
+                        bool inRight = (ss->mouse_inputs.pos.x >= rightA.x && ss->mouse_inputs.pos.x <= rightA.x + rightA.w && ss->mouse_inputs.pos.y >= rightA.y && ss->mouse_inputs.pos.y <= rightA.y + rightA.h);
+                        if (inLeft) {
+                            if (b.id == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 3) % 4;
+                            else if (b.id == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 2) % 3;
+                            else if (b.id == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 5) % 6;
+                            else if (b.id == 405 && b.enabled) ss->menu.window_size_index = (ss->menu.window_size_index + 3) % 4;
+                            if (aa) play_sound("base:ui_left");
+                        } else if (inRight) {
+                            if (b.id == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 1) % 4;
+                            else if (b.id == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 1) % 3;
+                            else if (b.id == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 1) % 6;
+                            else if (b.id == 405 && b.enabled) ss->menu.window_size_index = (ss->menu.window_size_index + 1) % 4;
+                            if (aa) play_sound("base:ui_right");
+                        } else {
+                            // Fallback: click cycles forward
+                            if (b.id == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 1) % 4;
+                            else if (b.id == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 1) % 3;
+                            else if (b.id == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 1) % 6;
+                            else if (b.id == 405 && b.enabled) ss->menu.window_size_index = (ss->menu.window_size_index + 1) % 4;
+                            if (aa) play_sound("base:ui_right");
+                        }
+                        // Apply window size immediately when windowed
+                        if (b.id == 405 && b.enabled && gg && gg->window) {
+                            static const int kResW[4] = {1280, 1600, 1920, 2560};
+                            static const int kResH[4] = {720,  900,  1080, 1440};
+                            int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                            SDL_SetWindowSize(gg->window, kResW[idx], kResH[idx]);
+                            gg->window_dims = glm::uvec2{(unsigned)kResW[idx], (unsigned)kResH[idx]};
+                        }
+                    }
+                } else if (b.id >= 700 && b.id <= 712) {
+                    // Enter capture mode for binds
+                    ss->menu.capture_action_id = b.id;
+                    ss->menu.ignore_mouse_until_release = true;
+                }
+            }
+            // Sliders: click/drag
+            if (b.kind == ButtonKind::Slider) {
+                if (ss->mouse_inputs.left) {
+                    if (!ss->menu.ignore_mouse_until_release) {
+                        bool first_drag_frame = (ss->menu.dragging_id != b.id);
+                        ss->menu.dragging_id = b.id;
+                        float t = (pr.w > 1.0f) ? (mx - pr.x) / pr.w : 0.0f;
+                        t = std::clamp(t, 0.0f, 1.0f);
+                        if (is_audio_slider(b.id)) {
+                            float* pv = audio_slider_value_ptr(b.id);
+                            float prev = pv ? *pv : 0.0f;
+                            bool changed = apply_audio_slider_value(b.id, t);
+                            float curr = pv ? *pv : prev;
+                            if (first_drag_frame)
+                                set_audio_slider_anchor(b.id, prev);
+                            else if (changed)
+                                play_audio_slider_preview(b.id, prev, curr, SliderPreviewEvent::Drag);
+                        } else {
+                            if (b.id == 500) ss->menu.screen_shake = t;
+                            else if (b.id == 501) ss->menu.mouse_sens = t;
+                            else if (b.id == 502) ss->menu.controller_sens = t;
+                            else if (b.id == 404) ss->menu.ui_scale = t;
+                            else if (b.id == 507) ss->menu.vibration_magnitude = t;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Continue slider drag if active
+    if (!ss->mouse_inputs.left) {
+        int released_id = ss->menu.dragging_id;
+        ss->menu.dragging_id = -1;
+        ss->menu.ignore_mouse_until_release = false;
+        if (is_audio_slider(released_id)) {
+            if (float* pv = audio_slider_value_ptr(released_id)) {
+                float val = *pv;
+                play_audio_slider_preview(released_id, val, val, SliderPreviewEvent::Release);
+            }
+            flush_audio_settings_if_dirty();
+        }
+    }
+    if (ss->menu.dragging_id >= 0) {
+        int id = ss->menu.dragging_id;
+        const ButtonDesc* b = find_btn(id);
+        if (b) {
+            SDL_FRect pr = ndc_to_pixels(b->rect, width, height);
+            float mx = static_cast<float>(ss->mouse_inputs.pos.x);
+            float t = (pr.w > 1.0f) ? (mx - pr.x) / pr.w : 0.0f;
+            t = std::clamp(t, 0.0f, 1.0f);
+            if (is_audio_slider(id)) {
+                float* pv = audio_slider_value_ptr(id);
+                float prev = pv ? *pv : 0.0f;
+                if (pv && !ss->menu.audio_slider_preview_anchor_valid[audio_slider_index(id)])
+                    set_audio_slider_anchor(id, prev);
+                bool changed = apply_audio_slider_value(id, t);
+                float curr = pv ? *pv : prev;
+                if (changed)
+                    play_audio_slider_preview(id, prev, curr, SliderPreviewEvent::Drag);
+            } else {
+                if (id == 500) ss->menu.screen_shake = t;
+                else if (id == 501) ss->menu.mouse_sens = t;
+                else if (id == 502) ss->menu.controller_sens = t;
+                else if (id == 404) ss->menu.ui_scale = t;
+                else if (id == 507) ss->menu.vibration_magnitude = t;
+            }
+        }
+    }
+
+    // Controller/keyboard navigation with edge+repeat timers
+    // First edge fires immediately, then repeats after an initial delay at a fixed interval.
+    const float kInitialDelay = 0.35f;   // seconds before repeats start
+    const float kRepeatInterval = 0.09f; // seconds between repeats
+
+    // Compute simple left/right edge detection before repeat updates
+    bool left_edge_now = (ss->menu.hold_left && !ss->menu.prev_hold_left);
+    bool right_edge_now = (ss->menu.hold_right && !ss->menu.prev_hold_right);
+    bool left_release_now = (!ss->menu.hold_left && ss->menu.prev_hold_left);
+    bool right_release_now = (!ss->menu.hold_right && ss->menu.prev_hold_right);
+
+    auto repeat_fire = [&](bool hold, bool& prev_hold, float& rpt_timer) -> bool {
+        bool fire = false;
+        if (hold) {
+            if (!prev_hold) {
+                // Rising edge: fire once and arm initial delay
+                fire = true;
+                rpt_timer = kInitialDelay;
+            } else {
+                // Held: count down and fire at repeat interval
+                rpt_timer = std::max(0.0f, rpt_timer - ss->dt);
+                if (rpt_timer <= 0.0f) {
+                    fire = true;
+                    rpt_timer += kRepeatInterval;
+                }
+            }
+        } else {
+            // Released: clear timer
+            rpt_timer = 0.0f;
+        }
+        prev_hold = hold;
+        return fire;
+    };
+
+    bool nav_up = repeat_fire(ss->menu.hold_up, ss->menu.prev_hold_up, ss->menu.rpt_up);
+    bool nav_down = repeat_fire(ss->menu.hold_down, ss->menu.prev_hold_down, ss->menu.rpt_down);
+    bool nav_left = repeat_fire(ss->menu.hold_left, ss->menu.prev_hold_left, ss->menu.rpt_left);
+    bool nav_right = repeat_fire(ss->menu.hold_right, ss->menu.prev_hold_right, ss->menu.rpt_right);
+
+    int fid = ss->menu.focus_id;
+    if (fid >= 0) {
+        if (nav_up) {
+            int n = nav(fid).up; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
+        } else if (nav_down) {
+            int n = nav(fid).down; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
+        } else if (nav_left) {
+            const ButtonDesc* b = find_btn(fid);
+            if (b && b->kind == ButtonKind::Slider) {
+                float* pv = nullptr;
+                if (fid == 300) pv = &ss->menu.vol_master;
+                else if (fid == 301) pv = &ss->menu.vol_music;
+                else if (fid == 302) pv = &ss->menu.vol_sfx;
+                else if (fid == 500) pv = &ss->menu.screen_shake;
+                else if (fid == 501) pv = &ss->menu.mouse_sens;
+                else if (fid == 502) pv = &ss->menu.controller_sens;
+                else if (fid == 404) pv = &ss->menu.ui_scale;
+                else if (fid == 507) pv = &ss->menu.vibration_magnitude;
+                if (pv) {
+                    float new_val = *pv;
+                    if (fid == 501 || fid == 502) {
+                        double step_val = 0.01; double minv = 0.10, maxv = 10.0; double range = maxv - minv; double tstep = step_val / range;
+                        new_val = std::clamp(*pv - (float)tstep, 0.0f, 1.0f);
+                    } else {
+                        new_val = std::clamp(*pv - 0.05f, 0.0f, 1.0f);
+                    }
+                    if (is_audio_slider(fid)) {
+                        apply_audio_slider_value(fid, new_val);
+                        ss->menu.audio_nav_active_id = fid;
+                        ss->menu.audio_nav_active_mask |= 0x1; // left input active
+                    } else
+                        *pv = new_val;
+                    if (aa) play_sound("base:ui_left");
+                }
+            } else if (b && b->kind == ButtonKind::OptionCycle) {
+                if (fid == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 3) % 4;
+                else if (fid == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 2) % 3;
+                else if (fid == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 5) % 6;
+                else if (fid == 405 && b->enabled) {
+                    ss->menu.window_size_index = (ss->menu.window_size_index + 3) % 4;
+                    if (gg && gg->window) {
+                        static const int kResW[4] = {1280, 1600, 1920, 2560};
+                        static const int kResH[4] = {720,  900,  1080, 1440};
+                        int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                        SDL_SetWindowSize(gg->window, kResW[idx], kResH[idx]);
+                        gg->window_dims = glm::uvec2{(unsigned)kResW[idx], (unsigned)kResH[idx]};
+                    }
+                }
+                if (aa) play_sound("base:ui_left");
+            } else if (b && b->kind == ButtonKind::Toggle) {
+                if (fid == 402) ss->menu.vsync = !ss->menu.vsync;
+                else if (fid == 503) ss->menu.invert_x = !ss->menu.invert_x;
+                else if (fid == 504) ss->menu.invert_y = !ss->menu.invert_y;
+                else if (fid == 505) ss->menu.vibration_enabled = !ss->menu.vibration_enabled;
+            } else {
+                int n = nav(fid).left; if (n >= 0) ss->menu.focus_id = n;
+            }
+        } else if (nav_right) {
+            const ButtonDesc* b = find_btn(fid);
+            if (b && b->kind == ButtonKind::Slider) {
+                float* pv = nullptr;
+                if (fid == 300) pv = &ss->menu.vol_master;
+                else if (fid == 301) pv = &ss->menu.vol_music;
+                else if (fid == 302) pv = &ss->menu.vol_sfx;
+                else if (fid == 500) pv = &ss->menu.screen_shake;
+                else if (fid == 501) pv = &ss->menu.mouse_sens;
+                else if (fid == 502) pv = &ss->menu.controller_sens;
+                else if (fid == 404) pv = &ss->menu.ui_scale;
+                else if (fid == 507) pv = &ss->menu.vibration_magnitude;
+                if (pv) {
+                    float new_val = *pv;
+                    if (fid == 501 || fid == 502) {
+                        double step_val = 0.01; double minv = 0.10, maxv = 10.0; double range = maxv - minv; double tstep = step_val / range;
+                        new_val = std::clamp(*pv + (float)tstep, 0.0f, 1.0f);
+                    } else {
+                        new_val = std::clamp(*pv + 0.05f, 0.0f, 1.0f);
+                    }
+                    if (is_audio_slider(fid)) {
+                        apply_audio_slider_value(fid, new_val);
+                        ss->menu.audio_nav_active_id = fid;
+                        ss->menu.audio_nav_active_mask |= 0x2; // right input active
+                    } else
+                        *pv = new_val;
+                    if (aa) play_sound("base:ui_right");
+                }
+            } else if (b && b->kind == ButtonKind::OptionCycle) {
+                if (fid == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 1) % 4;
+                else if (fid == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 1) % 3;
+                else if (fid == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 1) % 6;
+                else if (fid == 405 && b->enabled) {
+                    ss->menu.window_size_index = (ss->menu.window_size_index + 1) % 4;
+                    if (gg && gg->window) {
+                        static const int kResW[4] = {1280, 1600, 1920, 2560};
+                        static const int kResH[4] = {720,  900,  1080, 1440};
+                        int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                        SDL_SetWindowSize(gg->window, kResW[idx], kResH[idx]);
+                        gg->window_dims = glm::uvec2{(unsigned)kResW[idx], (unsigned)kResH[idx]};
+                    }
+                }
+                if (aa) play_sound("base:ui_right");
+            } else if (b && b->kind == ButtonKind::Toggle) {
+                if (fid == 402) ss->menu.vsync = !ss->menu.vsync;
+                else if (fid == 503) ss->menu.invert_x = !ss->menu.invert_x;
+                else if (fid == 504) ss->menu.invert_y = !ss->menu.invert_y;
+                else if (fid == 505) ss->menu.vibration_enabled = !ss->menu.vibration_enabled;
+            } else {
+                int n = nav(fid).right; if (n >= 0) ss->menu.focus_id = n;
+            }
+        }
+        if (ss->menu_inputs.confirm) {
+            const ButtonDesc* b = find_btn(ss->menu.focus_id);
+            if (b) {
+                if (b->id == 100) {
+                    ss->mode = ids::MODE_PLAYING;
+                } else if (b->id == 101) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
+                } else if (b->id == 102) {
+                    ss->running = false;
+                } else if (b->id == 299) {
+                    ss->menu.page = MAIN; ss->menu.focus_id = -1;
+                } else if (b->id == 200) {
+                    ss->menu.page = AUDIO; ss->menu.focus_id = -1;
+                } else if (b->id == 201) {
+                    ss->menu.page = VIDEO; ss->menu.focus_id = -1;
+                } else if (b->id == 202) {
+                    ss->menu.page = CONTROLS; ss->menu.focus_id = -1;
+                } else if (b->id == 203) {
+                    ss->menu.page = OTHER; ss->menu.focus_id = -1;
+                } else if (b->id == 399 || b->id == 499 || b->id == 599 || b->id == 799 || b->id == 899) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
+                } else if (b->id == 204) {
+                    ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                } else if (ss->menu.page == BINDS && b->id >= 700 && b->id <= 704) {
+                    static const BindAction order[] = {
+                        BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                        BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                        BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                    };
+                    int idx = ss->menu.binds_keys_page * 5 + (b->id - 700);
+                    if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0]))) ss->menu.capture_action_id = (int)order[idx];
+                } else if (b->id == 498 && b->enabled) {
+                    // Apply video settings: resolution + window mode
+                    if (gg && gg->window) {
+                        // Resolution (internal render size)
+                        static const int kResW[4] = {1280, 1600, 1920, 2560};
+                        static const int kResH[4] = {720,  900,  1080, 1440};
+                        int ridx = std::clamp(ss->menu.video_res_index, 0, 3);
+                        gg->dims = glm::uvec2{(unsigned)kResW[ridx], (unsigned)kResH[ridx]};
+                        // Window mode
+                        int wmode = std::clamp(ss->menu.window_mode_index, 0, 2);
+                        if (wmode == 2) {
+                            SDL_SetWindowFullscreen(gg->window, SDL_WINDOW_FULLSCREEN);
+                        } else if (wmode == 1) {
+                            SDL_SetWindowFullscreen(gg->window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                        } else {
+                            SDL_SetWindowFullscreen(gg->window, 0);
+                            SDL_SetWindowBordered(gg->window, SDL_TRUE);
+                        }
+                    }
+                }
+                } else if (ss->menu.page == BINDS && b->id == 792) {
+                    ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1; if (aa) play_sound("base:ui_confirm");
+                } else if (ss->menu.page == BINDS && b->id == 793) {
+                    auto exists = list_bind_presets();
+                    static const char* nouns[] = {"pickle","sausage","donut","potato","goblin","monkey","hamster","toaster","banana","slime","frog","llama","raccoon","duck","waffle","muffin","taco","snail","jelly","robot","chicken","wizard","shrimp","onion","cactus","pirate","pigeon","chair","noodle","burger","clown","wizard","gnome","sock","crab","pancake","fish","sandwich","gobstopper","eggplant","troll"};
+                    static const char* adjs[] = {"wonky","wobbly","smelly","sneaky","chonky","crispy","bouncy","soggy","tiny","spiky","grumpy","silly","turbo","funky","flappy","derpy","fizzy","greasy","cosmic","loopy","cranky"};
+                    std::mt19937 rng{std::random_device{}()};
+                    std::uniform_int_distribution<int> dn(0, (int)(sizeof(nouns)/sizeof(nouns[0])) - 1);
+                    std::uniform_int_distribution<int> da(0, (int)(sizeof(adjs)/sizeof(adjs[0])) - 1);
+                    std::string base;
+                    for (int attempts = 0; attempts < 5; ++attempts) {
+                        base = std::string(adjs[da(rng)]) + " " + nouns[dn(rng)];
+                        bool clash = false; for (auto const& n : exists) if (n == base) { clash = true; break; }
+                        if (!clash) break;
+                    }
+                    int suffix = 2; std::string name = base;
+                    auto present = [&](const std::string& s){ for (auto const& n : exists) if (n == s) return true; return false; };
+                    while (present(name)) { name = base + " " + std::to_string(suffix++); }
+                    if (save_input_bindings_to_ini(std::string("binds/") + name + ".ini", ss->input_binds)) {
+                        ss->menu.binds_current_preset = name;
+                        ss->menu.binds_snapshot = ss->input_binds;
+                        ss->menu.binds_dirty = false;
+                        ss->menu.binds_toast = std::string("NEW PRESET: ") + name;
+                        ss->menu.binds_toast_timer = 1.2f;
+                        if (aa) play_sound("base:ui_super_confirm");
+                    }
+                } else if (ss->menu.page == BINDS && b->id == 799) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; if (aa) play_sound("base:ui_confirm");
+                } else if (ss->menu.page == BINDS && b->id == 794) {
+                    // Undo changes back to snapshot and save to current preset if any
+                    ss->input_binds = ss->menu.binds_snapshot;
+                    if (!ss->menu.binds_current_preset.empty()) {
+                        save_input_bindings_to_ini(std::string("binds/") + ss->menu.binds_current_preset + ".ini", ss->input_binds);
+                    }
+                    ss->menu.binds_dirty = false;
+                    if (aa) play_sound("base:ui_confirm");
+                } else if (ss->menu.page == BINDS && b->id == 791) {
+                    ss->input_binds = InputBindings{};
+                    if (!ss->menu.binds_current_preset.empty()) {
+                        save_input_bindings_to_ini(std::string("binds/") + ss->menu.binds_current_preset + ".ini", ss->input_binds);
+                    }
+                    if (aa) play_sound("base:ui_confirm");
+                }
+            }
+        }
+
+    // Back button behavior (Esc/Backspace)
+    if (ss->menu_inputs.back) {
+        if (aa) play_sound("base:ui_confirm");
+        if (ss->menu.page == SETTINGS) {
+            ss->menu.page = MAIN; ss->menu.focus_id = -1;
+        } else if (ss->menu.page == BINDS_LOAD) {
+            ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.capture_action_id = -1;
+        } else if (ss->menu.page == AUDIO || ss->menu.page == VIDEO || ss->menu.page == CONTROLS || ss->menu.page == BINDS || ss->menu.page == OTHER) {
+            ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
+            ss->menu.capture_action_id = -1;
+        }
+    }
+
+    auto handle_nav_release = [&](bool released, uint8_t bit) {
+        if (!released) return;
+        if (ss->menu.audio_nav_active_mask & bit) {
+            ss->menu.audio_nav_active_mask &= ~bit;
+            if (ss->menu.audio_nav_active_mask == 0) {
+                ss->menu.audio_nav_active_id = -1;
+                flush_audio_settings_if_dirty();
+            }
+        }
+    };
+    handle_nav_release(left_release_now, 0x1);
+    handle_nav_release(right_release_now, 0x2);
+    if (ss->menu.page == BINDS) {
+        int total_actions = (int)BindAction::BA_COUNT;
+        int per_page = 5;
+        int total_pages = std::max(1, (total_actions + per_page - 1) / per_page);
+        // Page change: Q/E edges or left/right edges when focus on a binds row
+        if (ss->menu.focus_id >= 700 && ss->menu.focus_id <= 704) {
+            if (ss->menu_inputs.page_prev || left_edge_now) { ss->menu.binds_keys_page = std::max(0, ss->menu.binds_keys_page - 1); if (aa) play_sound("base:ui_left"); }
+            else if (ss->menu_inputs.page_next || right_edge_now) { ss->menu.binds_keys_page = std::min(total_pages - 1, ss->menu.binds_keys_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+        int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+        SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+        SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+        if (click) {
+            int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
+            auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
+            if (in_rect(prevb)) { ss->menu.binds_keys_page = std::max(0, ss->menu.binds_keys_page - 1); if (aa) play_sound("base:ui_left"); }
+            if (in_rect(nextb)) { ss->menu.binds_keys_page = std::min(total_pages - 1, ss->menu.binds_keys_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+    } else if (ss->menu.page == BINDS_LOAD) {
+        auto presets = list_bind_presets();
+        int per_page = 5;
+        int total_pages = std::max(1, (int)((presets.size() + (size_t)per_page - 1) / (size_t)per_page));
+        if (ss->menu.focus_id >= 720 && ss->menu.focus_id <= 724) {
+            if (ss->menu_inputs.page_prev || left_edge_now) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
+            else if (ss->menu_inputs.page_next || right_edge_now) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+        int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+        SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+        SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+        if (click) {
+            int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
+            auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
+            if (in_rect(prevb)) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
+            if (in_rect(nextb)) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+        // Allow click or confirm on list item
+        if (ss->menu_inputs.confirm || click) {
+            int fid2 = ss->menu.focus_id;
+            if (fid2 >= 720 && fid2 <= 724) {
+                int idx = ss->menu.binds_list_page * per_page + (fid2 - 720);
+                if (idx >= 0 && idx < (int)presets.size()) {
+                    std::string name = presets[(size_t)idx];
+                    if (load_input_bindings_from_ini(std::string("binds/") + name + ".ini")) {
+                        ss->menu.binds_current_preset = name;
+                        ss->menu.binds_snapshot = ss->input_binds;
+                        ss->menu.binds_dirty = false;
+                        ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                        ss->alerts.push_back({std::string("Loaded preset: ") + name, 0.0f, 1.2f, false});
+                        if (aa) play_sound("base:ui_confirm");
+                    }
+                }
+            }
+        }
+    }
+
+    // Pagination with bumpers
+    if (ss->menu.page == VIDEO) {
+        if (ss->menu_inputs.page_prev) {
+            ss->menu.page_index = std::max(0, ss->menu.page_index - 1);
+        } else if (ss->menu_inputs.page_next) {
+            ss->menu.page_index = std::min(0, ss->menu.page_index + 1);
+        }
+        // Also allow clicking the Prev/Next buttons
+        int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+        SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+        SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+        if (click) {
+            int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
+            auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
+            if (in_rect(prevb)) { ss->menu.page_index = std::max(0, ss->menu.page_index - 1); if (aa) play_sound("base:ui_left"); }
+            if (in_rect(nextb)) { ss->menu.page_index = std::min(0, ss->menu.page_index + 1); if (aa) play_sound("base:ui_right"); }
+        }
+    }
+
+    // Update mouse click edge
+    ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+}

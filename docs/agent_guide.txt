@@ -1,0 +1,152 @@
+Artificial (arti) — Agent Guide
+========================
+
+Notes
+-------
+keep it c+- style for gamedev. 
+we avoid nice pointers and use ints into arrays
+fixed size arrays for lots of stuff instead of vectors
+preallocate on startup for predictable memory usage
+dont call things manager
+
+Purpose
+-------
+This repo is a C++20 SDL2 + GLM engine scaffold for a moddable 2D top‑down game (Factorio/Terraria‑inspired, Synthetik vibe). We prioritize fast iteration, simple AABB physics, and mod‑defined content via Lua. Discriminants are ints (not enums) to keep data tables/modding flexible.
+
+Build + Run
+-----------
+- Dependencies: CMake 3.20+, C++20 compiler, SDL2 dev, GLM, Lua 5.4, SDL2_image, SDL2_ttf.
+- Debian setup: bash scripts/setup_debian.sh
+- Configure: cmake -S . -B build
+- Build: cmake --build build -j
+- Run: ./build/artificial (or bash scripts/run.sh)
+  - Alias symlink: ./build/arti
+- Strictness: Werror + -Wall -Wextra -Wpedantic etc enabled by default.
+
+Project Structure (flat under src/)
+-----------------------------------
+- main.cpp: SDL2 window + main loop, fixed 60Hz update. Delegates to render/sim modules.
+- types.hpp: Integer IDs (modes, types) + VID {id, version}.
+- settings.hpp: Engine constants (timestep, maxima, debounce).
+- graphics.hpp: Minimal camera structs, TILE_SIZE.
+- inputs.hpp: Mouse/Menu/Playing inputs + debounce timers.
+- input_system.{hpp,cpp}: SDL polling → fills State inputs; bindings struct.
+- config.{hpp,cpp}: Simple .ini parser for input remaps (SDL scancode names).
+- state.hpp: State bag (mode, timing, flags, Entities, Stage, etc.).
+- entity.hpp: Entity data (AABB, pos/vel/size, health, physics_steps).
+- entities.{hpp,cpp}: Fixed‑capacity pool (1024) with versioned IDs (VID).
+- stage.hpp: Tile grid with bit‑packed flags (blocks_entities, blocks_projectiles).
+- projectiles.hpp: Projectile pool (1024), physics_steps, owner VID, AABB stepping.
+- particles.hpp: Placeholder; no‑op step.
+
+Current Behavior
+----------------
+- Window: centered, resizable, “always on top/utility” hint.
+- Rendering (render.cpp): world (tiles/entities/pickups/items/guns), HUD (reticle with spread circle; mag/reserve bars incl. Active Reload window; bottom shield/plates/HP/dash bars; NPC HP/shield/plates always on), panels (inventory list with DnD, character slide-out [C], equipped gun panel [V], ground inspect when overlapping [V]), and pages (Score Review with animated counters + click sounds; Next Stage page). AABB overlays remain for debug when sprites are missing.
+- Stage: blocking border + sprinkled obstacles; spawn safety nudges spawns to nearest walkable tile; ground items gently repel.
+- Entities: ~25 NPCs spawn and wander; player + NPC sprites if found under mods/base/graphics/.
+- Projectiles: Left click fires toward mouse; per‑object physics_steps=2; NPCs can die and drop powerups/items/guns via Lua‑defined weighted tables.
+- Input remap: Reads config/input.ini (key=value). Pickup key default is F.
+- UI: Pickup prompt when overlapping; inventory panel with hotkeys 1–0 and drag‑and‑drop reordering; basic gun equip/use logic.
+- Ammo system: Guns declare `compatible_ammo` (weighted). Ammo is chosen at gun spawn (or set via API). Ammo provides projectile sprite/size/speed and damage behavior: damage_mult, armor_pen (entities only), shield_mult, range + linear falloff, and entity pierce_count. Ammo hooks fire on hit events.
+- Right gun panel (toggle with V): full gun + ammo stats and sprite.
+- Center hover panel: hovering an inventory slot after a short delay (~0.12s) shows detailed info. If standing on a ground item/gun and V is ON, shows that target’s inspect panel too.
+
+Physics and Collisions
+----------------------
+- AABB only, axis‑aligned.
+- Separate‑axis resolution per sub‑step (X then Y) for both entities and projectiles to avoid diagonal corner skipping.
+- No broad phase; data sizes capped (1024 entities/projectiles) so simple loops are OK.
+- Anti‑tunneling: physics_steps per object; movement subdivided within a frame.
+- Entities collide with tiles only (not with each other). Projectiles collide with tiles (if tile blocks projectiles) and entities (except the owner).
+- Immediate resolution: collisions are handled inline during stepping; no global event queue.
+
+IDs, Data, and Moddability Philosophy
+-------------------------------------
+- All discriminants are ints (not enums) so mods can define new types.
+- Data lives in Lua tables (powerups/items/guns); engine stores compact int IDs.
+- Mods folder:
+  mods/<modname>/
+    info.toml (name, version, deps, etc.)
+    graphics/, sounds/, music/
+    scripts/ (Lua): free‑form (e.g., content.lua)
+- Lua API (current):
+  - register_powerup, register_item, register_gun, register_ammo
+  - Item callbacks: on_use, on_tick(dt), on_shoot, on_damage(attacker_ap)
+  - api helpers: add_plate, heal, add_move_speed
+  - Ammo swap: api.set_equipped_ammo(type), api.set_equipped_ammo_force(type)
+- Load order: base mod first; simple directory scan today.
+
+Input Remapping (.ini)
+----------------------
+- File: config/input.ini; lines like: left=A, use_center=SPACE, pick_up=F, drop=Q
+- Supported tokens: A–Z, 0–9, KP_0–KP_9, LEFT/RIGHT/UP/DOWN, SPACE, RETURN, ESCAPE, COMMA, PERIOD (.), MINUS (-), EQUALS (=).
+- Parser ignores comments (# …) and whitespace. Unknown tokens are skipped.
+
+Rendering Notes / Sprites
+-------------------------
+- SpriteIdRegistry (string → int) and SpriteStore (rich defs) scan mods/*/graphics/.
+- Manifests: optional .sprite/.sprite.toml sidecars; fallback is whole‑image single frame.
+- Textures: SDL2_image loads PNGs; entities/items/powerups/guns render textures with AABB debug overlays.
+- Hot reload: polling detects asset changes and rebuilds sprite data; IDs stay stable by name.
+
+Coding Conventions / Guidelines
+-------------------------------
+- C++20, no exceptions added; standard library ok.
+- Keep changes tight; prefer clear data‑oriented structs.
+- Do not introduce enums for gameplay types; use ints.
+- Keep collisions AABB; if non‑AA visuals are needed, approximate with multiple AABBs or swept sub‑steps, not OBB math.
+- Resolve collisions immediately inside the stepping loop; avoid global event buses.
+- Maintain separate‑axis resolution for tile collisions.
+- Keep pools capped (1024 entities/projectiles) unless explicitly changed.
+- Respect strict warnings; fix conversions explicitly (static_cast<>) to keep -Werror clean.
+- Lua: sol2‑only; store callbacks as `sol::protected_function`; avoid raw Lua C API.
+  - Use a small RAII guard for per‑call player/state context.
+
+Where To Add Things
+-------------------
+- Simulation: in `sim.cpp` helpers called from the fixed-step loop (movement/collision; shield regen + reloads; drop mode toggle; number-row equip/select; ground repulsion; crate open; projectile step).
+- New entity/projectile fields: entity.hpp / projectiles.hpp.
+- Spawn/iterate: entities.cpp pool; main loop drives logic.
+- Keyboard remaps: tokens in config.cpp; use InputBindings.
+- Tile behavior: stage.hpp (add flags/metadata).
+- Assets: graphics owns sprite registry/defs/textures; use helpers in `graphics.cpp`.
+- Audio: use `audio.hpp/cpp` helpers; `load_mod_sounds()` scans mods.
+- Mod loader: mods.* and mods/ tree.
+
+Open Work
+---------
+- Stat modifier system (add/mul, durations, stacking) to replace direct stat edits.
+- on_damage trigger wiring through damage paths (player/enemy) with plates + armor/AP.
+- Gun polish: reload/eject timing, heat/cool dynamics, reload key, UI bars.
+- Camera polish: zoom/pan UX; tidy transforms.
+- Settings persistence: write .ini changes from in‑game menu.
+- Clean up legacy C API path once sol2 is standard.
+- See docs/todo_high_level.md and docs/todo_low_level.md for details.
+- Pages/Rooms: Stage Review and Next Area pages (no HUD/world in background), metrics display, next-room details; 3-room loop and decorations (see stages_and_decorations.md).
+- Entity Types & Ammo (planned): Lua entity type defs for base stats (incl. movement inaccuracy rates/caps), and Lua ammo defs with gun compatibility, damage/AP/speed/falloff/ricochet/shrapnel.
+
+Local Run Book (quick)
+----------------------
+1) Install deps: sudo apt-get install liblua5.4-dev libsdl2-image-dev libsdl2-ttf-dev
+2) Build+run: bash scripts/run.sh (or VSCode F5)
+3) Place PNGs under mods/base/graphics/ (filenames match sprite keys)
+4) Remap keys: edit config/input.ini and rerun.
+
+Design Rationale / Thoughts
+---------------------------
+- Keep it simple and fast: AABB, per‑axis, immediate resolution, and discrete sub‑steps cover most needs without heavy physics.
+- Int IDs + fat data tables: enables mod freedom; engine stays a toolbox.
+- No event system: simpler mental model; mods get direct callbacks once Lua is wired.
+- Axis‑separate motion: avoids diagonal corner tunneling without swept AABBs.
+- physics_steps: per‑object tuning for fast movers eliminates most tunneling.
+- Flat file layout: quicker navigation; matches owner’s style.
+
+Next Suggested Steps
+--------------------
+- Add SpriteIdRegistry + stub atlas loader (paths under mods/base/graphics).
+- Create mods/base with info.toml and folder skeleton.
+- Integrate Lua (sol2/lua C API) and load data.lua/control.lua per mod with a simple dependency resolver.
+- Expose minimal C API to Lua for spawning entities/projectiles and setting callbacks.
+- Add simple recoil/gun demo; projectiles with owner, damage, and on‑hit Lua hook.
+- Add ASan/UBSan dev preset if desired (optional).
