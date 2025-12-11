@@ -1381,6 +1381,15 @@ void step_menu_logic(int width, int height) {
                     ss->running = false;
                 } else if (b->id == 299) {
                     ss->menu.page = MAIN; ss->menu.focus_id = -1;
+                } else if (b->id == 799) {
+                    if (ss->menu.page == BINDS_LOAD) {
+                        ss->menu.page = BINDS;
+                        ss->menu.focus_id = -1;
+                        ss->menu.capture_action_id = -1;
+                    } else {
+                        ss->menu.page = SETTINGS;
+                        ss->menu.focus_id = -1;
+                    }
                 } else if (b->id == 200) {
                     ss->menu.page = AUDIO; ss->menu.focus_id = -1;
                 } else if (b->id == 201) {
@@ -1389,27 +1398,16 @@ void step_menu_logic(int width, int height) {
                     ss->menu.page = CONTROLS; ss->menu.focus_id = -1;
                 } else if (b->id == 203) {
                     ss->menu.page = OTHER; ss->menu.focus_id = -1;
-                } else if (b->id == 399 || b->id == 499 || b->id == 599 || b->id == 799 || b->id == 899) {
+                } else if (b->id == 399 || b->id == 499 || b->id == 599 || b->id == 899) {
                     ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
                 } else if (b->id == 204) {
                     ss->menu.page = BINDS; ss->menu.focus_id = -1;
-                } else if (ss->menu.page == BINDS && b->id >= 700 && b->id <= 704) {
-                    static const BindAction order[] = {
-                        BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
-                        BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
-                        BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
-                    };
-                    int idx = ss->menu.binds_keys_page * 5 + (b->id - 700);
-                    if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0]))) ss->menu.capture_action_id = (int)order[idx];
                 } else if (b->id == 498 && b->enabled) {
-                    // Apply video settings: resolution + window mode
                     if (gg && gg->window) {
-                        // Resolution (internal render size)
                         static const int kResW[4] = {1280, 1600, 1920, 2560};
                         static const int kResH[4] = {720,  900,  1080, 1440};
                         int ridx = std::clamp(ss->menu.video_res_index, 0, 3);
                         gg->dims = glm::uvec2{(unsigned)kResW[ridx], (unsigned)kResH[ridx]};
-                        // Window mode
                         int wmode = std::clamp(ss->menu.window_mode_index, 0, 2);
                         if (wmode == 2) {
                             SDL_SetWindowFullscreen(gg->window, SDL_WINDOW_FULLSCREEN);
@@ -1420,51 +1418,66 @@ void step_menu_logic(int width, int height) {
                             SDL_SetWindowBordered(gg->window, SDL_TRUE);
                         }
                     }
-                }
-                } else if (ss->menu.page == BINDS && b->id == 792) {
-                    ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1; refresh_binds_profiles();
-                    ss->menu.binds_list_page = 0;
-                    if (aa) play_sound("base:ui_confirm");
-                } else if (ss->menu.page == BINDS && b->id == 793) {
-                    std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
-                    suggestion = sanitize_profile_name(suggestion);
-                    if (suggestion.empty()) suggestion = "Preset";
-                    open_binds_text_input(BINDS_TEXT_INPUT_NEW, suggestion, std::string{});
-                } else if (ss->menu.page == BINDS && b->id == 794) {
-                    undo_active_bind_changes();
-                    if (aa) play_sound("base:ui_confirm");
-                } else if (ss->menu.page == BINDS && b->id == 791) {
-                    apply_default_bindings_to_active();
-                    if (aa) play_sound("base:ui_confirm");
-                } else if (ss->menu.page == BINDS && b->id == 799) {
-                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1; if (aa) play_sound("base:ui_confirm");
-                } else if (ss->menu.page == BINDS_LOAD && b->id >= 720 && b->id <= 724) {
-                    int idx = ss->menu.binds_list_page * 5 + (b->id - 720);
-                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
-                        std::string name = ss->menu.binds_profiles[(size_t)idx].name;
-                        if (set_active_binds_profile(name)) {
-                            ss->menu.page = BINDS; ss->menu.focus_id = -1;
-                            ss->menu.binds_toast = std::string("Loaded preset: ") + name;
+                } else if (ss->menu.page == BINDS) {
+                    if (b->id >= 700 && b->id <= 704) {
+                        static const BindAction order[] = {
+                            BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                            BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                            BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                        };
+                        int idx = ss->menu.binds_keys_page * 5 + (b->id - 700);
+                        if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0])))
+                            ss->menu.capture_action_id = (int)order[idx];
+                    } else if (b->id == 791 && b->enabled) {
+                        apply_default_bindings_to_active();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 792 && b->enabled) {
+                        ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1;
+                        refresh_binds_profiles();
+                        ss->menu.binds_list_page = 0;
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 793 && b->enabled) {
+                        std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
+                        suggestion = sanitize_profile_name(suggestion);
+                        if (suggestion.empty()) suggestion = "Preset";
+                        open_binds_text_input(BINDS_TEXT_INPUT_NEW, suggestion, std::string{});
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 794 && b->enabled) {
+                        undo_active_bind_changes();
+                        if (aa) play_sound("base:ui_confirm");
+                    }
+                } else if (ss->menu.page == BINDS_LOAD) {
+                    if (b->id >= 720 && b->id <= 724 && b->enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b->id - 720);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            std::string name = ss->menu.binds_profiles[(size_t)idx].name;
+                            if (set_active_binds_profile(name)) {
+                                ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                                ss->menu.binds_toast = std::string("Loaded preset: ") + name;
+                                ss->menu.binds_toast_timer = 1.2f;
+                                if (aa) play_sound("base:ui_confirm");
+                            }
+                        }
+                    } else if (b->id >= 730 && b->id <= 734 && b->enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b->id - 730);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            const auto& info = ss->menu.binds_profiles[(size_t)idx];
+                            if (!info.read_only)
+                                open_binds_text_input(BINDS_TEXT_INPUT_RENAME, info.name, info.name);
+                        }
+                    } else if (b->id >= 740 && b->id <= 744 && b->enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b->id - 740);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            const auto name = ss->menu.binds_profiles[(size_t)idx].name;
+                            delete_binds_profile(name);
+                            refresh_binds_profiles();
+                            ss->menu.binds_toast = std::string("Deleted preset: ") + name;
                             ss->menu.binds_toast_timer = 1.2f;
+                            const int per_page = 5;
+                            int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + per_page - 1) / per_page));
+                            ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
                             if (aa) play_sound("base:ui_confirm");
                         }
-                    }
-                } else if (ss->menu.page == BINDS_LOAD && b->id >= 730 && b->id <= 734) {
-                    int idx = ss->menu.binds_list_page * 5 + (b->id - 730);
-                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
-                        const auto& info = ss->menu.binds_profiles[(size_t)idx];
-                        if (!info.read_only)
-                            open_binds_text_input(BINDS_TEXT_INPUT_RENAME, info.name, info.name);
-                    }
-                } else if (ss->menu.page == BINDS_LOAD && b->id >= 740 && b->id <= 744) {
-                    int idx = ss->menu.binds_list_page * 5 + (b->id - 740);
-                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
-                        const auto name = ss->menu.binds_profiles[(size_t)idx].name;
-                        delete_binds_profile(name);
-                        int per_page = 5;
-                        int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + (size_t)per_page - 1) / (size_t)per_page));
-                        ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
-                        if (aa) play_sound("base:ui_confirm");
                     }
                 }
             }
@@ -1522,9 +1535,14 @@ void step_menu_logic(int width, int height) {
         int per_page = 5;
         int total_pages = std::max(1, (int)((profiles.size() + (size_t)per_page - 1) / (size_t)per_page));
         ss->menu.binds_list_page = std::clamp(ss->menu.binds_list_page, 0, total_pages - 1);
-        if (ss->menu.focus_id >= 720 && ss->menu.focus_id <= 724) {
+        bool focus_profiles = (ss->menu.focus_id >= 720 && ss->menu.focus_id <= 724);
+        bool focus_actions = (ss->menu.focus_id >= 730 && ss->menu.focus_id <= 744);
+        if (focus_profiles) {
             if (ss->menu_inputs.page_prev || left_edge_now) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
             else if (ss->menu_inputs.page_next || right_edge_now) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
+        } else if (focus_actions) {
+            if (ss->menu_inputs.page_prev) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
+            else if (ss->menu_inputs.page_next) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
         }
         int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
         SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
@@ -1558,4 +1576,5 @@ void step_menu_logic(int width, int height) {
 
     // Update mouse click edge
     ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+}
 }
