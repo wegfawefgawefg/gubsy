@@ -28,11 +28,11 @@ void step() {
             }
         }
         if (!stepped) {
-            if (ss->mode == ids::MODE_PLAYING) step_playing();
-            else if (ss->mode == ids::MODE_TITLE) step_title();
-            else if (ss->mode == ids::MODE_SCORE_REVIEW) step_score_review();
-            else if (ss->mode == ids::MODE_NEXT_STAGE) step_next_stage();
-            else if (ss->mode == ids::MODE_GAME_OVER) step_game_over();
+            if (ss->mode == modes::PLAYING) step_playing();
+            else if (ss->mode == modes::TITLE) step_title();
+            else if (ss->mode == modes::SCORE_REVIEW) step_score_review();
+            else if (ss->mode == modes::NEXT_STAGE) step_next_stage();
+            else if (ss->mode == modes::GAME_OVER) step_game_over();
         }
 
         ss->scene_frame = ss->scene_frame + 1u;

@@ -75,13 +75,13 @@ static void render_frame_impl() {
     };
 
     // Title/settings menu mode: render dedicated UI and early-out
-    if (ss->mode == ids::MODE_TITLE) {
+    if (ss->mode == modes::TITLE) {
         render_menu(width, height);
         SDL_RenderPresent(renderer);
         return;
     }
 
-    if (ss->mode == ids::MODE_PLAYING) {
+    if (ss->mode == modes::PLAYING) {
         // draw tiles
         for (int y = 0; y < (int)ss->stage.get_height(); ++y) {
             for (int x = 0; x < (int)ss->stage.get_width(); ++x) {
@@ -110,7 +110,7 @@ static void render_frame_impl() {
     }
 
     // Draw crates (visuals only); open progression computed in sim
-    if (ss->mode == ids::MODE_PLAYING) {
+    if (ss->mode == modes::PLAYING) {
         for (auto& c : ss->crates.data())
             if (c.active && !c.opened) {
                 glm::vec2 ch = c.size * 0.5f;
@@ -162,7 +162,7 @@ static void render_frame_impl() {
     }
 
     // draw entities (only during gameplay)
-    if (ss->mode == ids::MODE_PLAYING)
+    if (ss->mode == modes::PLAYING)
         for (auto const& e : ss->entities.data()) {
             if (!e.active)
                 continue;
@@ -253,7 +253,7 @@ static void render_frame_impl() {
         }
 
     // Enemy health bars above heads (for damaged NPCs)
-    if (ss->mode == ids::MODE_PLAYING) {
+    if (ss->mode == modes::PLAYING) {
         for (auto const& e : ss->entities.data()) {
             if (!e.active || e.type_ != ids::ET_NPC)
                 continue;
@@ -304,7 +304,7 @@ static void render_frame_impl() {
     }
 
     // draw pickups (power-ups) and ground items
-    if (ss->mode == ids::MODE_PLAYING) {
+    if (ss->mode == modes::PLAYING) {
         const Entity* pdraw = (ss->player_vid ? ss->entities.get(*ss->player_vid) : nullptr);
         glm::vec2 ph{0.0f, 0.0f};
         float pl = 0, pr = 0, pt = 0, pb = 0;
@@ -431,7 +431,7 @@ static void render_frame_impl() {
             }
         }
         // Consolidated pickup prompt
-        if (pdraw && gg->ui_font && ss->mode == ids::MODE_PLAYING && best_area > 0.0f) {
+        if (pdraw && gg->ui_font && ss->mode == modes::PLAYING && best_area > 0.0f) {
             std::string nm;
             SDL_Rect r{0, 0, 0, 0};
             if (best_kind == PK::Item) {
@@ -576,7 +576,7 @@ static void render_frame_impl() {
         }
 
     // draw cursor crosshair + circle + reload/jam UI
-    if (ss->mode == ids::MODE_PLAYING) {
+    if (ss->mode == modes::PLAYING) {
         int mx = ss->mouse_inputs.pos.x;
         int my = ss->mouse_inputs.pos.y;
         if (ss->reticle_shake > 0.01f) {
@@ -726,7 +726,7 @@ static void render_frame_impl() {
     }
 
     // Inventory list (left column) – gameplay only, hidden if character panel shown
-    if (gg->ui_font && ss->mode == ids::MODE_PLAYING && !ss->show_character_panel) {
+    if (gg->ui_font && ss->mode == modes::PLAYING && !ss->show_character_panel) {
         int sx = 40;
         int sy = 140;
         int slot_h = 26;
@@ -897,7 +897,7 @@ static void render_frame_impl() {
     }
 
     // Right-side equipped gun info panel (toggle with V)
-    if (gg->ui_font && ss->mode == ids::MODE_PLAYING && ss->player_vid && luam && ss->show_gun_panel) {
+    if (gg->ui_font && ss->mode == modes::PLAYING && ss->player_vid && luam && ss->show_gun_panel) {
         const Entity* ply = ss->entities.get(*ss->player_vid);
         if (ply && ply->equipped_gun_vid.has_value()) {
             const GunDef* gd = nullptr; const GunInstance* gi_inst = ss->guns.get(*ply->equipped_gun_vid);
@@ -958,7 +958,7 @@ static void render_frame_impl() {
 
     // Alerts and warnings (screen-space)
     // Bottom player condition bars (shield, plates, health, dash)
-    if (gg->ui_font && ss->mode == ids::MODE_PLAYING && ss->player_vid) {
+    if (gg->ui_font && ss->mode == modes::PLAYING && ss->player_vid) {
         const Entity* p = ss->entities.get(*ss->player_vid);
         if (p) {
             int group_w = std::max(200, (int)std::lround(width * 0.25));
@@ -1044,7 +1044,7 @@ static void render_frame_impl() {
     }
 
     // Exit countdown overlay (top) when standing on exit
-    if (ss->mode == ids::MODE_PLAYING && ss->exit_countdown >= 0.0f) {
+    if (ss->mode == modes::PLAYING && ss->exit_countdown >= 0.0f) {
         float ratio = ss->exit_countdown / EXIT_COUNTDOWN_SECONDS;
         ratio = std::clamp(ratio, 0.0f, 1.0f);
         int bar_w = width - 40;
@@ -1112,7 +1112,7 @@ static void render_frame_impl() {
     }
 
     // Score review overlay (animated metrics)
-    if (ss->mode == ids::MODE_SCORE_REVIEW) {
+    if (ss->mode == modes::SCORE_REVIEW) {
         SDL_Rect full{0, 0, width, height};
         SDL_SetRenderDrawColor(renderer, 18, 18, 22, 255);
         SDL_RenderFillRect(renderer, &full);
@@ -1184,7 +1184,7 @@ static void render_frame_impl() {
     }
 
     // Next-stage info page
-    if (ss->mode == ids::MODE_NEXT_STAGE) {
+    if (ss->mode == modes::NEXT_STAGE) {
         SDL_Rect full{0, 0, width, height}; SDL_SetRenderDrawColor(renderer, 18, 18, 22, 255); SDL_RenderFillRect(renderer, &full);
         int box_w = width - 200; int box_h = 140; int box_x = (width - box_w) / 2; int box_y = 40;
         SDL_Rect box{box_x, box_y, box_w, box_h}; SDL_SetRenderDrawColor(renderer, 30, 30, 40, 220); SDL_RenderFillRect(renderer, &box);
@@ -1220,7 +1220,7 @@ void render_mode_game_over() {
 }
 
 void render() {
-    std::string current_mode = ss ? ss->mode : ids::MODE_TITLE;
+    std::string current_mode = ss ? ss->mode : modes::TITLE;
     if (const ModeDesc* desc = find_mode(current_mode)) {
         if (desc->render_fn) {
             desc->render_fn();

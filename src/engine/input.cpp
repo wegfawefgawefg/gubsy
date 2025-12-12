@@ -58,7 +58,7 @@ void process_event(SDL_Event& ev) {
                 break;
             }
             // Binds capture: assign the pressed key to the selected action
-            if (ss->mode == ids::MODE_TITLE && ss->menu.capture_action_id >= 0) {
+            if (ss->mode == modes::TITLE && ss->menu.capture_action_id >= 0) {
                 SDL_Scancode sc = ev.key.keysym.scancode;
                 if (sc == SDL_SCANCODE_ESCAPE) {
                     ss->menu.capture_action_id = -1; // cancel
@@ -209,16 +209,16 @@ void collect_menu_inputs() {
 }
 
 void process_inputs() {
-    if (is_down(SDL_SCANCODE_ESCAPE) && ss->mode != ids::MODE_TITLE)
+    if (is_down(SDL_SCANCODE_ESCAPE) && ss->mode != modes::TITLE)
         ss->running = false;
 
-    if (ss->mode == ids::MODE_TITLE) {
+    if (ss->mode == modes::TITLE) {
         process_inputs_title();
-    } else if (ss->mode == ids::MODE_PLAYING) {
+    } else if (ss->mode == modes::PLAYING) {
         process_inputs_playing();
-    } else if (ss->mode == ids::MODE_GAME_OVER) {
+    } else if (ss->mode == modes::GAME_OVER) {
         if (ss->menu_inputs.confirm)
-            ss->mode = ids::MODE_TITLE;
+            ss->mode = modes::TITLE;
     }
 }
 

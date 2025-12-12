@@ -11,6 +11,7 @@
 #include "projectiles.hpp"
 #include "stage.hpp"
 #include "types.hpp"
+#include "modes.hpp"
 #include "runtime_settings.hpp"
 #include "config.hpp"
 
@@ -24,7 +25,7 @@
 
 struct State {
     bool running{true};
-    std::string mode{ids::MODE_TITLE};
+    std::string mode{modes::TITLE};
 
     // Time
     double now{0.0};

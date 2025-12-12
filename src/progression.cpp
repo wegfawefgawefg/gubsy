@@ -10,7 +10,7 @@
 #include <string>
 
 void update_exit_countdown() {
-    if (!ss || ss->mode != ids::MODE_PLAYING) return;
+    if (!ss || ss->mode != modes::PLAYING) return;
     const Entity* p = (ss->player_vid ? ss->entities.get(*ss->player_vid) : nullptr);
     if (p) {
         glm::vec2 half = p->half_size();
@@ -40,12 +40,12 @@ void update_exit_countdown() {
 }
 
 void start_score_review_if_ready() {
-    if (!ss || ss->mode != ids::MODE_PLAYING) return;
+    if (!ss || ss->mode != modes::PLAYING) return;
     if (ss->exit_countdown >= 0.0f) {
         ss->exit_countdown -= TIMESTEP;
         if (ss->exit_countdown <= 0.0f) {
             ss->exit_countdown = -1.0f;
-            ss->mode = ids::MODE_SCORE_REVIEW;
+            ss->mode = modes::SCORE_REVIEW;
             ss->score_ready_timer = SCORE_REVIEW_INPUT_DELAY;
             ss->alerts.push_back({"Area complete", 0.0f, 2.5f, false});
             std::printf("[room] Countdown complete. Entering score review.\n");
@@ -130,24 +130,24 @@ static void cleanup_ground_instances() {
 }
 
 void process_score_review_advance() {
-    if (!ss || ss->mode != ids::MODE_SCORE_REVIEW) return;
+    if (!ss || ss->mode != modes::SCORE_REVIEW) return;
     if (ss->score_ready_timer > 0.0f) return;
     if (ss->menu_inputs.confirm || ss->playing_inputs.use_center || ss->mouse_inputs.left) {
         cleanup_ground_instances();
         std::printf("[room] Proceeding to next area info screen.\n");
-        ss->mode = ids::MODE_NEXT_STAGE;
+        ss->mode = modes::NEXT_STAGE;
         ss->score_ready_timer = 0.5f;
         ss->input_lockout_timer = 0.2f;
     }
 }
 
 void process_next_stage_enter() {
-    if (!ss || ss->mode != ids::MODE_NEXT_STAGE) return;
+    if (!ss || ss->mode != modes::NEXT_STAGE) return;
     if (ss->score_ready_timer > 0.0f) return;
     if (ss->menu_inputs.confirm || ss->playing_inputs.use_center || ss->mouse_inputs.left) {
         std::printf("[room] Entering next area.\n");
         ss->alerts.push_back({"Entering next area", 0.0f, 2.0f, false});
-        ss->mode = ids::MODE_PLAYING;
+        ss->mode = modes::PLAYING;
         generate_room();
         ss->input_lockout_timer = 0.25f;
     }

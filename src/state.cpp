@@ -6,7 +6,7 @@ bool init_state() {
     // The previous stack allocation caused a dangling pointer and heap
     // corruption (free(): invalid pointer) shortly after startup.
     if (!ss) ss = new State{};
-    ss->mode = ids::MODE_TITLE;
+    ss->mode = modes::TITLE;
     return true;
 }
 

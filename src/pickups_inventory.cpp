@@ -12,7 +12,7 @@
 
 void auto_pickup_powerups() {
     if (!ss) return;
-    if (ss->mode != ids::MODE_PLAYING || !ss->player_vid) return;
+    if (ss->mode != modes::PLAYING || !ss->player_vid) return;
     const Entity* p = ss->entities.get(*ss->player_vid);
     if (!p) return;
     glm::vec2 ph = p->half_size();
@@ -31,7 +31,7 @@ void auto_pickup_powerups() {
 }
 
 void handle_manual_pickups() {
-    if (ss->mode != ids::MODE_PLAYING || !ss->player_vid) return;
+    if (ss->mode != modes::PLAYING || !ss->player_vid) return;
     const Entity* p = ss->entities.get(*ss->player_vid); if (!p) return;
     glm::vec2 ph = p->half_size();
     float pl = p->pos.x - ph.x, pr = p->pos.x + ph.x;

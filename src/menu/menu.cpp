@@ -1018,7 +1018,7 @@ void step_menu_logic(int width, int height) {
     if (click && !text_input_active) {
                 // Activate
                 if (b.id == 100) {
-                    ss->mode = ids::MODE_PLAYING;
+                    ss->mode = modes::PLAYING;
                 } else if (b.id == 101) {
                     ss->menu.page = SETTINGS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
                 } else if (b.id == 102) {
@@ -1374,7 +1374,7 @@ void step_menu_logic(int width, int height) {
             const ButtonDesc* b = find_btn(ss->menu.focus_id);
             if (b) {
                 if (b->id == 100) {
-                    ss->mode = ids::MODE_PLAYING;
+                    ss->mode = modes::PLAYING;
                 } else if (b->id == 101) {
                     ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
                 } else if (b->id == 102) {

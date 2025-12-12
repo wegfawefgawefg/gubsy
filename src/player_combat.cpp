@@ -61,7 +61,7 @@ void update_shields_and_reload_progress() {
 }
 
 void update_reload_active() {
-    if (!ss || ss->mode != ids::MODE_PLAYING || !ss->player_vid) return;
+    if (!ss || ss->mode != modes::PLAYING || !ss->player_vid) return;
     auto* plm = ss->entities.get_mut(*ss->player_vid);
     if (!plm || !plm->equipped_gun_vid.has_value()) return;
     static bool prev_reload = false;
@@ -161,15 +161,15 @@ void update_trigger_and_fire() {
     ss->gun_cooldown = std::max(0.0f, ss->gun_cooldown - TIMESTEP);
     bool can_fire = (ss->gun_cooldown == 0.0f);
     static bool prev_shoot = false;
-    bool trig_held = (ss->mode == ids::MODE_PLAYING) ? ss->mouse_inputs.left : false;
+    bool trig_held = (ss->mode == modes::PLAYING) ? ss->mouse_inputs.left : false;
     bool trig_edge = trig_held && !prev_shoot;
-    if (ss->mode == ids::MODE_PLAYING) prev_shoot = trig_held;
+    if (ss->mode == modes::PLAYING) prev_shoot = trig_held;
     bool fire_request = false;
     bool burst_step = false;
     int burst_count = 0;
     float burst_rpm = 0.0f;
     std::string fire_mode = "auto";
-    if (ss->mode == ids::MODE_PLAYING && ss->player_vid) {
+    if (ss->mode == modes::PLAYING && ss->player_vid) {
         auto* plm = ss->entities.get_mut(*ss->player_vid);
         if (plm && plm->equipped_gun_vid.has_value()) {
             const GunInstance* giq = ss->guns.get(*plm->equipped_gun_vid);
@@ -195,7 +195,7 @@ void update_trigger_and_fire() {
     } else {
         fire_request = trig_held;
     }
-    if (!(ss->mode == ids::MODE_PLAYING && ss->input_lockout_timer == 0.0f && fire_request && can_fire)) return;
+    if (!(ss->mode == modes::PLAYING && ss->input_lockout_timer == 0.0f && fire_request && can_fire)) return;
 
     glm::vec2 p = ss->player_vid ? ss->entities.get(*ss->player_vid)->pos
                                   : glm::vec2{(float)ss->stage.get_width() / 2.0f, (float)ss->stage.get_height() / 2.0f};
@@ -389,7 +389,7 @@ void update_trigger_and_fire() {
 }
 
 void update_unjam() {
-    if (!ss || !ss->player_vid || ss->mode != ids::MODE_PLAYING) return;
+    if (!ss || !ss->player_vid || ss->mode != modes::PLAYING) return;
     auto* plm = ss->entities.get_mut(*ss->player_vid);
     if (!plm || !plm->equipped_gun_vid.has_value()) return;
     GunInstance* gim = ss->guns.get(*plm->equipped_gun_vid);
