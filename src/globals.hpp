@@ -1,7 +1,7 @@
 #pragma once
 
 #include "luamgr.hpp"
-#include "sprites.hpp"
+#include "engine/sprites.hpp"
 #include "engine/graphics.hpp"
 #include "engine/audio.hpp"
 #include "mods.hpp"

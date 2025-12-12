@@ -1,4 +1,4 @@
-#include "sprites.hpp"
+#include "engine/sprites.hpp"
 
 #include <cctype>
 #include <cstdio>

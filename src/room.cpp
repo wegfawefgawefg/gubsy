@@ -3,7 +3,7 @@
 
 #include "globals.hpp"
 #include "luamgr.hpp"
-#include "sprites.hpp"
+#include "engine/sprites.hpp"
 
 #include <SDL2/SDL.h>
 #include <algorithm>

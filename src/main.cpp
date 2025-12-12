@@ -7,7 +7,7 @@
 #include "projectiles.hpp"
 #include "settings.hpp"
 #include "engine/audio.hpp"
-#include "sprites.hpp"
+#include "engine/sprites.hpp"
 #include "state.hpp"
 #include "room.hpp"
 #include "step.hpp"

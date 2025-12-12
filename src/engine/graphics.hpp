@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "sprites.hpp" // for SpriteDef metadata
+#include "engine/sprites.hpp" // for SpriteDef metadata
 
 inline constexpr float TILE_SIZE = 16.0f;
 

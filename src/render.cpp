@@ -3,7 +3,7 @@
 #include "globals.hpp"
 #include "engine/audio.hpp"
 #include "luamgr.hpp"
-#include "sprites.hpp"
+#include "engine/sprites.hpp"
 #include "settings.hpp"
 
 #include <algorithm>

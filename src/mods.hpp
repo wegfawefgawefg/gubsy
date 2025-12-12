@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sprites.hpp"
+#include "engine/sprites.hpp"
 
 #include <chrono>
 #include <filesystem>
