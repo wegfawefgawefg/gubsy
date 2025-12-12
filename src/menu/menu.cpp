@@ -10,6 +10,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cmath>
 
@@ -17,9 +18,127 @@ namespace {
 constexpr float SAFE_M = 0.05f; // safe margin on all sides
 constexpr int kMaxBindsProfiles = 50;
 constexpr float kTextInputErrorDuration = 1.5f;
+constexpr int kModsPerPage = 6;
+constexpr float kModsCardHeight = 0.11f;
+constexpr float kModsCardGap = 0.015f;
+
+enum TextInputMode {
+    TEXT_INPUT_NONE = 0,
+    TEXT_INPUT_BINDS_NEW = 1,
+    TEXT_INPUT_BINDS_RENAME = 2,
+    TEXT_INPUT_MODS_SEARCH = 3,
+};
+
+static constexpr int kPresetNameMaxLen = 16;
+static constexpr int kModsSearchMaxLen = 32;
+
+struct MockModEntry {
+    std::string id;
+    std::string title;
+    std::string author;
+    std::string version;
+    std::string summary;
+    std::vector<std::string> dependencies;
+    bool required{false};
+};
+
+std::string to_lower_copy(const std::string& s) {
+    std::string out = s;
+    std::transform(out.begin(), out.end(), out.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return out;
+}
+
+std::string trim_copy(const std::string& s) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
+    size_t end = s.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) --end;
+    return s.substr(start, end - start);
+}
+
+const std::vector<MockModEntry>& mock_mod_catalog() {
+    static const std::vector<MockModEntry> catalog = {
+        {"base", "Base Demo Content", "Gubsy Team", "0.1.0",
+         "Core pads + engines shipped with the demo project. Always enabled.",
+         {}, true},
+        {"shuffle_pack", "Pad Shuffle Pack", "Gubsy Labs", "0.1.0",
+         "Adds experimental pads that reposition or swap with existing ones.",
+         {"base"}, false},
+        {"pad_tweaks", "Pad Tweaks", "Gubsy Labs", "0.1.0",
+         "Recolors the teleport pad and adds a reset console for testing patches.",
+         {"base"}, false},
+        {"retro_ui", "Retro UI Theme", "Community", "0.0.3",
+         "Palette-swapped HUD, scanlines, and chunky font replacements.",
+         {}, false},
+        {"audio_plus", "Audio Plus", "SoundSmith", "0.2.1",
+         "Extra SFX cues when interacting with pads. Demonstrates audio hooks.",
+         {"base"}, false},
+    };
+    return catalog;
+}
+
+void ensure_mod_install_map() {
+    if (!ss) return;
+    const auto& catalog = mock_mod_catalog();
+    for (const auto& entry : catalog) {
+        auto it = ss->menu.mods_mock_install_state.find(entry.id);
+        if (it == ss->menu.mods_mock_install_state.end()) {
+            bool default_state = entry.required || entry.id == "base";
+            ss->menu.mods_mock_install_state.emplace(entry.id, default_state);
+        }
+    }
+}
+
+bool is_mod_installed(const std::string& id) {
+    if (!ss) return false;
+    auto it = ss->menu.mods_mock_install_state.find(id);
+    if (it == ss->menu.mods_mock_install_state.end())
+        return false;
+    return it->second;
+}
+
+void set_mod_installed(const std::string& id, bool installed) {
+    if (!ss) return;
+    ensure_mod_install_map();
+    ss->menu.mods_mock_install_state[id] = installed;
+}
+
+void rebuild_mods_filter() {
+    if (!ss) return;
+    ensure_mod_install_map();
+    const auto& catalog = mock_mod_catalog();
+    ss->menu.mods_visible_indices.clear();
+    std::string query = to_lower_copy(ss->menu.mods_search_query);
+    for (std::size_t i = 0; i < catalog.size(); ++i) {
+        const auto& entry = catalog[i];
+        if (!query.empty()) {
+            std::string haystack = to_lower_copy(entry.title + " " + entry.summary + " " + entry.author);
+            if (haystack.find(query) == std::string::npos)
+                continue;
+        }
+        ss->menu.mods_visible_indices.push_back(static_cast<int>(i));
+    }
+    ss->menu.mods_filtered_count = static_cast<int>(ss->menu.mods_visible_indices.size());
+    if (ss->menu.mods_filtered_count == 0) {
+        ss->menu.mods_total_pages = 1;
+        ss->menu.mods_catalog_page = 0;
+    } else {
+        ss->menu.mods_total_pages = std::max(1, (ss->menu.mods_filtered_count + kModsPerPage - 1) / kModsPerPage);
+        ss->menu.mods_catalog_page = std::clamp(ss->menu.mods_catalog_page, 0, ss->menu.mods_total_pages - 1);
+    }
+}
+
+void enter_mods_page() {
+    if (!ss) return;
+    ensure_mod_install_map();
+    ss->menu.mods_catalog_page = 0;
+    ss->menu.mods_total_pages = 1;
+    rebuild_mods_filter();
+}
 
 // Pages
-enum Page { MAIN=0, SETTINGS=1, AUDIO=2, VIDEO=3, CONTROLS=4, BINDS=5, OTHER=6, VIDEO2=7, BINDS_LOAD=8, PLAYERS=9 };
+enum Page { MAIN=0, SETTINGS=1, AUDIO=2, VIDEO=3, CONTROLS=4, BINDS=5, OTHER=6, VIDEO2=7, BINDS_LOAD=8, PLAYERS=9, MODS=10 };
 
 inline SDL_FRect ndc_to_pixels(const RectNdc& r, int w, int h) {
     float x0 = (SAFE_M + r.x) * static_cast<float>(w);
@@ -32,8 +151,9 @@ inline SDL_FRect ndc_to_pixels(const RectNdc& r, int w, int h) {
 // Simple nav graphs per page
 static inline NavNode nav_main_for_id(int id) {
     switch (id) {
-        case 100: return NavNode{-1, 101, 100, 100};
-        case 101: return NavNode{100, 102, 101, 101};
+        case 100: return NavNode{-1, 110, 100, 100};
+        case 110: return NavNode{100, 101, 110, 110};
+        case 101: return NavNode{110, 102, 101, 101};
         case 102: return NavNode{101, -1, 102, 102};
         default: return NavNode{-1,-1,-1,-1};
     } 
@@ -222,6 +342,45 @@ static inline NavNode nav_other_for_id(int id) {
     }
 }
 
+static inline NavNode nav_mods_for_id(int id) {
+    const int row_base = 900;
+    int rows_on_page = 0;
+    if (ss) {
+        int total = ss->menu.mods_filtered_count;
+        int start = ss->menu.mods_catalog_page * kModsPerPage;
+        if (total > start)
+            rows_on_page = std::min(kModsPerPage, total - start);
+    }
+    auto row_nav = [&](int row_idx) {
+        int up = (row_idx == 0) ? (rows_on_page > 0 ? 950 : 998) : (row_base + row_idx - 1);
+        int down = (row_idx == rows_on_page - 1) ? 998 : (row_base + row_idx + 1);
+        return NavNode{up, down, row_base + row_idx, row_base + row_idx};
+    };
+    if (id == 950) {
+        int down = (rows_on_page > 0) ? row_base : 998;
+        return NavNode{-1, down, 950, 951};
+    }
+    if (id == 951) {
+        int down = (rows_on_page > 0) ? row_base : 998;
+        return NavNode{-1, down, 950, 952};
+    }
+    if (id == 952) {
+        int down = (rows_on_page > 0) ? row_base : 998;
+        return NavNode{-1, down, 951, 952};
+    }
+    if (id >= row_base && id < row_base + 32) {
+        int row_idx = id - row_base;
+        if (row_idx >= 0 && row_idx < rows_on_page)
+            return row_nav(row_idx);
+        return NavNode{-1,-1,-1,-1};
+    }
+    if (id == 998) {
+        int up = (rows_on_page > 0) ? (row_base + rows_on_page - 1) : 950;
+        return NavNode{up, -1, 998, 998};
+    }
+    return NavNode{-1,-1,-1,-1};
+}
+
 inline void ensure_focus_default(const std::vector<ButtonDesc>& btns) {
     if (ss->menu.focus_id >= 0) return;
     for (auto const& b : btns) if (b.enabled) { ss->menu.focus_id = b.id; break; }
@@ -338,28 +497,25 @@ static void undo_active_bind_changes() {
     ss->menu.binds_toast_timer = 1.0f;
 }
 
-static constexpr int BINDS_TEXT_INPUT_NONE = 0;
-static constexpr int BINDS_TEXT_INPUT_NEW = 1;
-static constexpr int BINDS_TEXT_INPUT_RENAME = 2;
-static constexpr int kPresetNameMaxLen = 16;
-
 static void show_text_input_error(const std::string& msg) {
     if (!ss) return;
     ss->menu.binds_text_input_error = msg;
     ss->menu.binds_text_input_error_timer = kTextInputErrorDuration;
 }
 
-static void open_binds_text_input(int mode, const std::string& initial, const std::string& target) {
+static void open_text_input(int mode, int limit, const std::string& initial,
+                            const std::string& target, const std::string& title) {
     if (!ss) return;
     ss->menu.binds_text_input_active = true;
     ss->menu.binds_text_input_mode = mode;
-    ss->menu.binds_text_input_limit = kPresetNameMaxLen;
+    ss->menu.binds_text_input_limit = limit;
     ss->menu.binds_text_input_buffer = initial;
     if ((int)ss->menu.binds_text_input_buffer.size() > ss->menu.binds_text_input_limit)
         ss->menu.binds_text_input_buffer.resize(static_cast<size_t>(ss->menu.binds_text_input_limit));
     ss->menu.binds_text_input_target = target;
     ss->menu.binds_text_input_error.clear();
     ss->menu.binds_text_input_error_timer = 0.0f;
+    ss->menu.text_input_title = title;
 }
 
 bool menu_is_text_input_active() {
@@ -382,21 +538,23 @@ void menu_text_input_backspace() {
 void menu_text_input_cancel() {
     if (!menu_is_text_input_active()) return;
     ss->menu.binds_text_input_active = false;
-    ss->menu.binds_text_input_mode = BINDS_TEXT_INPUT_NONE;
+    ss->menu.binds_text_input_mode = TEXT_INPUT_NONE;
     ss->menu.binds_text_input_buffer.clear();
     ss->menu.binds_text_input_target.clear();
     ss->menu.binds_text_input_error.clear();
     ss->menu.binds_text_input_error_timer = 0.0f;
+    ss->menu.text_input_title.clear();
 }
 
 void menu_text_input_submit() {
     if (!menu_is_text_input_active()) return;
     refresh_binds_profiles();
-    std::string raw = sanitize_profile_name(ss->menu.binds_text_input_buffer);
-    if (raw.empty())
-        raw = "Preset";
+    std::string raw = ss->menu.binds_text_input_buffer;
     bool completed = false;
-    if (ss->menu.binds_text_input_mode == BINDS_TEXT_INPUT_NEW) {
+    if (ss->menu.binds_text_input_mode == TEXT_INPUT_BINDS_NEW) {
+        raw = sanitize_profile_name(raw);
+        if (raw.empty())
+            raw = "Preset";
         if ((int)ss->menu.binds_profiles.size() >= kMaxBindsProfiles) {
             show_text_input_error("Preset limit reached (50)");
             if (aa) play_sound("base:ui_cant");
@@ -420,7 +578,10 @@ void menu_text_input_submit() {
         ss->menu.binds_toast = std::string("Saved preset: ") + raw;
         ss->menu.binds_toast_timer = 1.2f;
         completed = true;
-    } else if (ss->menu.binds_text_input_mode == BINDS_TEXT_INPUT_RENAME) {
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_BINDS_RENAME) {
+        raw = sanitize_profile_name(raw);
+        if (raw.empty())
+            raw = "Preset";
         std::string target = ss->menu.binds_text_input_target;
         if (target.empty() || binds_profile_is_read_only(target)) {
             completed = true;
@@ -444,6 +605,11 @@ void menu_text_input_submit() {
             completed = true;
         }
         refresh_binds_profiles();
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_MODS_SEARCH) {
+        ss->menu.mods_search_query = trim_copy(raw);
+        ss->menu.mods_catalog_page = 0;
+        rebuild_mods_filter();
+        completed = true;
     }
     if (completed) {
         ss->menu.suppress_confirm_until_release = true;
@@ -467,10 +633,11 @@ std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
     const float item_h = 0.08f;
     const float vgap = 0.02f;
     if (ss->menu.page == MAIN) {
-        auto rects = layout_vlist(RectNdc{0.10f, 0.25f, 0.0f, 0.0f}, 0.40f, item_h, vgap, 3);
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.40f, item_h, vgap, 4);
         buttons.push_back(ButtonDesc{100, rects[0], "Play", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{101, rects[1], "Settings", ButtonKind::Button, 0.0f, true});
-        buttons.push_back(ButtonDesc{102, rects[2], "Quit", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{110, rects[1], "Mods", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{101, rects[2], "Settings", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{102, rects[3], "Quit", ButtonKind::Button, 0.0f, true});
     } else if (ss->menu.page == SETTINGS) {
         auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.50f, item_h, vgap, 6);
         buttons.push_back(ButtonDesc{201, rects[0], "Video", ButtonKind::Button, 0.0f, true});
@@ -576,6 +743,29 @@ std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
         buttons.push_back(ButtonDesc{981, RectNdc{0.22f, 0.82f, 0.20f, 0.08f}, "Remove Player", ButtonKind::Button, 0.0f, ss->menu.players_count > 1});
         buttons.push_back(ButtonDesc{980, RectNdc{0.44f, 0.82f, 0.20f, 0.08f}, "Add Player", ButtonKind::Button, 0.0f, true});
         buttons.push_back(ButtonDesc{999, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == MODS) {
+        ensure_mod_install_map();
+        if (ss->menu.mods_visible_indices.empty() && ss->menu.mods_filtered_count == 0)
+            rebuild_mods_filter();
+        buttons.push_back(ButtonDesc{950, RectNdc{0.10f, 0.18f, 0.45f, 0.08f}, "Search Mods", ButtonKind::Button, 0.0f, true});
+        bool prev_enabled = ss->menu.mods_catalog_page > 0;
+        bool next_enabled = ss->menu.mods_catalog_page + 1 < ss->menu.mods_total_pages;
+        buttons.push_back(ButtonDesc{951, RectNdc{0.60f, 0.18f, 0.12f, 0.08f}, "Prev", ButtonKind::Button, 0.0f, prev_enabled});
+        buttons.push_back(ButtonDesc{952, RectNdc{0.74f, 0.18f, 0.12f, 0.08f}, "Next", ButtonKind::Button, 0.0f, next_enabled});
+        const auto& catalog = mock_mod_catalog();
+        const auto& visible = ss->menu.mods_visible_indices;
+        int start = ss->menu.mods_catalog_page * kModsPerPage;
+        auto cards = layout_vlist(RectNdc{0.10f, 0.28f, 0.0f, 0.0f}, 0.78f, kModsCardHeight, kModsCardGap, kModsPerPage);
+        for (int i = 0; i < kModsPerPage; ++i) {
+            int idx = start + i;
+            if (idx >= (int)visible.size())
+                break;
+            int catalog_idx = visible[(size_t)idx];
+            ButtonDesc card{900 + i, cards[static_cast<std::size_t>(i)], catalog[(size_t)catalog_idx].title, ButtonKind::Button,
+                            static_cast<float>(catalog_idx), true};
+            buttons.push_back(card);
+        }
+        buttons.push_back(ButtonDesc{998, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
     } else if (ss->menu.page == OTHER) {
         auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 0);
         buttons.push_back(ButtonDesc{899, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
@@ -620,6 +810,7 @@ void render_menu(int width, int height) {
     else if (ss->menu.page == BINDS_LOAD) title = "Load Preset";
     else if (ss->menu.page == PLAYERS) title = "Players";
     else if (ss->menu.page == OTHER) title = "Other";
+    else if (ss->menu.page == MODS) title = "Mods";
     draw_text_hdr(title, hdr_x, hdr_y);
     // Page indicator on right
     if (ss->menu.page == VIDEO) {
@@ -680,6 +871,12 @@ void render_menu(int width, int height) {
             draw_small("Next", nextb);
         }
         // defer hint drawing until draw_text is defined
+    } else if (ss->menu.page == MODS) {
+        int total_pages = std::max(1, ss->menu.mods_total_pages);
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.mods_catalog_page + 1, total_pages);
+        int x = width - 260; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
     }
 
     auto draw_text = [&](const char* s, int x, int y, SDL_Color col) {
@@ -731,6 +928,10 @@ void render_menu(int width, int height) {
         if (ro) sub += " (read-only)";
         if (modified) sub += " (modified)";
         draw_text(sub.c_str(), hdr_x, hdr_y + 36, SDL_Color{200,200,210,255});
+    } else if (ss->menu.page == MODS) {
+        char results_buf[64];
+        std::snprintf(results_buf, sizeof(results_buf), "%d mods", ss->menu.mods_filtered_count);
+        draw_text(results_buf, hdr_x, hdr_y + 36, SDL_Color{200, 200, 210, 255});
     }
 
     // Draw hints (after draw_text lambda defined)
@@ -748,6 +949,19 @@ void render_menu(int width, int height) {
         if (!b.enabled) {
             fill = focused ? SDL_Color{50, 55, 65, 255} : SDL_Color{35, 38, 45, 255};
             border = SDL_Color{110, 110, 120, 255};
+        }
+        int mod_catalog_idx = -1;
+        if (ss->menu.page == MODS && b.id >= 900 && b.id < 900 + kModsPerPage) {
+            int rel = b.id - 900;
+            int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
+            if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size())
+                mod_catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
+            if (mod_catalog_idx >= 0) {
+                const auto& entry = mock_mod_catalog()[(size_t)mod_catalog_idx];
+                if (is_mod_installed(entry.id)) {
+                    fill = focused ? SDL_Color{70, 90, 70, 255} : SDL_Color{45, 55, 45, 255};
+                }
+            }
         }
         SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a);
         SDL_Rect rr{(int)std::floor(pr.x), (int)std::floor(pr.y), (int)std::ceil(pr.w), (int)std::ceil(pr.h)};
@@ -785,6 +999,60 @@ void render_menu(int width, int height) {
                     draw_label_value(rr, "Rename", std::string(), focused);
                 } else if (b.id >= 740 && b.id <= 744) {
                     draw_label_value(rr, "Delete", std::string(), focused);
+                } else {
+                    draw_label_value(rr, b.label, std::string(), focused);
+                }
+            } else if (ss->menu.page == MODS) {
+                if (b.id == 950) {
+                    std::string query = ss->menu.mods_search_query.empty()
+                                            ? "Type to filter mods..."
+                                            : ss->menu.mods_search_query;
+                    SDL_Color label_col{220, 220, 230, 255};
+                    SDL_Color lc = ss->menu.mods_search_query.empty()
+                                       ? SDL_Color{150, 150, 170, 255}
+                                       : SDL_Color{220, 220, 230, 255};
+                    draw_text("Search", rr.x + 12, rr.y + 10, label_col);
+                    draw_text(query.c_str(), rr.x + 12, rr.y + rr.h / 2, lc);
+                } else if (b.id == 951 || b.id == 952) {
+                    draw_label_value(rr, b.label, std::string(), focused);
+                } else if (mod_catalog_idx >= 0) {
+                    const auto& entry = mock_mod_catalog()[(size_t)mod_catalog_idx];
+                    SDL_Color title_col{240, 220, 80, 255};
+                    SDL_Color meta_col{190, 190, 200, 255};
+                    SDL_Color desc_col{200, 200, 210, 255};
+                    draw_text(entry.title.c_str(), rr.x + 12, rr.y + 10, title_col);
+                    char meta[128];
+                    std::snprintf(meta, sizeof(meta), "v%s  •  %s", entry.version.c_str(), entry.author.c_str());
+                    draw_text(meta, rr.x + 12, rr.y + 34, meta_col);
+                    std::string summary = entry.summary;
+                    if (summary.size() > 140) {
+                        summary.resize(137);
+                        summary += "...";
+                    }
+                    draw_text(summary.c_str(), rr.x + 12, rr.y + 54, desc_col);
+                    std::string deps = "Standalone";
+                    if (!entry.dependencies.empty()) {
+                        deps = "Requires: ";
+                        for (size_t i = 0; i < entry.dependencies.size(); ++i) {
+                            if (i > 0) deps += ", ";
+                            deps += entry.dependencies[i];
+                        }
+                    }
+                    draw_text(deps.c_str(), rr.x + 12, rr.y + rr.h - 32, SDL_Color{170, 170, 190, 255});
+                    SDL_Rect pill{rr.x + rr.w - 140, rr.y + rr.h - 40, 120, 26};
+                    bool installed = is_mod_installed(entry.id);
+                    SDL_Color pill_fill = installed ? SDL_Color{70, 110, 80, 255} : SDL_Color{60, 70, 90, 255};
+                    SDL_Color pill_border = installed ? SDL_Color{200, 220, 200, 255} : SDL_Color{180, 180, 190, 255};
+                    if (entry.required)
+                        pill_fill = SDL_Color{80, 80, 100, 255};
+                    SDL_SetRenderDrawColor(r, pill_fill.r, pill_fill.g, pill_fill.b, pill_fill.a);
+                    SDL_RenderFillRect(r, &pill);
+                    SDL_SetRenderDrawColor(r, pill_border.r, pill_border.g, pill_border.b, pill_border.a);
+                    SDL_RenderDrawRect(r, &pill);
+                    const char* status = entry.required ? "Core" : (installed ? "Installed" : "Install");
+                    draw_text(status, pill.x + 12, pill.y + 5, SDL_Color{230, 230, 240, 255});
+                } else if (b.id == 998) {
+                    draw_label_value(rr, b.label, std::string(), focused);
                 } else {
                     draw_label_value(rr, b.label, std::string(), focused);
                 }
@@ -998,6 +1266,7 @@ void step_menu_logic(int width, int height) {
             case BINDS: return nav_binds_for_id(id);
             case BINDS_LOAD: return nav_binds_list_for_id(id);
             case OTHER: return nav_other_for_id(id);
+            case MODS: return nav_mods_for_id(id);
             default: return NavNode{-1,-1,-1,-1};
         }
     };
@@ -1019,6 +1288,10 @@ void step_menu_logic(int width, int height) {
                 // Activate
                 if (b.id == 100) {
                     ss->mode = modes::PLAYING;
+                } else if (b.id == 110) {
+                    enter_mods_page();
+                    ss->menu.page = MODS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
+                    if (aa) play_sound("base:ui_confirm");
                 } else if (b.id == 101) {
                     ss->menu.page = SETTINGS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
                 } else if (b.id == 102) {
@@ -1059,7 +1332,7 @@ void step_menu_logic(int width, int height) {
                     std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
                     suggestion = sanitize_profile_name(suggestion);
                     if (suggestion.empty()) suggestion = "Preset";
-                    open_binds_text_input(BINDS_TEXT_INPUT_NEW, suggestion, std::string{});
+                    open_text_input(TEXT_INPUT_BINDS_NEW, kPresetNameMaxLen, suggestion, std::string{}, "Preset Name");
                     ss->menu.ignore_mouse_until_release = true;
                     if (aa) play_sound("base:ui_confirm");
                 } else if (ss->menu.page == BINDS && b.id == 799) {
@@ -1085,7 +1358,7 @@ void step_menu_logic(int width, int height) {
                     if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
                         const auto& info = ss->menu.binds_profiles[(size_t)idx];
                         if (!info.read_only)
-                            open_binds_text_input(BINDS_TEXT_INPUT_RENAME, info.name, info.name);
+                            open_text_input(TEXT_INPUT_BINDS_RENAME, kPresetNameMaxLen, info.name, info.name, "Rename Preset");
                     }
                     ss->menu.ignore_mouse_until_release = true;
                 } else if (ss->menu.page == BINDS_LOAD && b.id >= 740 && b.id <= 744 && b.enabled) {
@@ -1102,6 +1375,50 @@ void step_menu_logic(int width, int height) {
                         if (aa) play_sound("base:ui_confirm");
                     }
                     ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == MODS) {
+                    if (b.id == 950) {
+                        open_text_input(TEXT_INPUT_MODS_SEARCH, kModsSearchMaxLen,
+                                        ss->menu.mods_search_query, std::string{}, "Search Mods");
+                        ss->menu.ignore_mouse_until_release = true;
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 951) {
+                        if (ss->menu.mods_catalog_page > 0) {
+                            ss->menu.mods_catalog_page = std::max(0, ss->menu.mods_catalog_page - 1);
+                            ss->menu.focus_id = -1;
+                            if (aa) play_sound("base:ui_left");
+                        } else if (aa) {
+                            play_sound("base:ui_cant");
+                        }
+                        ss->menu.ignore_mouse_until_release = true;
+                    } else if (b.id == 952) {
+                        if (ss->menu.mods_catalog_page + 1 < ss->menu.mods_total_pages) {
+                            ss->menu.mods_catalog_page =
+                                std::min(ss->menu.mods_total_pages - 1, ss->menu.mods_catalog_page + 1);
+                            ss->menu.focus_id = -1;
+                            if (aa) play_sound("base:ui_right");
+                        } else if (aa) {
+                            play_sound("base:ui_cant");
+                        }
+                        ss->menu.ignore_mouse_until_release = true;
+                    } else if (b.id >= 900 && b.id < 900 + kModsPerPage && b.enabled) {
+                        int rel = b.id - 900;
+                        int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
+                        if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size()) {
+                            int catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
+                            const auto& entry = mock_mod_catalog()[(size_t)catalog_idx];
+                            if (entry.required) {
+                                if (aa) play_sound("base:ui_cant");
+                            } else {
+                                bool installed = is_mod_installed(entry.id);
+                                set_mod_installed(entry.id, !installed);
+                                if (aa) play_sound(installed ? "base:ui_cant" : "base:ui_confirm");
+                            }
+                        }
+                        ss->menu.ignore_mouse_until_release = true;
+                    } else if (b.id == 998) {
+                        ss->menu.page = MAIN; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
+                        if (aa) play_sound("base:ui_confirm");
+                    }
                 } else if (b.kind == ButtonKind::Toggle) {
                     if (b.id == 402) ss->menu.vsync = !ss->menu.vsync;
                     else if (b.id == 503) ss->menu.invert_x = !ss->menu.invert_x;
@@ -1375,6 +1692,10 @@ void step_menu_logic(int width, int height) {
             if (b) {
                 if (b->id == 100) {
                     ss->mode = modes::PLAYING;
+                } else if (b->id == 110) {
+                    enter_mods_page();
+                    ss->menu.page = MODS; ss->menu.focus_id = -1;
+                    if (aa) play_sound("base:ui_confirm");
                 } else if (b->id == 101) {
                     ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
                 } else if (b->id == 102) {
@@ -1440,7 +1761,7 @@ void step_menu_logic(int width, int height) {
                         std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
                         suggestion = sanitize_profile_name(suggestion);
                         if (suggestion.empty()) suggestion = "Preset";
-                        open_binds_text_input(BINDS_TEXT_INPUT_NEW, suggestion, std::string{});
+                        open_text_input(TEXT_INPUT_BINDS_NEW, kPresetNameMaxLen, suggestion, std::string{}, "Preset Name");
                         if (aa) play_sound("base:ui_confirm");
                     } else if (b->id == 794 && b->enabled) {
                         undo_active_bind_changes();
@@ -1463,24 +1784,65 @@ void step_menu_logic(int width, int height) {
                         if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
                             const auto& info = ss->menu.binds_profiles[(size_t)idx];
                             if (!info.read_only)
-                                open_binds_text_input(BINDS_TEXT_INPUT_RENAME, info.name, info.name);
+                                open_text_input(TEXT_INPUT_BINDS_RENAME, kPresetNameMaxLen, info.name, info.name, "Rename Preset");
                         }
-                    } else if (b->id >= 740 && b->id <= 744 && b->enabled) {
-                        int idx = ss->menu.binds_list_page * 5 + (b->id - 740);
-                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
-                            const auto name = ss->menu.binds_profiles[(size_t)idx].name;
-                            delete_binds_profile(name);
+                } else if (b->id >= 740 && b->id <= 744 && b->enabled) {
+                    int idx = ss->menu.binds_list_page * 5 + (b->id - 740);
+                    if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                        const auto name = ss->menu.binds_profiles[(size_t)idx].name;
+                        delete_binds_profile(name);
                             refresh_binds_profiles();
                             ss->menu.binds_toast = std::string("Deleted preset: ") + name;
                             ss->menu.binds_toast_timer = 1.2f;
                             const int per_page = 5;
                             int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + per_page - 1) / per_page));
-                            ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
-                            if (aa) play_sound("base:ui_confirm");
+                        ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
+                        if (aa) play_sound("base:ui_confirm");
+                    }
+                }
+                } else if (ss->menu.page == MODS) {
+                    if (b->id == 950) {
+                        open_text_input(TEXT_INPUT_MODS_SEARCH, kModsSearchMaxLen,
+                                        ss->menu.mods_search_query, std::string{}, "Search Mods");
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 951) {
+                        if (ss->menu.mods_catalog_page > 0) {
+                            ss->menu.mods_catalog_page = std::max(0, ss->menu.mods_catalog_page - 1);
+                            ss->menu.focus_id = -1;
+                            if (aa) play_sound("base:ui_left");
+                        } else if (aa) {
+                            play_sound("base:ui_cant");
                         }
+                    } else if (b->id == 952) {
+                        if (ss->menu.mods_catalog_page + 1 < ss->menu.mods_total_pages) {
+                            ss->menu.mods_catalog_page =
+                                std::min(ss->menu.mods_total_pages - 1, ss->menu.mods_catalog_page + 1);
+                            ss->menu.focus_id = -1;
+                            if (aa) play_sound("base:ui_right");
+                        } else if (aa) {
+                            play_sound("base:ui_cant");
+                        }
+                    } else if (b->id >= 900 && b->id < 900 + kModsPerPage && b->enabled) {
+                        int rel = b->id - 900;
+                        int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
+                        if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size()) {
+                            int catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
+                            const auto& entry = mock_mod_catalog()[(size_t)catalog_idx];
+                            if (entry.required) {
+                                if (aa) play_sound("base:ui_cant");
+                            } else {
+                                bool installed = is_mod_installed(entry.id);
+                                set_mod_installed(entry.id, !installed);
+                                if (aa) play_sound(installed ? "base:ui_cant" : "base:ui_confirm");
+                            }
+                        }
+                    } else if (b->id == 998) {
+                        ss->menu.page = MAIN; ss->menu.focus_id = -1;
+                        if (aa) play_sound("base:ui_confirm");
                     }
                 }
             }
+        }
         }
 
     // Back button behavior (Esc/Backspace)
@@ -1491,6 +1853,8 @@ void step_menu_logic(int width, int height) {
     } else if (ss->menu_inputs.back) {
         if (aa) play_sound("base:ui_confirm");
         if (ss->menu.page == SETTINGS) {
+            ss->menu.page = MAIN; ss->menu.focus_id = -1;
+        } else if (ss->menu.page == MODS) {
             ss->menu.page = MAIN; ss->menu.focus_id = -1;
         } else if (ss->menu.page == BINDS_LOAD) {
             ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.capture_action_id = -1;
@@ -1576,5 +1940,4 @@ void step_menu_logic(int width, int height) {
 
     // Update mouse click edge
     ss->menu.mouse_left_prev = ss->mouse_inputs.left;
-}
 }
