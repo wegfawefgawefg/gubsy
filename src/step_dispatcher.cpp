@@ -4,6 +4,7 @@
 #include "step.hpp"
 #include "globals.hpp"
 #include "settings.hpp"
+#include "engine/mode_registry.hpp"
 #include "engine/alerts.hpp"
 #include "crates.hpp"
 
@@ -19,25 +20,19 @@ void step() {
         ss->time_since_last_update -= TIMESTEP;
         if (ss->frame_pause > 0) { ss->frame_pause -= 1; return; }
 
-        switch (ss->mode) {
-            case ids::MODE_PLAYING:
-                step_playing();
-                break;
-            case ids::MODE_TITLE:
-                step_title();
-                break;
-            case ids::MODE_SCORE_REVIEW:
-                step_score_review();
-                break;
-            case ids::MODE_NEXT_STAGE:
-                step_next_stage();
-                break;
-            case ids::MODE_GAME_OVER:
-                step_game_over();
-                break;
-            default:
-                // Unknown mode: do nothing this tick
-                break;
+        bool stepped = false;
+        if (const ModeDesc* mode = find_mode(ss->mode)) {
+            if (mode->step_fn) {
+                mode->step_fn();
+                stepped = true;
+            }
+        }
+        if (!stepped) {
+            if (ss->mode == ids::MODE_PLAYING) step_playing();
+            else if (ss->mode == ids::MODE_TITLE) step_title();
+            else if (ss->mode == ids::MODE_SCORE_REVIEW) step_score_review();
+            else if (ss->mode == ids::MODE_NEXT_STAGE) step_next_stage();
+            else if (ss->mode == ids::MODE_GAME_OVER) step_game_over();
         }
 
         ss->scene_frame = ss->scene_frame + 1u;

@@ -1,5 +1,6 @@
 #include "render.hpp"
 
+#include "engine/mode_registry.hpp"
 #include "globals.hpp"
 #include "engine/audio.hpp"
 #include "luamgr.hpp"
@@ -44,7 +45,7 @@ static inline void ui_draw_kv_line(int tx, int& ty, int lh,
 }
 }
 
-void render() {
+static void render_frame_impl() {
     double dt = ss->dt;
     SDL_Renderer* renderer = gg->renderer;
     if (!renderer) {
@@ -1195,5 +1196,36 @@ void render() {
         }
     }
 
-    SDL_RenderPresent(renderer);
+SDL_RenderPresent(renderer);
+}
+
+void render_mode_title() {
+    render_frame_impl();
+}
+
+void render_mode_playing() {
+    render_frame_impl();
+}
+
+void render_mode_score_review() {
+    render_frame_impl();
+}
+
+void render_mode_next_stage() {
+    render_frame_impl();
+}
+
+void render_mode_game_over() {
+    render_frame_impl();
+}
+
+void render() {
+    std::string current_mode = ss ? ss->mode : ids::MODE_TITLE;
+    if (const ModeDesc* desc = find_mode(current_mode)) {
+        if (desc->render_fn) {
+            desc->render_fn();
+            return;
+        }
+    }
+    render_frame_impl();
 }

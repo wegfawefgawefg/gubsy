@@ -24,7 +24,7 @@
 
 struct State {
     bool running{true};
-    int mode{ids::MODE_TITLE};
+    std::string mode{ids::MODE_TITLE};
 
     // Time
     double now{0.0};

@@ -13,6 +13,7 @@
 #include "step.hpp"
 #include "render.hpp"
 #include "menu/menu.hpp"
+#include "game_modes.hpp"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -113,6 +114,7 @@ int main(int argc, char** argv) {
     save_active_input_profile_name(active_profile);
 
     generate_room();
+    register_game_modes();
 
     // FPS counter state
     Uint64 perf_freq = SDL_GetPerformanceFrequency();

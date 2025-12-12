@@ -5,14 +5,14 @@
 
 // Integer IDs instead of enums (moddable via data tables later)
 namespace ids {
-inline constexpr int MODE_TITLE = 0;
-inline constexpr int MODE_SETTINGS = 1;
-inline constexpr int MODE_VIDEO_SETTINGS = 2;
-inline constexpr int MODE_PLAYING = 3;
-inline constexpr int MODE_GAME_OVER = 4;
-inline constexpr int MODE_WIN = 5;
-inline constexpr int MODE_SCORE_REVIEW = 6;
-inline constexpr int MODE_NEXT_STAGE = 7;
+inline constexpr const char* MODE_TITLE = "title";
+inline constexpr const char* MODE_SETTINGS = "settings";
+inline constexpr const char* MODE_VIDEO_SETTINGS = "video_settings";
+inline constexpr const char* MODE_PLAYING = "playing";
+inline constexpr const char* MODE_GAME_OVER = "game_over";
+inline constexpr const char* MODE_WIN = "win";
+inline constexpr const char* MODE_SCORE_REVIEW = "score_review";
+inline constexpr const char* MODE_NEXT_STAGE = "next_stage";
 
 inline constexpr int ET_NONE = 0;
 inline constexpr int ET_PLAYER = 1;
