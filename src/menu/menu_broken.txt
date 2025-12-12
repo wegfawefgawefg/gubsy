@@ -1,0 +1,1986 @@
+#include "menu.hpp"
+
+#include "globals.hpp"
+#include "engine/graphics.hpp"
+#include "engine/input_defs.hpp"
+#include "engine/input.hpp"
+#include "config.hpp"
+#include "types.hpp"
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cmath>
+
+namespace {
+constexpr float SAFE_M = 0.05f; // safe margin on all sides
+constexpr int kMaxBindsProfiles = 50;
+constexpr float kTextInputErrorDuration = 1.5f;
+constexpr int kModsPerPage = 6;
+constexpr float kModsCardHeight = 0.085f;
+constexpr float kModsCardGap = 0.0125f;
+constexpr float kModsCardsTop = 0.24f;
+
+enum TextInputMode {
+    TEXT_INPUT_NONE = 0,
+    TEXT_INPUT_BINDS_NEW = 1,
+    TEXT_INPUT_BINDS_RENAME = 2,
+    TEXT_INPUT_MODS_SEARCH = 3,
+};
+
+static constexpr int kPresetNameMaxLen = 16;
+static constexpr int kModsSearchMaxLen = 32;
+
+struct MockModEntry {
+    std::string id;
+    std::string title;
+    std::string author;
+    std::string version;
+    std::string summary;
+    std::vector<std::string> dependencies;
+    bool required{false};
+};
+
+std::string to_lower_copy(const std::string& s) {
+    std::string out = s;
+    std::transform(out.begin(), out.end(), out.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return out;
+}
+
+std::string trim_copy(const std::string& s) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
+    size_t end = s.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) --end;
+    return s.substr(start, end - start);
+}
+
+const std::vector<MockModEntry>& mock_mod_catalog() {
+    static const std::vector<MockModEntry> catalog = {
+        {"base", "Base Demo Content", "Gubsy Team", "0.1.0",
+         "Core pads + engines shipped with the demo project. Always enabled.",
+         {}, true},
+        {"shuffle_pack", "Pad Shuffle Pack", "Gubsy Labs", "0.1.0",
+         "Adds experimental pads that reposition or swap with existing ones.",
+         {"base"}, false},
+        {"pad_tweaks", "Pad Tweaks", "Gubsy Labs", "0.1.0",
+         "Recolors the teleport pad and adds a reset console for testing patches.",
+         {"base"}, false},
+        {"retro_ui", "Retro UI Theme", "Community", "0.0.3",
+         "Palette-swapped HUD, scanlines, and chunky font replacements.",
+         {}, false},
+        {"audio_plus", "Audio Plus", "SoundSmith", "0.2.1",
+         "Extra SFX cues when interacting with pads. Demonstrates audio hooks.",
+         {"base"}, false},
+    };
+    return catalog;
+}
+
+void ensure_mod_install_map() {
+    if (!ss) return;
+    const auto& catalog = mock_mod_catalog();
+    for (const auto& entry : catalog) {
+        auto it = ss->menu.mods_mock_install_state.find(entry.id);
+        if (it == ss->menu.mods_mock_install_state.end()) {
+            bool default_state = entry.required || entry.id == "base";
+            ss->menu.mods_mock_install_state.emplace(entry.id, default_state);
+        }
+    }
+}
+
+bool is_mod_installed(const std::string& id) {
+    if (!ss) return false;
+    auto it = ss->menu.mods_mock_install_state.find(id);
+    if (it == ss->menu.mods_mock_install_state.end())
+        return false;
+    return it->second;
+}
+
+void set_mod_installed(const std::string& id, bool installed) {
+    if (!ss) return;
+    ensure_mod_install_map();
+    ss->menu.mods_mock_install_state[id] = installed;
+}
+
+void rebuild_mods_filter() {
+    if (!ss) return;
+    ensure_mod_install_map();
+    const auto& catalog = mock_mod_catalog();
+    ss->menu.mods_visible_indices.clear();
+    std::string query = to_lower_copy(ss->menu.mods_search_query);
+    for (std::size_t i = 0; i < catalog.size(); ++i) {
+        const auto& entry = catalog[i];
+        if (!query.empty()) {
+            std::string haystack = to_lower_copy(entry.title + " " + entry.summary + " " + entry.author);
+            if (haystack.find(query) == std::string::npos)
+                continue;
+        }
+        ss->menu.mods_visible_indices.push_back(static_cast<int>(i));
+    }
+    ss->menu.mods_filtered_count = static_cast<int>(ss->menu.mods_visible_indices.size());
+    if (ss->menu.mods_filtered_count == 0) {
+        ss->menu.mods_total_pages = 1;
+        ss->menu.mods_catalog_page = 0;
+    } else {
+        ss->menu.mods_total_pages = std::max(1, (ss->menu.mods_filtered_count + kModsPerPage - 1) / kModsPerPage);
+        ss->menu.mods_catalog_page = std::clamp(ss->menu.mods_catalog_page, 0, ss->menu.mods_total_pages - 1);
+    }
+}
+
+void enter_mods_page() {
+    if (!ss) return;
+    ensure_mod_install_map();
+    ss->menu.mods_catalog_page = 0;
+    ss->menu.mods_total_pages = 1;
+    rebuild_mods_filter();
+}
+
+// Pages
+enum Page { MAIN=0, SETTINGS=1, AUDIO=2, VIDEO=3, CONTROLS=4, BINDS=5, OTHER=6, VIDEO2=7, BINDS_LOAD=8, PLAYERS=9, MODS=10 };
+
+inline SDL_FRect ndc_to_pixels(const RectNdc& r, int w, int h) {
+    float x0 = (SAFE_M + r.x) * static_cast<float>(w);
+    float y0 = (SAFE_M + r.y) * static_cast<float>(h);
+    float ww = r.w * static_cast<float>(w);
+    float hh = r.h * static_cast<float>(h);
+    return SDL_FRect{x0, y0, ww, hh};
+}
+
+// Simple nav graphs per page
+static inline NavNode nav_main_for_id(int id) {
+    switch (id) {
+        case 100: return NavNode{-1, 110, 100, 100}; // Play
+        case 110: return NavNode{100, 101, 110, 110}; // Mods
+        case 101: return NavNode{110, 102, 101, 101}; // Settings
+        case 102: return NavNode{101, -1, 102, 102};  // Quit
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_settings_for_id(int id) {
+    switch (id) {
+        case 201: return NavNode{-1, 200, 201, 201}; // Video (top)
+        case 200: return NavNode{201, 202, 200, 200}; // Audio
+        case 202: return NavNode{200, 204, 202, 202}; // Controls
+        case 204: return NavNode{202, 205, 204, 204}; // Binds
+        case 205: return NavNode{204, 203, 205, 205}; // Players
+        case 203: return NavNode{205, 299, 203, 203}; // Other
+        case 299: return NavNode{203, -1, 299, 299}; // Back
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
+static inline NavNode nav_audio_for_id(int id) {
+    switch (id) {
+        case 300: return NavNode{-1, 301, 300, 300};
+        case 301: return NavNode{300, 302, 301, 301};
+        case 302: return NavNode{301, 399, 302, 302};
+        case 399: return NavNode{302, -1, 399, 399};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_video_for_id(int id) {
+    switch (id) {
+        case 400: return NavNode{-1, 405, 400, 400};
+        case 405: return NavNode{400, 401, 405, 405};
+        case 401: return NavNode{405, 402, 401, 401};
+        case 402: return NavNode{401, 403, 402, 402};
+        case 403: return NavNode{402, 404, 403, 403};
+        case 404: return NavNode{403, 499, 404, 404};
+        case 499: return NavNode{404, -1, 499, 498}; // Back ↔ Apply horizontally
+        case 498: return NavNode{404, -1, 499, 498};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_controls_for_id(int id) {
+    switch (id) {
+        case 500: return NavNode{-1, 501, 500, 500};
+        case 501: return NavNode{500, 502, 501, 501};
+        case 502: return NavNode{501, 505, 502, 502};
+        case 505: return NavNode{502, 507, 505, 505};
+        case 507: return NavNode{505, 506, 507, 507};
+        case 506: return NavNode{507, 599, 506, 506};
+        case 599: return NavNode{506, -1, 599, 599};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
+static inline bool is_audio_slider(int id) {
+    return id == 300 || id == 301 || id == 302;
+}
+
+static inline int audio_slider_index(int id) {
+    switch (id) {
+        case 300: return 0;
+        case 301: return 1;
+        case 302: return 2;
+        default: return -1;
+    }
+}
+
+static float* audio_slider_value_ptr(int slider_id) {
+    if (!ss) return nullptr;
+    switch (slider_id) {
+        case 300: return &ss->menu.vol_master;
+        case 301: return &ss->menu.vol_music;
+        case 302: return &ss->menu.vol_sfx;
+        default: return nullptr;
+    }
+}
+
+static void set_audio_slider_anchor(int slider_id, float value) {
+    if (!ss) return;
+    int idx = audio_slider_index(slider_id);
+    if (idx < 0) return;
+    ss->menu.audio_slider_preview_anchor[idx] = value;
+    ss->menu.audio_slider_preview_anchor_valid[idx] = true;
+}
+
+enum class SliderPreviewEvent { Drag, Release };
+static constexpr float kAudioSliderPreviewCooldown = 0.12f;
+
+static void play_audio_slider_preview(int slider_id, float prev_value, float new_value, SliderPreviewEvent evt) {
+    if (!aa || !ss) return;
+    int idx = audio_slider_index(slider_id);
+    if (idx < 0) return;
+    if (!ss->menu.audio_slider_preview_anchor_valid[idx]) {
+        ss->menu.audio_slider_preview_anchor[idx] = prev_value;
+        ss->menu.audio_slider_preview_anchor_valid[idx] = true;
+    }
+    const char* sound = nullptr;
+    if (evt == SliderPreviewEvent::Drag) {
+        float anchor = ss->menu.audio_slider_preview_anchor[idx];
+        float diff = new_value - anchor;
+        if (std::fabs(diff) < 0.004f)
+            return;
+        float& cooldown = ss->menu.audio_slider_preview_cooldown[idx];
+        if (cooldown > 0.0f)
+            return;
+        sound = (diff >= 0.0f) ? "base:ui_right" : "base:ui_left";
+        cooldown = kAudioSliderPreviewCooldown;
+        ss->menu.audio_slider_preview_anchor[idx] = new_value;
+    } else {
+        sound = "base:ui_confirm";
+        ss->menu.audio_slider_preview_anchor[idx] = new_value;
+        ss->menu.audio_slider_preview_anchor_valid[idx] = true;
+    }
+    if (sound)
+        play_sound(sound);
+}
+
+static void flush_audio_settings_if_dirty() {
+    if (ss && ss->menu.audio_settings_dirty) {
+        save_audio_settings_to_ini("config/audio.ini");
+        ss->menu.audio_settings_dirty = false;
+    }
+}
+
+static bool apply_audio_slider_value(int slider_id, float value) {
+    if (!ss)
+        return false;
+    float* target = audio_slider_value_ptr(slider_id);
+    if (!target)
+        return false;
+    float clamped = std::clamp(value, 0.0f, 1.0f);
+    bool changed = std::fabs(*target - clamped) > 0.0005f;
+    *target = clamped;
+    if (changed)
+        ss->menu.audio_settings_dirty = true;
+    return changed;
+}
+static inline NavNode nav_binds_for_id(int id) {
+    // Keys page rows (700..704), then footer buttons in order:
+    // 799 Back, 791 Reset, 792 Load, 794 Undo
+    if (id >= 700 && id <= 704) {
+        int up = (id == 700) ? -1 : id - 1;
+        int down = (id == 704) ? 799 : id + 1;
+        return NavNode{up, down, id, id};
+    }
+    switch (id) {
+        case 799: return NavNode{704, -1, 799, 791};
+        case 791: return NavNode{704, -1, 799, 792};
+        case 792: return NavNode{704, -1, 791, 793};
+        case 793: return NavNode{704, -1, 792, 794};
+        case 794: return NavNode{704, -1, 793, 794};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_binds_list_for_id(int id) {
+    if (id >= 720 && id <= 724) {
+        int up = (id == 720) ? -1 : id - 1;
+        int down = (id == 724) ? 799 : id + 1;
+        int right = 730 + (id - 720);
+        return NavNode{up, down, id, right};
+    }
+    if (id >= 730 && id <= 734) {
+        int row = id - 730;
+        int up = (id == 730) ? -1 : id - 1;
+        int down = (id == 734) ? 799 : id + 1;
+        int left = 720 + row;
+        int right = 740 + row;
+        return NavNode{up, down, left, right};
+    }
+    if (id >= 740 && id <= 744) {
+        int row = id - 740;
+        int up = (id == 740) ? -1 : id - 1;
+        int down = (id == 744) ? 799 : id + 1;
+        int left = 730 + row;
+        return NavNode{up, down, left, id};
+    }
+    switch (id) {
+        case 799: return NavNode{724, -1, 799, 799};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+static inline NavNode nav_other_for_id(int id) {
+    switch (id) {
+        case 800: return NavNode{-1, 801, 800, 800};
+        case 801: return NavNode{800, 899, 801, 801};
+        case 899: return NavNode{801, -1, 899, 899};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
+static inline NavNode nav_mods_for_id(int id) {
+    const int row_base = 900;
+    int rows_on_page = 0;
+    if (ss) {
+        int total = ss->menu.mods_filtered_count;
+        int start = ss->menu.mods_catalog_page * kModsPerPage;
+        if (total > start)
+            rows_on_page = std::min(kModsPerPage, total - start);
+    }
+    auto row_nav = [&](int row_idx) {
+        int up = (row_idx == 0) ? (rows_on_page > 0 ? 950 : 998) : (row_base + row_idx - 1);
+        int down = (row_idx == rows_on_page - 1) ? 998 : (row_base + row_idx + 1);
+        return NavNode{up, down, row_base + row_idx, row_base + row_idx};
+    };
+    if (id == 950) {
+        int down = (rows_on_page > 0) ? row_base : 998;
+        return NavNode{-1, down, 950, 951};
+    }
+    if (id == 951) {
+        int down = (rows_on_page > 0) ? row_base : 998;
+        return NavNode{-1, down, 950, 952};
+    }
+    if (id == 952) {
+        int down = (rows_on_page > 0) ? row_base : 998;
+        return NavNode{-1, down, 951, 952};
+    }
+    if (id >= row_base && id < row_base + 32) {
+        int row_idx = id - row_base;
+        if (row_idx >= 0 && row_idx < rows_on_page)
+            return row_nav(row_idx);
+        return NavNode{-1,-1,-1,-1};
+    }
+    if (id == 998) {
+        int up = (rows_on_page > 0) ? (row_base + rows_on_page - 1) : 950;
+        return NavNode{up, -1, 998, 998};
+    }
+    return NavNode{-1,-1,-1,-1};
+}
+
+inline void ensure_focus_default(const std::vector<ButtonDesc>& btns) {
+    if (ss->menu.focus_id >= 0) return;
+    for (auto const& b : btns) if (b.enabled) { ss->menu.focus_id = b.id; break; }
+}
+
+} // namespace
+
+bool binds_profile_is_read_only(const std::string& name) {
+    return name.empty() || name == default_input_profile_name();
+}
+
+void refresh_binds_profiles() {
+    if (!ss) return;
+    ss->menu.binds_profiles = list_input_profiles();
+}
+
+bool ensure_active_binds_profile_writeable() {
+    if (!ss) return false;
+    if (!binds_profile_is_read_only(ss->menu.binds_current_preset))
+        return true;
+    refresh_binds_profiles();
+    if ((int)ss->menu.binds_profiles.size() >= kMaxBindsProfiles) {
+        ss->menu.binds_toast = "Preset limit reached (50)";
+        ss->menu.binds_toast_timer = 1.5f;
+        if (aa) play_sound("base:ui_cant");
+        return false;
+    }
+    std::string base = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset + " Copy";
+    base = sanitize_profile_name(base);
+    if (base.empty()) base = "Custom";
+    std::string unique = make_unique_profile_name(base);
+    if (unique.empty())
+        unique = "Preset";
+    if (!save_input_profile(unique, ss->input_binds, false)) {
+        ss->menu.binds_toast = "Failed to create preset";
+        ss->menu.binds_toast_timer = 1.5f;
+        if (aa) play_sound("base:ui_cant");
+        return false;
+    }
+    refresh_binds_profiles();
+    ss->menu.binds_current_preset = unique;
+    ss->menu.binds_snapshot = ss->input_binds;
+    ss->menu.binds_dirty = false;
+    save_active_input_profile_name(unique);
+    ss->menu.binds_toast = std::string("Created preset: ") + unique;
+    ss->menu.binds_toast_timer = 1.2f;
+    return true;
+}
+
+void autosave_active_binds_profile() {
+    if (!ss) return;
+    if (ss->menu.binds_current_preset.empty())
+        ss->menu.binds_current_preset = default_input_profile_name();
+    ensure_input_profiles_dir();
+    save_input_profile(ss->menu.binds_current_preset, ss->input_binds, true);
+    save_active_input_profile_name(ss->menu.binds_current_preset);
+}
+
+static bool profile_name_exists(const std::string& name) {
+    if (!ss) return false;
+    for (auto const& info : ss->menu.binds_profiles) {
+        if (info.name == name)
+            return true;
+    }
+    return false;
+}
+
+static bool set_active_binds_profile(const std::string& name) {
+    if (!ss) return false;
+    InputBindings tmp{};
+    if (!load_input_profile(name, &tmp))
+        return false;
+    ss->input_binds = tmp;
+    ss->menu.binds_current_preset = name;
+    ss->menu.binds_snapshot = tmp;
+    ss->menu.binds_dirty = false;
+    save_active_input_profile_name(name);
+    refresh_binds_profiles();
+    return true;
+}
+
+static void delete_binds_profile(const std::string& name) {
+    if (binds_profile_is_read_only(name))
+        return;
+    delete_input_profile(name);
+    refresh_binds_profiles();
+    if (ss && ss->menu.binds_current_preset == name) {
+        set_active_binds_profile(default_input_profile_name());
+    }
+}
+
+static void apply_default_bindings_to_active() {
+    if (!ss) return;
+    InputBindings defaults{};
+    if (!load_input_profile(default_input_profile_name(), &defaults))
+        defaults = InputBindings{};
+    if (!ensure_active_binds_profile_writeable())
+        return;
+    ss->input_binds = defaults;
+    autosave_active_binds_profile();
+    ss->menu.binds_dirty = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
+    ss->menu.binds_toast = "Applied default controls";
+    ss->menu.binds_toast_timer = 1.2f;
+}
+
+static void undo_active_bind_changes() {
+    if (!ss) return;
+    if (!ensure_active_binds_profile_writeable())
+        return;
+    ss->input_binds = ss->menu.binds_snapshot;
+    autosave_active_binds_profile();
+    ss->menu.binds_dirty = false;
+    ss->menu.binds_toast = "Reverted changes";
+    ss->menu.binds_toast_timer = 1.0f;
+}
+
+static void show_text_input_error(const std::string& msg) {
+    if (!ss) return;
+    ss->menu.binds_text_input_error = msg;
+    ss->menu.binds_text_input_error_timer = kTextInputErrorDuration;
+}
+
+static void open_text_input(int mode, int limit, const std::string& initial,
+                            const std::string& target, const std::string& title) {
+    if (!ss) return;
+    ss->menu.binds_text_input_active = true;
+    ss->menu.binds_text_input_mode = mode;
+    ss->menu.binds_text_input_limit = limit;
+    ss->menu.binds_text_input_buffer = initial;
+    if ((int)ss->menu.binds_text_input_buffer.size() > ss->menu.binds_text_input_limit)
+        ss->menu.binds_text_input_buffer.resize(static_cast<size_t>(ss->menu.binds_text_input_limit));
+    ss->menu.binds_text_input_target = target;
+    ss->menu.binds_text_input_error.clear();
+    ss->menu.binds_text_input_error_timer = 0.0f;
+    ss->menu.text_input_title = title;
+}
+
+bool menu_is_text_input_active() {
+    return ss && ss->menu.binds_text_input_active;
+}
+
+void menu_text_input_append(char c) {
+    if (!menu_is_text_input_active()) return;
+    if ((int)ss->menu.binds_text_input_buffer.size() >= ss->menu.binds_text_input_limit)
+        return;
+    ss->menu.binds_text_input_buffer.push_back(c);
+}
+
+void menu_text_input_backspace() {
+    if (!menu_is_text_input_active()) return;
+    if (!ss->menu.binds_text_input_buffer.empty())
+        ss->menu.binds_text_input_buffer.pop_back();
+}
+
+void menu_text_input_cancel() {
+    if (!menu_is_text_input_active()) return;
+    ss->menu.binds_text_input_active = false;
+    ss->menu.binds_text_input_mode = TEXT_INPUT_NONE;
+    ss->menu.binds_text_input_buffer.clear();
+    ss->menu.binds_text_input_target.clear();
+    ss->menu.binds_text_input_error.clear();
+    ss->menu.binds_text_input_error_timer = 0.0f;
+    ss->menu.text_input_title.clear();
+}
+
+void menu_text_input_submit() {
+    if (!menu_is_text_input_active()) return;
+    refresh_binds_profiles();
+    std::string raw = ss->menu.binds_text_input_buffer;
+    bool completed = false;
+    if (ss->menu.binds_text_input_mode == TEXT_INPUT_BINDS_NEW) {
+        raw = sanitize_profile_name(raw);
+        if (raw.empty())
+            raw = "Preset";
+        if ((int)ss->menu.binds_profiles.size() >= kMaxBindsProfiles) {
+            show_text_input_error("Preset limit reached (50)");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        }
+        if (profile_name_exists(raw)) {
+            show_text_input_error("Preset already exists");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        }
+        if (!save_input_profile(raw, ss->input_binds, false)) {
+            show_text_input_error("Failed to save preset");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        }
+        refresh_binds_profiles();
+        ss->menu.binds_current_preset = raw;
+        ss->menu.binds_snapshot = ss->input_binds;
+        ss->menu.binds_dirty = false;
+        save_active_input_profile_name(raw);
+        ss->menu.binds_toast = std::string("Saved preset: ") + raw;
+        ss->menu.binds_toast_timer = 1.2f;
+        completed = true;
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_BINDS_RENAME) {
+        raw = sanitize_profile_name(raw);
+        if (raw.empty())
+            raw = "Preset";
+        std::string target = ss->menu.binds_text_input_target;
+        if (target.empty() || binds_profile_is_read_only(target)) {
+            completed = true;
+        } else if (raw == target) {
+            completed = true;
+        } else if (profile_name_exists(raw)) {
+            show_text_input_error("Preset already exists");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        } else if (!rename_input_profile(target, raw)) {
+            show_text_input_error("Rename failed");
+            if (aa) play_sound("base:ui_cant");
+            return;
+        } else {
+            if (ss->menu.binds_current_preset == target) {
+                ss->menu.binds_current_preset = raw;
+                save_active_input_profile_name(raw);
+            }
+            ss->menu.binds_toast = std::string("Renamed to: ") + raw;
+            ss->menu.binds_toast_timer = 1.2f;
+            completed = true;
+        }
+        refresh_binds_profiles();
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_MODS_SEARCH) {
+        ss->menu.mods_search_query = trim_copy(raw);
+        ss->menu.mods_catalog_page = 0;
+        rebuild_mods_filter();
+        completed = true;
+    }
+    if (completed) {
+        ss->menu.suppress_confirm_until_release = true;
+        menu_text_input_cancel();
+    }
+}
+
+std::vector<RectNdc> layout_vlist(RectNdc top_left, float item_w, float item_h, float vgap, int count) {
+    std::vector<RectNdc> out;
+    out.reserve(static_cast<std::size_t>(std::max(0, count)));
+    for (int i = 0; i < count; ++i) {
+        RectNdc r{top_left.x, top_left.y + static_cast<float>(i) * (item_h + vgap), item_w, item_h};
+        out.push_back(r);
+    }
+    return out;
+}
+
+std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
+    (void)width; (void)height;
+    std::vector<ButtonDesc> buttons;
+    const float item_h = 0.08f;
+    const float vgap = 0.02f;
+    if (ss->menu.page == MAIN) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.40f, item_h, vgap, 4);
+        buttons.push_back(ButtonDesc{100, rects[0], "Play", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{110, rects[1], "Mods", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{101, rects[2], "Settings", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{102, rects[3], "Quit", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == SETTINGS) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.50f, item_h, vgap, 6);
+        buttons.push_back(ButtonDesc{201, rects[0], "Video", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{200, rects[1], "Audio", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{202, rects[2], "Controls", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{204, rects[3], "Binds", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{205, rects[4], "Players", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{203, rects[5], "Other", ButtonKind::Button, 0.0f, true});
+        // Footer Back button (5% from left/bottom)
+        buttons.push_back(ButtonDesc{299, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == AUDIO) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 3);
+        buttons.push_back(ButtonDesc{300, rects[0], "Master Volume", ButtonKind::Slider, ss->menu.vol_master, true});
+        buttons.push_back(ButtonDesc{301, rects[1], "Music Volume", ButtonKind::Slider, ss->menu.vol_music, true});
+        buttons.push_back(ButtonDesc{302, rects[2], "SFX Volume", ButtonKind::Slider, ss->menu.vol_sfx, true});
+        // Footer buttons (5% from left/bottom)
+        buttons.push_back(ButtonDesc{399, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == VIDEO) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 6);
+        buttons.push_back(ButtonDesc{400, rects[0], "Resolution", ButtonKind::OptionCycle, static_cast<float>(ss->menu.video_res_index), true});
+        bool windowed = (std::clamp(ss->menu.window_mode_index, 0, 2) == 0);
+        buttons.push_back(ButtonDesc{405, rects[1], "Window Size", ButtonKind::OptionCycle, static_cast<float>(ss->menu.window_size_index), windowed});
+        buttons.push_back(ButtonDesc{401, rects[2], "Window Mode", ButtonKind::OptionCycle, static_cast<float>(ss->menu.window_mode_index), true});
+        buttons.push_back(ButtonDesc{402, rects[3], "VSync", ButtonKind::Toggle, ss->menu.vsync ? 1.0f : 0.0f, true});
+        buttons.push_back(ButtonDesc{403, rects[4], "Frame Rate Limit", ButtonKind::OptionCycle, static_cast<float>(ss->menu.frame_limit_index), true});
+        buttons.push_back(ButtonDesc{404, rects[5], "UI Scale", ButtonKind::Slider, ss->menu.ui_scale, true});
+        // Footer buttons: Back (left 5%), Apply (right 5%)
+        bool apply_enabled = false;
+        // Apply needed if internal resolution or window mode differs from current real state.
+        if (gg) {
+            static const int kResW[4] = {1280, 1600, 1920, 2560};
+            static const int kResH[4] = {720,  900,  1080, 1440};
+            int idx = std::clamp(ss->menu.video_res_index, 0, 3);
+            bool res_diff = (gg->dims.x != (unsigned)kResW[idx] || gg->dims.y != (unsigned)kResH[idx]);
+            Uint32 flags = SDL_GetWindowFlags(gg->window);
+            int curr_mode = (flags & SDL_WINDOW_FULLSCREEN) ? 2 : ((flags & SDL_WINDOW_FULLSCREEN_DESKTOP) ? 1 : 0);
+            bool mode_diff = (std::clamp(ss->menu.window_mode_index, 0, 2) != curr_mode);
+            apply_enabled = res_diff || mode_diff;
+        }
+        buttons.push_back(ButtonDesc{499, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{498, RectNdc{0.70f, 0.82f, 0.20f, 0.08f}, "Apply", ButtonKind::Button, 0.0f, apply_enabled});
+    } else if (ss->menu.page == CONTROLS) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.16f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 4);
+        buttons.push_back(ButtonDesc{500, rects[0], "Screen Shake", ButtonKind::Slider, ss->menu.screen_shake, true});
+        buttons.push_back(ButtonDesc{501, rects[1], "Mouse Sensitivity", ButtonKind::Slider, ss->menu.mouse_sens, true});
+        buttons.push_back(ButtonDesc{502, rects[2], "Controller Sensitivity", ButtonKind::Slider, ss->menu.controller_sens, true});
+        buttons.push_back(ButtonDesc{505, rects[3], "Vibration Enabled", ButtonKind::Toggle, ss->menu.vibration_enabled ? 1.0f : 0.0f, true});
+        // Add vibration magnitude slider row
+        auto ctrl_more = layout_vlist(RectNdc{0.10f, 0.16f + 4 * (item_h + vgap), 0.0f, 0.0f}, 0.70f, item_h, vgap, 1);
+        buttons.push_back(ButtonDesc{507, ctrl_more[0], "Vibration Intensity", ButtonKind::Slider, ss->menu.vibration_magnitude, ss->menu.vibration_enabled});
+        buttons.push_back(ButtonDesc{599, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == BINDS) {
+        auto rows = layout_vlist(RectNdc{0.10f, 0.16f, 0.0f, 0.0f}, 0.70f, item_h, vgap, 5);
+        for (size_t i = 0; i < rows.size(); ++i) {
+            buttons.push_back(ButtonDesc{700 + static_cast<int>(i), rows[i], "", ButtonKind::Button, 0.0f, true});
+        }
+        bool modified = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
+        float footer_w = 0.16f;
+        float footer_gap = 0.02f;
+        float footer_y = 0.82f;
+        RectNdc footer_rects[5];
+        for (int i = 0; i < 5; ++i) {
+            footer_rects[i] = RectNdc{0.00f + static_cast<float>(i) * (footer_w + footer_gap), footer_y, footer_w, 0.08f};
+        }
+        buttons.push_back(ButtonDesc{799, footer_rects[0], "Back", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{791, footer_rects[1], "Reset to Defaults", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{792, footer_rects[2], "Load Preset", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{793, footer_rects[3], "Save As New", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{794, footer_rects[4], "Undo Changes", ButtonKind::Button, 0.0f, modified});
+    } else if (ss->menu.page == BINDS_LOAD) {
+        auto rows = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 5);
+        const auto& profiles = ss->menu.binds_profiles;
+        int per_page = 5;
+        for (size_t i = 0; i < rows.size(); ++i) {
+            RectNdc main = rows[i];
+            float action_w = 0.12f;
+            float action_gap = 0.01f;
+            float shrink = action_w * 2.0f + action_gap * 2.0f;
+            if (main.w > shrink)
+                main.w -= shrink;
+            int idx = ss->menu.binds_list_page * per_page + static_cast<int>(i);
+            bool has_entry = idx >= 0 && idx < (int)profiles.size();
+            bool read_only = has_entry ? profiles[static_cast<size_t>(idx)].read_only : false;
+            buttons.push_back(ButtonDesc{720 + static_cast<int>(i), main, "", ButtonKind::Button, 0.0f, has_entry});
+            RectNdc rename_rect{main.x + main.w + action_gap, main.y, action_w, main.h};
+            RectNdc delete_rect{rename_rect.x + action_w + action_gap, main.y, action_w, main.h};
+            buttons.push_back(ButtonDesc{730 + static_cast<int>(i), rename_rect, "Rename", ButtonKind::Button, 0.0f, has_entry && !read_only});
+            buttons.push_back(ButtonDesc{740 + static_cast<int>(i), delete_rect, "Delete", ButtonKind::Button, 0.0f, has_entry && !read_only});
+        }
+        buttons.push_back(ButtonDesc{799, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == PLAYERS) {
+        // Ensure players_presets size
+        if ((int)ss->menu.players_presets.size() < ss->menu.players_count)
+            ss->menu.players_presets.resize(static_cast<std::size_t>(ss->menu.players_count), ss->menu.binds_current_preset.empty() ? std::string("Default") : ss->menu.binds_current_preset);
+        int per_page = 5;
+        int start = ss->menu.players_page * per_page;
+        int rows = std::min(per_page, ss->menu.players_count - start);
+        auto rows_rect = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.70f, item_h, vgap, std::max(0, rows));
+        for (int i = 0; i < rows; ++i) {
+            buttons.push_back(ButtonDesc{900 + i, rows_rect[static_cast<std::size_t>(i)], "Player", ButtonKind::OptionCycle, 0.0f, true});
+        }
+        // Footer: Add/Remove/Back
+        buttons.push_back(ButtonDesc{981, RectNdc{0.22f, 0.82f, 0.20f, 0.08f}, "Remove Player", ButtonKind::Button, 0.0f, ss->menu.players_count > 1});
+        buttons.push_back(ButtonDesc{980, RectNdc{0.44f, 0.82f, 0.20f, 0.08f}, "Add Player", ButtonKind::Button, 0.0f, true});
+        buttons.push_back(ButtonDesc{999, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == MODS) {
+        ensure_mod_install_map();
+        if (ss->menu.mods_visible_indices.empty() && ss->menu.mods_filtered_count == 0)
+            rebuild_mods_filter();
+        buttons.push_back(ButtonDesc{950, RectNdc{0.10f, 0.16f, 0.44f, 0.07f}, "Search Mods", ButtonKind::Button, 0.0f, true});
+        bool prev_enabled = ss->menu.mods_catalog_page > 0;
+        bool next_enabled = ss->menu.mods_catalog_page + 1 < ss->menu.mods_total_pages;
+        buttons.push_back(ButtonDesc{951, RectNdc{0.56f, 0.16f, 0.10f, 0.07f}, "Prev", ButtonKind::Button, 0.0f, prev_enabled});
+        buttons.push_back(ButtonDesc{952, RectNdc{0.68f, 0.16f, 0.10f, 0.07f}, "Next", ButtonKind::Button, 0.0f, next_enabled});
+        const auto& catalog = mock_mod_catalog();
+        const auto& visible = ss->menu.mods_visible_indices;
+        int start = ss->menu.mods_catalog_page * kModsPerPage;
+        auto cards = layout_vlist(RectNdc{0.10f, kModsCardsTop, 0.0f, 0.0f}, 0.78f, kModsCardHeight, kModsCardGap, kModsPerPage);
+        for (int i = 0; i < kModsPerPage; ++i) {
+            int idx = start + i;
+            if (idx >= (int)visible.size())
+                break;
+            int catalog_idx = visible[(size_t)idx];
+            ButtonDesc card{900 + i, cards[static_cast<std::size_t>(i)], catalog[(size_t)catalog_idx].title, ButtonKind::Button,
+                            static_cast<float>(catalog_idx), true};
+            buttons.push_back(card);
+        }
+        buttons.push_back(ButtonDesc{998, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == OTHER) {
+        auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 0);
+        buttons.push_back(ButtonDesc{899, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    }
+    return buttons;
+}
+
+void render_menu(int width, int height) {
+    SDL_Renderer* r = gg ? gg->renderer : nullptr;
+    if (!r) return;
+
+    auto buttons = build_menu_buttons(width, height);
+    ensure_focus_default(buttons);
+
+    if (ss) {
+        for (float& cd : ss->menu.audio_slider_preview_cooldown)
+            cd = std::max(0.0f, cd - ss->dt);
+    }
+
+    // Draw page header and page indicator
+    auto draw_text_hdr = [&](const char* s, int x, int y){
+        if (!gg->ui_font) return;
+        SDL_Color tc{240, 220, 80, 255};
+        if (SDL_Surface* ts = TTF_RenderUTF8_Blended(gg->ui_font, s, tc)) {
+            SDL_Texture* tt = SDL_CreateTextureFromSurface(r, ts);
+            int tw=0, th=0; SDL_QueryTexture(tt, nullptr, nullptr, &tw, &th);
+            // Scale up header ~1.5x for prominence
+            int sw = (int)std::lround((double)tw * 1.5);
+            int sh = (int)std::lround((double)th * 1.5);
+            SDL_Rect td{x, y, sw, sh}; SDL_RenderCopy(r, tt, nullptr, &td);
+            SDL_DestroyTexture(tt); SDL_FreeSurface(ts);
+        }
+    };
+    int hdr_x = (int)std::lround(SAFE_M * static_cast<float>(width)) + 24;
+    int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+    const char* title = "Main Menu";
+    if (ss->menu.page == SETTINGS) title = "Settings";
+    else if (ss->menu.page == AUDIO) title = "Audio";
+    else if (ss->menu.page == VIDEO) title = "Video";
+    else if (ss->menu.page == CONTROLS) title = "Controls";
+    else if (ss->menu.page == BINDS) title = "Binds";
+    else if (ss->menu.page == BINDS_LOAD) title = "Load Preset";
+    else if (ss->menu.page == PLAYERS) title = "Players";
+    else if (ss->menu.page == OTHER) title = "Other";
+    else if (ss->menu.page == MODS) title = "Mods";
+    draw_text_hdr(title, hdr_x, hdr_y);
+    // Page indicator on right
+    if (ss->menu.page == VIDEO) {
+        int total_pages = 1; // extend to >1 when paginating
+        char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.page_index + 1, 1);
+        int x = width - 200; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+        if (total_pages > 1) {
+            // Prev/Next larger buttons near top-right
+            SDL_Rect prevb{width - 320, hdr_y - 4, 90, 32};
+            SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &nextb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &nextb);
+            auto draw_small = [&](const char* s, SDL_Rect rc){ if (!gg->ui_font) return; SDL_Color c{220,220,230,255}; if (SDL_Surface* srf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) { SDL_Texture* tex = SDL_CreateTextureFromSurface(r, srf); int tw=0, th=0; SDL_QueryTexture(tex,nullptr,nullptr,&tw,&th); SDL_Rect d{rc.x + (rc.w - tw)/2, rc.y + (rc.h - th)/2, tw, th}; SDL_RenderCopy(r, tex, nullptr, &d); SDL_DestroyTexture(tex); SDL_FreeSurface(srf);} };
+            draw_small("Prev", prevb);
+            draw_small("Next", nextb);
+        }
+    } else if (ss->menu.page == BINDS) {
+        // Binds keys paging header
+        int total_actions = (int)BindAction::BA_COUNT;
+        int per_page = 5;
+        int total_pages = std::max(1, (total_actions + per_page - 1) / per_page);
+        char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.binds_keys_page + 1, total_pages);
+        int x = width - 380; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+        if (total_pages > 1) {
+            SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+            SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &nextb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &nextb);
+            auto draw_small = [&](const char* s, SDL_Rect rc){ if (!gg->ui_font) return; SDL_Color c{220,220,230,255}; if (SDL_Surface* srf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) { SDL_Texture* tex = SDL_CreateTextureFromSurface(r, srf); int tw=0, th=0; SDL_QueryTexture(tex,nullptr,nullptr,&tw,&th); SDL_Rect d{rc.x + (rc.w - tw)/2, rc.y + (rc.h - th)/2, tw, th}; SDL_RenderCopy(r, tex, nullptr, &d); SDL_DestroyTexture(tex); SDL_FreeSurface(srf);} };
+            draw_small("Prev", prevb);
+            draw_small("Next", nextb);
+        }
+        // Hints: device-specific
+        // defer hint drawing until draw_text is defined
+    } else if (ss->menu.page == BINDS_LOAD) {
+        // List paging
+        int count = (int)ss->menu.binds_profiles.size();
+        int per_page = 5;
+        int total_pages = std::max(1, (count + per_page - 1) / per_page);
+        char buf[64]; std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.binds_list_page + 1, total_pages);
+        int x = width - 380; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+        if (total_pages > 1) {
+            SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+            SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &prevb);
+            SDL_SetRenderDrawColor(r, 40, 45, 55, 255); SDL_RenderFillRect(r, &nextb);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &nextb);
+            auto draw_small = [&](const char* s, SDL_Rect rc){ if (!gg->ui_font) return; SDL_Color c{220,220,230,255}; if (SDL_Surface* srf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) { SDL_Texture* tex = SDL_CreateTextureFromSurface(r, srf); int tw=0, th=0; SDL_QueryTexture(tex,nullptr,nullptr,&tw,&th); SDL_Rect d{rc.x + (rc.w - tw)/2, rc.y + (rc.h - th)/2, tw, th}; SDL_RenderCopy(r, tex, nullptr, &d); SDL_DestroyTexture(tex); SDL_FreeSurface(srf);} };
+            draw_small("Prev", prevb);
+            draw_small("Next", nextb);
+        }
+        // defer hint drawing until draw_text is defined
+    } else if (ss->menu.page == MODS) {
+        int total_pages = std::max(1, ss->menu.mods_total_pages);
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Page %d/%d", ss->menu.mods_catalog_page + 1, total_pages);
+        int x = width - 260; int y = hdr_y;
+        draw_text_hdr(buf, x, y);
+    }
+
+    auto draw_text = [&](const char* s, int x, int y, SDL_Color col) {
+        if (!gg->ui_font) return;
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s, col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect td{x, y, tw, th}; SDL_RenderCopy(r, tex, nullptr, &td);
+            SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+        }
+    };
+    if (ss->menu.page == MODS) {
+        char results_buf[64];
+        std::snprintf(results_buf, sizeof(results_buf), "%d mods", ss->menu.mods_filtered_count);
+        draw_text(results_buf, hdr_x, hdr_y + 36, SDL_Color{200, 200, 210, 255});
+    }
+
+    auto draw_label_value = [&](const SDL_Rect& rr, const std::string& label, const std::string& value, bool /*focused*/){
+        SDL_Color lc{220, 220, 230, 255};
+        SDL_Color vc{200, 200, 210, 255};
+        int lx = rr.x + 12; int ly = rr.y + rr.h/2 - 8;
+        draw_text(label.c_str(), lx, ly, lc);
+        if (!value.empty() && gg->ui_font) {
+            if (SDL_Surface* vs = TTF_RenderUTF8_Blended(gg->ui_font, value.c_str(), vc)) {
+                SDL_Texture* vt = SDL_CreateTextureFromSurface(r, vs);
+                int tw=0, th=0; SDL_QueryTexture(vt, nullptr, nullptr, &tw, &th);
+                SDL_Rect vd{rr.x + rr.w - tw - 12, rr.y + rr.h/2 - th/2, tw, th};
+                SDL_RenderCopy(r, vt, nullptr, &vd);
+                SDL_DestroyTexture(vt); SDL_FreeSurface(vs);
+            }
+        }
+    };
+
+    auto draw_slider = [&](const SDL_Rect& rr, float t){
+        t = std::clamp(t, 0.0f, 1.0f);
+        SDL_SetRenderDrawColor(r, 60, 60, 70, 255);
+        int bx = rr.x + 12, bw = rr.w - 24, by = rr.y + rr.h - 16, bh = 6;
+        SDL_Rect bg{bx, by, bw, bh}; SDL_RenderFillRect(r, &bg);
+        SDL_SetRenderDrawColor(r, 240, 220, 80, 220);
+        int fw = (int)std::lround((double)bw * (double)t);
+        SDL_Rect fg{bx, by, fw, bh}; SDL_RenderFillRect(r, &fg);
+        int thw = 8, thh = 14;
+        int tx = bx + fw - thw/2; int ty = by - (thh - bh)/2;
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_Rect thumb{tx, ty, thw, thh}; SDL_RenderFillRect(r, &thumb);
+    };
+
+    // Show current preset on Binds page (+ modified indicator vs snapshot)
+    if (ss->menu.page == BINDS) {
+        std::string preset = ss->menu.binds_current_preset.empty() ? default_input_profile_name() : ss->menu.binds_current_preset;
+        bool modified = !bindings_equal(ss->input_binds, ss->menu.binds_snapshot);
+        bool ro = binds_profile_is_read_only(preset);
+        std::string sub = std::string("Preset: ") + preset;
+        if (ro) sub += " (read-only)";
+        if (modified) sub += " (modified)";
+        draw_text(sub.c_str(), hdr_x, hdr_y + 36, SDL_Color{200,200,210,255});
+    }
+
+    // Draw hints (after draw_text lambda defined)
+    if (ss->menu.page == BINDS || ss->menu.page == BINDS_LOAD) {
+        const char* hint = (ss->menu.last_input_source == 2) ? "Prev: LB  Next: RB  Back: B" : "Prev: Q  Next: E  Back: Esc";
+        draw_text(hint, hdr_x, hdr_y + 58, SDL_Color{160,170,180,255});
+    }
+
+    // Draw buttons and controls
+    for (auto const& b : buttons) {
+        SDL_FRect pr = ndc_to_pixels(b.rect, width, height);
+        bool focused = (b.id == ss->menu.focus_id);
+        SDL_Color fill = focused ? SDL_Color{60, 70, 90, 255} : SDL_Color{40, 45, 55, 255};
+        SDL_Color border = focused ? SDL_Color{240, 220, 80, 255} : SDL_Color{180, 180, 190, 255};
+        if (!b.enabled) {
+            fill = focused ? SDL_Color{50, 55, 65, 255} : SDL_Color{35, 38, 45, 255};
+            border = SDL_Color{110, 110, 120, 255};
+        }
+        int mod_catalog_idx = -1;
+        if (ss->menu.page == MODS && b.id >= 900 && b.id < 900 + kModsPerPage) {
+            int rel = b.id - 900;
+            int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
+            if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size())
+                mod_catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
+            if (mod_catalog_idx >= 0) {
+                const auto& entry = mock_mod_catalog()[(size_t)mod_catalog_idx];
+                if (is_mod_installed(entry.id)) {
+                    fill = focused ? SDL_Color{70, 90, 70, 255} : SDL_Color{45, 55, 45, 255};
+                }
+            }
+        }
+        SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a);
+        SDL_Rect rr{(int)std::floor(pr.x), (int)std::floor(pr.y), (int)std::ceil(pr.w), (int)std::ceil(pr.h)};
+        SDL_RenderFillRect(r, &rr);
+        SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+        SDL_RenderDrawRect(r, &rr);
+        if (b.kind == ButtonKind::Button) {
+            if (ss->menu.page == BINDS && b.id >= 700 && b.id <= 704) {
+                static const BindAction order[] = {
+                    BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                    BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                    BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                };
+                int per_page = 5;
+                int idx = ss->menu.binds_keys_page * per_page + (b.id - 700);
+                if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0]))) {
+                    BindAction a = order[idx];
+                    std::string label = bind_label(a);
+                    SDL_Scancode sc = bind_get(ss->input_binds, a);
+                    draw_label_value(rr, label, std::string(SDL_GetScancodeName(sc)), focused);
+                }
+            } else if (ss->menu.page == BINDS_LOAD) {
+                const auto& profiles = ss->menu.binds_profiles;
+                int per_page = 5;
+                if (b.id >= 720 && b.id <= 724) {
+                    int idx = ss->menu.binds_list_page * per_page + (b.id - 720);
+                    if (idx >= 0 && idx < (int)profiles.size()) {
+                        const auto& info = profiles[static_cast<size_t>(idx)];
+                        std::string label = info.name;
+                        if (info.name == ss->menu.binds_current_preset) label += " (Active)";
+                        if (info.read_only) label += " (Default)";
+                        draw_label_value(rr, label, std::string(), focused);
+                    }
+                } else if (b.id >= 730 && b.id <= 734) {
+                    draw_label_value(rr, "Rename", std::string(), focused);
+                } else if (b.id >= 740 && b.id <= 744) {
+                    draw_label_value(rr, "Delete", std::string(), focused);
+                } else {
+                    draw_label_value(rr, b.label, std::string(), focused);
+                }
+            } else if (ss->menu.page == MODS) {
+                if (b.id == 950) {
+                    std::string query = ss->menu.mods_search_query.empty()
+                                            ? "Type to filter mods..."
+                                            : ss->menu.mods_search_query;
+                    SDL_Color label_col{220, 220, 230, 255};
+                    SDL_Color lc = ss->menu.mods_search_query.empty()
+                                       ? SDL_Color{150, 150, 170, 255}
+                                       : SDL_Color{220, 220, 230, 255};
+                    draw_text("Search", rr.x + 12, rr.y + 10, label_col);
+                    draw_text(query.c_str(), rr.x + 12, rr.y + rr.h / 2, lc);
+                } else if (b.id == 951 || b.id == 952) {
+                    draw_label_value(rr, b.label, std::string(), focused);
+                } else if (mod_catalog_idx >= 0) {
+                    const auto& entry = mock_mod_catalog()[(size_t)mod_catalog_idx];
+                    SDL_Color title_col{240, 220, 80, 255};
+                    SDL_Color meta_col{190, 190, 200, 255};
+                    SDL_Color desc_col{200, 200, 210, 255};
+                    int title_y = rr.y + 8;
+                    draw_text(entry.title.c_str(), rr.x + 12, title_y, title_col);
+                    char meta[128];
+                    std::snprintf(meta, sizeof(meta), "v%s  •  %s", entry.version.c_str(), entry.author.c_str());
+                    draw_text(meta, rr.x + 12, title_y + 20, meta_col);
+                    std::string summary = entry.summary;
+                    constexpr size_t kMaxSummaryChars = 120;
+                    if (summary.size() > kMaxSummaryChars) {
+                        summary.resize(kMaxSummaryChars - 3);
+                        summary += "...";
+                    }
+                    draw_text(summary.c_str(), rr.x + 12, title_y + 40, desc_col);
+                    std::string deps = "Standalone";
+                    if (!entry.dependencies.empty()) {
+                        deps = "Requires: ";
+                        for (size_t i = 0; i < entry.dependencies.size(); ++i) {
+                            if (i > 0) deps += ", ";
+                            deps += entry.dependencies[i];
+                        }
+                    }
+                    draw_text(deps.c_str(), rr.x + 12, rr.y + rr.h - 30, SDL_Color{170, 170, 190, 255});
+                    SDL_Rect pill{rr.x + rr.w - 128, rr.y + rr.h - 36, 112, 24};
+                    bool installed = is_mod_installed(entry.id);
+                    SDL_Color pill_fill = installed ? SDL_Color{70, 110, 80, 255} : SDL_Color{60, 70, 90, 255};
+                    SDL_Color pill_border = installed ? SDL_Color{200, 220, 200, 255} : SDL_Color{180, 180, 190, 255};
+                    if (entry.required)
+                        pill_fill = SDL_Color{80, 80, 100, 255};
+                    SDL_SetRenderDrawColor(r, pill_fill.r, pill_fill.g, pill_fill.b, pill_fill.a);
+                    SDL_RenderFillRect(r, &pill);
+                    SDL_SetRenderDrawColor(r, pill_border.r, pill_border.g, pill_border.b, pill_border.a);
+                    SDL_RenderDrawRect(r, &pill);
+                    const char* status = entry.required ? "Core" : (installed ? "Installed" : "Install");
+                    draw_text(status, pill.x + 12, pill.y + 5, SDL_Color{230, 230, 240, 255});
+                } else if (b.id == 998) {
+                    draw_label_value(rr, b.label, std::string(), focused);
+                } else {
+                    draw_label_value(rr, b.label, std::string(), focused);
+                }
+            } else if (b.id == 498) {
+                // Apply button highlight when enabled
+                draw_label_value(rr, b.label, std::string(), focused);
+            } else {
+                draw_label_value(rr, b.label, std::string(), focused);
+            }
+        } else if (b.kind == ButtonKind::Toggle) {
+            bool on = (b.value >= 0.5f);
+            draw_label_value(rr, b.label, on ? std::string("On") : std::string("Off"), focused);
+        } else if (b.kind == ButtonKind::Slider) {
+            char buf[64] = {0};
+            if (b.id == 501 || b.id == 502) {
+                double minv = 0.10, maxv = 10.0;
+                double val = minv + (maxv - minv) * (double)b.value;
+                std::snprintf(buf, sizeof(buf), "%.3f", val);
+            } else {
+                double dv = static_cast<double>(b.value) * 100.0;
+                int pct = (int)std::lround(dv);
+                std::snprintf(buf, sizeof(buf), "%d%%", pct);
+            }
+            draw_label_value(rr, b.label, std::string(buf), focused);
+            draw_slider(rr, b.value);
+        } else if (b.kind == ButtonKind::OptionCycle) {
+            std::string val;
+            if (b.id == 400) {
+                static const char* kRes[] = {"1280x720", "1600x900", "1920x1080", "2560x1440"};
+                int idx = std::clamp(ss->menu.video_res_index, 0, 3);
+                val = kRes[idx];
+            } else if (b.id == 405) {
+                static const char* kWin[] = {"1280x720", "1600x900", "1920x1080", "2560x1440"};
+                int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                val = kWin[idx];
+            } else if (b.id == 401) {
+                static const char* kModes[] = {"Windowed", "Borderless", "Fullscreen"};
+                int idx = std::clamp(ss->menu.window_mode_index, 0, 2);
+                val = kModes[idx];
+            } else if (b.id == 403) {
+                static const char* kFps[] = {"Off", "30", "60", "120", "144", "240"};
+                int idx = std::clamp(ss->menu.frame_limit_index, 0, 5);
+                val = kFps[idx];
+            }
+            // Draw label, value, and left/right arrows
+            SDL_Color lc{220, 220, 230, 255};
+            int lx = rr.x + 12; int ly = rr.y + rr.h/2 - 8; draw_text(b.label.c_str(), lx, ly, lc);
+            // Arrow buttons (larger) with padding from right edge
+            int padR = 16;
+            int aw = std::min(36, rr.w / 6);
+            int ah = std::min(28, rr.h - 8);
+            SDL_Rect leftA{rr.x + rr.w - (aw*2 + padR), rr.y + rr.h/2 - ah/2, aw, ah};
+            SDL_Rect rightA{rr.x + rr.w - (aw + padR/2), rr.y + rr.h/2 - ah/2, aw, ah};
+            SDL_SetRenderDrawColor(r, 60, 60, 70, 255); SDL_RenderFillRect(r, &leftA); SDL_RenderFillRect(r, &rightA);
+            SDL_SetRenderDrawColor(r, 180, 180, 190, 255); SDL_RenderDrawRect(r, &leftA); SDL_RenderDrawRect(r, &rightA);
+            draw_text("<", leftA.x + 7, leftA.y + 2, lc);
+            draw_text(">", rightA.x + 7, rightA.y + 2, lc);
+            // Value right-aligned, before arrows
+            if (gg->ui_font) {
+                SDL_Color vc{200, 200, 210, 255};
+                if (SDL_Surface* vs = TTF_RenderUTF8_Blended(gg->ui_font, val.c_str(), vc)) {
+                    SDL_Texture* vt = SDL_CreateTextureFromSurface(r, vs);
+                    int tw=0, th=0; SDL_QueryTexture(vt, nullptr, nullptr, &tw, &th);
+                    SDL_Rect vd{leftA.x - 16 - tw, rr.y + rr.h/2 - th/2, tw, th};
+                    SDL_RenderCopy(r, vt, nullptr, &vd);
+                    SDL_DestroyTexture(vt); SDL_FreeSurface(vs);
+                }
+            }
+        }
+    }
+
+    // Binds capture overlay
+    if (ss->menu.capture_action_id >= 0) {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, 10, 10, 14, 180);
+        SDL_Rect full{0,0,width,height};
+        SDL_RenderFillRect(r, &full);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        const char* msg = "Press a key to bind (Esc to cancel)";
+        auto draw_center = [&](const char* s){
+            if (!gg->ui_font) return;
+            SDL_Color c{240, 220, 80, 255};
+            if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s, c)) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                SDL_Rect td{width/2 - tw/2, height/2 - th/2, tw, th};
+                SDL_RenderCopy(r, tex, nullptr, &td);
+                SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+            }
+        };
+        draw_center(msg);
+    }
+
+    // Toast overlay for binds actions
+    if (ss->menu.binds_toast_timer > 0.0f) {
+        ss->menu.binds_toast_timer = std::max(0.0f, ss->menu.binds_toast_timer - ss->dt);
+        if (!ss->menu.binds_toast.empty() && gg && gg->ui_font) {
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+            SDL_Color c{240, 220, 80, 255};
+            const std::string& s = ss->menu.binds_toast;
+            if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s.c_str(), c)) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                float t = 1.0f - (ss->menu.binds_toast_timer / 1.2f);
+                int yoff = (int)std::lround(-40.0f * t);
+                SDL_Rect td{width/2 - tw/2, height/2 - th/2 + yoff, tw, th};
+                SDL_RenderCopy(r, tex, nullptr, &td);
+                SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+            }
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        }
+    }
+
+    if (menu_is_text_input_active() && gg && gg->ui_font) {
+        SDL_Rect modal{width / 2 - 220, height / 2 - 90, 440, 180};
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, 15, 15, 25, 235);
+        SDL_RenderFillRect(r, &modal);
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_RenderDrawRect(r, &modal);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        SDL_Color text_col{240, 240, 250, 255};
+        std::string modal_title = ss->menu.text_input_title.empty() ? std::string("Enter Text")
+                                                                   : ss->menu.text_input_title;
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, modal_title.c_str(), text_col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{modal.x + (modal.w - tw)/2, modal.y + 16, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+        SDL_Rect input_box{modal.x + 24, modal.y + 60, modal.w - 48, 48};
+        SDL_SetRenderDrawColor(r, 50, 55, 70, 255);
+        SDL_RenderFillRect(r, &input_box);
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_RenderDrawRect(r, &input_box);
+        std::string buffer = ss->menu.binds_text_input_buffer;
+        if ((int)buffer.size() < ss->menu.binds_text_input_limit)
+            buffer.push_back('_');
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, buffer.c_str(), text_col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{input_box.x + 12, input_box.y + input_box.h/2 - th/2, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+        char count_buf[32];
+        std::snprintf(count_buf, sizeof(count_buf), "%d/%d", (int)ss->menu.binds_text_input_buffer.size(), ss->menu.binds_text_input_limit);
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, count_buf, SDL_Color{180,180,190,255})) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{input_box.x + input_box.w - tw - 8, input_box.y + input_box.h + 8, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+        if (!ss->menu.binds_text_input_error.empty() && ss->menu.binds_text_input_error_timer > 0.0f) {
+            ss->menu.binds_text_input_error_timer = std::max(0.0f, ss->menu.binds_text_input_error_timer - ss->dt);
+            SDL_Color err_col{255, 120, 120, 255};
+            if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, ss->menu.binds_text_input_error.c_str(), err_col)) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+                int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+                SDL_Rect dst{modal.x + (modal.w - tw)/2, input_box.y + input_box.h + 28, tw, th};
+                SDL_RenderCopy(r, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+                SDL_FreeSurface(surf);
+            }
+            if (ss->menu.binds_text_input_error_timer <= 0.0f)
+                ss->menu.binds_text_input_error.clear();
+        } else if (ss->menu.binds_text_input_error_timer <= 0.0f) {
+            ss->menu.binds_text_input_error.clear();
+        }
+        const char* hint = "Enter = Confirm   Esc = Cancel";
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, hint, SDL_Color{200,200,210,255})) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect dst{modal.x + (modal.w - tw)/2, modal.y + modal.h - th - 12, tw, th};
+            SDL_RenderCopy(r, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+    }
+}
+
+void step_menu_logic(int width, int height) {
+    auto buttons = build_menu_buttons(width, height);
+    ensure_focus_default(buttons);
+    bool text_input_active = menu_is_text_input_active();
+    bool click = (!ss->menu.ignore_mouse_until_release && ss->mouse_inputs.left && !ss->menu.mouse_left_prev);
+    auto consume_mouse_click = [&]() {
+        ss->menu.ignore_mouse_until_release = true;
+        click = false;
+    };
+
+    // If capturing a bind, ignore all menu navigation and clicks until capture completes (Esc cancels in input.cpp)
+    if (ss->menu.capture_action_id >= 0) {
+        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+        return;
+    }
+
+    auto find_btn = [&](int id) -> const ButtonDesc* {
+        for (auto const& b : buttons) {
+            if (b.id == id) return &b;
+        }
+        return nullptr;
+    };
+
+    auto nav = [&](int id) -> NavNode {
+        switch (ss->menu.page) {
+            case MAIN: return nav_main_for_id(id);
+            case SETTINGS: return nav_settings_for_id(id);
+            case AUDIO: return nav_audio_for_id(id);
+            case VIDEO: return nav_video_for_id(id);
+            case CONTROLS: return nav_controls_for_id(id);
+            case BINDS: return nav_binds_for_id(id);
+            case BINDS_LOAD: return nav_binds_list_for_id(id);
+            case OTHER: return nav_other_for_id(id);
+            case MODS: return nav_mods_for_id(id);
+            default: return NavNode{-1,-1,-1,-1};
+        }
+    };
+
+    auto handle_mod_button = [&](int id, bool from_mouse) -> bool {
+        if (ss->menu.page != MODS)
+            return false;
+        auto mark_mouse_consumed = [&]() {
+            if (from_mouse)
+                consume_mouse_click();
+        };
+        if (id == 950) {
+            open_text_input(TEXT_INPUT_MODS_SEARCH, kModsSearchMaxLen,
+                            ss->menu.mods_search_query, std::string{}, "Search Mods");
+            mark_mouse_consumed();
+            if (aa) play_sound("base:ui_confirm");
+            return true;
+        }
+        if (id == 951) {
+            if (ss->menu.mods_catalog_page > 0) {
+                ss->menu.mods_catalog_page = std::max(0, ss->menu.mods_catalog_page - 1);
+                ss->menu.focus_id = -1;
+                if (aa) play_sound("base:ui_left");
+            } else if (aa) {
+                play_sound("base:ui_cant");
+            }
+            mark_mouse_consumed();
+            return true;
+        }
+        if (id == 952) {
+            if (ss->menu.mods_catalog_page + 1 < ss->menu.mods_total_pages) {
+                ss->menu.mods_catalog_page =
+                    std::min(ss->menu.mods_total_pages - 1, ss->menu.mods_catalog_page + 1);
+                ss->menu.focus_id = -1;
+                if (aa) play_sound("base:ui_right");
+            } else if (aa) {
+                play_sound("base:ui_cant");
+            }
+            mark_mouse_consumed();
+            return true;
+        }
+        if (id >= 900 && id < 900 + kModsPerPage) {
+            int rel = id - 900;
+            int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
+            if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size()) {
+                int catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
+                const auto& entry = mock_mod_catalog()[(size_t)catalog_idx];
+                if (entry.required) {
+                    if (aa) play_sound("base:ui_cant");
+                } else {
+                    bool installed = is_mod_installed(entry.id);
+                    set_mod_installed(entry.id, !installed);
+                    if (aa) play_sound(installed ? "base:ui_cant" : "base:ui_confirm");
+                }
+            } else if (aa) {
+                play_sound("base:ui_cant");
+            }
+            mark_mouse_consumed();
+            return true;
+        }
+        if (id == 998) {
+            ss->menu.page = MAIN;
+            ss->menu.focus_id = -1;
+            if (aa) play_sound("base:ui_confirm");
+            mark_mouse_consumed();
+            return true;
+        }
+        return false;
+    };
+
+    // Mouse hover/focus
+    for (auto const& b : buttons) {
+        SDL_FRect pr = ndc_to_pixels(b.rect, width, height);
+        float mx = static_cast<float>(ss->mouse_inputs.pos.x);
+        float my = static_cast<float>(ss->mouse_inputs.pos.y);
+        bool inside = (!ss->menu.ignore_mouse_until_release) &&
+                      (mx >= pr.x && mx <= pr.x + pr.w && my >= pr.y && my <= pr.y + pr.h);
+        if (inside) {
+            // Only let hover steal focus if mouse was the last-used device,
+            // but always move focus on click.
+            if (ss->menu.mouse_last_used || click) {
+                if (ss->menu.focus_id != b.id) { ss->menu.focus_id = b.id; play_sound("base:ui_cursor_move"); }
+            }
+            if (click && !text_input_active) {
+                bool handled = handle_mod_button(b.id, true);
+                auto mark_handled = [&]() {
+                    handled = true;
+                    consume_mouse_click();
+                };
+                if (!handled) {
+                    if (b.id == 100) {
+                        ss->mode = modes::PLAYING;
+                        mark_handled();
+                    } else if (b.id == 110) {
+                        enter_mods_page();
+                        ss->menu.page = MODS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 101) {
+                        ss->menu.page = SETTINGS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                    } else if (b.id == 102) {
+                        ss->running = false;
+                        mark_handled();
+                    } else if (b.id == 299) {
+                        ss->menu.page = MAIN;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_cant");
+                    } else if (b.id == 200) {
+                        ss->menu.page = AUDIO;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 201) {
+                        ss->menu.page = VIDEO;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 202) {
+                        ss->menu.page = CONTROLS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 204) {
+                        ss->menu.page = BINDS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 203) {
+                        ss->menu.page = OTHER;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 205) {
+                        ss->menu.page = PLAYERS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 799 && ss->menu.page == BINDS_LOAD) {
+                        ss->menu.page = BINDS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b.id == 399 || b.id == 499 || b.id == 599 || b.id == 799 || b.id == 899) {
+                        ss->menu.page = SETTINGS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_cant");
+                    } else if (ss->menu.page == BINDS && b.id >= 700 && b.id <= 704) {
+                        static const BindAction order[] = {
+                            BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                            BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                            BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                        };
+                        int idx = ss->menu.binds_keys_page * 5 + (b.id - 700);
+                        if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0])))
+                            ss->menu.capture_action_id = (int)order[idx];
+                        mark_handled();
+                    } else if (ss->menu.page == BINDS && b.id == 792) {
+                        ss->menu.page = BINDS_LOAD;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        refresh_binds_profiles();
+                        ss->menu.binds_list_page = 0;
+                    } else if (ss->menu.page == BINDS && b.id == 793) {
+                        std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
+                        suggestion = sanitize_profile_name(suggestion);
+                        if (suggestion.empty()) suggestion = "Preset";
+                        open_text_input(TEXT_INPUT_BINDS_NEW, kPresetNameMaxLen, suggestion, std::string{}, "Preset Name");
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (ss->menu.page == BINDS && b.id == 799) {
+                        ss->menu.page = SETTINGS;
+                        ss->menu.focus_id = -1;
+                        mark_handled();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (ss->menu.page == BINDS && b.id == 791) {
+                        apply_default_bindings_to_active();
+                        mark_handled();
+                    } else if (ss->menu.page == BINDS && b.id == 794) {
+                        undo_active_bind_changes();
+                        mark_handled();
+                    } else if (ss->menu.page == BINDS_LOAD && b.id >= 720 && b.id <= 724 && b.enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b.id - 720);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            std::string name = ss->menu.binds_profiles[(size_t)idx].name;
+                            if (set_active_binds_profile(name)) {
+                                ss->menu.page = BINDS;
+                                ss->menu.focus_id = -1;
+                                ss->menu.binds_toast = std::string("Loaded preset: ") + name;
+                                ss->menu.binds_toast_timer = 1.2f;
+                                if (aa) play_sound("base:ui_confirm");
+                            }
+                        }
+                        mark_handled();
+                    } else if (ss->menu.page == BINDS_LOAD && b.id >= 730 && b.id <= 734 && b.enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b.id - 730);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            const auto& info = ss->menu.binds_profiles[(size_t)idx];
+                            if (!info.read_only)
+                                open_text_input(TEXT_INPUT_BINDS_RENAME, kPresetNameMaxLen, info.name, info.name, "Rename Preset");
+                        }
+                        mark_handled();
+                    } else if (ss->menu.page == BINDS_LOAD && b.id >= 740 && b.id <= 744 && b.enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b.id - 740);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            const auto name = ss->menu.binds_profiles[(size_t)idx].name;
+                            delete_binds_profile(name);
+                            refresh_binds_profiles();
+                            ss->menu.binds_toast = std::string("Deleted preset: ") + name;
+                            ss->menu.binds_toast_timer = 1.2f;
+                            const int per_page = 5;
+                            int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + per_page - 1) / per_page));
+                            ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
+                            if (aa) play_sound("base:ui_confirm");
+                        }
+                        mark_handled();
+                    }
+                    if (!handled) {
+                        if (b.kind == ButtonKind::Toggle) {
+                            if (b.id == 402) ss->menu.vsync = !ss->menu.vsync;
+                            else if (b.id == 503) ss->menu.invert_x = !ss->menu.invert_x;
+                            else if (b.id == 504) ss->menu.invert_y = !ss->menu.invert_y;
+                            else if (b.id == 505) ss->menu.vibration_enabled = !ss->menu.vibration_enabled;
+                        } else if (b.kind == ButtonKind::OptionCycle) {
+                            if (!ss->menu.ignore_mouse_until_release) {
+                        // Determine arrow hit boxes (larger)
+                        SDL_Rect rr{(int)std::floor(pr.x), (int)std::floor(pr.y), (int)std::ceil(pr.w), (int)std::ceil(pr.h)};
+                        int aw = std::min(36, rr.w / 6);
+                        int ah = std::min(28, rr.h - 8);
+                        SDL_Rect leftA{rr.x + rr.w - (aw*2 + 8), rr.y + rr.h/2 - ah/2, aw, ah};
+                        SDL_Rect rightA{rr.x + rr.w - aw, rr.y + rr.h/2 - ah/2, aw, ah};
+                        bool inLeft = (ss->mouse_inputs.pos.x >= leftA.x && ss->mouse_inputs.pos.x <= leftA.x + leftA.w && ss->mouse_inputs.pos.y >= leftA.y && ss->mouse_inputs.pos.y <= leftA.y + leftA.h);
+                        bool inRight = (ss->mouse_inputs.pos.x >= rightA.x && ss->mouse_inputs.pos.x <= rightA.x + rightA.w && ss->mouse_inputs.pos.y >= rightA.y && ss->mouse_inputs.pos.y <= rightA.y + rightA.h);
+                        if (inLeft) {
+                            if (b.id == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 3) % 4;
+                            else if (b.id == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 2) % 3;
+                            else if (b.id == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 5) % 6;
+                            else if (b.id == 405 && b.enabled) ss->menu.window_size_index = (ss->menu.window_size_index + 3) % 4;
+                            if (aa) play_sound("base:ui_left");
+                        } else if (inRight) {
+                            if (b.id == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 1) % 4;
+                            else if (b.id == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 1) % 3;
+                            else if (b.id == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 1) % 6;
+                            else if (b.id == 405 && b.enabled) ss->menu.window_size_index = (ss->menu.window_size_index + 1) % 4;
+                            if (aa) play_sound("base:ui_right");
+                        } else {
+                            // Fallback: click cycles forward
+                            if (b.id == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 1) % 4;
+                            else if (b.id == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 1) % 3;
+                            else if (b.id == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 1) % 6;
+                            else if (b.id == 405 && b.enabled) ss->menu.window_size_index = (ss->menu.window_size_index + 1) % 4;
+                            if (aa) play_sound("base:ui_right");
+                        }
+                        // Apply window size immediately when windowed
+                        if (b.id == 405 && b.enabled && gg && gg->window) {
+                            static const int kResW[4] = {1280, 1600, 1920, 2560};
+                            static const int kResH[4] = {720,  900,  1080, 1440};
+                            int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                            SDL_SetWindowSize(gg->window, kResW[idx], kResH[idx]);
+                            gg->window_dims = glm::uvec2{(unsigned)kResW[idx], (unsigned)kResH[idx]};
+                        }
+                    }
+                }
+            } else if (b.id >= 700 && b.id <= 712) {
+                    // Enter capture mode for binds
+                    ss->menu.capture_action_id = b.id;
+                    consume_mouse_click();
+                }
+            }
+            // Sliders: click/drag
+            if (!text_input_active && b.kind == ButtonKind::Slider) {
+                if (ss->mouse_inputs.left) {
+                    if (!ss->menu.ignore_mouse_until_release) {
+                        bool first_drag_frame = (ss->menu.dragging_id != b.id);
+                        ss->menu.dragging_id = b.id;
+                        float t = (pr.w > 1.0f) ? (mx - pr.x) / pr.w : 0.0f;
+                        t = std::clamp(t, 0.0f, 1.0f);
+                        if (is_audio_slider(b.id)) {
+                            float* pv = audio_slider_value_ptr(b.id);
+                            float prev = pv ? *pv : 0.0f;
+                            bool changed = apply_audio_slider_value(b.id, t);
+                            float curr = pv ? *pv : prev;
+                            if (first_drag_frame)
+                                set_audio_slider_anchor(b.id, prev);
+                            else if (changed)
+                                play_audio_slider_preview(b.id, prev, curr, SliderPreviewEvent::Drag);
+                        } else {
+                            if (b.id == 500) ss->menu.screen_shake = t;
+                            else if (b.id == 501) ss->menu.mouse_sens = t;
+                            else if (b.id == 502) ss->menu.controller_sens = t;
+                            else if (b.id == 404) ss->menu.ui_scale = t;
+                            else if (b.id == 507) ss->menu.vibration_magnitude = t;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Continue slider drag if active
+    if (!ss->mouse_inputs.left) {
+        int released_id = ss->menu.dragging_id;
+        ss->menu.dragging_id = -1;
+        ss->menu.ignore_mouse_until_release = false;
+        if (is_audio_slider(released_id)) {
+            if (float* pv = audio_slider_value_ptr(released_id)) {
+                float val = *pv;
+                play_audio_slider_preview(released_id, val, val, SliderPreviewEvent::Release);
+            }
+            flush_audio_settings_if_dirty();
+        }
+    }
+    if (ss->menu.dragging_id >= 0) {
+        int id = ss->menu.dragging_id;
+        const ButtonDesc* b = find_btn(id);
+        if (b) {
+            SDL_FRect pr = ndc_to_pixels(b->rect, width, height);
+            float mx = static_cast<float>(ss->mouse_inputs.pos.x);
+            float t = (pr.w > 1.0f) ? (mx - pr.x) / pr.w : 0.0f;
+            t = std::clamp(t, 0.0f, 1.0f);
+            if (is_audio_slider(id)) {
+                float* pv = audio_slider_value_ptr(id);
+                float prev = pv ? *pv : 0.0f;
+                if (pv && !ss->menu.audio_slider_preview_anchor_valid[audio_slider_index(id)])
+                    set_audio_slider_anchor(id, prev);
+                bool changed = apply_audio_slider_value(id, t);
+                float curr = pv ? *pv : prev;
+                if (changed)
+                    play_audio_slider_preview(id, prev, curr, SliderPreviewEvent::Drag);
+            } else {
+                if (id == 500) ss->menu.screen_shake = t;
+                else if (id == 501) ss->menu.mouse_sens = t;
+                else if (id == 502) ss->menu.controller_sens = t;
+                else if (id == 404) ss->menu.ui_scale = t;
+                else if (id == 507) ss->menu.vibration_magnitude = t;
+            }
+        }
+    }
+
+    // Controller/keyboard navigation with edge+repeat timers
+    // First edge fires immediately, then repeats after an initial delay at a fixed interval.
+    const float kInitialDelay = 0.35f;   // seconds before repeats start
+    const float kRepeatInterval = 0.09f; // seconds between repeats
+
+    // Compute simple left/right edge detection before repeat updates
+    bool left_edge_now = (ss->menu.hold_left && !ss->menu.prev_hold_left);
+    bool right_edge_now = (ss->menu.hold_right && !ss->menu.prev_hold_right);
+    bool left_release_now = (!ss->menu.hold_left && ss->menu.prev_hold_left);
+    bool right_release_now = (!ss->menu.hold_right && ss->menu.prev_hold_right);
+
+    auto repeat_fire = [&](bool hold, bool& prev_hold, float& rpt_timer) -> bool {
+        bool fire = false;
+        if (hold) {
+            if (!prev_hold) {
+                // Rising edge: fire once and arm initial delay
+                fire = true;
+                rpt_timer = kInitialDelay;
+            } else {
+                // Held: count down and fire at repeat interval
+                rpt_timer = std::max(0.0f, rpt_timer - ss->dt);
+                if (rpt_timer <= 0.0f) {
+                    fire = true;
+                    rpt_timer += kRepeatInterval;
+                }
+            }
+        } else {
+            // Released: clear timer
+            rpt_timer = 0.0f;
+        }
+        prev_hold = hold;
+        return fire;
+    };
+
+    bool nav_up = repeat_fire(ss->menu.hold_up, ss->menu.prev_hold_up, ss->menu.rpt_up);
+    bool nav_down = repeat_fire(ss->menu.hold_down, ss->menu.prev_hold_down, ss->menu.rpt_down);
+    bool nav_left = repeat_fire(ss->menu.hold_left, ss->menu.prev_hold_left, ss->menu.rpt_left);
+    bool nav_right = repeat_fire(ss->menu.hold_right, ss->menu.prev_hold_right, ss->menu.rpt_right);
+
+    int fid = ss->menu.focus_id;
+    if (!text_input_active && fid >= 0) {
+        if (nav_up) {
+            int n = nav(fid).up; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
+        } else if (nav_down) {
+            int n = nav(fid).down; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
+        } else if (nav_left) {
+            const ButtonDesc* b = find_btn(fid);
+            if (b && b->kind == ButtonKind::Slider) {
+                float* pv = nullptr;
+                if (fid == 300) pv = &ss->menu.vol_master;
+                else if (fid == 301) pv = &ss->menu.vol_music;
+                else if (fid == 302) pv = &ss->menu.vol_sfx;
+                else if (fid == 500) pv = &ss->menu.screen_shake;
+                else if (fid == 501) pv = &ss->menu.mouse_sens;
+                else if (fid == 502) pv = &ss->menu.controller_sens;
+                else if (fid == 404) pv = &ss->menu.ui_scale;
+                else if (fid == 507) pv = &ss->menu.vibration_magnitude;
+                if (pv) {
+                    float new_val = *pv;
+                    if (fid == 501 || fid == 502) {
+                        double step_val = 0.01; double minv = 0.10, maxv = 10.0; double range = maxv - minv; double tstep = step_val / range;
+                        new_val = std::clamp(*pv - (float)tstep, 0.0f, 1.0f);
+                    } else {
+                        new_val = std::clamp(*pv - 0.05f, 0.0f, 1.0f);
+                    }
+                    if (is_audio_slider(fid)) {
+                        apply_audio_slider_value(fid, new_val);
+                        ss->menu.audio_nav_active_id = fid;
+                        ss->menu.audio_nav_active_mask |= 0x1; // left input active
+                    } else
+                        *pv = new_val;
+                    if (aa) play_sound("base:ui_left");
+                }
+            } else if (b && b->kind == ButtonKind::OptionCycle) {
+                if (fid == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 3) % 4;
+                else if (fid == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 2) % 3;
+                else if (fid == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 5) % 6;
+                else if (fid == 405 && b->enabled) {
+                    ss->menu.window_size_index = (ss->menu.window_size_index + 3) % 4;
+                    if (gg && gg->window) {
+                        static const int kResW[4] = {1280, 1600, 1920, 2560};
+                        static const int kResH[4] = {720,  900,  1080, 1440};
+                        int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                        SDL_SetWindowSize(gg->window, kResW[idx], kResH[idx]);
+                        gg->window_dims = glm::uvec2{(unsigned)kResW[idx], (unsigned)kResH[idx]};
+                    }
+                }
+                if (aa) play_sound("base:ui_left");
+            } else if (b && b->kind == ButtonKind::Toggle) {
+                if (fid == 402) ss->menu.vsync = !ss->menu.vsync;
+                else if (fid == 503) ss->menu.invert_x = !ss->menu.invert_x;
+                else if (fid == 504) ss->menu.invert_y = !ss->menu.invert_y;
+                else if (fid == 505) ss->menu.vibration_enabled = !ss->menu.vibration_enabled;
+            } else {
+                int n = nav(fid).left; if (n >= 0) ss->menu.focus_id = n;
+            }
+        } else if (nav_right) {
+            const ButtonDesc* b = find_btn(fid);
+            if (b && b->kind == ButtonKind::Slider) {
+                float* pv = nullptr;
+                if (fid == 300) pv = &ss->menu.vol_master;
+                else if (fid == 301) pv = &ss->menu.vol_music;
+                else if (fid == 302) pv = &ss->menu.vol_sfx;
+                else if (fid == 500) pv = &ss->menu.screen_shake;
+                else if (fid == 501) pv = &ss->menu.mouse_sens;
+                else if (fid == 502) pv = &ss->menu.controller_sens;
+                else if (fid == 404) pv = &ss->menu.ui_scale;
+                else if (fid == 507) pv = &ss->menu.vibration_magnitude;
+                if (pv) {
+                    float new_val = *pv;
+                    if (fid == 501 || fid == 502) {
+                        double step_val = 0.01; double minv = 0.10, maxv = 10.0; double range = maxv - minv; double tstep = step_val / range;
+                        new_val = std::clamp(*pv + (float)tstep, 0.0f, 1.0f);
+                    } else {
+                        new_val = std::clamp(*pv + 0.05f, 0.0f, 1.0f);
+                    }
+                    if (is_audio_slider(fid)) {
+                        apply_audio_slider_value(fid, new_val);
+                        ss->menu.audio_nav_active_id = fid;
+                        ss->menu.audio_nav_active_mask |= 0x2; // right input active
+                    } else
+                        *pv = new_val;
+                    if (aa) play_sound("base:ui_right");
+                }
+            } else if (b && b->kind == ButtonKind::OptionCycle) {
+                if (fid == 400) ss->menu.video_res_index = (ss->menu.video_res_index + 1) % 4;
+                else if (fid == 401) ss->menu.window_mode_index = (ss->menu.window_mode_index + 1) % 3;
+                else if (fid == 403) ss->menu.frame_limit_index = (ss->menu.frame_limit_index + 1) % 6;
+                else if (fid == 405 && b->enabled) {
+                    ss->menu.window_size_index = (ss->menu.window_size_index + 1) % 4;
+                    if (gg && gg->window) {
+                        static const int kResW[4] = {1280, 1600, 1920, 2560};
+                        static const int kResH[4] = {720,  900,  1080, 1440};
+                        int idx = std::clamp(ss->menu.window_size_index, 0, 3);
+                        SDL_SetWindowSize(gg->window, kResW[idx], kResH[idx]);
+                        gg->window_dims = glm::uvec2{(unsigned)kResW[idx], (unsigned)kResH[idx]};
+                    }
+                }
+                if (aa) play_sound("base:ui_right");
+            } else if (b && b->kind == ButtonKind::Toggle) {
+                if (fid == 402) ss->menu.vsync = !ss->menu.vsync;
+                else if (fid == 503) ss->menu.invert_x = !ss->menu.invert_x;
+                else if (fid == 504) ss->menu.invert_y = !ss->menu.invert_y;
+                else if (fid == 505) ss->menu.vibration_enabled = !ss->menu.vibration_enabled;
+            } else {
+                int n = nav(fid).right; if (n >= 0) ss->menu.focus_id = n;
+            }
+        }
+        if (!text_input_active && ss->menu_inputs.confirm) {
+            const ButtonDesc* b = find_btn(ss->menu.focus_id);
+            if (b) {
+                if (handle_mod_button(b->id, false)) {
+                    // handled by mods helper
+                } else if (b->id == 100) {
+                    ss->mode = modes::PLAYING;
+                } else if (b->id == 110) {
+                    enter_mods_page();
+                    ss->menu.page = MODS; ss->menu.focus_id = -1;
+                    if (aa) play_sound("base:ui_confirm");
+                } else if (b->id == 101) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
+                } else if (b->id == 102) {
+                    ss->running = false;
+                } else if (b->id == 299) {
+                    ss->menu.page = MAIN; ss->menu.focus_id = -1;
+                } else if (b->id == 799) {
+                    if (ss->menu.page == BINDS_LOAD) {
+                        ss->menu.page = BINDS;
+                        ss->menu.focus_id = -1;
+                        ss->menu.capture_action_id = -1;
+                    } else {
+                        ss->menu.page = SETTINGS;
+                        ss->menu.focus_id = -1;
+                    }
+                } else if (b->id == 200) {
+                    ss->menu.page = AUDIO; ss->menu.focus_id = -1;
+                } else if (b->id == 201) {
+                    ss->menu.page = VIDEO; ss->menu.focus_id = -1;
+                } else if (b->id == 202) {
+                    ss->menu.page = CONTROLS; ss->menu.focus_id = -1;
+                } else if (b->id == 203) {
+                    ss->menu.page = OTHER; ss->menu.focus_id = -1;
+                } else if (b->id == 399 || b->id == 499 || b->id == 599 || b->id == 899) {
+                    ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
+                } else if (b->id == 204) {
+                    ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                } else if (b->id == 498 && b->enabled) {
+                    if (gg && gg->window) {
+                        static const int kResW[4] = {1280, 1600, 1920, 2560};
+                        static const int kResH[4] = {720,  900,  1080, 1440};
+                        int ridx = std::clamp(ss->menu.video_res_index, 0, 3);
+                        gg->dims = glm::uvec2{(unsigned)kResW[ridx], (unsigned)kResH[ridx]};
+                        int wmode = std::clamp(ss->menu.window_mode_index, 0, 2);
+                        if (wmode == 2) {
+                            SDL_SetWindowFullscreen(gg->window, SDL_WINDOW_FULLSCREEN);
+                        } else if (wmode == 1) {
+                            SDL_SetWindowFullscreen(gg->window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                        } else {
+                            SDL_SetWindowFullscreen(gg->window, 0);
+                            SDL_SetWindowBordered(gg->window, SDL_TRUE);
+                        }
+                    }
+                } else if (ss->menu.page == BINDS) {
+                    if (b->id >= 700 && b->id <= 704) {
+                        static const BindAction order[] = {
+                            BA_LEFT, BA_RIGHT, BA_UP, BA_DOWN,
+                            BA_USE_LEFT, BA_USE_RIGHT, BA_USE_UP, BA_USE_DOWN, BA_USE_CENTER,
+                            BA_PICK_UP, BA_DROP, BA_RELOAD, BA_DASH
+                        };
+                        int idx = ss->menu.binds_keys_page * 5 + (b->id - 700);
+                        if (idx >= 0 && idx < (int)(sizeof(order)/sizeof(order[0])))
+                            ss->menu.capture_action_id = (int)order[idx];
+                    } else if (b->id == 791 && b->enabled) {
+                        apply_default_bindings_to_active();
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 792 && b->enabled) {
+                        ss->menu.page = BINDS_LOAD; ss->menu.focus_id = -1;
+                        refresh_binds_profiles();
+                        ss->menu.binds_list_page = 0;
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 793 && b->enabled) {
+                        std::string suggestion = ss->menu.binds_current_preset.empty() ? "Custom" : ss->menu.binds_current_preset;
+                        suggestion = sanitize_profile_name(suggestion);
+                        if (suggestion.empty()) suggestion = "Preset";
+                        open_text_input(TEXT_INPUT_BINDS_NEW, kPresetNameMaxLen, suggestion, std::string{}, "Preset Name");
+                        if (aa) play_sound("base:ui_confirm");
+                    } else if (b->id == 794 && b->enabled) {
+                        undo_active_bind_changes();
+                        if (aa) play_sound("base:ui_confirm");
+                    }
+                } else if (ss->menu.page == BINDS_LOAD) {
+                    if (b->id >= 720 && b->id <= 724 && b->enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b->id - 720);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            std::string name = ss->menu.binds_profiles[(size_t)idx].name;
+                            if (set_active_binds_profile(name)) {
+                                ss->menu.page = BINDS; ss->menu.focus_id = -1;
+                                ss->menu.binds_toast = std::string("Loaded preset: ") + name;
+                                ss->menu.binds_toast_timer = 1.2f;
+                                if (aa) play_sound("base:ui_confirm");
+                            }
+                        }
+                    } else if (b->id >= 730 && b->id <= 734 && b->enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b->id - 730);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            const auto& info = ss->menu.binds_profiles[(size_t)idx];
+                            if (!info.read_only)
+                                open_text_input(TEXT_INPUT_BINDS_RENAME, kPresetNameMaxLen, info.name, info.name, "Rename Preset");
+                        }
+                    } else if (b->id >= 740 && b->id <= 744 && b->enabled) {
+                        int idx = ss->menu.binds_list_page * 5 + (b->id - 740);
+                        if (idx >= 0 && idx < (int)ss->menu.binds_profiles.size()) {
+                            const auto name = ss->menu.binds_profiles[(size_t)idx].name;
+                            delete_binds_profile(name);
+                            refresh_binds_profiles();
+                            ss->menu.binds_toast = std::string("Deleted preset: ") + name;
+                            ss->menu.binds_toast_timer = 1.2f;
+                            const int per_page = 5;
+                            int total_pages = std::max(1, (int)((ss->menu.binds_profiles.size() + per_page - 1) / per_page));
+                            ss->menu.binds_list_page = std::min(ss->menu.binds_list_page, total_pages - 1);
+                            if (aa) play_sound("base:ui_confirm");
+                        }
+                    }
+                }
+            }
+        }
+
+    // Back button behavior (Esc/Backspace)
+    if (text_input_active) {
+        if (ss->menu_inputs.back) {
+            menu_text_input_cancel();
+        }
+    } else if (ss->menu_inputs.back) {
+        if (aa) play_sound("base:ui_confirm");
+        if (ss->menu.page == SETTINGS) {
+            ss->menu.page = MAIN; ss->menu.focus_id = -1;
+        } else if (ss->menu.page == MODS) {
+            ss->menu.page = MAIN; ss->menu.focus_id = -1;
+        } else if (ss->menu.page == BINDS_LOAD) {
+            ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.capture_action_id = -1;
+        } else if (ss->menu.page == AUDIO || ss->menu.page == VIDEO || ss->menu.page == CONTROLS || ss->menu.page == BINDS || ss->menu.page == OTHER) {
+            ss->menu.page = SETTINGS; ss->menu.focus_id = -1;
+            ss->menu.capture_action_id = -1;
+        }
+    }
+
+    auto handle_nav_release = [&](bool released, uint8_t bit) {
+        if (!released) return;
+        if (ss->menu.audio_nav_active_mask & bit) {
+            ss->menu.audio_nav_active_mask &= ~bit;
+            if (ss->menu.audio_nav_active_mask == 0) {
+                ss->menu.audio_nav_active_id = -1;
+                flush_audio_settings_if_dirty();
+            }
+        }
+    };
+    handle_nav_release(left_release_now, 0x1);
+    handle_nav_release(right_release_now, 0x2);
+    if (ss->menu.page == BINDS) {
+        int total_actions = (int)BindAction::BA_COUNT;
+        int per_page = 5;
+        int total_pages = std::max(1, (total_actions + per_page - 1) / per_page);
+        // Page change: Q/E edges or left/right edges when focus on a binds row
+        if (ss->menu.focus_id >= 700 && ss->menu.focus_id <= 704) {
+            if (ss->menu_inputs.page_prev || left_edge_now) { ss->menu.binds_keys_page = std::max(0, ss->menu.binds_keys_page - 1); if (aa) play_sound("base:ui_left"); }
+            else if (ss->menu_inputs.page_next || right_edge_now) { ss->menu.binds_keys_page = std::min(total_pages - 1, ss->menu.binds_keys_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+        int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+        SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+        SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+        if (click && !text_input_active) {
+            int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
+            auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
+            if (in_rect(prevb)) { ss->menu.binds_keys_page = std::max(0, ss->menu.binds_keys_page - 1); if (aa) play_sound("base:ui_left"); }
+            if (in_rect(nextb)) { ss->menu.binds_keys_page = std::min(total_pages - 1, ss->menu.binds_keys_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+    } else if (ss->menu.page == BINDS_LOAD) {
+        const auto& profiles = ss->menu.binds_profiles;
+        int per_page = 5;
+        int total_pages = std::max(1, (int)((profiles.size() + (size_t)per_page - 1) / (size_t)per_page));
+        ss->menu.binds_list_page = std::clamp(ss->menu.binds_list_page, 0, total_pages - 1);
+        bool focus_profiles = (ss->menu.focus_id >= 720 && ss->menu.focus_id <= 724);
+        bool focus_actions = (ss->menu.focus_id >= 730 && ss->menu.focus_id <= 744);
+        if (focus_profiles) {
+            if (ss->menu_inputs.page_prev || left_edge_now) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
+            else if (ss->menu_inputs.page_next || right_edge_now) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
+        } else if (focus_actions) {
+            if (ss->menu_inputs.page_prev) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
+            else if (ss->menu_inputs.page_next) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+        int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+        SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+        SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+        if (click && !text_input_active) {
+            int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
+            auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
+            if (in_rect(prevb)) { ss->menu.binds_list_page = std::max(0, ss->menu.binds_list_page - 1); if (aa) play_sound("base:ui_left"); }
+            if (in_rect(nextb)) { ss->menu.binds_list_page = std::min(total_pages - 1, ss->menu.binds_list_page + 1); if (aa) play_sound("base:ui_right"); }
+        }
+    }
+
+    // Pagination with bumpers
+    if (ss->menu.page == VIDEO) {
+        if (ss->menu_inputs.page_prev) {
+            ss->menu.page_index = std::max(0, ss->menu.page_index - 1);
+        } else if (ss->menu_inputs.page_next) {
+            ss->menu.page_index = std::min(0, ss->menu.page_index + 1);
+        }
+        // Also allow clicking the Prev/Next buttons
+        int hdr_y = (int)std::lround(SAFE_M * static_cast<float>(height)) + 16;
+        SDL_Rect prevb{width - 540, hdr_y - 4, 90, 32};
+        SDL_Rect nextb{width - 120, hdr_y - 4, 90, 32};
+        if (click && !text_input_active) {
+            int mx_i = ss->mouse_inputs.pos.x; int my_i = ss->mouse_inputs.pos.y;
+            auto in_rect = [&](SDL_Rect rc){ return mx_i >= rc.x && mx_i <= rc.x + rc.w && my_i >= rc.y && my_i <= rc.y + rc.h; };
+            if (in_rect(prevb)) { ss->menu.page_index = std::max(0, ss->menu.page_index - 1); if (aa) play_sound("base:ui_left"); }
+            if (in_rect(nextb)) { ss->menu.page_index = std::min(0, ss->menu.page_index + 1); if (aa) play_sound("base:ui_right"); }
+        }
+    }
+
+    // Update mouse click edge
+    ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+}
+}

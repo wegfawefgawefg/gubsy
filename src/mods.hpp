@@ -10,9 +10,15 @@
 
 struct ModInfo {
     std::string name;
+    std::string title;
     std::string version;
     std::vector<std::string> deps;
     std::string path; // absolute or relative root
+    std::string manifest_path;
+    std::string description;
+    std::string download_url;
+    std::string author;
+    bool enabled{true};
 };
 
 // Very small mod manager that discovers mods in `mods/`,

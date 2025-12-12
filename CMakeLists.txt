@@ -147,7 +147,10 @@ if (NOT SDL2_TTF_FOUND_LOCAL)
   message(WARNING "SDL2_ttf not found. Numeric text overlays will be disabled at runtime if initialization fails.")
 endif()
 
-target_include_directories(gubsy PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(gubsy PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/third_party
+)
 
 # Lua 5.4 (required at runtime; build-time optional with stub)
 set(LUA_FOUND_LOCAL OFF)

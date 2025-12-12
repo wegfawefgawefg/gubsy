@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -58,6 +59,15 @@ struct DemoApi {
 };
 
 DemoApi g_api{};
+
+DemoItemRecord* find_record_by_id(const std::string& id) {
+    auto it = g_lookup.find(id);
+    if (it == g_lookup.end())
+        return nullptr;
+    if (it->second >= g_records.size())
+        return nullptr;
+    return &g_records[it->second];
+}
 
 void clear_instances() {
     g_item_pool.clear();
@@ -130,6 +140,21 @@ glm::vec3 read_color(const sol::object& obj, glm::vec3 fallback) {
     return out;
 }
 
+void apply_def_patch(DemoItemRecord& rec, const sol::table& patch) {
+    if (auto label = patch.get<sol::optional<std::string>>("label"))
+        rec.def.label = *label;
+    if (auto radius = patch.get<sol::optional<double>>("radius"))
+        rec.def.radius = static_cast<float>(*radius);
+    if (auto pos_obj = patch.get<sol::object>("position"); pos_obj.valid())
+        rec.def.position = read_vec2(pos_obj, rec.def.position);
+    if (auto color_obj = patch.get<sol::object>("color"); color_obj.valid())
+        rec.def.color = read_color(color_obj, rec.def.color);
+    if (auto sprite_name = patch.get<sol::optional<std::string>>("sprite")) {
+        rec.def.sprite_name = *sprite_name;
+        rec.def.sprite_id = rec.def.sprite_name.empty() ? -1 : try_get_sprite_id(rec.def.sprite_name);
+    }
+}
+
 std::string make_default_id() {
     std::string base = g_current_mod.empty() ? "item" : g_current_mod;
     base += "_";
@@ -180,6 +205,20 @@ void register_bindings(sol::state& lua) {
 
         g_lookup.emplace(rec.def.id, g_records.size());
         g_records.push_back(std::move(rec));
+    });
+
+    lua.set_function("patch_item", [](sol::table t) {
+        std::string id = t.get_or("id", std::string{});
+        if (id.empty()) {
+            std::fprintf(stderr, "[demo_items] patch_item missing id\n");
+            return;
+        }
+        DemoItemRecord* rec = find_record_by_id(id);
+        if (!rec) {
+            std::fprintf(stderr, "[demo_items] patch_item unknown id '%s'\n", id.c_str());
+            return;
+        }
+        apply_def_patch(*rec, t);
     });
 }
 

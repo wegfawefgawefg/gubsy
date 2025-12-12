@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct State {
@@ -81,12 +82,21 @@ struct State {
         int players_count{1};
         std::vector<std::string> players_presets;
 
+        // Mods browser mock state
+        std::unordered_map<std::string, bool> mods_mock_install_state;
+        std::vector<int> mods_visible_indices;
+        int mods_catalog_page{0};
+        int mods_total_pages{1};
+        int mods_filtered_count{0};
+        std::string mods_search_query;
+
         // Input hold-repeat for menu navigation/adjustment
         bool hold_left{false}, hold_right{false}, hold_up{false}, hold_down{false};
         float rpt_left{0.0f}, rpt_right{0.0f}, rpt_up{0.0f}, rpt_down{0.0f};
         bool prev_hold_left{false}, prev_hold_right{false}, prev_hold_up{false}, prev_hold_down{false};
         bool suppress_confirm_until_release{false};
         bool suppress_back_until_release{false};
+        std::string text_input_title;
     };
 
     struct DemoPlayer {

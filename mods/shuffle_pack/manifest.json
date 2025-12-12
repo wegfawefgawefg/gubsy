@@ -1,0 +1,8 @@
+{
+  "id": "shuffle_pack",
+  "title": "Pad Shuffle Pack",
+  "version": "0.1.0",
+  "author": "Gubsy",
+  "description": "Adds playful pads that manipulate existing demo items.",
+  "dependencies": ["base"]
+}

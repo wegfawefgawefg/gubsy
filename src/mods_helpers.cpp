@@ -4,7 +4,10 @@
 #include <cctype>
 #include <cstdio>
 #include <fstream>
+#include <optional>
 #include <system_error>
+
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
@@ -52,10 +55,16 @@ bool ModManager::check_changes(std::vector<std::string>& changed_assets,
     std::unordered_map<std::string, fs::file_time_type> current;
     current.reserve(tracked_files.size());
     for (auto const& m : mods) {
-        // info.toml
-        fs::path ip = fs::path(m.path) / "info.toml";
-        if (fs::exists(ip, ec))
-            current[ip.string()] = fs::last_write_time(ip, ec);
+        // manifest or info
+        if (!m.manifest_path.empty()) {
+            fs::path mp = m.manifest_path;
+            if (fs::exists(mp, ec))
+                current[mp.string()] = fs::last_write_time(mp, ec);
+        } else {
+            fs::path ip = fs::path(m.path) / "info.toml";
+            if (fs::exists(ip, ec))
+                current[ip.string()] = fs::last_write_time(ip, ec);
+        }
         // graphics
         fs::path gdir = fs::path(m.path) / "graphics";
         if (fs::exists(gdir, ec) && fs::is_directory(gdir, ec)) {
@@ -91,7 +100,9 @@ bool ModManager::check_changes(std::vector<std::string>& changed_assets,
                 changed_assets.push_back(path);
             else if (path.find("/scripts/") != std::string::npos)
                 changed_scripts.push_back(path);
-            else if (path.rfind("info.toml") != std::string::npos) { /* ignore for now */
+            else if (path.rfind("info.toml") != std::string::npos ||
+                     path.rfind("manifest.json") != std::string::npos) {
+                changed_scripts.push_back(path);
             }
         } else if (ts != it->second) {
             any = true;
@@ -99,7 +110,9 @@ bool ModManager::check_changes(std::vector<std::string>& changed_assets,
                 changed_assets.push_back(path);
             else if (path.find("/scripts/") != std::string::npos)
                 changed_scripts.push_back(path);
-            else if (path.rfind("info.toml") != std::string::npos) { /* ignore for now */
+            else if (path.rfind("info.toml") != std::string::npos ||
+                     path.rfind("manifest.json") != std::string::npos) {
+                changed_scripts.push_back(path);
             }
         }
     }
@@ -109,7 +122,9 @@ bool ModManager::check_changes(std::vector<std::string>& changed_assets,
             any = true;
             if (path.find("/graphics/") != std::string::npos)
                 changed_assets.push_back(path);
-            else if (path.find("/scripts/") != std::string::npos)
+            else if (path.find("/scripts/") != std::string::npos ||
+                     path.rfind("manifest.json") != std::string::npos ||
+                     path.rfind("info.toml") != std::string::npos)
                 changed_scripts.push_back(path);
         }
     }
@@ -118,16 +133,56 @@ bool ModManager::check_changes(std::vector<std::string>& changed_assets,
     return any;
 }
 
-ModInfo ModManager::parse_info(const std::string& mod_path) {
-    ModInfo info{};
-    info.path = mod_path;
-    std::ifstream f(mod_path + "/info.toml");
-    if (!f.good()) {
-        // derive name from folder leaf
-        info.name = fs::path(mod_path).filename().string();
-        info.version = "0.0.0";
-        return info;
+namespace {
+
+bool parse_manifest_json(const std::string& manifest_path, ModInfo& info) {
+    std::ifstream f(manifest_path);
+    if (!f.good())
+        return false;
+    try {
+        nlohmann::json j;
+        f >> j;
+        if (!j.is_object())
+            return false;
+        info.manifest_path = manifest_path;
+        if (auto it = j.find("id"); it != j.end() && it->is_string())
+            info.name = it->get<std::string>();
+        if (auto it = j.find("slug"); it != j.end() && it->is_string() && info.name.empty())
+            info.name = it->get<std::string>();
+        if (auto it = j.find("title"); it != j.end() && it->is_string())
+            info.title = it->get<std::string>();
+        if (auto it = j.find("name"); it != j.end() && it->is_string()) {
+            if (info.name.empty())
+                info.name = it->get<std::string>();
+            if (info.title.empty())
+                info.title = it->get<std::string>();
+        }
+        if (auto it = j.find("version"); it != j.end() && it->is_string())
+            info.version = it->get<std::string>();
+        if (auto it = j.find("description"); it != j.end() && it->is_string())
+            info.description = it->get<std::string>();
+        if (auto it = j.find("author"); it != j.end() && it->is_string())
+            info.author = it->get<std::string>();
+        if (auto it = j.find("download_url"); it != j.end() && it->is_string())
+            info.download_url = it->get<std::string>();
+        if (auto it = j.find("dependencies"); it != j.end() && it->is_array()) {
+            for (auto& dep : *it) {
+                if (dep.is_string())
+                    info.deps.push_back(dep.get<std::string>());
+            }
+        }
+        return true;
+    } catch (const std::exception& e) {
+        std::printf("[mods] Failed to parse manifest %s: %s\n",
+                    manifest_path.c_str(), e.what());
+        return false;
     }
+}
+
+void parse_info_toml(const std::string& info_path, ModInfo& info) {
+    std::ifstream f(info_path);
+    if (!f.good())
+        return;
     std::string line;
     while (std::getline(f, line)) {
         std::string t = trim(line);
@@ -153,7 +208,6 @@ ModInfo ModManager::parse_info(const std::string& mod_path) {
             auto pos = t.find('=');
             if (pos != std::string::npos) {
                 std::string v = trim(t.substr(pos + 1));
-                // parse ["a","b"] minimally
                 if (!v.empty() && v.front() == '[' && v.back() == ']') {
                     std::string inner = v.substr(1, v.size() - 2);
                     size_t i = 0;
@@ -180,8 +234,21 @@ ModInfo ModManager::parse_info(const std::string& mod_path) {
             }
         }
     }
+}
+
+} // namespace
+
+ModInfo ModManager::parse_info(const std::string& mod_path) {
+    ModInfo info{};
+    info.path = mod_path;
+    const std::string manifest_path = mod_path + "/manifest.json";
+    if (!parse_manifest_json(manifest_path, info)) {
+        parse_info_toml(mod_path + "/info.toml", info);
+    }
     if (info.name.empty())
         info.name = fs::path(mod_path).filename().string();
+    if (info.title.empty())
+        info.title = info.name;
     if (info.version.empty())
         info.version = "0.0.0";
     return info;
