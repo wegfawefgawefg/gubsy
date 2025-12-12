@@ -26,6 +26,7 @@ set(GUB_SOURCES
   src/mods.cpp
   src/mods_helpers.cpp
   src/demo_content.cpp
+  src/demo_items.cpp
   src/engine/alerts.cpp
   src/engine/audio.cpp
   src/engine/graphics.cpp

@@ -247,7 +247,7 @@ void process_inputs_playing() {
     pi.use_right = is_down(b.use_right);
     pi.use_up = is_down(b.use_up);
     pi.use_down = is_down(b.use_down);
-    pi.use_center = is_down(b.use_center);
+    pi.use_center = is_down(b.use_center) || is_down(SDL_SCANCODE_SPACE);
     // Manual pickup key
     pi.pick_up = is_down(b.pick_up);
     pi.drop = is_down(b.drop);

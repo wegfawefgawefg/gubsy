@@ -1,16 +1,19 @@
 #include "render.hpp"
 
 #include "engine/mode_registry.hpp"
+#include "engine/graphics.hpp"
 #include "globals.hpp"
 #include "settings.hpp"
 #include "menu/menu.hpp"
 #include "state.hpp"
+#include "demo_items.hpp"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <glm/glm.hpp>
 
 namespace {
 struct ScreenSpace {
@@ -41,6 +44,19 @@ void fill_and_outline(SDL_Renderer* renderer, const SDL_FRect& rect,
     SDL_RenderFillRectF(renderer, &rect);
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
     SDL_RenderDrawRectF(renderer, &rect);
+}
+
+Uint8 channel_from_vec(float v) {
+    float clamped = std::clamp(v, 0.0f, 1.0f);
+    return static_cast<Uint8>(std::round(clamped * 255.0f));
+}
+
+SDL_Color color_from_vec3(const glm::vec3& v, Uint8 alpha = 255) {
+    return SDL_Color{channel_from_vec(v.r), channel_from_vec(v.g), channel_from_vec(v.b), alpha};
+}
+
+glm::vec3 brighten(const glm::vec3& base, float amount) {
+    return glm::clamp(base + glm::vec3(amount), glm::vec3(0.0f), glm::vec3(1.0f));
 }
 
 void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
@@ -76,8 +92,7 @@ void render_alerts(SDL_Renderer* renderer, int width) {
     draw_text(renderer, mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
 }
 
-void render_instructions(SDL_Renderer* renderer, int /*width*/, int height) {
-    const std::string text = "WASD / Arrows to move. Bump the square to trigger a sound.";
+void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, const std::string& text) {
     int margin = 24;
     draw_text(renderer, text, margin, height - 30, SDL_Color{200, 200, 200, 255});
 }
@@ -127,11 +142,59 @@ void render_playing_frame() {
     fill_and_outline(renderer, player_rect, player_fill, player_border);
 
     SDL_FRect target_rect = rect_for(target.pos, target.half_size, space);
-    fill_and_outline(renderer, target_rect, target_fill, target_border);
+    if (target.enabled) {
+        fill_and_outline(renderer, target_rect, target_fill, target_border);
+    } else {
+        SDL_Color disabled{60, 50, 40, 180};
+        SDL_SetRenderDrawColor(renderer, disabled.r, disabled.g, disabled.b, disabled.a);
+        SDL_RenderDrawRectF(renderer, &target_rect);
+    }
+
+    std::string nearby_label;
+    const float player_radius = glm::length(player.half_size);
+    for (const auto& inst : demo_item_instances()) {
+        if (!inst.active)
+            continue;
+        const DemoItemDef* item = demo_item_def(inst);
+        if (!item)
+            continue;
+        SDL_FRect item_rect = rect_for(inst.position,
+                                       glm::vec2(item->radius, item->radius), space);
+        float dist = glm::length(player.pos - inst.position);
+        bool nearby = dist <= (player_radius + item->radius + 0.1f);
+        bool drew_sprite = false;
+        if (item->sprite_id >= 0) {
+            if (SDL_Texture* tex = get_texture(item->sprite_id)) {
+                SDL_RenderCopyF(renderer, tex, nullptr, &item_rect);
+                drew_sprite = true;
+            }
+        }
+        if (!drew_sprite) {
+            glm::vec3 fill_vec = nearby ? brighten(item->color, 0.15f) : item->color;
+            glm::vec3 border_vec = nearby ? glm::vec3(1.0f, 0.95f, 0.7f)
+                                          : brighten(item->color, 0.05f);
+            fill_and_outline(renderer, item_rect,
+                             color_from_vec3(fill_vec),
+                             color_from_vec3(border_vec));
+        } else if (nearby) {
+            SDL_Color border{255, 240, 180, 255};
+            SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+            SDL_RenderDrawRectF(renderer, &item_rect);
+        }
+        draw_text(renderer, item->label, static_cast<int>(item_rect.x),
+                  static_cast<int>(item_rect.y) - 18, SDL_Color{200, 200, 220, 255});
+        if (nearby && nearby_label.empty())
+            nearby_label = item->label;
+    }
 
     // Alerts + instructions overlay
     render_alerts(renderer, width);
-    render_instructions(renderer, width, height);
+    std::string prompt_text;
+    if (!nearby_label.empty())
+        prompt_text = "Press Space/E to use " + nearby_label;
+    else
+        prompt_text = "Move with WASD. Press Space/E near a pad to run its Lua-defined action.";
+    render_instructions(renderer, width, height, prompt_text);
 
     SDL_RenderPresent(renderer);
 }

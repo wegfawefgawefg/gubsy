@@ -1,0 +1,263 @@
+#include "demo_items.hpp"
+
+#include "engine/audio.hpp"
+#include "engine/graphics.hpp"
+#include "globals.hpp"
+#include "mods.hpp"
+#include "state.hpp"
+
+#include <cstdio>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include <sol/sol.hpp>
+
+namespace {
+
+constexpr std::size_t kMaxDemoItemInstances = 32;
+
+struct DemoItemRecord {
+    DemoItemDef def;
+    sol::protected_function on_use;
+};
+
+std::unique_ptr<sol::state> g_lua;
+std::vector<DemoItemRecord> g_records;
+std::vector<DemoItemDef> g_public_defs;
+std::vector<DemoItemInstance> g_instances;
+std::unordered_map<std::string, std::size_t> g_lookup;
+std::string g_current_mod;
+
+struct DemoApi {
+    void alert(const std::string& text) const {
+        if (!ss) return;
+        State::Alert al;
+        al.text = text;
+        al.ttl = 1.4f;
+        ss->alerts.push_back(al);
+    }
+    void set_player_position(float x, float y) const {
+        if (ss) ss->player.pos = glm::vec2{x, y};
+    }
+    void play_sound(const std::string& key) const {
+        if (!key.empty())
+            ::play_sound(key);
+    }
+    void set_bonk_enabled(bool enabled) const {
+        if (ss) ss->bonk.enabled = enabled;
+    }
+    void set_bonk_position(float x, float y) const {
+        if (ss) ss->bonk.pos = glm::vec2{x, y};
+    }
+};
+
+DemoApi g_api{};
+
+void ensure_instance_pool() {
+    if (g_instances.size() >= kMaxDemoItemInstances)
+        return;
+    std::size_t old_size = g_instances.size();
+    g_instances.resize(kMaxDemoItemInstances);
+    for (std::size_t i = old_size; i < g_instances.size(); ++i) {
+        g_instances[i].vid.id = i;
+        g_instances[i].vid.version = 0;
+    }
+}
+
+void clear_instances() {
+    ensure_instance_pool();
+    for (auto& inst : g_instances) {
+        inst.active = false;
+        inst.def_index = -1;
+        inst.position = glm::vec2{0.0f, 0.0f};
+    }
+}
+
+bool spawn_instance(std::size_t def_index, const glm::vec2& pos) {
+    ensure_instance_pool();
+    for (auto& inst : g_instances) {
+        if (!inst.active) {
+            inst.active = true;
+            inst.def_index = static_cast<int>(def_index);
+            inst.position = pos;
+            inst.vid.version += 1;
+            return true;
+        }
+    }
+    std::fprintf(stderr, "[demo_items] no free instance slots (max %zu)\n", kMaxDemoItemInstances);
+    return false;
+}
+
+glm::vec2 read_vec2(const sol::object& obj, glm::vec2 fallback) {
+    if (!obj.is<sol::table>()) return fallback;
+    sol::table t = obj.as<sol::table>();
+    glm::vec2 out = fallback;
+    out.x = t.get_or("x", fallback.x);
+    out.y = t.get_or("y", fallback.y);
+    return out;
+}
+
+glm::vec3 read_color(const sol::object& obj, glm::vec3 fallback) {
+    if (!obj.is<sol::table>()) return fallback;
+    sol::table t = obj.as<sol::table>();
+    glm::vec3 out = fallback;
+    out.r = t.get_or("r", fallback.r);
+    out.g = t.get_or("g", fallback.g);
+    out.b = t.get_or("b", fallback.b);
+    if (out.r > 1.001f || out.g > 1.001f || out.b > 1.001f) {
+        out /= 255.0f;
+    }
+    out = glm::clamp(out, glm::vec3(0.0f), glm::vec3(1.0f));
+    return out;
+}
+
+std::string make_default_id() {
+    std::string base = g_current_mod.empty() ? "item" : g_current_mod;
+    base += "_";
+    base += std::to_string(g_records.size());
+    return base;
+}
+
+void rebuild_public_items() {
+    g_public_defs.clear();
+    g_public_defs.reserve(g_records.size());
+    for (auto const& rec : g_records)
+        g_public_defs.push_back(rec.def);
+}
+
+void register_api(sol::state& lua) {
+    lua.new_usertype<DemoApi>("DemoAPI",
+        "alert", &DemoApi::alert,
+        "set_player_position", &DemoApi::set_player_position,
+        "play_sound", &DemoApi::play_sound,
+        "set_bonk_enabled", &DemoApi::set_bonk_enabled,
+        "set_bonk_position", &DemoApi::set_bonk_position);
+    lua["api"] = &g_api;
+}
+
+void register_bindings(sol::state& lua) {
+    lua.set_function("register_item", [](sol::table t) {
+        DemoItemRecord rec;
+
+        rec.def.id = t.get_or("id", make_default_id());
+        if (g_lookup.find(rec.def.id) != g_lookup.end()) {
+            std::fprintf(stderr, "[demo_items] duplicate id '%s'\n", rec.def.id.c_str());
+            return;
+        }
+
+        rec.def.label = t.get_or("label", rec.def.id);
+        rec.def.position = read_vec2(t.get<sol::object>("position"), rec.def.position);
+        rec.def.radius = t.get_or("radius", rec.def.radius);
+        rec.def.color = read_color(t.get<sol::object>("color"), rec.def.color);
+
+        rec.def.sprite_name = t.get_or("sprite", std::string{});
+        rec.def.sprite_id = rec.def.sprite_name.empty() ? -1 : try_get_sprite_id(rec.def.sprite_name);
+
+        sol::object cb = t.get<sol::object>("on_use");
+        if (cb.is<sol::function>())
+            rec.on_use = cb.as<sol::protected_function>();
+
+        g_lookup.emplace(rec.def.id, g_records.size());
+        g_records.push_back(std::move(rec));
+    });
+}
+
+sol::table make_item_table(sol::state& lua, const DemoItemDef& item) {
+    sol::table tbl = lua.create_table();
+    tbl["id"] = item.id;
+    tbl["label"] = item.label;
+    tbl["x"] = item.position.x;
+    tbl["y"] = item.position.y;
+    tbl["radius"] = item.radius;
+    tbl["sprite"] = item.sprite_name;
+    return tbl;
+}
+
+} // namespace
+
+bool load_demo_item_defs() {
+    unload_demo_item_defs();
+    if (!mm)
+        return false;
+
+    g_lua = std::make_unique<sol::state>();
+    auto& lua = *g_lua;
+    lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::os);
+    register_api(lua);
+    register_bindings(lua);
+
+    namespace fs = std::filesystem;
+    bool loaded_any = false;
+    for (const auto& mod : mm->mods) {
+        fs::path script = fs::path(mod.path) / "scripts" / "demo_items.lua";
+        if (!fs::exists(script))
+            continue;
+        g_current_mod = mod.name;
+        sol::protected_function_result r = lua.safe_script_file(script.string());
+        if (!r.valid()) {
+            sol::error e = r;
+            std::fprintf(stderr, "[demo_items] %s\n", e.what());
+        } else {
+            loaded_any = true;
+        }
+        g_current_mod.clear();
+    }
+
+    rebuild_public_items();
+
+    // Spawn demo instances: one per def at its authored position.
+    clear_instances();
+    for (std::size_t i = 0; i < g_public_defs.size(); ++i) {
+        const auto& def = g_public_defs[i];
+        spawn_instance(i, def.position);
+    }
+
+    if (!loaded_any)
+        std::fprintf(stderr, "[demo_items] no demo_items.lua files found\n");
+    return loaded_any;
+}
+
+void unload_demo_item_defs() {
+    g_lookup.clear();
+    g_records.clear();
+    g_public_defs.clear();
+    g_current_mod.clear();
+    g_lua.reset();
+}
+
+const std::vector<DemoItemDef>& demo_item_defs() {
+    return g_public_defs;
+}
+
+const std::vector<DemoItemInstance>& demo_item_instances() {
+    return g_instances;
+}
+
+const DemoItemDef* demo_item_def(const DemoItemInstance& inst) {
+    if (inst.def_index < 0) return nullptr;
+    if (static_cast<std::size_t>(inst.def_index) >= g_public_defs.size())
+        return nullptr;
+    return &g_public_defs[static_cast<std::size_t>(inst.def_index)];
+}
+
+void trigger_demo_item_use(const DemoItemInstance& inst) {
+    if (!g_lua)
+        return;
+    if (inst.def_index < 0 || static_cast<std::size_t>(inst.def_index) >= g_records.size())
+        return;
+    DemoItemRecord& rec = g_records[static_cast<std::size_t>(inst.def_index)];
+    if (!rec.on_use.valid())
+        return;
+
+    sol::table info = make_item_table(*g_lua, rec.def);
+    sol::protected_function_result r = rec.on_use(info);
+    if (!r.valid()) {
+        sol::error e = r;
+        std::fprintf(stderr, "[demo_items] on_use error (%s): %s\n",
+                     rec.def.id.c_str(), e.what());
+    }
+}

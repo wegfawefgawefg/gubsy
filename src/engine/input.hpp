@@ -24,7 +24,7 @@ struct InputBindings {
     SDL_Scancode use_right = SDL_SCANCODE_RIGHT;
     SDL_Scancode use_up = SDL_SCANCODE_UP;
     SDL_Scancode use_down = SDL_SCANCODE_DOWN;
-    SDL_Scancode use_center = SDL_SCANCODE_SPACE;
+    SDL_Scancode use_center = SDL_SCANCODE_E;
 
     SDL_Scancode pick_up = SDL_SCANCODE_F;
     SDL_Scancode drop = SDL_SCANCODE_Q;

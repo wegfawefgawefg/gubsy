@@ -100,6 +100,7 @@ struct State {
         glm::vec2 half_size{BONK_HALF_SIZE_UNITS, BONK_HALF_SIZE_UNITS};
         float cooldown{0.0f};
         std::string sound_key{"base:ui_confirm"};
+        bool enabled{true};
     };
 
     bool running{true};
@@ -123,6 +124,7 @@ struct State {
 
     DemoPlayer player{};
     BonkTarget bonk{};
+    bool use_interact_prev{false};
 
     bool show_character_panel{false};
     bool show_gun_panel{true};

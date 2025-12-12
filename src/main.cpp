@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include "demo_content.hpp"
+#include "demo_items.hpp"
 #include "engine/audio.hpp"
 #include "engine/graphics.hpp"
 #include "engine/input.hpp"
@@ -99,6 +100,7 @@ int main(int argc, char** argv) {
         load_all_textures_in_sprite_lookup();
     load_mod_sounds();
     load_demo_content();
+    load_demo_item_defs();
 
     ensure_default_input_profile();
 
@@ -151,6 +153,7 @@ int main(int argc, char** argv) {
     }
 
     save_audio_settings_to_ini("config/audio.ini");
+    unload_demo_item_defs();
     cleanup_mods_manager();
     cleanup_audio();
     cleanup_state();

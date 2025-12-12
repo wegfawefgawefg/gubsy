@@ -4,6 +4,7 @@
 #include "globals.hpp"
 #include "settings.hpp"
 #include "state.hpp"
+#include "demo_items.hpp"
 
 #include <algorithm>
 #include <glm/glm.hpp>
@@ -55,11 +56,30 @@ void step_playing() {
     if (target.cooldown > 0.0f)
         target.cooldown = std::max(0.0f, target.cooldown - dt);
 
-    if (overlaps(player.pos, player.half_size, target.pos, target.half_size) &&
+    if (target.enabled &&
+        overlaps(player.pos, player.half_size, target.pos, target.half_size) &&
         target.cooldown <= 0.0f) {
         target.cooldown = BONK_COOLDOWN_SECONDS;
         add_alert("bonk!");
         const std::string sound = target.sound_key.empty() ? "base:ui_confirm" : target.sound_key;
         play_sound(sound);
+    }
+
+    const bool use_pressed = ss->playing_inputs.use_center && !ss->use_interact_prev;
+    ss->use_interact_prev = ss->playing_inputs.use_center;
+    if (use_pressed) {
+        const float player_radius = glm::length(player.half_size);
+        for (const auto& inst : demo_item_instances()) {
+            if (!inst.active)
+                continue;
+            const DemoItemDef* def = demo_item_def(inst);
+            if (!def)
+                continue;
+            float dist = glm::length(player.pos - inst.position);
+            if (dist <= (player_radius + def->radius)) {
+                trigger_demo_item_use(inst);
+                break;
+            }
+        }
     }
 }

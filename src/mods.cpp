@@ -2,6 +2,7 @@
 #include "globals.hpp"
 #include "settings.hpp"
 #include "engine/graphics.hpp"
+#include "demo_items.hpp"
 #include "demo_content.hpp"
 
 #include <algorithm>
@@ -241,9 +242,11 @@ bool poll_fs_mods_hot_reload() {
         scan_mods_for_sprite_defs();
     }
     if (!changed_scripts.empty()) {
-        std::printf("[mods] Script changes detected (%zu). Reloading demo config...\n",
+        std::printf("[mods] Script changes detected (%zu). Reloading demo scripts...\n",
                     changed_scripts.size());
-        if (load_demo_content())
+        bool content_reloaded = load_demo_content();
+        bool items_reloaded = load_demo_item_defs();
+        if (content_reloaded || items_reloaded)
             ss->alerts.push_back({"Demo script reloaded", 0.0f, 1.5f, false});
     }
     return true;
