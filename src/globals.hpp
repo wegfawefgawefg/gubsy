@@ -6,7 +6,7 @@
 #include "engine/audio.hpp"
 #include "mods.hpp"
 #include "state.hpp"
-#include "input.hpp"
+#include "engine/input.hpp"
 #include "runtime_settings.hpp"
 
 // Shared pointers to systems used across modules.

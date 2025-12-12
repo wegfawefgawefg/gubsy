@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <vector>
 #include "globals.hpp"
-#include "input.hpp"
+#include "engine/input.hpp"
 
 static std::unordered_map<std::string, SDL_Scancode> make_scancode_map() {
     using S = SDL_Scancode;

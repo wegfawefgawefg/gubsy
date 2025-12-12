@@ -1,5 +1,5 @@
 #include "globals.hpp"
-#include "input_defs.hpp"
+#include "engine/input_defs.hpp"
 
 void MenuInputDebounceTimers::step(float dt) {
     left  = std::max(0.0f, left  - dt);

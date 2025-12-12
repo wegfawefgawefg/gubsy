@@ -3,7 +3,7 @@
 #include "crates.hpp"
 #include "entities.hpp"
 #include "guns.hpp"
-#include "input.hpp"
+#include "engine/input.hpp"
 #include "inventory.hpp"
 #include "items.hpp"
 #include "particles.hpp"
@@ -20,7 +20,7 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
-#include "input_defs.hpp"
+#include "engine/input_defs.hpp"
 
 struct State {
     bool running{true};

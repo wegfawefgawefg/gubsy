@@ -2,8 +2,8 @@
 
 #include "globals.hpp"
 #include "engine/graphics.hpp"
-#include "input_defs.hpp"
-#include "input.hpp"
+#include "engine/input_defs.hpp"
+#include "engine/input.hpp"
 #include "config.hpp"
 #include "types.hpp"
 
