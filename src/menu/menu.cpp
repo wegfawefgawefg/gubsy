@@ -1,7 +1,7 @@
 #include "menu.hpp"
 
 #include "globals.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 #include "input_defs.hpp"
 #include "input.hpp"
 #include "config.hpp"

@@ -3,7 +3,7 @@
 #include "lua/bindings.hpp"
 #include "lua/lua_helpers.hpp"
 #include "globals.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 #include <glm/glm.hpp>
 #include <cmath>
 

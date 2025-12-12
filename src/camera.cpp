@@ -1,7 +1,7 @@
 // Camera follow implementation.
 // Moves gg->play_cam.pos toward player and mouse mix when enabled.
 #include "globals.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 #include "state.hpp"
 
 #include <SDL2/SDL.h>

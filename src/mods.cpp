@@ -1,7 +1,7 @@
 #include "mods.hpp"
 #include "globals.hpp"
 #include "settings.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 
 #include <algorithm>
 #include <cctype>

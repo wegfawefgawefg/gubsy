@@ -1,5 +1,5 @@
 #include "config.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 #include "runtime_settings.hpp"
 #include "globals.hpp"
 #include "luamgr.hpp"

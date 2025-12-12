@@ -4,7 +4,7 @@
 #include "luamgr.hpp"
 #include "items.hpp"
 #include "guns.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 
 #include <algorithm>
 #include <random>

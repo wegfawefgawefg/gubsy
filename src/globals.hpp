@@ -2,7 +2,7 @@
 
 #include "luamgr.hpp"
 #include "sprites.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 #include "engine/audio.hpp"
 #include "mods.hpp"
 #include "state.hpp"

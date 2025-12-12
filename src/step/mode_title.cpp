@@ -1,6 +1,6 @@
 #include "step.hpp"
 #include "globals.hpp"
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 // Title mode no longer handles input/logic; inputs dispatcher does.
 
 void step_title() {

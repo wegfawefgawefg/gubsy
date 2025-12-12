@@ -1,6 +1,6 @@
 #pragma once
 
-#include "graphics.hpp"
+#include "engine/graphics.hpp"
 #include "settings.hpp"
 #include "state.hpp"
 
