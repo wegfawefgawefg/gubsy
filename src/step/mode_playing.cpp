@@ -69,9 +69,10 @@ void step_playing() {
     ss->use_interact_prev = ss->playing_inputs.use_center;
     if (use_pressed) {
         const float player_radius = glm::length(player.half_size);
-        for (const auto& inst : demo_item_instances()) {
-            if (!inst.active)
+        for (const auto& slot : demo_item_instance_slots()) {
+            if (!slot.active)
                 continue;
+            const DemoItemInstance& inst = slot.value;
             const DemoItemDef* def = demo_item_def(inst);
             if (!def)
                 continue;

@@ -6,7 +6,8 @@ This repo ships a tiny “demo items” system to showcase how to expose C++ def
 2. **Mods register defs via Lua tables** (`register_item{ id=..., position=..., sprite=..., on_use=function(item) ... end }`). The loader copies table fields into the def struct and stores the callback.
 3. **Callbacks use a minimal API surface** (the `api:*` methods). That API manipulates *game* state (player position, bonk toggles, alerts, etc.) so mods can change behaviour without touching the engine code.
 4. **Gameplay pulls from the defs table** (`demo_item_defs()` returns the vector). Rendering, interaction logic, etc. iterate over those defs, spawn instances, and call `trigger_demo_item_use(def)` when needed.
-5. **Hot reload**: `load_demo_item_defs()` runs on startup and when scripts change, so edits take effect immediately.
+5. **Instances can expose mutable state**. The demo now forwards live instance positions (`info.x/info.y`) to Lua and ships two helpers: `api:get_item_position(id)` and `api:set_item_position(id, x, y)`. Lua mods can move pads around at runtime, showing how to mutate per-instance data while still referencing the shared def.
+6. **Hot reload**: `load_demo_item_defs()` runs on startup and when scripts change, so edits take effect immediately.
 
 Use this pattern when adding your own mod-facing systems:
 

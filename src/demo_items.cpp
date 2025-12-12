@@ -28,7 +28,7 @@ struct DemoItemRecord {
 std::unique_ptr<sol::state> g_lua;
 std::vector<DemoItemRecord> g_records;
 std::vector<DemoItemDef> g_public_defs;
-std::vector<DemoItemInstance> g_instances;
+DemoItemPool g_item_pool{kMaxDemoItemInstances};
 std::unordered_map<std::string, std::size_t> g_lookup;
 std::string g_current_mod;
 
@@ -53,40 +53,55 @@ struct DemoApi {
     void set_bonk_position(float x, float y) const {
         if (ss) ss->bonk.pos = glm::vec2{x, y};
     }
+    bool set_item_position(const std::string& def_id, float x, float y) const;
+    sol::object get_item_position(const std::string& def_id, sol::this_state state) const;
 };
 
 DemoApi g_api{};
 
-void ensure_instance_pool() {
-    if (g_instances.size() >= kMaxDemoItemInstances)
-        return;
-    std::size_t old_size = g_instances.size();
-    g_instances.resize(kMaxDemoItemInstances);
-    for (std::size_t i = old_size; i < g_instances.size(); ++i) {
-        g_instances[i].vid.id = i;
-        g_instances[i].vid.version = 0;
-    }
+void clear_instances() {
+    g_item_pool.clear();
 }
 
-void clear_instances() {
-    ensure_instance_pool();
-    for (auto& inst : g_instances) {
-        inst.active = false;
-        inst.def_index = -1;
-        inst.position = glm::vec2{0.0f, 0.0f};
+DemoItemPool::Entry* find_instance_by_def_index(std::size_t def_index) {
+    for (auto& entry : g_item_pool.entries()) {
+        if (entry.active && entry.value.def_index == static_cast<int>(def_index))
+            return &entry;
     }
+    return nullptr;
+}
+
+DemoItemPool::Entry* find_instance_by_def_id(const std::string& def_id) {
+    auto it = g_lookup.find(def_id);
+    if (it == g_lookup.end())
+        return nullptr;
+    return find_instance_by_def_index(it->second);
+}
+
+bool DemoApi::set_item_position(const std::string& def_id, float x, float y) const {
+    if (auto* entry = find_instance_by_def_id(def_id)) {
+        entry->value.position = glm::vec2{x, y};
+        return true;
+    }
+    return false;
+}
+
+sol::object DemoApi::get_item_position(const std::string& def_id, sol::this_state state) const {
+    sol::state_view lua{state};
+    if (auto* entry = find_instance_by_def_id(def_id)) {
+        sol::table tbl = lua.create_table();
+        tbl["x"] = entry->value.position.x;
+        tbl["y"] = entry->value.position.y;
+        return sol::make_object(lua, tbl);
+    }
+    return sol::make_object(lua, sol::lua_nil);
 }
 
 bool spawn_instance(std::size_t def_index, const glm::vec2& pos) {
-    ensure_instance_pool();
-    for (auto& inst : g_instances) {
-        if (!inst.active) {
-            inst.active = true;
-            inst.def_index = static_cast<int>(def_index);
-            inst.position = pos;
-            inst.vid.version += 1;
-            return true;
-        }
+    if (auto* entry = g_item_pool.acquire()) {
+        entry->value.def_index = static_cast<int>(def_index);
+        entry->value.position = pos;
+        return true;
     }
     std::fprintf(stderr, "[demo_items] no free instance slots (max %zu)\n", kMaxDemoItemInstances);
     return false;
@@ -135,7 +150,9 @@ void register_api(sol::state& lua) {
         "set_player_position", &DemoApi::set_player_position,
         "play_sound", &DemoApi::play_sound,
         "set_bonk_enabled", &DemoApi::set_bonk_enabled,
-        "set_bonk_position", &DemoApi::set_bonk_position);
+        "set_bonk_position", &DemoApi::set_bonk_position,
+        "set_item_position", &DemoApi::set_item_position,
+        "get_item_position", &DemoApi::get_item_position);
     lua["api"] = &g_api;
 }
 
@@ -166,12 +183,18 @@ void register_bindings(sol::state& lua) {
     });
 }
 
-sol::table make_item_table(sol::state& lua, const DemoItemDef& item) {
+sol::table make_item_table(sol::state& lua, const DemoItemDef& item,
+                           const DemoItemInstance* inst) {
     sol::table tbl = lua.create_table();
     tbl["id"] = item.id;
     tbl["label"] = item.label;
-    tbl["x"] = item.position.x;
-    tbl["y"] = item.position.y;
+    if (inst) {
+        tbl["x"] = inst->position.x;
+        tbl["y"] = inst->position.y;
+    } else {
+        tbl["x"] = item.position.x;
+        tbl["y"] = item.position.y;
+    }
     tbl["radius"] = item.radius;
     tbl["sprite"] = item.sprite_name;
     return tbl;
@@ -233,8 +256,8 @@ const std::vector<DemoItemDef>& demo_item_defs() {
     return g_public_defs;
 }
 
-const std::vector<DemoItemInstance>& demo_item_instances() {
-    return g_instances;
+const std::vector<DemoItemPool::Entry>& demo_item_instance_slots() {
+    return g_item_pool.entries();
 }
 
 const DemoItemDef* demo_item_def(const DemoItemInstance& inst) {
@@ -253,7 +276,7 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
     if (!rec.on_use.valid())
         return;
 
-    sol::table info = make_item_table(*g_lua, rec.def);
+    sol::table info = make_item_table(*g_lua, rec.def, &inst);
     sol::protected_function_result r = rec.on_use(info);
     if (!r.valid()) {
         sol::error e = r;

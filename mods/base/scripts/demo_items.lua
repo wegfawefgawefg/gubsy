@@ -50,3 +50,26 @@ register_item{
         api:play_sound("base:ui_super_confirm")
     end
 }
+
+register_item{
+    id = "base:item_shuffle",
+    label = "Shuffle Pads",
+    sprite = "base:boots",
+    position = { x = 2.0, y = -2.5 },
+    radius = 0.7,
+    color = { r = 0.55, g = 0.4, b = 0.95 },
+    on_use = function(info)
+        local pad_pos = api:get_item_position("base:teleport_pad")
+        if pad_pos then
+            local dx = math.random(-2, 2)
+            local dy = math.random(-2, 2)
+            pad_pos.x = pad_pos.x + dx * 0.5
+            pad_pos.y = pad_pos.y + dy * 0.5
+            api:set_item_position("base:teleport_pad", pad_pos.x, pad_pos.y)
+            api:alert(string.format("Moved Teleport Pad to (%.1f, %.1f)", pad_pos.x, pad_pos.y))
+            api:play_sound("base:ui_confirm")
+        else
+            api:alert("Teleport Pad not found")
+        end
+    end
+}

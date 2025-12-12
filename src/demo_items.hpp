@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/vid.hpp"
+#include "engine/vid_pool.hpp"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -19,16 +19,16 @@ struct DemoItemDef {
 };
 
 struct DemoItemInstance {
-    VID vid{};
     int def_index{-1};
     glm::vec2 position{0.0f, 0.0f};
-    bool active{false};
 };
+
+using DemoItemPool = VidPool<DemoItemInstance>;
 
 bool load_demo_item_defs();
 void unload_demo_item_defs();
 
 const std::vector<DemoItemDef>& demo_item_defs();
-const std::vector<DemoItemInstance>& demo_item_instances();
+const std::vector<DemoItemPool::Entry>& demo_item_instance_slots();
 const DemoItemDef* demo_item_def(const DemoItemInstance& inst);
 void trigger_demo_item_use(const DemoItemInstance& inst);

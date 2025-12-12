@@ -152,9 +152,10 @@ void render_playing_frame() {
 
     std::string nearby_label;
     const float player_radius = glm::length(player.half_size);
-    for (const auto& inst : demo_item_instances()) {
-        if (!inst.active)
+    for (const auto& slot : demo_item_instance_slots()) {
+        if (!slot.active)
             continue;
+        const DemoItemInstance& inst = slot.value;
         const DemoItemDef* item = demo_item_def(inst);
         if (!item)
             continue;
