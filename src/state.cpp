@@ -2,17 +2,17 @@
 #include "globals.hpp"
 
 bool init_state() {
-    // Allocate State on the heap to ensure it outlives this function scope.
-    // The previous stack allocation caused a dangling pointer and heap
-    // corruption (free(): invalid pointer) shortly after startup.
-    if (!ss) ss = new State{};
+    if (!ss)
+        ss = new State{};
     ss->mode = modes::TITLE;
+    ss->alerts.clear();
+    ss->player.pos = glm::vec2{0.0f, 0.0f};
+    ss->bonk.pos = glm::vec2{2.5f, 0.0f};
+    ss->bonk.cooldown = 0.0f;
     return true;
 }
 
 void cleanup_state() {
-    if (ss) {
-        delete ss;
-        ss = nullptr;
-    }
+    delete ss;
+    ss = nullptr;
 }

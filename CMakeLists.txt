@@ -11,19 +11,30 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Auto-discover all sources/headers in src (no manual list)
-# CONFIGURE_DEPENDS makes CMake reconfigure when files are added/removed
-file(GLOB_RECURSE GUB_SOURCES CONFIGURE_DEPENDS
-  "${CMAKE_SOURCE_DIR}/src/*.cpp"
-  "${CMAKE_SOURCE_DIR}/src/*.cxx"
-  "${CMAKE_SOURCE_DIR}/src/*.cc"
-)
-file(GLOB_RECURSE GUB_HEADERS CONFIGURE_DEPENDS
-  "${CMAKE_SOURCE_DIR}/src/*.hpp"
-  "${CMAKE_SOURCE_DIR}/src/*.h"
+set(GUB_SOURCES
+  src/main.cpp
+  src/globals.cpp
+  src/state.cpp
+  src/render.cpp
+  src/game_modes.cpp
+  src/step.cpp
+  src/step/mode_playing.cpp
+  src/step/mode_title.cpp
+  src/config.cpp
+  src/input_debounce.cpp
+  src/menu/menu.cpp
+  src/mods.cpp
+  src/mods_helpers.cpp
+  src/demo_content.cpp
+  src/engine/alerts.cpp
+  src/engine/audio.cpp
+  src/engine/graphics.cpp
+  src/engine/input.cpp
+  src/engine/mode_registry.cpp
+  src/engine/sprites.cpp
 )
 
-add_executable(gubsy ${GUB_SOURCES} ${GUB_HEADERS})
+add_executable(gubsy ${GUB_SOURCES})
 
 # Developer convenience: alias target and CLI symlink 'arti'
 add_executable(arti ALIAS gubsy)

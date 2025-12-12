@@ -216,9 +216,6 @@ void process_inputs() {
         process_inputs_title();
     } else if (ss->mode == modes::PLAYING) {
         process_inputs_playing();
-    } else if (ss->mode == modes::GAME_OVER) {
-        if (ss->menu_inputs.confirm)
-            ss->mode = modes::TITLE;
     }
 }
 

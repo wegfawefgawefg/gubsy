@@ -2,7 +2,6 @@
 
 #include "engine/graphics.hpp"
 #include "settings.hpp"
-#include "state.hpp"
 
 #include <SDL2/SDL.h>
 
