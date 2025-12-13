@@ -2,6 +2,7 @@
 
 #include "main_menu/menu.hpp"
 #include "main_menu/menu_layout.hpp"
+#include "main_menu/menu_navgraph.hpp"
 
 #include <SDL2/SDL.h>
 #include <string>

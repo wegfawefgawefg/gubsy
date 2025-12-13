@@ -224,6 +224,7 @@ void enter_lobby_page() {
         return;
     refresh_lobby_mod_entries();
     layout_set_page("lobby");
+    navgraph_set_page("lobby");
     ss->menu.page = LOBBY;
     ss->menu.focus_id = -1;
 }
@@ -395,6 +396,8 @@ void render_lobby(int width, int height, const std::vector<ButtonDesc>& buttons)
     draw_button(1441, "Back", "");
     if (layout_edit_enabled())
         render_lobby_layout_overlay(r, buttons, width, height);
+    if (navgraph_edit_enabled())
+        navgraph_render_overlay(r, buttons, width, height);
 }
 
 void render_lobby_mods(int width, int height, const std::vector<ButtonDesc>& buttons) {

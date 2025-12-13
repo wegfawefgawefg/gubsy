@@ -318,10 +318,22 @@ void step_menu_logic(int width, int height) {
     bool text_input_active = menu_is_text_input_active();
 
     if (ss->menu_inputs.layout_toggle && ss->menu.page == LOBBY) {
+        if (navgraph_edit_enabled())
+            navgraph_toggle_edit_mode();
         toggle_lobby_layout_edit_mode();
+    }
+    if (ss->menu_inputs.nav_toggle && ss->menu.page == LOBBY) {
+        if (layout_edit_enabled())
+            toggle_lobby_layout_edit_mode();
+        navgraph_toggle_edit_mode();
     }
     if (ss->menu.layout_edit.enabled && ss->menu.page == LOBBY) {
         lobby_layout_editor_handle(buttons, width, height);
+        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+        return;
+    }
+    if (navgraph_edit_enabled() && ss->menu.page == LOBBY) {
+        navgraph_handle_editor(buttons, width, height);
         ss->menu.mouse_left_prev = ss->mouse_inputs.left;
         return;
     }
@@ -340,20 +352,22 @@ void step_menu_logic(int width, int height) {
     };
 
     auto nav = [&](int id) -> NavNode {
+        NavNode base;
         switch (ss->menu.page) {
-            case MAIN: return nav_main_for_id(id);
-            case SETTINGS: return nav_settings_for_id(id);
-            case AUDIO: return nav_audio_for_id(id);
-            case VIDEO: return nav_video_for_id(id);
-            case CONTROLS: return nav_controls_for_id(id);
-            case BINDS: return nav_binds_for_id(id);
-            case BINDS_LOAD: return nav_binds_list_for_id(id);
-            case OTHER: return nav_other_for_id(id);
-            case MODS: return nav_mods_for_id(id);
-            case LOBBY: return nav_lobby_for_id(id);
-            case LOBBY_MODS: return nav_lobby_mods_for_id(id);
-            default: return NavNode{-1,-1,-1,-1};
+            case MAIN: base = nav_main_for_id(id); break;
+            case SETTINGS: base = nav_settings_for_id(id); break;
+            case AUDIO: base = nav_audio_for_id(id); break;
+            case VIDEO: base = nav_video_for_id(id); break;
+            case CONTROLS: base = nav_controls_for_id(id); break;
+            case BINDS: base = nav_binds_for_id(id); break;
+            case BINDS_LOAD: base = nav_binds_list_for_id(id); break;
+            case OTHER: base = nav_other_for_id(id); break;
+            case MODS: base = nav_mods_for_id(id); break;
+            case LOBBY: base = nav_lobby_for_id(id); break;
+            case LOBBY_MODS: base = nav_lobby_mods_for_id(id); break;
+            default: base = NavNode{-1,-1,-1,-1}; break;
         }
+        return navgraph_apply(id, base);
     };
 
     // Mouse hover/focus

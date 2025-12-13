@@ -7,8 +7,10 @@
 #include "settings.hpp"
 #include "main_menu/menu.hpp"
 
+#include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <SDL2/SDL.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -57,6 +59,15 @@ struct LobbySettings {
     int mod_page{0};
     int selected_mod{-1};
     std::vector<LobbyModEntry> mods;
+};
+
+struct MenuNavEdges {
+    std::array<int, 4> targets{};
+    std::array<bool, 4> set{};
+    MenuNavEdges() {
+        targets.fill(-1);
+        set.fill(false);
+    }
 };
 
 struct State {
@@ -162,6 +173,20 @@ struct State {
             std::string active_id;
             glm::vec2 grab_offset{0.0f, 0.0f};
         } layout_edit{};
+        struct {
+            std::string page;
+            std::string section;
+            std::unordered_map<int, MenuNavEdges> edges;
+        } nav_cache{};
+        struct {
+            bool enabled{false};
+            bool dirty{false};
+            int selected_id{-1};
+            int pending_dir{-1};
+            std::array<bool, 4> dir_held{};
+            float status_timer{0.0f};
+            std::string status;
+        } nav_edit{};
         LobbySettings lobby{};
     };
 
