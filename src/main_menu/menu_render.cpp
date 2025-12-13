@@ -20,6 +20,9 @@ void render_menu(int width, int height) {
     if (ss->menu.page == LOBBY) {
         render_lobby(width, height, buttons);
         return;
+    } else if (ss->menu.page == LOBBY_MODS) {
+        render_lobby_mods(width, height, buttons);
+        return;
     }
 
     if (ss) {
@@ -121,7 +124,17 @@ void render_menu(int width, int height) {
         draw_text_hdr(buf, x, y);
     }
 
-    auto draw_text = [&](const char* s, int x, int y, SDL_Color col, float scale = 1.0f) {
+    auto draw_text = [&](const char* s, int x, int y, SDL_Color col) {
+        if (!gg->ui_font) return;
+        if (!s || !*s) return;
+        if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s, col)) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+            int tw=0, th=0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+            SDL_Rect td{x, y, tw, th}; SDL_RenderCopy(r, tex, nullptr, &td);
+            SDL_DestroyTexture(tex); SDL_FreeSurface(surf);
+        }
+    };
+    auto draw_text_scaled = [&](const char* s, int x, int y, SDL_Color col, float scale) {
         if (!gg->ui_font) return;
         if (!s || !*s) return;
         if (SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, s, col)) {
@@ -265,8 +278,8 @@ void render_menu(int width, int height) {
                     SDL_Color lc = ss->menu.mods_search_query.empty()
                                        ? SDL_Color{150, 150, 170, 255}
                                        : SDL_Color{220, 220, 230, 255};
-                    draw_text("Search", rr.x + 12, rr.y + 10, label_col, 0.9f);
-                    draw_text(query.c_str(), rr.x + 12, rr.y + rr.h / 2, lc, 0.9f);
+                    draw_text_scaled("Search", rr.x + 12, rr.y + 10, label_col, 0.9f);
+                    draw_text_scaled(query.c_str(), rr.x + 12, rr.y + rr.h / 2, lc, 0.9f);
                 } else if (b.id == 951 || b.id == 952) {
                     draw_label_value(rr, b.label, std::string(), focused);
                 } else if (mod_catalog_idx >= 0) {
@@ -277,16 +290,16 @@ void render_menu(int width, int height) {
                     SDL_Color title_col{240, 220, 80, 255};
                     SDL_Color meta_col{190, 190, 200, 255};
                     SDL_Color desc_col{200, 200, 210, 255};
-                    draw_text(entry.title.c_str(), rr.x + 12, rr.y + 10, title_col, 0.95f);
+                    draw_text_scaled(entry.title.c_str(), rr.x + 12, rr.y + 10, title_col, 0.95f);
                     char meta[128];
                     std::snprintf(meta, sizeof(meta), "v%s  •  %s", entry.version.c_str(), entry.author.c_str());
-                    draw_text(meta, rr.x + 12, rr.y + 34, meta_col, 0.85f);
+                    draw_text_scaled(meta, rr.x + 12, rr.y + 34, meta_col, 0.85f);
                     std::string summary = entry.summary;
                     if (summary.size() > 140) {
                         summary.resize(137);
                         summary += "...";
                     }
-                    draw_text(summary.c_str(), rr.x + 12, rr.y + 54, desc_col, 0.8f);
+                    draw_text_scaled(summary.c_str(), rr.x + 12, rr.y + 54, desc_col, 0.8f);
                     std::string deps = entry.dependencies.empty() ? "Standalone" : "Requires: ";
                     if (!entry.dependencies.empty()) {
                         for (size_t i = 0; i < entry.dependencies.size(); ++i) {
@@ -294,7 +307,7 @@ void render_menu(int width, int height) {
                             deps += entry.dependencies[i];
                         }
                     }
-                    draw_text(deps.c_str(), rr.x + 12, rr.y + rr.h - 32, SDL_Color{170, 170, 190, 255}, 0.8f);
+                    draw_text_scaled(deps.c_str(), rr.x + 12, rr.y + rr.h - 32, SDL_Color{170, 170, 190, 255}, 0.8f);
                     SDL_Rect pill{rr.x + rr.w - 160, rr.y + rr.h - 40, 140, 26};
                     bool installed = entry.installed;
                     SDL_Color pill_fill{60, 70, 90, 255};
@@ -321,9 +334,9 @@ void render_menu(int width, int height) {
                         status = "Removing...";
                     else if (installed)
                         status = "Uninstall";
-                    draw_text(status.c_str(), pill.x + 12, pill.y + 5, SDL_Color{230, 230, 240, 255}, 0.9f);
+                    draw_text_scaled(status.c_str(), pill.x + 12, pill.y + 5, SDL_Color{230, 230, 240, 255}, 0.9f);
                     if (!entry.status_text.empty()) {
-                        draw_text(entry.status_text.c_str(), rr.x + 12, rr.y + rr.h - 12,
+                        draw_text_scaled(entry.status_text.c_str(), rr.x + 12, rr.y + rr.h - 12,
                                   SDL_Color{180, 200, 200, 255}, 0.85f);
                     }
                 } else if (b.id == 998) {

@@ -273,6 +273,43 @@ static inline NavNode nav_lobby_for_id(int id) {
     }
 }
 
+static inline NavNode nav_lobby_mods_for_id(int id) {
+    int rows_on_page = 0;
+    if (ss) {
+        int total = static_cast<int>(ss->menu.lobby.mods.size());
+        int start = ss->menu.lobby.mod_page * kLobbyModsPerPage;
+        if (total > start)
+            rows_on_page = std::min(kLobbyModsPerPage, total - start);
+    }
+    switch (id) {
+        case 1430: {
+            int down = (rows_on_page > 0) ? 1420 : 1450;
+            return NavNode{-1, down, 1430, 1431};
+        }
+        case 1431: {
+            int down = (rows_on_page > 0) ? 1420 : 1450;
+            return NavNode{-1, down, 1430, 1431};
+        }
+        case 1450: {
+            int up = (rows_on_page > 0) ? (1420 + rows_on_page - 1) : 1430;
+            return NavNode{up, -1, 1450, 1450};
+        }
+        default:
+            break;
+    }
+    if (id >= 1420 && id < 1420 + kLobbyModsPerPage) {
+        int row_idx = id - 1420;
+        if (row_idx >= rows_on_page) {
+            int up = (row_idx == 0) ? 1430 : id - 1;
+            return NavNode{up, 1450, id, id};
+        }
+        int up = (row_idx == 0) ? 1430 : id - 1;
+        int down = (row_idx == rows_on_page - 1) ? 1450 : id + 1;
+        return NavNode{up, down, id, id};
+    }
+    return NavNode{-1,-1,-1,-1};
+}
+
 } // namespace
 
 void step_menu_logic(int width, int height) {
@@ -305,6 +342,7 @@ void step_menu_logic(int width, int height) {
             case OTHER: return nav_other_for_id(id);
             case MODS: return nav_mods_for_id(id);
             case LOBBY: return nav_lobby_for_id(id);
+            case LOBBY_MODS: return nav_lobby_mods_for_id(id);
             default: return NavNode{-1,-1,-1,-1};
         }
     };
@@ -480,6 +518,9 @@ void step_menu_logic(int width, int height) {
                 } else if (ss->menu.page == LOBBY) {
                     lobby_handle_button(b, true, aa);
                     ss->menu.ignore_mouse_until_release = true;
+                } else if (ss->menu.page == LOBBY_MODS) {
+                    lobby_mods_handle_button(b, true, aa);
+                    ss->menu.ignore_mouse_until_release = true;
                 } else if (b.kind == ButtonKind::Toggle) {
                     if (b.id == 402) ss->menu.vsync = !ss->menu.vsync;
                     else if (b.id == 503) ss->menu.invert_x = !ss->menu.invert_x;
@@ -647,7 +688,8 @@ void step_menu_logic(int width, int height) {
             int n = nav(fid).down; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
         } else if (nav_left) {
             const ButtonDesc* b = find_btn(fid);
-            if (ss->menu.page == LOBBY && lobby_handle_nav_direction(fid, -1)) {
+            if ((ss->menu.page == LOBBY && lobby_handle_nav_direction(fid, -1)) ||
+                (ss->menu.page == LOBBY_MODS && lobby_mods_handle_nav_direction(fid, -1))) {
                 // handled
             } else if (b && b->kind == ButtonKind::Slider) {
             } else if (b && b->kind == ButtonKind::Slider) {
@@ -701,7 +743,8 @@ void step_menu_logic(int width, int height) {
             }
         } else if (nav_right) {
             const ButtonDesc* b = find_btn(fid);
-            if (ss->menu.page == LOBBY && lobby_handle_nav_direction(fid, 1)) {
+            if ((ss->menu.page == LOBBY && lobby_handle_nav_direction(fid, 1)) ||
+                (ss->menu.page == LOBBY_MODS && lobby_mods_handle_nav_direction(fid, 1))) {
                 // handled
             } else if (b && b->kind == ButtonKind::Slider) {
                 float* pv = nullptr;
@@ -925,6 +968,8 @@ void step_menu_logic(int width, int height) {
                     }
                 } else if (ss->menu.page == LOBBY) {
                     lobby_handle_button(*b, true, aa);
+                } else if (ss->menu.page == LOBBY_MODS) {
+                    lobby_mods_handle_button(*b, true, aa);
                 }
             }
         }
@@ -943,6 +988,8 @@ void step_menu_logic(int width, int height) {
             ss->menu.page = MAIN; ss->menu.focus_id = -1;
         } else if (ss->menu.page == LOBBY) {
             ss->menu.page = MAIN; ss->menu.focus_id = -1;
+        } else if (ss->menu.page == LOBBY_MODS) {
+            ss->menu.page = LOBBY; ss->menu.focus_id = -1;
         } else if (ss->menu.page == BINDS_LOAD) {
             ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.capture_action_id = -1;
         } else if (ss->menu.page == AUDIO || ss->menu.page == VIDEO || ss->menu.page == CONTROLS || ss->menu.page == BINDS || ss->menu.page == OTHER) {

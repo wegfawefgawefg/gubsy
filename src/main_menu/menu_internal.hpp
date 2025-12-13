@@ -55,6 +55,7 @@ enum Page {
     PLAYERS = 9,
     MODS = 10,
     LOBBY = 11,
+    LOBBY_MODS = 12,
 };
 
 std::string trim_copy(const std::string& s);
@@ -68,11 +69,16 @@ bool uninstall_mod_by_index(int catalog_idx, std::string& error);
 void rebuild_mods_filter();
 void enter_mods_page();
 void enter_lobby_page();
+void enter_lobby_mods_page();
 std::vector<ButtonDesc> build_lobby_buttons();
+std::vector<ButtonDesc> build_lobby_mod_buttons();
 void render_lobby(int width, int height, const std::vector<ButtonDesc>& buttons);
+void render_lobby_mods(int width, int height, const std::vector<ButtonDesc>& buttons);
 bool lobby_start_session();
 bool lobby_handle_nav_direction(int focus_id, int delta);
+bool lobby_mods_handle_nav_direction(int focus_id, int delta);
 void lobby_handle_button(const ButtonDesc& b, bool activated, bool play_sound_on_success);
+void lobby_mods_handle_button(const ButtonDesc& b, bool activated, bool play_sound_on_success);
 
 void apply_default_bindings_to_active();
 void undo_active_bind_changes();
