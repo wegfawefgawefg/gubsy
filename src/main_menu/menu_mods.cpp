@@ -104,7 +104,8 @@ void refresh_runtime_after_mod_change() {
     scan_mods_for_sprite_defs();
     load_all_textures_in_sprite_lookup();
     load_mod_sounds();
-    load_demo_item_defs();
+    if (demo_items_active())
+        load_demo_item_defs();
 }
 
 void update_install_flags() {

@@ -4,6 +4,7 @@
 #include "engine/input.hpp"
 #include "engine/input_defs.hpp"
 #include "globals.hpp"
+#include "demo_items.hpp"
 #include "state.hpp"
 
 #include <SDL2/SDL.h>
@@ -295,6 +296,8 @@ void step_menu_logic(int width, int height) {
                 // Activate
                 if (b.id == 100) {
                     ss->mode = modes::PLAYING;
+                    if (!demo_items_active())
+                        load_demo_item_defs();
                 } else if (b.id == 110) {
                     enter_mods_page();
                     ss->menu.page = MODS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
@@ -717,6 +720,8 @@ void step_menu_logic(int width, int height) {
             if (b) {
                 if (b->id == 100) {
                     ss->mode = modes::PLAYING;
+                    if (!demo_items_active())
+                        load_demo_item_defs();
                 } else if (b->id == 110) {
                     enter_mods_page();
                     ss->menu.page = MODS; ss->menu.focus_id = -1;

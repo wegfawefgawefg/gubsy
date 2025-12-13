@@ -419,7 +419,11 @@ bool poll_fs_mods_hot_reload() {
         std::printf("[mods] Script changes detected (%zu). Reloading demo scripts...\n",
                     changed_scripts.size());
         bool content_reloaded = load_demo_content();
-        bool items_reloaded = load_demo_item_defs();
+        bool items_reloaded = false;
+        if (demo_items_active())
+            items_reloaded = load_demo_item_defs();
+        else
+            std::printf("[mods] Demo items inactive; skipping item reload until gameplay starts.\n");
         if (content_reloaded || items_reloaded)
             ss->alerts.push_back({"Demo script reloaded", 0.0f, 1.5f, false});
     }

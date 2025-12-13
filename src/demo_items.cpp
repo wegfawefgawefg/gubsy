@@ -32,6 +32,7 @@ std::vector<DemoItemDef> g_public_defs;
 DemoItemPool g_item_pool{kMaxDemoItemInstances};
 std::unordered_map<std::string, std::size_t> g_lookup;
 std::string g_current_mod;
+bool g_demo_items_active = false;
 
 struct DemoApi {
     void alert(const std::string& text) const {
@@ -291,6 +292,7 @@ bool load_demo_item_defs() {
 
     if (!loaded_any)
         std::fprintf(stderr, "[demo_items] no demo_items.lua files found\n");
+    g_demo_items_active = loaded_any;
     return loaded_any;
 }
 
@@ -300,6 +302,7 @@ void unload_demo_item_defs() {
     g_public_defs.clear();
     g_current_mod.clear();
     g_lua.reset();
+    g_demo_items_active = false;
 }
 
 const std::vector<DemoItemDef>& demo_item_defs() {
@@ -350,4 +353,8 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
         if (ss)
             ss->alerts.push_back(al);
     }
+}
+
+bool demo_items_active() {
+    return g_demo_items_active;
 }
