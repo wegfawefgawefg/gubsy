@@ -1,6 +1,7 @@
 #pragma once
 
 #include "main_menu/menu.hpp"
+#include "main_menu/menu_layout.hpp"
 
 #include <SDL2/SDL.h>
 #include <string>
@@ -77,6 +78,7 @@ void render_lobby_mods(int width, int height, const std::vector<ButtonDesc>& but
 bool lobby_layout_edit_enabled();
 void toggle_lobby_layout_edit_mode();
 void lobby_layout_editor_handle(const std::vector<ButtonDesc>& buttons, int width, int height);
+std::vector<LayoutItem> lobby_layout_items(const std::vector<ButtonDesc>& buttons, int width, int height);
 bool lobby_start_session();
 bool lobby_handle_nav_direction(int focus_id, int delta);
 bool lobby_mods_handle_nav_direction(int focus_id, int delta);

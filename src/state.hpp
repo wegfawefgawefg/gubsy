@@ -150,9 +150,10 @@ struct State {
         bool suppress_back_until_release{false};
         std::string text_input_title;
         struct {
+            std::string page;
             std::string section;
             std::unordered_map<std::string, RectNdc> rects;
-        } lobby_layout{};
+        } layout_cache{};
         struct {
             bool enabled{false};
             bool dragging{false};
