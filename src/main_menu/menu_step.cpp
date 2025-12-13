@@ -244,6 +244,35 @@ static inline NavNode nav_mods_for_id(int id) {
     return NavNode{-1,-1,-1,-1};
 }
 
+static inline NavNode nav_lobby_for_id(int id) {
+    switch (id) {
+        case 1400: return NavNode{1441, 1401, 1400, 1401};
+        case 1401: return NavNode{1400, 1402, 1400, 1402};
+        case 1402: return NavNode{1401, 1403, 1401, 1403};
+        case 1403: return NavNode{1402, 1404, 1403, 1404};
+        case 1404: return NavNode{1403, 1405, 1404, 1405};
+        case 1405: return NavNode{1404, 1406, 1405, 1406};
+        case 1406: return NavNode{1405, 1407, 1406, 1407};
+        case 1407: return NavNode{1406, 1408, 1407, 1408};
+        case 1408: return NavNode{1407, 1420, 1408, 1430};
+        case 1430: return NavNode{1408, 1420, 1430, 1431};
+        case 1431: return NavNode{1408, 1420, 1430, 1431};
+        case 1420:
+        case 1421:
+        case 1422:
+        case 1423:
+        case 1424: {
+            int idx = id - 1420;
+            int up = (idx == 0) ? 1408 : id - 1;
+            int down = (idx == kLobbyModsPerPage - 1) ? 1440 : id + 1;
+            return NavNode{up, down, id, id};
+        }
+        case 1440: return NavNode{1424, 1441, 1440, 1440};
+        case 1441: return NavNode{1440, 1400, 1441, 1400};
+        default: return NavNode{-1,-1,-1,-1};
+    }
+}
+
 } // namespace
 
 void step_menu_logic(int width, int height) {
@@ -275,6 +304,7 @@ void step_menu_logic(int width, int height) {
             case BINDS_LOAD: return nav_binds_list_for_id(id);
             case OTHER: return nav_other_for_id(id);
             case MODS: return nav_mods_for_id(id);
+            case LOBBY: return nav_lobby_for_id(id);
             default: return NavNode{-1,-1,-1,-1};
         }
     };
@@ -295,9 +325,9 @@ void step_menu_logic(int width, int height) {
     if (click && !text_input_active) {
                 // Activate
                 if (b.id == 100) {
-                    ss->mode = modes::PLAYING;
-                    if (!demo_items_active())
-                        load_demo_item_defs();
+                    enter_lobby_page();
+                    ss->menu.ignore_mouse_until_release = true;
+                    if (aa) play_sound("base:ui_confirm");
                 } else if (b.id == 110) {
                     enter_mods_page();
                     ss->menu.page = MODS; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
@@ -447,6 +477,9 @@ void step_menu_logic(int width, int height) {
                         ss->menu.page = MAIN; ss->menu.focus_id = -1; ss->menu.ignore_mouse_until_release = true;
                         if (aa) play_sound("base:ui_confirm");
                     }
+                } else if (ss->menu.page == LOBBY) {
+                    lobby_handle_button(b, true, aa);
+                    ss->menu.ignore_mouse_until_release = true;
                 } else if (b.kind == ButtonKind::Toggle) {
                     if (b.id == 402) ss->menu.vsync = !ss->menu.vsync;
                     else if (b.id == 503) ss->menu.invert_x = !ss->menu.invert_x;
@@ -614,7 +647,10 @@ void step_menu_logic(int width, int height) {
             int n = nav(fid).down; if (n >= 0) { ss->menu.focus_id = n; if (aa) play_sound("base:ui_cursor_move"); }
         } else if (nav_left) {
             const ButtonDesc* b = find_btn(fid);
-            if (b && b->kind == ButtonKind::Slider) {
+            if (ss->menu.page == LOBBY && lobby_handle_nav_direction(fid, -1)) {
+                // handled
+            } else if (b && b->kind == ButtonKind::Slider) {
+            } else if (b && b->kind == ButtonKind::Slider) {
                 float* pv = nullptr;
                 if (fid == 300) pv = &ss->menu.vol_master;
                 else if (fid == 301) pv = &ss->menu.vol_music;
@@ -665,7 +701,9 @@ void step_menu_logic(int width, int height) {
             }
         } else if (nav_right) {
             const ButtonDesc* b = find_btn(fid);
-            if (b && b->kind == ButtonKind::Slider) {
+            if (ss->menu.page == LOBBY && lobby_handle_nav_direction(fid, 1)) {
+                // handled
+            } else if (b && b->kind == ButtonKind::Slider) {
                 float* pv = nullptr;
                 if (fid == 300) pv = &ss->menu.vol_master;
                 else if (fid == 301) pv = &ss->menu.vol_music;
@@ -719,9 +757,8 @@ void step_menu_logic(int width, int height) {
             const ButtonDesc* b = find_btn(ss->menu.focus_id);
             if (b) {
                 if (b->id == 100) {
-                    ss->mode = modes::PLAYING;
-                    if (!demo_items_active())
-                        load_demo_item_defs();
+                    enter_lobby_page();
+                    if (aa) play_sound("base:ui_confirm");
                 } else if (b->id == 110) {
                     enter_mods_page();
                     ss->menu.page = MODS; ss->menu.focus_id = -1;
@@ -886,6 +923,8 @@ void step_menu_logic(int width, int height) {
                         ss->menu.page = MAIN; ss->menu.focus_id = -1;
                         if (aa) play_sound("base:ui_confirm");
                     }
+                } else if (ss->menu.page == LOBBY) {
+                    lobby_handle_button(*b, true, aa);
                 }
             }
         }
@@ -901,6 +940,8 @@ void step_menu_logic(int width, int height) {
         if (ss->menu.page == SETTINGS) {
             ss->menu.page = MAIN; ss->menu.focus_id = -1;
         } else if (ss->menu.page == MODS) {
+            ss->menu.page = MAIN; ss->menu.focus_id = -1;
+        } else if (ss->menu.page == LOBBY) {
             ss->menu.page = MAIN; ss->menu.focus_id = -1;
         } else if (ss->menu.page == BINDS_LOAD) {
             ss->menu.page = BINDS; ss->menu.focus_id = -1; ss->menu.capture_action_id = -1;

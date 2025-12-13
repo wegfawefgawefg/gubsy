@@ -12,6 +12,7 @@ inline constexpr float kTextInputErrorDuration = 1.5f;
 inline constexpr int kModsPerPage = 4;
 inline constexpr float kModsCardHeight = 0.14f;
 inline constexpr float kModsCardGap = 0.02f;
+inline constexpr int kLobbyModsPerPage = 5;
 
 struct ModCatalogEntry;
 
@@ -20,10 +21,14 @@ enum TextInputMode {
     TEXT_INPUT_BINDS_NEW = 1,
     TEXT_INPUT_BINDS_RENAME = 2,
     TEXT_INPUT_MODS_SEARCH = 3,
+    TEXT_INPUT_LOBBY_NAME = 4,
+    TEXT_INPUT_LOBBY_SEED = 5,
 };
 
 inline constexpr int kPresetNameMaxLen = 16;
 inline constexpr int kModsSearchMaxLen = 32;
+inline constexpr int kLobbyNameMaxLen = 24;
+inline constexpr int kLobbySeedMaxLen = 16;
 
 struct ModCatalogEntry;
 
@@ -49,6 +54,7 @@ enum Page {
     BINDS_LOAD = 8,
     PLAYERS = 9,
     MODS = 10,
+    LOBBY = 11,
 };
 
 std::string trim_copy(const std::string& s);
@@ -61,6 +67,12 @@ bool install_mod_by_index(int catalog_idx, std::string& error);
 bool uninstall_mod_by_index(int catalog_idx, std::string& error);
 void rebuild_mods_filter();
 void enter_mods_page();
+void enter_lobby_page();
+std::vector<ButtonDesc> build_lobby_buttons();
+void render_lobby(int width, int height, const std::vector<ButtonDesc>& buttons);
+bool lobby_start_session();
+bool lobby_handle_nav_direction(int focus_id, int delta);
+void lobby_handle_button(const ButtonDesc& b, bool activated, bool play_sound_on_success);
 
 void apply_default_bindings_to_active();
 void undo_active_bind_changes();

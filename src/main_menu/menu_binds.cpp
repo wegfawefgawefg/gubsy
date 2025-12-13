@@ -234,6 +234,16 @@ void menu_text_input_submit() {
         ss->menu.mods_catalog_page = 0;
         rebuild_mods_filter();
         completed = true;
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_LOBBY_NAME) {
+        std::string name = trim_copy(raw);
+        if (name.empty())
+            name = "Local Session";
+        ss->menu.lobby.session_name = name;
+        completed = true;
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_LOBBY_SEED) {
+        ss->menu.lobby.seed = trim_copy(raw);
+        ss->menu.lobby.seed_randomized = ss->menu.lobby.seed.empty();
+        completed = true;
     }
     if (completed) {
         ss->menu.suppress_confirm_until_release = true;

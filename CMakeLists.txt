@@ -25,6 +25,7 @@ set(GUB_SOURCES
   src/main_menu/menu_binds.cpp
   src/main_menu/menu_buttons.cpp
   src/main_menu/menu_mods.cpp
+  src/main_menu/menu_lobby.cpp
   src/main_menu/menu_render.cpp
   src/main_menu/menu_step.cpp
   src/mods.cpp

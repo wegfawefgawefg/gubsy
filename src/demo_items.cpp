@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -33,6 +34,8 @@ DemoItemPool g_item_pool{kMaxDemoItemInstances};
 std::unordered_map<std::string, std::size_t> g_lookup;
 std::string g_current_mod;
 bool g_demo_items_active = false;
+std::unordered_set<std::string> g_mod_filter;
+bool g_use_mod_filter = false;
 
 struct DemoApi {
     void alert(const std::string& text) const {
@@ -253,9 +256,17 @@ bool load_demo_item_defs() {
     register_api(lua);
     register_bindings(lua);
 
+    auto mod_allowed = [](const std::string& id) {
+        if (!g_use_mod_filter)
+            return true;
+        return g_mod_filter.find(id) != g_mod_filter.end();
+    };
+
     namespace fs = std::filesystem;
     bool loaded_any = false;
     for (const auto& mod : mm->mods) {
+        if (!mod_allowed(mod.name))
+            continue;
         fs::path script = fs::path(mod.path) / "scripts" / "demo_items.lua";
         if (!fs::exists(script))
             continue;
@@ -357,4 +368,13 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
 
 bool demo_items_active() {
     return g_demo_items_active;
+}
+
+void set_demo_item_mod_filter(const std::vector<std::string>& ids) {
+    g_mod_filter.clear();
+    g_use_mod_filter = true;
+    for (const auto& id : ids) {
+        if (!id.empty())
+            g_mod_filter.insert(id);
+    }
 }

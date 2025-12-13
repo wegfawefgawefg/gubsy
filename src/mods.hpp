@@ -19,6 +19,7 @@ struct ModInfo {
     std::string download_url;
     std::string author;
     bool enabled{true};
+    bool required{false};
 };
 
 // Very small mod manager that discovers mods in `mods/`,

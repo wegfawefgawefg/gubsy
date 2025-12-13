@@ -158,6 +158,8 @@ std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
             buttons.push_back(card);
         }
         buttons.push_back(ButtonDesc{998, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
+    } else if (ss->menu.page == LOBBY) {
+        return build_lobby_buttons();
     } else if (ss->menu.page == OTHER) {
         auto rects = layout_vlist(RectNdc{0.10f, 0.20f, 0.0f, 0.0f}, 0.60f, item_h, vgap, 0);
         buttons.push_back(ButtonDesc{899, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});

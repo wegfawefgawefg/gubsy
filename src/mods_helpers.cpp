@@ -165,6 +165,8 @@ bool parse_manifest_json(const std::string& manifest_path, ModInfo& info) {
             info.author = it->get<std::string>();
         if (auto it = j.find("download_url"); it != j.end() && it->is_string())
             info.download_url = it->get<std::string>();
+        if (auto it = j.find("required"); it != j.end() && it->is_boolean())
+            info.required = it->get<bool>();
         if (auto it = j.find("dependencies"); it != j.end() && it->is_array()) {
             for (auto& dep : *it) {
                 if (dep.is_string())

@@ -17,6 +17,11 @@ void render_menu(int width, int height) {
     auto buttons = build_menu_buttons(width, height);
     ensure_focus_default(buttons);
 
+    if (ss->menu.page == LOBBY) {
+        render_lobby(width, height, buttons);
+        return;
+    }
+
     if (ss) {
         for (float& cd : ss->menu.audio_slider_preview_cooldown)
             cd = std::max(0.0f, cd - ss->dt);

@@ -34,6 +34,30 @@ struct ModCatalogEntry {
     std::string status_text;
 };
 
+struct LobbyModEntry {
+    std::string id;
+    std::string title;
+    std::string author;
+    std::string description;
+    std::vector<std::string> dependencies;
+    bool required{false};
+    bool enabled{false};
+};
+
+struct LobbySettings {
+    std::string session_name{"Local Session"};
+    int privacy{0}; // 0=Solo,1=Friends,2=Public
+    int scenario_index{0};
+    int difficulty{1}; // 0=Easy,1=Normal,2=Hard
+    int max_players{1};
+    bool allow_join{false};
+    std::string seed;
+    bool seed_randomized{true};
+    int mod_page{0};
+    int selected_mod{-1};
+    std::vector<LobbyModEntry> mods;
+};
+
 struct State {
     struct Alert {
         std::string text;
@@ -124,6 +148,7 @@ struct State {
         bool suppress_confirm_until_release{false};
         bool suppress_back_until_release{false};
         std::string text_input_title;
+        LobbySettings lobby{};
     };
 
     struct DemoPlayer {
