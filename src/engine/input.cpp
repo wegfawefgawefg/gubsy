@@ -1,5 +1,4 @@
 #include "globals.hpp"
-#include "types.hpp"
 #include "engine/input_defs.hpp"
 #include "engine/input.hpp"
 #include "main_menu/menu.hpp"
