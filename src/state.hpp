@@ -5,6 +5,7 @@
 #include "engine/input_defs.hpp"
 #include "modes.hpp"
 #include "settings.hpp"
+#include "main_menu/menu.hpp"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -148,6 +149,18 @@ struct State {
         bool suppress_confirm_until_release{false};
         bool suppress_back_until_release{false};
         std::string text_input_title;
+        struct {
+            std::string section;
+            std::unordered_map<std::string, RectNdc> rects;
+        } lobby_layout{};
+        struct {
+            bool enabled{false};
+            bool dragging{false};
+            bool resizing{false};
+            bool dirty{false};
+            std::string active_id;
+            glm::vec2 grab_offset{0.0f, 0.0f};
+        } layout_edit{};
         LobbySettings lobby{};
     };
 

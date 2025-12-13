@@ -17,6 +17,7 @@ struct MenuInputs {
     bool back{false};
     bool page_prev{false};
     bool page_next{false};
+    bool layout_toggle{false};
 };
 
 struct MenuInputDebounceTimers {

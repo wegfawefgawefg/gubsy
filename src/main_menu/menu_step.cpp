@@ -317,6 +317,15 @@ void step_menu_logic(int width, int height) {
     ensure_focus_default(buttons);
     bool text_input_active = menu_is_text_input_active();
 
+    if (ss->menu_inputs.layout_toggle && ss->menu.page == LOBBY) {
+        toggle_lobby_layout_edit_mode();
+    }
+    if (ss->menu.layout_edit.enabled && ss->menu.page == LOBBY) {
+        lobby_layout_editor_handle(buttons, width, height);
+        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+        return;
+    }
+
     // If capturing a bind, ignore all menu navigation and clicks until capture completes (Esc cancels in input.cpp)
     if (ss->menu.capture_action_id >= 0) {
         ss->menu.mouse_left_prev = ss->mouse_inputs.left;

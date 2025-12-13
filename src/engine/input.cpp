@@ -138,6 +138,8 @@ void collect_menu_inputs() {
     bool kb_back = kb(SDL_SCANCODE_ESCAPE) || kb(SDL_SCANCODE_BACKSPACE);
     bool kb_page_prev = kb(SDL_SCANCODE_Q);
     bool kb_page_next = kb(SDL_SCANCODE_E);
+    bool kb_ctrl = kb(SDL_SCANCODE_LCTRL) || kb(SDL_SCANCODE_RCTRL);
+    bool kb_layout_toggle = kb_ctrl && kb(SDL_SCANCODE_L);
 
     bool gp_left = gp_btn(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || (gp_axis(SDL_CONTROLLER_AXIS_LEFTX) < -DZ);
     bool gp_right = gp_btn(SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || (gp_axis(SDL_CONTROLLER_AXIS_LEFTX) > DZ);
@@ -158,11 +160,13 @@ void collect_menu_inputs() {
     held.back = kb_back || gp_back;
     held.page_prev = kb_page_prev || gp_page_prev;
     held.page_next = kb_page_next || gp_page_next;
+    held.layout_toggle = kb_layout_toggle;
 
     if (menu_is_text_input_active()) {
         held.left = held.right = held.up = held.down = false;
         held.confirm = held.back = false;
         held.page_prev = held.page_next = false;
+        held.layout_toggle = false;
     }
     if (ss->menu.suppress_confirm_until_release) {
         if (!held.confirm)
@@ -177,7 +181,7 @@ void collect_menu_inputs() {
             held.back = false;
     }
 
-    struct Prev { bool confirm=false, back=false, pprev=false, pnext=false; };
+    struct Prev { bool confirm=false, back=false, pprev=false, pnext=false, layout=false; };
     static Prev prev{};
     auto edge = [](bool now, bool prevv){ return now && !prevv; };
 
@@ -190,7 +194,8 @@ void collect_menu_inputs() {
     out.back = edge(held.back, prev.back);
     out.page_prev = edge(held.page_prev, prev.pprev);
     out.page_next = edge(held.page_next, prev.pnext);
-    prev = {held.confirm, held.back, held.page_prev, held.page_next};
+    out.layout_toggle = edge(held.layout_toggle, prev.layout);
+    prev = {held.confirm, held.back, held.page_prev, held.page_next, held.layout_toggle};
 
     // If any controller/keyboard input occurred, mark last-used device and source
     if (held.left || held.right || held.up || held.down || out.confirm || out.back || held.page_prev || held.page_next) {
