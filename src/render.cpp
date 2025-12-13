@@ -4,7 +4,7 @@
 #include "engine/graphics.hpp"
 #include "globals.hpp"
 #include "settings.hpp"
-#include "menu/menu.hpp"
+#include "main_menu/menu.hpp"
 #include "state.hpp"
 #include "demo_items.hpp"
 

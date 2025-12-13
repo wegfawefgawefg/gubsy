@@ -2,7 +2,7 @@
 #include "types.hpp"
 #include "engine/input_defs.hpp"
 #include "engine/input.hpp"
-#include "menu/menu.hpp"
+#include "main_menu/menu.hpp"
 #include "config.hpp"
 
 #include <algorithm>

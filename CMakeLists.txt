@@ -22,7 +22,11 @@ set(GUB_SOURCES
   src/step/mode_title.cpp
   src/config.cpp
   src/input_debounce.cpp
-  src/menu/menu.cpp
+  src/main_menu/menu_binds.cpp
+  src/main_menu/menu_buttons.cpp
+  src/main_menu/menu_mods.cpp
+  src/main_menu/menu_render.cpp
+  src/main_menu/menu_step.cpp
   src/mods.cpp
   src/mods_helpers.cpp
   src/demo_content.cpp

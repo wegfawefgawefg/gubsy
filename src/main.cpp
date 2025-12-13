@@ -6,7 +6,7 @@
 #include "engine/input.hpp"
 #include "game_modes.hpp"
 #include "globals.hpp"
-#include "menu/menu.hpp"
+#include "main_menu/menu.hpp"
 #include "mods.hpp"
 #include "render.hpp"
 #include "settings.hpp"
