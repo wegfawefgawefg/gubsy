@@ -174,6 +174,18 @@ struct State {
             glm::vec2 grab_offset{0.0f, 0.0f};
         } layout_edit{};
         struct {
+            enum class Mode { None, Layout, Nav };
+            enum class View { Screens, Screen };
+            bool active{false};
+            Page page{MAIN};
+            Page prev_page{MAIN};
+            Mode mode{Mode::None};
+            View view{View::Screens};
+            int selection{0};
+            std::array<bool, 4> dir_prev{{false, false, false, false}};
+            std::string status;
+        } gui_editor{};
+        struct {
             std::string page;
             std::string section;
             std::unordered_map<int, MenuNavEdges> edges;

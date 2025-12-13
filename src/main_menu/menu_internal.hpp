@@ -3,6 +3,7 @@
 #include "main_menu/menu.hpp"
 #include "main_menu/menu_layout.hpp"
 #include "main_menu/menu_navgraph.hpp"
+#include "main_menu/editor/editor.hpp"
 
 #include <SDL2/SDL.h>
 #include <string>
@@ -43,22 +44,6 @@ inline SDL_FRect ndc_to_pixels(const RectNdc& r, int w, int h) {
     float hh = r.h * static_cast<float>(h);
     return SDL_FRect{x0, y0, ww, hh};
 }
-
-enum Page {
-    MAIN = 0,
-    SETTINGS = 1,
-    AUDIO = 2,
-    VIDEO = 3,
-    CONTROLS = 4,
-    BINDS = 5,
-    OTHER = 6,
-    VIDEO2 = 7,
-    BINDS_LOAD = 8,
-    PLAYERS = 9,
-    MODS = 10,
-    LOBBY = 11,
-    LOBBY_MODS = 12,
-};
 
 std::string trim_copy(const std::string& s);
 

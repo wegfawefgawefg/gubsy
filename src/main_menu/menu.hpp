@@ -23,6 +23,22 @@ struct NavNode { int up{-1}, down{-1}, left{-1}, right{-1}; };
 // Layout helpers (normalized)
 std::vector<RectNdc> layout_vlist(RectNdc top_left, float item_w, float item_h, float vgap, int count);
 
+enum Page {
+    MAIN = 0,
+    SETTINGS = 1,
+    AUDIO = 2,
+    VIDEO = 3,
+    CONTROLS = 4,
+    BINDS = 5,
+    OTHER = 6,
+    VIDEO2 = 7,
+    BINDS_LOAD = 8,
+    PLAYERS = 9,
+    MODS = 10,
+    LOBBY = 11,
+    LOBBY_MODS = 12,
+};
+
 // Build buttons for current page (transient per-frame)
 std::vector<ButtonDesc> build_menu_buttons(int width, int height);
 

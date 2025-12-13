@@ -226,9 +226,8 @@ void render_menu(int width, int height) {
                     const auto& entry = catalog[(size_t)mod_catalog_idx];
                     if (entry.installed) {
                         fill = focused ? SDL_Color{70, 90, 70, 255} : SDL_Color{45, 55, 45, 255};
-                    }
-                }
-            }
+    }
+}
         }
         SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a);
         SDL_Rect rr{(int)std::floor(pr.x), (int)std::floor(pr.y), (int)std::ceil(pr.w), (int)std::ceil(pr.h)};
@@ -524,4 +523,8 @@ void render_menu(int width, int height) {
             SDL_FreeSurface(surf);
         }
     }
+
+    gui_editor_render(r, width, height);
+}
+
 }

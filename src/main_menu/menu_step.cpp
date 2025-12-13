@@ -316,25 +316,10 @@ void step_menu_logic(int width, int height) {
     auto buttons = build_menu_buttons(width, height);
     ensure_focus_default(buttons);
     bool text_input_active = menu_is_text_input_active();
-
-    if (ss->menu_inputs.layout_toggle && ss->menu.page == LOBBY) {
-        if (navgraph_edit_enabled())
-            navgraph_toggle_edit_mode();
-        toggle_lobby_layout_edit_mode();
-    }
-    if (ss->menu_inputs.nav_toggle && ss->menu.page == LOBBY) {
-        if (layout_edit_enabled())
-            toggle_lobby_layout_edit_mode();
-        navgraph_toggle_edit_mode();
-    }
-    if (ss->menu.layout_edit.enabled && ss->menu.page == LOBBY) {
-        lobby_layout_editor_handle(buttons, width, height);
-        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
-        return;
-    }
-    if (navgraph_edit_enabled() && ss->menu.page == LOBBY) {
-        navgraph_handle_editor(buttons, width, height);
-        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+    Page current_page = static_cast<Page>(ss->menu.page);
+    gui_editor_handle_shortcuts(current_page);
+    if (gui_editor_consumes_input()) {
+        gui_editor_step(buttons, width, height);
         return;
     }
 
