@@ -1,8 +1,0 @@
-{
-  "id": "bonus_pack",
-  "title": "Bonus Pack",
-  "author": "Gubsy QA",
-  "version": "0.1.0",
-  "description": "Depends on Patch Core and adds sparkly pads for testing dependency chains.",
-  "dependencies": ["patch_core"]
-}

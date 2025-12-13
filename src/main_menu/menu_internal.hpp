@@ -9,9 +9,9 @@
 inline constexpr float MENU_SAFE_MARGIN = 0.05f;
 inline constexpr int kMaxBindsProfiles = 50;
 inline constexpr float kTextInputErrorDuration = 1.5f;
-inline constexpr int kModsPerPage = 6;
-inline constexpr float kModsCardHeight = 0.11f;
-inline constexpr float kModsCardGap = 0.015f;
+inline constexpr int kModsPerPage = 4;
+inline constexpr float kModsCardHeight = 0.14f;
+inline constexpr float kModsCardGap = 0.02f;
 
 struct ModCatalogEntry;
 

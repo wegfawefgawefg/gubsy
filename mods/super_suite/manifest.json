@@ -1,8 +1,0 @@
-{
-  "id": "super_suite",
-  "title": "Super Suite",
-  "author": "Gubsy QA",
-  "version": "0.1.0",
-  "description": "Meta-mod that depends on Bonus Pack and Pad Tweaks to stress dependency install order.",
-  "dependencies": ["bonus_pack", "pad_tweaks"]
-}

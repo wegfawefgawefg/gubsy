@@ -1,8 +1,0 @@
-{
-  "id": "pad_tweaks",
-  "title": "Pad Tweaks",
-  "version": "0.1.0",
-  "author": "Gubsy",
-  "description": "Demonstrates patching defs from another mod.",
-  "dependencies": ["base"]
-}

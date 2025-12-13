@@ -259,12 +259,23 @@ bool load_demo_item_defs() {
         if (!fs::exists(script))
             continue;
         g_current_mod = mod.name;
-        sol::protected_function_result r = lua.safe_script_file(script.string());
-        if (!r.valid()) {
-            sol::error e = r;
-            std::fprintf(stderr, "[demo_items] %s\n", e.what());
-        } else {
-            loaded_any = true;
+        try {
+            sol::protected_function_result r = lua.safe_script_file(script.string());
+            if (!r.valid()) {
+                sol::error e = r;
+                std::fprintf(stderr, "[demo_items] %s\n", e.what());
+            } else {
+                loaded_any = true;
+            }
+        } catch (const sol::error& e) {
+            std::fprintf(stderr, "[demo_items] exception loading %s: %s\n",
+                         script.string().c_str(), e.what());
+            State::Alert al;
+            al.text = std::string("Mod load failed: ") + mod.name;
+            al.ttl = 2.0f;
+            al.purge_eof = true;
+            if (ss)
+                ss->alerts.push_back(al);
         }
         g_current_mod.clear();
     }
@@ -316,10 +327,27 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
         return;
 
     sol::table info = make_item_table(*g_lua, rec.def, &inst);
-    sol::protected_function_result r = rec.on_use(info);
+    sol::protected_function_result r;
+    try {
+        r = rec.on_use(info);
+    } catch (const sol::error& e) {
+        std::fprintf(stderr, "[demo_items] on_use exception (%s): %s\n",
+                     rec.def.id.c_str(), e.what());
+        State::Alert al;
+        al.text = std::string("Pad failed: ") + rec.def.label;
+        al.ttl = 1.5f;
+        if (ss)
+            ss->alerts.push_back(al);
+        return;
+    }
     if (!r.valid()) {
         sol::error e = r;
         std::fprintf(stderr, "[demo_items] on_use error (%s): %s\n",
                      rec.def.id.c_str(), e.what());
+        State::Alert al;
+        al.text = std::string("Pad error: ") + rec.def.label;
+        al.ttl = 1.5f;
+        if (ss)
+            ss->alerts.push_back(al);
     }
 }
