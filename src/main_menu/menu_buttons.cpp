@@ -134,15 +134,15 @@ std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
         buttons.push_back(ButtonDesc{980, RectNdc{0.44f, 0.82f, 0.20f, 0.08f}, "Add Player", ButtonKind::Button, 0.0f, true});
         buttons.push_back(ButtonDesc{999, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});
     } else if (ss->menu.page == MODS) {
-        ensure_mod_install_map();
-        if (ss->menu.mods_visible_indices.empty() && ss->menu.mods_filtered_count == 0)
+        ensure_mod_catalog_loaded();
+        if (ss->menu.mods_visible_indices.empty())
             rebuild_mods_filter();
         buttons.push_back(ButtonDesc{950, RectNdc{0.10f, 0.18f, 0.45f, 0.08f}, "Search Mods", ButtonKind::Button, 0.0f, true});
         bool prev_enabled = ss->menu.mods_catalog_page > 0;
         bool next_enabled = ss->menu.mods_catalog_page + 1 < ss->menu.mods_total_pages;
         buttons.push_back(ButtonDesc{951, RectNdc{0.60f, 0.18f, 0.12f, 0.08f}, "Prev", ButtonKind::Button, 0.0f, prev_enabled});
         buttons.push_back(ButtonDesc{952, RectNdc{0.74f, 0.18f, 0.12f, 0.08f}, "Next", ButtonKind::Button, 0.0f, next_enabled});
-        const auto& catalog = mock_mod_catalog();
+        const auto& catalog = menu_mod_catalog();
         const auto& visible = ss->menu.mods_visible_indices;
         int start = ss->menu.mods_catalog_page * kModsPerPage;
         auto cards = layout_vlist(RectNdc{0.10f, 0.28f, 0.0f, 0.0f}, 0.78f, kModsCardHeight, kModsCardGap, kModsPerPage);
@@ -151,8 +151,10 @@ std::vector<ButtonDesc> build_menu_buttons(int width, int height) {
             if (idx >= (int)visible.size())
                 break;
             int catalog_idx = visible[(size_t)idx];
-            ButtonDesc card{900 + i, cards[static_cast<std::size_t>(i)], catalog[(size_t)catalog_idx].title, ButtonKind::Button,
-                            static_cast<float>(catalog_idx), true};
+            bool enabled = catalog_idx >= 0 && catalog_idx < (int)catalog.size();
+            std::string title = enabled ? catalog[(size_t)catalog_idx].title : std::string();
+            ButtonDesc card{900 + i, cards[static_cast<std::size_t>(i)], title, ButtonKind::Button,
+                            static_cast<float>(catalog_idx), enabled};
             buttons.push_back(card);
         }
         buttons.push_back(ButtonDesc{998, RectNdc{0.00f, 0.82f, 0.20f, 0.08f}, "Back", ButtonKind::Button, 0.0f, true});

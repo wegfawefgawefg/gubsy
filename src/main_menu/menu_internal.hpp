@@ -13,6 +13,8 @@ inline constexpr int kModsPerPage = 6;
 inline constexpr float kModsCardHeight = 0.11f;
 inline constexpr float kModsCardGap = 0.015f;
 
+struct ModCatalogEntry;
+
 enum TextInputMode {
     TEXT_INPUT_NONE = 0,
     TEXT_INPUT_BINDS_NEW = 1,
@@ -23,15 +25,7 @@ enum TextInputMode {
 inline constexpr int kPresetNameMaxLen = 16;
 inline constexpr int kModsSearchMaxLen = 32;
 
-struct MockModEntry {
-    std::string id;
-    std::string title;
-    std::string author;
-    std::string version;
-    std::string summary;
-    std::vector<std::string> dependencies;
-    bool required{false};
-};
+struct ModCatalogEntry;
 
 enum class SliderPreviewEvent { Drag, Release };
 
@@ -59,10 +53,12 @@ enum Page {
 
 std::string trim_copy(const std::string& s);
 
-const std::vector<MockModEntry>& mock_mod_catalog();
-void ensure_mod_install_map();
+const std::vector<ModCatalogEntry>& menu_mod_catalog();
+ModCatalogEntry* find_mod_entry(const std::string& id);
+bool ensure_mod_catalog_loaded();
 bool is_mod_installed(const std::string& id);
-void set_mod_installed(const std::string& id, bool installed);
+bool install_mod_by_index(int catalog_idx, std::string& error);
+bool uninstall_mod_by_index(int catalog_idx, std::string& error);
 void rebuild_mods_filter();
 void enter_mods_page();
 

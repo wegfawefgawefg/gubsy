@@ -412,14 +412,32 @@ void step_menu_logic(int width, int height) {
                         int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
                         if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size()) {
                             int catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
-                            const auto& entry = mock_mod_catalog()[(size_t)catalog_idx];
-                            if (entry.required) {
+                            const auto& catalog = menu_mod_catalog();
+                            if (catalog_idx < 0 || catalog_idx >= (int)catalog.size()) {
                                 if (aa) play_sound("base:ui_cant");
                             } else {
-                                bool installed = is_mod_installed(entry.id);
-                                set_mod_installed(entry.id, !installed);
-                                if (aa) play_sound(installed ? "base:ui_cant" : "base:ui_confirm");
+                                const auto& entry = catalog[(size_t)catalog_idx];
+                                bool was_installed = entry.installed;
+                                if (entry.required || entry.installing || entry.uninstalling) {
+                                    if (aa) play_sound("base:ui_cant");
+                                } else {
+                                    std::string err;
+                                    bool ok = was_installed ? uninstall_mod_by_index(catalog_idx, err)
+                                                            : install_mod_by_index(catalog_idx, err);
+                                    if (ok) {
+                                        if (aa) play_sound(was_installed ? "base:ui_cant" : "base:ui_confirm");
+                                        rebuild_mods_filter();
+                                    } else {
+                                        State::Alert al;
+                                        al.text = err.empty() ? "Mod operation failed" : err;
+                                        al.ttl = 1.6f;
+                                        ss->alerts.push_back(al);
+                                        if (aa) play_sound("base:ui_cant");
+                                    }
+                                }
                             }
+                            if (ss->menu.mods_visible_indices.size() <= (size_t)abs_idx)
+                                rebuild_mods_filter();
                         }
                         ss->menu.ignore_mouse_until_release = true;
                     } else if (b.id == 998) {
@@ -834,13 +852,29 @@ void step_menu_logic(int width, int height) {
                         int abs_idx = ss->menu.mods_catalog_page * kModsPerPage + rel;
                         if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size()) {
                             int catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
-                            const auto& entry = mock_mod_catalog()[(size_t)catalog_idx];
-                            if (entry.required) {
+                            const auto& catalog = menu_mod_catalog();
+                            if (catalog_idx < 0 || catalog_idx >= (int)catalog.size()) {
                                 if (aa) play_sound("base:ui_cant");
                             } else {
-                                bool installed = is_mod_installed(entry.id);
-                                set_mod_installed(entry.id, !installed);
-                                if (aa) play_sound(installed ? "base:ui_cant" : "base:ui_confirm");
+                                const auto& entry = catalog[(size_t)catalog_idx];
+                                bool was_installed = entry.installed;
+                                if (entry.required || entry.installing || entry.uninstalling) {
+                                    if (aa) play_sound("base:ui_cant");
+                                } else {
+                                    std::string err;
+                                    bool ok = was_installed ? uninstall_mod_by_index(catalog_idx, err)
+                                                            : install_mod_by_index(catalog_idx, err);
+                                    if (ok) {
+                                        if (aa) play_sound(was_installed ? "base:ui_cant" : "base:ui_confirm");
+                                        rebuild_mods_filter();
+                                    } else {
+                                        State::Alert al;
+                                        al.text = err.empty() ? "Mod operation failed" : err;
+                                        al.ttl = 1.6f;
+                                        ss->alerts.push_back(al);
+                                        if (aa) play_sound("base:ui_cant");
+                                    }
+                                }
                             }
                         }
                     } else if (b->id == 998) {

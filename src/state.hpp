@@ -12,6 +12,28 @@
 #include <unordered_map>
 #include <vector>
 
+struct ModFileEntry {
+    std::string path;
+    std::uint64_t size_bytes{0};
+};
+
+struct ModCatalogEntry {
+    std::string id;
+    std::string folder;
+    std::string title;
+    std::string author;
+    std::string version;
+    std::string summary;
+    std::vector<std::string> dependencies;
+    std::vector<ModFileEntry> files;
+    std::uint64_t total_bytes{0};
+    bool required{false};
+    bool installed{false};
+    bool installing{false};
+    bool uninstalling{false};
+    std::string status_text;
+};
+
 struct State {
     struct Alert {
         std::string text;
@@ -82,13 +104,18 @@ struct State {
         int players_count{1};
         std::vector<std::string> players_presets;
 
-        // Mods browser mock state
-        std::unordered_map<std::string, bool> mods_mock_install_state;
+        // Mods browser state
+        std::unordered_map<std::string, bool> mods_install_state;
         std::vector<int> mods_visible_indices;
         int mods_catalog_page{0};
         int mods_total_pages{1};
         int mods_filtered_count{0};
         std::string mods_search_query;
+        std::vector<ModCatalogEntry> mods_catalog;
+        bool mods_catalog_loaded{false};
+        bool mods_catalog_loading{false};
+        std::string mods_catalog_error;
+        std::string mods_server_url{"http://127.0.0.1:8787"};
 
         // Input hold-repeat for menu navigation/adjustment
         bool hold_left{false}, hold_right{false}, hold_up{false}, hold_down{false};

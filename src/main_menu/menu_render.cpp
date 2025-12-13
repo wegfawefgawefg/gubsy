@@ -169,6 +169,11 @@ void render_menu(int width, int height) {
         char results_buf[64];
         std::snprintf(results_buf, sizeof(results_buf), "%d mods", ss->menu.mods_filtered_count);
         draw_text(results_buf, hdr_x, hdr_y + 36, SDL_Color{200, 200, 210, 255});
+        if (ss->menu.mods_catalog_loading) {
+            draw_text("Fetching catalog...", hdr_x, hdr_y + 58, SDL_Color{180, 180, 190, 255});
+        } else if (!ss->menu.mods_catalog_error.empty()) {
+            draw_text(ss->menu.mods_catalog_error.c_str(), hdr_x, hdr_y + 58, SDL_Color{220, 160, 160, 255});
+        }
     }
 
     // Draw hints (after draw_text lambda defined)
@@ -194,9 +199,12 @@ void render_menu(int width, int height) {
             if (abs_idx >= 0 && abs_idx < (int)ss->menu.mods_visible_indices.size())
                 mod_catalog_idx = ss->menu.mods_visible_indices[(size_t)abs_idx];
             if (mod_catalog_idx >= 0) {
-                const auto& entry = mock_mod_catalog()[(size_t)mod_catalog_idx];
-                if (is_mod_installed(entry.id)) {
-                    fill = focused ? SDL_Color{70, 90, 70, 255} : SDL_Color{45, 55, 45, 255};
+                const auto& catalog = menu_mod_catalog();
+                if (mod_catalog_idx < (int)catalog.size()) {
+                    const auto& entry = catalog[(size_t)mod_catalog_idx];
+                    if (entry.installed) {
+                        fill = focused ? SDL_Color{70, 90, 70, 255} : SDL_Color{45, 55, 45, 255};
+                    }
                 }
             }
         }
@@ -253,7 +261,10 @@ void render_menu(int width, int height) {
                 } else if (b.id == 951 || b.id == 952) {
                     draw_label_value(rr, b.label, std::string(), focused);
                 } else if (mod_catalog_idx >= 0) {
-                    const auto& entry = mock_mod_catalog()[(size_t)mod_catalog_idx];
+                    const auto& catalog = menu_mod_catalog();
+                    if (mod_catalog_idx >= (int)catalog.size())
+                        continue;
+                    const auto& entry = catalog[(size_t)mod_catalog_idx];
                     SDL_Color title_col{240, 220, 80, 255};
                     SDL_Color meta_col{190, 190, 200, 255};
                     SDL_Color desc_col{200, 200, 210, 255};
@@ -267,27 +278,45 @@ void render_menu(int width, int height) {
                         summary += "...";
                     }
                     draw_text(summary.c_str(), rr.x + 12, rr.y + 54, desc_col);
-                    std::string deps = "Standalone";
+                    std::string deps = entry.dependencies.empty() ? "Standalone" : "Requires: ";
                     if (!entry.dependencies.empty()) {
-                        deps = "Requires: ";
                         for (size_t i = 0; i < entry.dependencies.size(); ++i) {
                             if (i > 0) deps += ", ";
                             deps += entry.dependencies[i];
                         }
                     }
                     draw_text(deps.c_str(), rr.x + 12, rr.y + rr.h - 32, SDL_Color{170, 170, 190, 255});
-                    SDL_Rect pill{rr.x + rr.w - 140, rr.y + rr.h - 40, 120, 26};
-                    bool installed = is_mod_installed(entry.id);
-                    SDL_Color pill_fill = installed ? SDL_Color{70, 110, 80, 255} : SDL_Color{60, 70, 90, 255};
-                    SDL_Color pill_border = installed ? SDL_Color{200, 220, 200, 255} : SDL_Color{180, 180, 190, 255};
-                    if (entry.required)
+                    SDL_Rect pill{rr.x + rr.w - 160, rr.y + rr.h - 40, 140, 26};
+                    bool installed = entry.installed;
+                    SDL_Color pill_fill{60, 70, 90, 255};
+                    SDL_Color pill_border{180, 180, 190, 255};
+                    if (entry.required) {
                         pill_fill = SDL_Color{80, 80, 100, 255};
+                    } else if (entry.installing || entry.uninstalling) {
+                        pill_fill = SDL_Color{90, 90, 60, 255};
+                        pill_border = SDL_Color{230, 230, 160, 255};
+                    } else if (installed) {
+                        pill_fill = focused ? SDL_Color{90, 110, 90, 255} : SDL_Color{70, 90, 70, 255};
+                        pill_border = SDL_Color{200, 220, 200, 255};
+                    }
                     SDL_SetRenderDrawColor(r, pill_fill.r, pill_fill.g, pill_fill.b, pill_fill.a);
                     SDL_RenderFillRect(r, &pill);
                     SDL_SetRenderDrawColor(r, pill_border.r, pill_border.g, pill_border.b, pill_border.a);
                     SDL_RenderDrawRect(r, &pill);
-                    const char* status = entry.required ? "Core" : (installed ? "Installed" : "Install");
-                    draw_text(status, pill.x + 12, pill.y + 5, SDL_Color{230, 230, 240, 255});
+                    std::string status = "Install";
+                    if (entry.required)
+                        status = "Core";
+                    else if (entry.installing)
+                        status = "Installing...";
+                    else if (entry.uninstalling)
+                        status = "Removing...";
+                    else if (installed)
+                        status = "Uninstall";
+                    draw_text(status.c_str(), pill.x + 12, pill.y + 5, SDL_Color{230, 230, 240, 255});
+                    if (!entry.status_text.empty()) {
+                        draw_text(entry.status_text.c_str(), rr.x + 12, rr.y + rr.h - 12,
+                                  SDL_Color{180, 200, 200, 255});
+                    }
                 } else if (b.id == 998) {
                     draw_label_value(rr, b.label, std::string(), focused);
                 } else {
@@ -474,4 +503,3 @@ void render_menu(int width, int height) {
         }
     }
 }
-

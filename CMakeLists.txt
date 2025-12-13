@@ -156,6 +156,11 @@ target_include_directories(gubsy PRIVATE
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
+add_executable(mod_server tools/mod_server/main.cpp)
+target_include_directories(mod_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/third_party
+)
+
 # Lua 5.4 (required at runtime; build-time optional with stub)
 set(LUA_FOUND_LOCAL OFF)
 find_package(PkgConfig QUIET)
@@ -225,3 +230,7 @@ if (NOT SDL2_IMAGE_FOUND_LOCAL)
     message(WARNING "SDL2_image not found. Texture loading will not work.")
   endif()
 endif()
+
+find_package(Threads REQUIRED)
+target_link_libraries(gubsy PRIVATE Threads::Threads)
+target_link_libraries(mod_server PRIVATE Threads::Threads)
