@@ -38,6 +38,8 @@ struct RepoMod {
 struct RepoState {
     std::vector<RepoMod> mods;
     fs::path root;
+    std::uint64_t version{0};
+    std::uint64_t snapshot_hash{0};
 
     const RepoMod* find(const std::string& id) const {
         for (const auto& mod : mods) {
@@ -83,9 +85,39 @@ bool load_manifest(const fs::path& manifest_path, RepoMod& mod) {
     }
 }
 
-RepoState build_repo(const fs::path& root) {
+std::uint64_t hash_repo_tree(const fs::path& root) {
+    fs::path mods_dir = root / "mods";
+    std::error_code ec;
+    if (!fs::exists(mods_dir, ec) || !fs::is_directory(mods_dir, ec))
+        return 0;
+    std::uint64_t hash = 1469598103934665603ULL; // FNV offset
+    auto mix = [&](std::uint64_t value) {
+        hash ^= value;
+        hash *= 1099511628211ULL;
+    };
+    for (auto const& entry : fs::directory_iterator(mods_dir, ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        mix(std::hash<std::string>{}(entry.path().filename().string()));
+        fs::path manifest = entry.path() / "manifest.json";
+        if (fs::exists(manifest, ec)) {
+            auto ts = fs::last_write_time(manifest, ec);
+            if (!ec)
+                mix(static_cast<std::uint64_t>(ts.time_since_epoch().count()));
+            else
+                ec.clear();
+        }
+    }
+    return hash;
+}
+
+RepoState build_repo(const fs::path& root, std::uint64_t version_hint = 0) {
     RepoState state;
     state.root = root;
+    state.version = version_hint;
+    state.snapshot_hash = hash_repo_tree(root);
     fs::path mods_dir = root / "mods";
     std::error_code ec;
     if (!fs::exists(mods_dir, ec) || !fs::is_directory(mods_dir, ec)) {
@@ -176,6 +208,17 @@ bool is_subpath(const fs::path& base, const fs::path& target) {
     return it_base == norm_base.end();
 }
 
+void rebuild_if_needed(RepoState& state, nlohmann::json& cached_catalog) {
+    std::uint64_t current_hash = hash_repo_tree(state.root);
+    if (current_hash == state.snapshot_hash && !state.mods.empty())
+        return;
+    state.version += 1;
+    state = build_repo(state.root, state.version);
+    cached_catalog = build_catalog_json(state);
+    std::cout << "[mod_server] Catalog rebuilt (version " << state.version << ", "
+              << state.mods.size() << " mods)\n";
+}
+
 int main(int argc, char** argv) {
     fs::path root = "mod_repo";
     int port = 8787;
@@ -195,7 +238,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    RepoState state = build_repo(root);
+    RepoState state = build_repo(root, 1);
     if (state.mods.empty()) {
         std::cerr << "[mod_server] No mods found under " << root << "/mods\n";
     } else {
@@ -204,14 +247,16 @@ int main(int argc, char** argv) {
     nlohmann::json catalog_json = build_catalog_json(state);
 
     httplib::Server server;
-    server.Get("/mods/catalog", [catalog_json](const httplib::Request&, httplib::Response& res) {
+    server.Get("/mods/catalog", [&state, &catalog_json](const httplib::Request&, httplib::Response& res) {
+        rebuild_if_needed(state, catalog_json);
         res.set_content(catalog_json.dump(2), "application/json");
     });
     server.Get("/ping", [](const httplib::Request&, httplib::Response& res) {
         res.set_content("ok", "text/plain");
     });
     server.Get(R"(/mods/files/([^/]+)/(.+))",
-               [&state](const httplib::Request& req, httplib::Response& res) {
+               [&state, &catalog_json](const httplib::Request& req, httplib::Response& res) {
+                   rebuild_if_needed(state, catalog_json);
                    if (req.matches.size() < 3) {
                        res.status = 400;
                        res.set_content("bad request", "text/plain");

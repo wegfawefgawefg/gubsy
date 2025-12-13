@@ -1,0 +1,8 @@
+{
+  "id": "patch_core",
+  "title": "Patch Core",
+  "author": "Gubsy QA",
+  "version": "0.1.0",
+  "description": "Adds helper pads and exposes new defs. Used as a dependency for bonus mods.",
+  "dependencies": ["base"]
+}
