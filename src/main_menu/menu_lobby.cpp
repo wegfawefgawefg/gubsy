@@ -191,10 +191,10 @@ std::vector<ButtonDesc> build_lobby_buttons() {
     buttons.reserve(32);
     auto row_rect = [&](int idx) {
         const float x = 0.06f;
-        const float w = 0.38f;
+        const float w = 0.32f;
         const float y0 = 0.20f;
-        const float row_h = 0.075f;
-        const float gap = 0.025f;
+        const float row_h = 0.065f;
+        const float gap = 0.02f;
         return RectNdc{x, y0 + static_cast<float>(idx) * (row_h + gap), w, row_h};
     };
     buttons.push_back(ButtonDesc{1400, row_rect(0), "Lobby Name", ButtonKind::Button, 0.0f, true});
@@ -205,10 +205,10 @@ std::vector<ButtonDesc> build_lobby_buttons() {
     buttons.push_back(ButtonDesc{1405, row_rect(5), "Max Players", ButtonKind::OptionCycle, 0.0f, true});
     buttons.push_back(ButtonDesc{1406, row_rect(6), "Allow Join", ButtonKind::Toggle, lobby_const().allow_join ? 1.0f : 0.0f, true});
     buttons.push_back(ButtonDesc{1407, row_rect(7), "Seed", ButtonKind::Button, 0.0f, true});
-    buttons.push_back(ButtonDesc{1408, RectNdc{0.06f, 0.74f, 0.18f, 0.07f}, "Randomize Seed", ButtonKind::Button, 0.0f, true});
-    buttons.push_back(ButtonDesc{1409, RectNdc{0.56f, 0.74f, 0.34f, 0.07f}, "Manage Mods", ButtonKind::Button, 0.0f, true});
-    buttons.push_back(ButtonDesc{1440, RectNdc{0.58f, 0.86f, 0.30f, 0.09f}, "Start Game", ButtonKind::Button, 0.0f, true});
-    buttons.push_back(ButtonDesc{1441, RectNdc{0.06f, 0.86f, 0.30f, 0.09f}, "Back", ButtonKind::Button, 0.0f, true});
+    buttons.push_back(ButtonDesc{1408, RectNdc{0.06f, 0.72f, 0.20f, 0.065f}, "Randomize Seed", ButtonKind::Button, 0.0f, true});
+    buttons.push_back(ButtonDesc{1409, RectNdc{0.52f, 0.70f, 0.36f, 0.07f}, "Manage Mods", ButtonKind::Button, 0.0f, true});
+    buttons.push_back(ButtonDesc{1440, RectNdc{0.56f, 0.85f, 0.32f, 0.08f}, "Start Game", ButtonKind::Button, 0.0f, true});
+    buttons.push_back(ButtonDesc{1441, RectNdc{0.06f, 0.82f, 0.22f, 0.07f}, "Back", ButtonKind::Button, 0.0f, true});
     return buttons;
 }
 
@@ -303,8 +303,8 @@ void render_lobby(int width, int height, const std::vector<ButtonDesc>& buttons)
         SDL_DestroyTexture(tex);
     };
 
-    int title_x = static_cast<int>((MENU_SAFE_MARGIN + 0.01f) * static_cast<float>(width));
-    int title_y = static_cast<int>((MENU_SAFE_MARGIN + 0.02f) * static_cast<float>(height));
+    int title_x = static_cast<int>(MENU_SAFE_MARGIN * static_cast<float>(width)) + 24;
+    int title_y = static_cast<int>(MENU_SAFE_MARGIN * static_cast<float>(height)) + 16;
     draw_abs("Game Options", title_x, title_y, SDL_Color{240, 220, 80, 255});
 
     SDL_Rect mods_panel = to_pixels(RectNdc{0.52f, 0.22f, 0.40f, 0.46f}, width, height);
