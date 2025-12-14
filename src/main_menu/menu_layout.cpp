@@ -273,20 +273,26 @@ void layout_handle_editor(std::vector<LayoutItem> items, int width, int height) 
     if (edit.dragging && !edit.active_id.empty()) {
         auto it = std::find_if(items.begin(), items.end(),
                                [&](const LayoutItem& li) { return li.id == edit.active_id; });
+        auto snap_value = [&](int value) {
+            if (!edit.snap)
+                return value;
+            const int step = 8;
+            return (value / step) * step;
+        };
         if (it != items.end()) {
             SDL_Rect rect = it->rect;
             if (!edit.resizing) {
                 double new_x = static_cast<double>(mx) - static_cast<double>(edit.grab_offset.x);
                 double new_y = static_cast<double>(my) - static_cast<double>(edit.grab_offset.y);
-                rect.x = static_cast<int>(std::round(new_x));
-                rect.y = static_cast<int>(std::round(new_y));
+                rect.x = snap_value(static_cast<int>(std::round(new_x)));
+                rect.y = snap_value(static_cast<int>(std::round(new_y)));
             } else {
                 double base_x = static_cast<double>(rect.x);
                 double base_y = static_cast<double>(rect.y);
                 double new_br_x = static_cast<double>(mx) - static_cast<double>(edit.grab_offset.x);
                 double new_br_y = static_cast<double>(my) - static_cast<double>(edit.grab_offset.y);
-                rect.w = static_cast<int>(std::round(std::max(40.0, new_br_x - base_x)));
-                rect.h = static_cast<int>(std::round(std::max(40.0, new_br_y - base_y)));
+                rect.w = snap_value(static_cast<int>(std::round(std::max(40.0, new_br_x - base_x))));
+                rect.h = snap_value(static_cast<int>(std::round(std::max(40.0, new_br_y - base_y))));
             }
             clamp_rect(rect, width, height);
             it->rect = rect;

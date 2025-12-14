@@ -139,8 +139,16 @@ void collect_menu_inputs() {
     bool kb_page_prev = kb(SDL_SCANCODE_Q);
     bool kb_page_next = kb(SDL_SCANCODE_E);
     bool kb_ctrl = kb(SDL_SCANCODE_LCTRL) || kb(SDL_SCANCODE_RCTRL);
-    bool kb_layout_toggle = kb_ctrl && kb(SDL_SCANCODE_L);
-    bool kb_nav_toggle = kb_ctrl && kb(SDL_SCANCODE_N);
+    bool kb_layout_toggle = kb(SDL_SCANCODE_L);
+    bool kb_nav_toggle = kb(SDL_SCANCODE_N);
+    bool kb_object_toggle = kb(SDL_SCANCODE_O);
+    bool kb_warp_toggle = kb(SDL_SCANCODE_W);
+    bool kb_label_edit = kb(SDL_SCANCODE_F) || kb(SDL_SCANCODE_RETURN);
+    bool kb_help_toggle = kb(SDL_SCANCODE_H) || (kb_ctrl && kb(SDL_SCANCODE_H));
+    bool kb_snap_toggle = kb(SDL_SCANCODE_S);
+    bool kb_layout_reset = kb_ctrl && kb(SDL_SCANCODE_R);
+    bool kb_duplicate = kb(SDL_SCANCODE_D);
+    bool kb_delete_key = kb(SDL_SCANCODE_DELETE);
     bool kb_editor_toggle = kb_ctrl && kb(SDL_SCANCODE_E);
 
     bool gp_left = gp_btn(SDL_CONTROLLER_BUTTON_DPAD_LEFT) || (gp_axis(SDL_CONTROLLER_AXIS_LEFTX) < -DZ);
@@ -164,6 +172,14 @@ void collect_menu_inputs() {
     held.page_next = kb_page_next || gp_page_next;
     held.layout_toggle = kb_layout_toggle;
     held.nav_toggle = kb_nav_toggle;
+    held.object_toggle = kb_object_toggle;
+    held.warp_toggle = kb_warp_toggle;
+    held.label_edit = kb_label_edit;
+    held.help_toggle = kb_help_toggle;
+    held.snap_toggle = kb_snap_toggle;
+    held.layout_reset = kb_layout_reset;
+    held.duplicate_key = kb_duplicate;
+    held.delete_key = kb_delete_key;
     held.editor_toggle = kb_editor_toggle;
 
     if (menu_is_text_input_active()) {
@@ -172,6 +188,14 @@ void collect_menu_inputs() {
         held.page_prev = held.page_next = false;
         held.layout_toggle = false;
         held.nav_toggle = false;
+        held.object_toggle = false;
+        held.warp_toggle = false;
+        held.label_edit = false;
+        held.help_toggle = false;
+        held.snap_toggle = false;
+        held.layout_reset = false;
+        held.duplicate_key = false;
+        held.delete_key = false;
         held.editor_toggle = false;
     }
     if (ss->menu.suppress_confirm_until_release) {
@@ -187,7 +211,12 @@ void collect_menu_inputs() {
             held.back = false;
     }
 
-    struct Prev { bool confirm=false, back=false, pprev=false, pnext=false, layout=false, nav=false, editor=false; };
+    struct Prev {
+        bool confirm=false, back=false, pprev=false, pnext=false;
+        bool layout=false, nav=false, object=false, warp=false;
+        bool label=false, help=false, snap=false, layout_reset=false;
+        bool duplicate=false, del=false, editor=false;
+    };
     static Prev prev{};
     auto edge = [](bool now, bool prevv){ return now && !prevv; };
 
@@ -202,8 +231,19 @@ void collect_menu_inputs() {
     out.page_next = edge(held.page_next, prev.pnext);
     out.layout_toggle = edge(held.layout_toggle, prev.layout);
     out.nav_toggle = edge(held.nav_toggle, prev.nav);
+    out.object_toggle = edge(held.object_toggle, prev.object);
+    out.warp_toggle = edge(held.warp_toggle, prev.warp);
+    out.label_edit = edge(held.label_edit, prev.label);
+    out.help_toggle = edge(held.help_toggle, prev.help);
+    out.snap_toggle = edge(held.snap_toggle, prev.snap);
+    out.layout_reset = edge(held.layout_reset, prev.layout_reset);
+    out.duplicate_key = edge(held.duplicate_key, prev.duplicate);
+    out.delete_key = edge(held.delete_key, prev.del);
     out.editor_toggle = edge(held.editor_toggle, prev.editor);
-    prev = {held.confirm, held.back, held.page_prev, held.page_next, held.layout_toggle, held.nav_toggle, held.editor_toggle};
+    prev = {held.confirm, held.back, held.page_prev, held.page_next,
+            held.layout_toggle, held.nav_toggle, held.object_toggle, held.warp_toggle,
+            held.label_edit, held.help_toggle, held.snap_toggle, held.layout_reset,
+            held.duplicate_key, held.delete_key, held.editor_toggle};
 
     // If any controller/keyboard input occurred, mark last-used device and source
     if (held.left || held.right || held.up || held.down || out.confirm || out.back || held.page_prev || held.page_next) {

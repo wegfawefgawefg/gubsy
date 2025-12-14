@@ -20,6 +20,14 @@ struct MenuInputs {
     bool layout_toggle{false};
     bool nav_toggle{false};
     bool editor_toggle{false};
+    bool object_toggle{false};
+    bool warp_toggle{false};
+    bool label_edit{false};
+    bool help_toggle{false};
+    bool snap_toggle{false};
+    bool layout_reset{false};
+    bool delete_key{false};
+    bool duplicate_key{false};
 };
 
 struct MenuInputDebounceTimers {

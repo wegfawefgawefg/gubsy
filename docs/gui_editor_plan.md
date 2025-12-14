@@ -34,6 +34,15 @@
 - Grid snap toggle stored per screen/resolution.
 - Labels remain visible for context.
 
+## Screens Overview
+### Keyboard
+- `W`/`S` or Up/Down arrow keys move selection.
+- `Enter` dives into the highlighted screen.
+- `Esc` exits the editor entirely (restoring the active menu page).
+### Mouse
+- Hovering rows updates selection; clicking a row activates it (same as Enter).
+- Clicking outside the panel does nothing; the panel is centered and sized to never overlap the active UI.
+
 ## Object Mode (`o`)
 - Purpose: create placeholder rectangles even if no real button exists yet.
 - Controls:

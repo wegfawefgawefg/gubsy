@@ -170,11 +170,33 @@ struct State {
             bool dragging{false};
             bool resizing{false};
             bool dirty{false};
+            bool snap{false};
             std::string active_id;
             glm::vec2 grab_offset{0.0f, 0.0f};
         } layout_edit{};
+        struct GuiObjectDesc {
+            std::string id;
+            RectNdc rect;
+            std::string label;
+        };
         struct {
-            enum class Mode { None, Layout, Nav };
+            std::string page;
+            std::string section;
+            std::vector<GuiObjectDesc> items;
+            bool dirty{false};
+            int next_id{1};
+        } objects_cache{};
+        struct {
+            bool enabled{false};
+            bool dragging{false};
+            bool resizing{false};
+            bool snap{false};
+            int selected{-1};
+            glm::vec2 grab_offset{0.0f, 0.0f};
+            std::string rename_target;
+        } objects_edit{};
+        struct {
+            enum class Mode { None, Layout, Nav, Object, Warp };
             enum class View { Screens, Screen };
             bool active{false};
             Page page{MAIN};
@@ -184,11 +206,14 @@ struct State {
             int selection{0};
             std::array<bool, 4> dir_prev{{false, false, false, false}};
             std::string status;
+            bool show_help{false};
+            bool snap_enabled{false};
         } gui_editor{};
         struct {
             std::string page;
             std::string section;
             std::unordered_map<int, MenuNavEdges> edges;
+            bool loaded{false};
         } nav_cache{};
         struct {
             bool enabled{false};

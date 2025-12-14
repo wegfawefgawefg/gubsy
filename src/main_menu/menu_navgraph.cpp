@@ -205,9 +205,26 @@ std::unordered_map<int, SDL_Rect> build_button_rects(const std::vector<ButtonDes
     return rects;
 }
 
-SDL_FPoint rect_center(const SDL_Rect& r) {
-    return SDL_FPoint{static_cast<float>(r.x) + static_cast<float>(r.w) * 0.5f,
-                      static_cast<float>(r.y) + static_cast<float>(r.h) * 0.5f};
+SDL_FPoint edge_anchor(const SDL_Rect& rect, int dir_idx, bool source) {
+    float cx = static_cast<float>(rect.x) + static_cast<float>(rect.w) * 0.5f;
+    float cy = static_cast<float>(rect.y) + static_cast<float>(rect.h) * 0.5f;
+    float top = static_cast<float>(rect.y);
+    float bottom = static_cast<float>(rect.y + rect.h);
+    float left = static_cast<float>(rect.x);
+    float right = static_cast<float>(rect.x + rect.w);
+    const float delta = 8.0f;
+    switch (dir_idx) {
+        case 0: // up
+            return SDL_FPoint{cx, source ? top - delta : top + delta};
+        case 1: // down
+            return SDL_FPoint{cx, source ? bottom + delta : bottom - delta};
+        case 2: // left
+            return SDL_FPoint{source ? left - delta : left + delta, cy};
+        case 3: // right
+            return SDL_FPoint{source ? right + delta : right - delta, cy};
+        default:
+            return SDL_FPoint{cx, cy};
+    }
 }
 
 void set_status(const std::string& msg) {
@@ -310,14 +327,18 @@ void navgraph_set_page(const std::string& page_key) {
         return;
     ensure_registry_loaded();
     auto& cache = ss->menu.nav_cache;
+    std::string section = section_for_page(page_key);
+    if (cache.loaded && cache.section == section)
+        return;
     cache.page = page_key;
-    cache.section = section_for_page(page_key);
+    cache.section = section;
     auto& reg = registry();
     auto it = reg.sections.find(cache.section);
     if (it != reg.sections.end())
         cache.edges = it->second;
     else
         cache.edges.clear();
+    cache.loaded = true;
 }
 
 NavNode navgraph_apply(int button_id, const NavNode& fallback) {
@@ -434,11 +455,11 @@ void navgraph_render_overlay(SDL_Renderer* r, const std::vector<ButtonDesc>& but
         }
     };
     // Highlight buttons and draw arrows
-    auto center_of = [&](int id) -> SDL_FPoint {
+    auto anchor_for = [&](int id, int dir_idx, bool source) -> SDL_FPoint {
         auto it = rects.find(id);
         if (it == rects.end())
             return SDL_FPoint{0,0};
-        return rect_center(it->second);
+        return edge_anchor(it->second, dir_idx, source);
     };
     SDL_Color highlight{250, 220, 120, 255};
     if (ss->menu.nav_edit.selected_id >= 0) {
@@ -452,7 +473,6 @@ void navgraph_render_overlay(SDL_Renderer* r, const std::vector<ButtonDesc>& but
     for (const auto& entry : ss->menu.nav_cache.edges) {
         int source = entry.first;
         const MenuNavEdges& edges = entry.second;
-        SDL_FPoint src = center_of(source);
         for (int d = 0; d < 4; ++d) {
             std::size_t idx = static_cast<std::size_t>(d);
             if (!edges.set[idx])
@@ -461,7 +481,8 @@ void navgraph_render_overlay(SDL_Renderer* r, const std::vector<ButtonDesc>& but
             auto dest_it = rects.find(target);
             if (dest_it == rects.end())
                 continue;
-            SDL_FPoint dst = rect_center(dest_it->second);
+            SDL_FPoint src = anchor_for(source, d, true);
+            SDL_FPoint dst = anchor_for(target, d, false);
             SDL_RenderDrawLine(r, static_cast<int>(src.x), static_cast<int>(src.y),
                                   static_cast<int>(dst.x), static_cast<int>(dst.y));
             float angle = std::atan2(dst.y - src.y, dst.x - src.x);
@@ -475,6 +496,15 @@ void navgraph_render_overlay(SDL_Renderer* r, const std::vector<ButtonDesc>& but
             SDL_RenderDrawLine(r, static_cast<int>(dst.x), static_cast<int>(dst.y),
                                   static_cast<int>(arrow2.x), static_cast<int>(arrow2.y));
             SDL_FPoint mid{(src.x + dst.x) * 0.5f, (src.y + dst.y) * 0.5f};
+            float nx = src.y - dst.y;
+            float ny = dst.x - src.x;
+            float nlen = std::sqrt(nx * nx + ny * ny);
+            if (nlen > 0.01f) {
+                nx /= nlen;
+                ny /= nlen;
+                mid.x += nx * 6.0f;
+                mid.y += ny * 6.0f;
+            }
             static const char* labels[4] = {"Up", "Down", "Left", "Right"};
             draw_text(labels[d], static_cast<int>(mid.x) + 6, static_cast<int>(mid.y) + 6,
                       SDL_Color{230, 230, 240, 255});
@@ -505,6 +535,7 @@ void navgraph_reset_current() {
     if (!cache.section.empty())
         registry().sections.erase(cache.section);
     cache.edges.clear();
+    cache.loaded = false;
     ss->menu.nav_edit.dirty = true;
     persist_nav_if_dirty();
 }

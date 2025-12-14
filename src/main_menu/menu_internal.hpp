@@ -3,6 +3,7 @@
 #include "main_menu/menu.hpp"
 #include "main_menu/menu_layout.hpp"
 #include "main_menu/menu_navgraph.hpp"
+#include "main_menu/menu_objects.hpp"
 #include "main_menu/editor/editor.hpp"
 
 #include <SDL2/SDL.h>
@@ -26,6 +27,7 @@ enum TextInputMode {
     TEXT_INPUT_MODS_SEARCH = 3,
     TEXT_INPUT_LOBBY_NAME = 4,
     TEXT_INPUT_LOBBY_SEED = 5,
+    TEXT_INPUT_GUI_OBJECT_LABEL = 6,
 };
 
 inline constexpr int kPresetNameMaxLen = 16;

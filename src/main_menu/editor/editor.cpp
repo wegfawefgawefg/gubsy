@@ -3,6 +3,7 @@
 #include "globals.hpp"
 #include "main_menu/menu_internal.hpp"
 #include "main_menu/menu_layout.hpp"
+#include "main_menu/menu_objects.hpp"
 #include "main_menu/menu_navgraph.hpp"
 #include "state.hpp"
 
@@ -10,9 +11,12 @@
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <string>
 
 namespace {
+
+using GuiObjectDesc = State::MenuState::GuiObjectDesc;
 
 struct EditorScreenInfo {
     const char* label;
@@ -93,22 +97,253 @@ void stop_nav_mode() {
         navgraph_toggle_edit_mode();
 }
 
-const int kScreensPanelWidthPx = 480;
-const int kScreensPanelHeightPx = 320;
-const int kScreensItemHeight = 28;
+enum class Dir { Up = 0, Down = 1, Left = 2, Right = 3 };
 
-SDL_Rect screens_panel_rect(int width, int height) {
-    int panel_w = std::min(kScreensPanelWidthPx, width - 40);
-    int panel_h = std::min(kScreensPanelHeightPx, height - 40);
-    int x = (width - panel_w) / 2;
-    int y = (height - panel_h) / 2;
-    return SDL_Rect{x, y, panel_w, panel_h};
+struct ScreenGridLayout {
+    std::vector<SDL_Rect> cards;
+    int cols{1};
+    int rows{1};
+    SDL_Rect grid_bounds{0, 0, 0, 0};
+};
+
+ScreenGridLayout build_screens_layout(int width, int height, int count) {
+    ScreenGridLayout layout;
+    if (count <= 0 || width <= 0 || height <= 0) {
+        layout.cards.clear();
+        layout.cols = layout.rows = 0;
+        return layout;
+    }
+    float cols_f = std::ceil(std::sqrt(static_cast<float>(count)));
+    layout.cols = std::max(1, static_cast<int>(cols_f));
+    layout.rows = std::max(1, (count + layout.cols - 1) / layout.cols);
+    const int margin = static_cast<int>(0.08f * static_cast<float>(std::min(width, height)));
+    const int gap = 16;
+    int grid_w = width - margin * 2;
+    int grid_h = height - margin * 2;
+    if (grid_w < 100) grid_w = width;
+    if (grid_h < 100) grid_h = height;
+    layout.grid_bounds = SDL_Rect{(width - grid_w) / 2, (height - grid_h) / 2, grid_w, grid_h};
+    int card_w = std::max(120, (grid_w - (layout.cols - 1) * gap) / layout.cols);
+    int card_h = std::max(100, (grid_h - (layout.rows - 1) * gap) / layout.rows);
+    layout.cards.reserve(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        int row = i / layout.cols;
+        int col = i % layout.cols;
+        int x = layout.grid_bounds.x + col * (card_w + gap);
+        int y = layout.grid_bounds.y + row * (card_h + gap);
+        layout.cards.push_back(SDL_Rect{x, y, card_w, card_h});
+    }
+    return layout;
 }
 
-SDL_Rect screens_item_rect(const SDL_Rect& panel, int index) {
-    int start_y = panel.y + 70;
-    int y = start_y + index * kScreensItemHeight;
-    return SDL_Rect{panel.x + 16, y - 4, panel.w - 32, kScreensItemHeight};
+bool pressed_edge(std::array<bool, 4>& cache, Dir dir, bool now) {
+    std::size_t idx = static_cast<std::size_t>(static_cast<int>(dir));
+    bool prev = cache[idx];
+    cache[idx] = now;
+    return now && !prev;
+}
+
+struct PreviewLayout {
+    std::vector<LayoutItem> items;
+    int ref_w{1280};
+    int ref_h{720};
+};
+
+PreviewLayout preview_layout_for_page(Page page) {
+    PreviewLayout preview{};
+    if (!ss)
+        return preview;
+    auto backup_cache = ss->menu.layout_cache;
+    switch (page) {
+        case LOBBY: {
+            const int ref_w = 1280;
+            const int ref_h = 720;
+            layout_set_page("lobby");
+            auto buttons = build_lobby_buttons();
+            preview.items = lobby_layout_items(buttons, ref_w, ref_h);
+            auto object_items = gui_objects_layout_items(ref_w, ref_h);
+            preview.items.insert(preview.items.end(), object_items.begin(), object_items.end());
+            preview.ref_w = ref_w;
+            preview.ref_h = ref_h;
+            break;
+        }
+        default:
+            break;
+    }
+    ss->menu.layout_cache = std::move(backup_cache);
+    return preview;
+}
+
+SDL_Rect object_pixels_for(const GuiObjectDesc& obj, int width, int height) {
+    SDL_FRect pf = ndc_to_pixels(obj.rect, width, height);
+    SDL_Rect rect{
+        static_cast<int>(std::floor(pf.x)),
+        static_cast<int>(std::floor(pf.y)),
+        static_cast<int>(std::ceil(pf.w)),
+        static_cast<int>(std::ceil(pf.h))
+    };
+    if (rect.x + rect.w > width) rect.w = width - rect.x;
+    if (rect.y + rect.h > height) rect.h = height - rect.y;
+    if (rect.x < 0) rect.x = 0;
+    if (rect.y < 0) rect.y = 0;
+    return rect;
+}
+
+void start_object_mode() {
+    if (!ss)
+        return;
+    ss->menu.objects_edit.enabled = true;
+    ss->menu.objects_edit.dragging = false;
+    ss->menu.objects_edit.resizing = false;
+    ss->menu.objects_edit.selected = -1;
+    ss->menu.objects_edit.snap = ss->menu.gui_editor.snap_enabled;
+}
+
+void stop_object_mode() {
+    if (!ss)
+        return;
+    if (ss->menu.objects_edit.enabled) {
+        ss->menu.objects_edit.enabled = false;
+        ss->menu.objects_edit.dragging = false;
+        ss->menu.objects_edit.resizing = false;
+        ss->menu.objects_edit.rename_target.clear();
+        gui_objects_save_if_dirty();
+    }
+}
+
+void handle_object_mode(int width, int height) {
+    if (!ss)
+        return;
+    auto& edit = ss->menu.objects_edit;
+    auto& cache = ss->menu.objects_cache;
+    const int handle = 12;
+    bool mouse_pressed = ss->mouse_inputs.left && !ss->menu.mouse_left_prev;
+    bool mouse_released = !ss->mouse_inputs.left && ss->menu.mouse_left_prev;
+    int mx = ss->mouse_inputs.pos.x;
+    int my = ss->mouse_inputs.pos.y;
+    auto point_in = [&](const SDL_Rect& r) {
+        return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+    };
+    auto clamp_rect = [&](SDL_Rect& rect) {
+        rect.w = std::max(10, rect.w);
+        rect.h = std::max(10, rect.h);
+        if (rect.x < 0) rect.x = 0;
+        if (rect.y < 0) rect.y = 0;
+        if (rect.x + rect.w > width) rect.x = width - rect.w;
+        if (rect.y + rect.h > height) rect.y = height - rect.h;
+    };
+    auto apply_snap = [&](int value) {
+        if (!edit.snap)
+            return value;
+        const int step = 8;
+        return (value / step) * step;
+    };
+    if (mouse_pressed && !menu_is_text_input_active()) {
+        for (int i = static_cast<int>(cache.items.size()) - 1; i >= 0; --i) {
+            SDL_Rect rect = object_pixels_for(cache.items[static_cast<size_t>(i)], width, height);
+            SDL_Rect move = SDL_Rect{rect.x - handle - 2, rect.y - handle - 2, handle, handle};
+            SDL_Rect resize = SDL_Rect{rect.x + rect.w + 2, rect.y + rect.h + 2, handle, handle};
+            if (point_in(move)) {
+                edit.selected = i;
+                edit.dragging = true;
+                edit.resizing = false;
+                edit.grab_offset = glm::vec2(static_cast<float>(mx - rect.x),
+                                             static_cast<float>(my - rect.y));
+                break;
+            }
+            if (point_in(resize)) {
+                edit.selected = i;
+                edit.dragging = true;
+                edit.resizing = true;
+                edit.grab_offset = glm::vec2(static_cast<float>(mx - (rect.x + rect.w)),
+                                             static_cast<float>(my - (rect.y + rect.h)));
+                break;
+            }
+            if (point_in(rect)) {
+                edit.selected = i;
+                edit.dragging = false;
+                edit.resizing = false;
+                break;
+            }
+        }
+    }
+    if (edit.dragging && edit.selected >= 0 && edit.selected < (int)cache.items.size()) {
+        auto& obj = cache.items[static_cast<size_t>(edit.selected)];
+        SDL_Rect rect = object_pixels_for(obj, width, height);
+        if (!edit.resizing) {
+            double new_x = static_cast<double>(mx) - static_cast<double>(edit.grab_offset.x);
+            double new_y = static_cast<double>(my) - static_cast<double>(edit.grab_offset.y);
+            rect.x = apply_snap(static_cast<int>(std::round(new_x)));
+            rect.y = apply_snap(static_cast<int>(std::round(new_y)));
+        } else {
+            double new_br_x = static_cast<double>(mx) - static_cast<double>(edit.grab_offset.x);
+            double new_br_y = static_cast<double>(my) - static_cast<double>(edit.grab_offset.y);
+            rect.w = apply_snap(static_cast<int>(std::round(new_br_x)) - rect.x);
+            rect.h = apply_snap(static_cast<int>(std::round(new_br_y)) - rect.y);
+        }
+        clamp_rect(rect);
+        obj.rect = gui_objects_rect_from_pixels(rect, width, height);
+        cache.dirty = true;
+    }
+    if (mouse_released && edit.dragging) {
+        edit.dragging = false;
+        edit.resizing = false;
+        gui_objects_save_if_dirty();
+    }
+    if (ss->menu_inputs.confirm && !menu_is_text_input_active() && !edit.dragging && !edit.resizing) {
+        SDL_Rect rect{mx - width / 16, my - height / 20, width / 8, height / 12};
+        clamp_rect(rect);
+        GuiObjectDesc obj;
+        obj.id = std::string("obj") + std::to_string(cache.next_id++);
+        obj.label = obj.id;
+        obj.rect = gui_objects_rect_from_pixels(rect, width, height);
+        cache.items.push_back(obj);
+        cache.dirty = true;
+        edit.selected = static_cast<int>(cache.items.size()) - 1;
+        gui_objects_save_if_dirty();
+    }
+    if (ss->menu_inputs.delete_key && edit.selected >= 0 && edit.selected < (int)cache.items.size()) {
+        cache.items.erase(cache.items.begin() + edit.selected);
+        cache.dirty = true;
+        edit.selected = std::min(edit.selected, static_cast<int>(cache.items.size()) - 1);
+        gui_objects_save_if_dirty();
+    } else if (ss->menu_inputs.duplicate_key && edit.selected >= 0 && edit.selected < (int)cache.items.size()) {
+        auto obj = cache.items[static_cast<size_t>(edit.selected)];
+        SDL_Rect rect = object_pixels_for(obj, width, height);
+        rect.x += 16;
+        rect.y += 16;
+        clamp_rect(rect);
+        obj.id = std::string("obj") + std::to_string(cache.next_id++);
+        obj.rect = gui_objects_rect_from_pixels(rect, width, height);
+        cache.items.push_back(obj);
+        cache.dirty = true;
+        edit.selected = static_cast<int>(cache.items.size()) - 1;
+        gui_objects_save_if_dirty();
+    }
+    if (ss->menu_inputs.label_edit && edit.selected >= 0 && edit.selected < (int)cache.items.size() && !menu_is_text_input_active()) {
+        auto& obj = cache.items[static_cast<size_t>(edit.selected)];
+        edit.rename_target = obj.id;
+        open_text_input(TEXT_INPUT_GUI_OBJECT_LABEL, 32, obj.label, obj.id, "Object Label");
+    }
+}
+
+void render_object_overlay(SDL_Renderer* r, int width, int height) {
+    if (!ss || !r)
+        return;
+    if (!ss->menu.objects_edit.enabled)
+        return;
+    auto items = gui_objects_pixel_items(width, height);
+    int selected = ss->menu.objects_edit.selected;
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        const auto& obj = items[i];
+        SDL_Color color = (static_cast<int>(i) == selected)
+                              ? SDL_Color{250, 210, 120, 255}
+                              : SDL_Color{90, 110, 150, 200};
+        SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
+        SDL_RenderDrawRect(r, &obj.rect);
+    }
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
 }
 
 } // namespace
@@ -140,7 +375,7 @@ void gui_editor_handle_shortcuts(Page current_page) {
             ge.view = decltype(ge.view)::Screens;
             ge.selection = 0;
             ge.dir_prev.fill(false);
-            ge.status = "Select a screen (W/S, Enter, Esc)";
+            ge.status = "Screens: WASD to move, Enter/click to open, Esc to exit.";
         }
     }
 
@@ -150,17 +385,7 @@ void gui_editor_handle_shortcuts(Page current_page) {
         ge.page = current_page;
     }
 
-    if (ge.view != decltype(ge.view)::Screen)
-        return;
-
-    if (ss->menu_inputs.layout_toggle) {
-        ge.mode = decltype(ge.mode)::Layout;
-        ge.status.clear();
-    }
-    if (ss->menu_inputs.nav_toggle) {
-        ge.mode = decltype(ge.mode)::Nav;
-        ge.status.clear();
-    }
+    (void)current_page;
 }
 
 bool gui_editor_consumes_input() {
@@ -176,10 +401,12 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
     auto exit_to_screens = [&]() {
         ge.mode = decltype(ge.mode)::None;
         ge.view = decltype(ge.view)::Screens;
-        ge.status = "Select a screen (W/S, Enter, Esc)";
+        ge.status = "Screens: WASD to move, Enter/click to open, Esc to exit.";
         ge.dir_prev.fill(false);
         stop_layout_mode();
         stop_nav_mode();
+        stop_object_mode();
+        gui_objects_save_if_dirty();
         ss->menu.page = static_cast<int>(ge.prev_page);
     };
 
@@ -191,6 +418,8 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
         ge.dir_prev.fill(false);
         stop_layout_mode();
         stop_nav_mode();
+        stop_object_mode();
+        gui_objects_save_if_dirty();
         ss->menu.page = static_cast<int>(ge.prev_page);
     };
 
@@ -211,35 +440,57 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
 
     if (ge.view == decltype(ge.view)::Screens) {
         int count = static_cast<int>(screens.size());
+        if (ge.selection >= count)
+            ge.selection = std::max(0, count - 1);
         if (count == 0) {
             ge.status = "No screens available.";
         } else {
-            auto pressed = [&](int idx, bool now) {
-                std::size_t sidx = static_cast<std::size_t>(idx);
-                bool prev = ge.dir_prev[sidx];
-                ge.dir_prev[sidx] = now;
-                return now && !prev;
-            };
-            if (pressed(1, ss->menu_inputs.down)) {
-                ge.selection = (ge.selection + 1 + count) % count;
-            } else if (pressed(0, ss->menu_inputs.up)) {
-                ge.selection = (ge.selection - 1 + count) % count;
-            }
-
-            SDL_Rect panel = screens_panel_rect(width, height);
-            auto point_in = [&](const SDL_Rect& r) {
+            ScreenGridLayout layout = build_screens_layout(width, height, count);
+            auto within = [&](const SDL_Rect& r) {
                 int mx = ss->mouse_inputs.pos.x;
                 int my = ss->mouse_inputs.pos.y;
                 return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
             };
-            for (int i = 0; i < count; ++i) {
-                SDL_Rect row = screens_item_rect(panel, i);
-                if (point_in(row)) {
+            for (int i = 0; i < count && i < (int)layout.cards.size(); ++i) {
+                if (within(layout.cards[(size_t)i])) {
                     ge.selection = i;
                     break;
                 }
             }
             bool mouse_pressed = ss->mouse_inputs.left && !ss->menu.mouse_left_prev;
+
+            auto try_move = [&](Dir dir) {
+                if (!pressed_edge(ge.dir_prev, dir, (dir == Dir::Up) ? ss->menu_inputs.up :
+                                                     (dir == Dir::Down) ? ss->menu_inputs.down :
+                                                     (dir == Dir::Left) ? ss->menu_inputs.left :
+                                                                          ss->menu_inputs.right))
+                    return;
+                if (count <= 0)
+                    return;
+                int idx = ge.selection;
+                int col = layout.cols > 0 ? idx % layout.cols : 0;
+                int row = layout.cols > 0 ? idx / layout.cols : 0;
+                if (dir == Dir::Left) {
+                    if (col > 0)
+                        ge.selection = idx - 1;
+                } else if (dir == Dir::Right) {
+                    if (col + 1 < layout.cols && idx + 1 < count)
+                        ge.selection = idx + 1;
+                } else if (dir == Dir::Up) {
+                    if (row > 0)
+                        ge.selection = std::max(0, idx - layout.cols);
+                } else if (dir == Dir::Down) {
+                    if (row + 1 < layout.rows) {
+                        int next = idx + layout.cols;
+                        if (next < count)
+                            ge.selection = next;
+                    }
+                }
+            };
+            try_move(Dir::Up);
+            try_move(Dir::Down);
+            try_move(Dir::Left);
+            try_move(Dir::Right);
 
             auto activate_selection = [&]() {
                 ge.selection = std::clamp(ge.selection, 0, count - 1);
@@ -247,7 +498,11 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
                 ge.page = info.page;
                 ge.mode = decltype(ge.mode)::None;
                 ge.view = decltype(ge.view)::Screen;
-                ge.status = "Press Ctrl+L for layout, Ctrl+N for nav. Esc to return.";
+                ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, W=Warp, H=Help. Esc to return.";
+                if (const char* key = page_key(info.page)) {
+                    layout_set_page(key);
+                    gui_objects_set_page(key);
+                }
                 ge.dir_prev.fill(false);
                 ss->menu.page = static_cast<int>(info.page);
                 ss->menu.focus_id = -1;
@@ -257,11 +512,37 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
 
             if (ss->menu_inputs.confirm)
                 activate_selection();
-            else if (mouse_pressed && point_in(panel))
+            else if (mouse_pressed && within(layout.grid_bounds))
                 activate_selection();
         }
         ss->menu.mouse_left_prev = ss->mouse_inputs.left;
         return;
+    }
+
+    if (ss->menu_inputs.help_toggle)
+        ge.show_help = !ge.show_help;
+    if (ss->menu_inputs.snap_toggle) {
+        ge.snap_enabled = !ge.snap_enabled;
+        ss->menu.layout_edit.snap = ge.snap_enabled;
+        ss->menu.objects_edit.snap = ge.snap_enabled;
+        ge.status = ge.snap_enabled ? "Snap enabled." : "Snap disabled.";
+    }
+
+    if (ge.mode == decltype(ge.mode)::None) {
+        if (ss->menu_inputs.layout_toggle) {
+            ge.mode = decltype(ge.mode)::Layout;
+            ge.status = "Layout mode: drag handles, Ctrl+R resets, Esc exits.";
+        } else if (ss->menu_inputs.nav_toggle) {
+            ge.mode = decltype(ge.mode)::Nav;
+            ge.status = "Navigation mode: WASD sets direction, Space/click targets.";
+        } else if (ss->menu_inputs.object_toggle) {
+            ge.mode = decltype(ge.mode)::Object;
+            ge.status = "Object mode: Enter spawns, Delete removes, D duplicates.";
+            start_object_mode();
+        } else if (ss->menu_inputs.warp_toggle) {
+            ge.mode = decltype(ge.mode)::Warp;
+            ge.status = "Warp editing not available yet.";
+        }
     }
 
     if (ge.mode == decltype(ge.mode)::Layout) {
@@ -273,6 +554,8 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
             if (ge.page == LOBBY) {
                 lobby_layout_editor_handle(buttons, width, height);
             }
+            if (ss->menu_inputs.layout_reset)
+                layout_reset_current();
         }
         ss->menu.mouse_left_prev = ss->mouse_inputs.left;
         return;
@@ -293,8 +576,19 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
     }
 
     stop_nav_mode();
-    // Neutral editor state: nothing to do except keep mouse state in sync.
-    ge.status = "Press Ctrl+L for layout, Ctrl+N for nav. Esc returns to screen list.";
+    if (ge.mode == decltype(ge.mode)::Object) {
+        if (!ss->menu.objects_edit.enabled)
+            start_object_mode();
+        ss->menu.objects_edit.snap = ge.snap_enabled;
+        handle_object_mode(width, height);
+        ss->menu.mouse_left_prev = ss->mouse_inputs.left;
+        return;
+    }
+    stop_object_mode();
+    if (ge.mode == decltype(ge.mode)::Warp) {
+        ge.mode = decltype(ge.mode)::None;
+    }
+    ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, W=Warp, H=Help. Esc returns to screen list.";
     ss->menu.mouse_left_prev = ss->mouse_inputs.left;
 }
 
@@ -326,30 +620,60 @@ void gui_editor_render(SDL_Renderer* r, int width, int height) {
     int y = static_cast<int>((MENU_SAFE_MARGIN + 0.01f) * static_cast<float>(height));
 
     if (ge.view == decltype(ge.view)::Screens) {
-        SDL_Rect panel = screens_panel_rect(width, height);
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(r, 10, 10, 20, 220);
-        SDL_RenderFillRect(r, &panel);
-        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
-        SDL_RenderDrawRect(r, &panel);
-        draw_text("GUI Editor - Screens", panel.x + 16, panel.y + 12, fg);
-        draw_text("Use W/S or Up/Down, click/Enter selects, Esc exits", panel.x + 16, panel.y + 40,
+        SDL_SetRenderDrawColor(r, 5, 5, 8, 200);
+        SDL_Rect full{0, 0, width, height};
+        SDL_RenderFillRect(r, &full);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        draw_text("GUI Editor - Screens", margin, y, fg);
+        draw_text("WASD/Arrows move • Enter/click opens • Esc exits", margin, y + 26,
                   SDL_Color{200, 200, 210, 255});
         const auto& screens = editor_screens();
-        for (std::size_t i = 0; i < screens.size(); ++i) {
-            SDL_Rect row = screens_item_rect(panel, static_cast<int>(i));
-            if (static_cast<int>(i) == ge.selection) {
-                SDL_SetRenderDrawColor(r, 50, 60, 90, 230);
-                SDL_RenderFillRect(r, &row);
+        ScreenGridLayout layout = build_screens_layout(width, height, static_cast<int>(screens.size()));
+        SDL_Color border{140, 140, 160, 255};
+        for (std::size_t i = 0; i < layout.cards.size() && i < screens.size(); ++i) {
+            SDL_Rect card = layout.cards[i];
+            bool selected = static_cast<int>(i) == ge.selection;
+            SDL_Color fill = selected ? SDL_Color{50, 60, 100, 240} : SDL_Color{25, 28, 36, 220};
+            SDL_SetRenderDrawColor(r, fill.r, fill.g, fill.b, fill.a);
+            SDL_RenderFillRect(r, &card);
+            SDL_SetRenderDrawColor(r, border.r, border.g, border.b, border.a);
+            SDL_RenderDrawRect(r, &card);
+            draw_text(screens[i].label, card.x + 12, card.y + 10,
+                      selected ? SDL_Color{240, 240, 140, 255} : SDL_Color{210, 210, 220, 255});
+            SDL_Rect preview{card.x + 12, card.y + 36, card.w - 24, card.h - 48};
+            SDL_SetRenderDrawColor(r, 18, 18, 26, 255);
+            SDL_RenderFillRect(r, &preview);
+            SDL_SetRenderDrawColor(r, 70, 70, 90, 255);
+            SDL_RenderDrawRect(r, &preview);
+            auto preview_layout = preview_layout_for_page(screens[i].page);
+            if (preview_layout.items.empty()) {
+                int row_h = std::max(6, preview.h / 6);
+                for (int line = 0; line < 4; ++line) {
+                    int y0 = preview.y + 6 + line * (row_h + 4);
+                    SDL_Rect mini{preview.x + 6, y0, preview.w - 12, row_h};
+                    SDL_SetRenderDrawColor(r, selected ? 120 : 80, 120, 150, 200);
+                    SDL_RenderFillRect(r, &mini);
+                }
+            } else {
+                float sx = preview_layout.ref_w > 0 ? static_cast<float>(preview.w) / static_cast<float>(preview_layout.ref_w) : 1.0f;
+                float sy = preview_layout.ref_h > 0 ? static_cast<float>(preview.h) / static_cast<float>(preview_layout.ref_h) : 1.0f;
+                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(r, 90, 110, 150, 140);
+                for (const auto& item : preview_layout.items) {
+                    SDL_Rect br{
+                        preview.x + static_cast<int>(std::round(static_cast<float>(item.rect.x) * sx)),
+                        preview.y + static_cast<int>(std::round(static_cast<float>(item.rect.y) * sy)),
+                        std::max(2, static_cast<int>(std::round(static_cast<float>(item.rect.w) * sx))),
+                        std::max(2, static_cast<int>(std::round(static_cast<float>(item.rect.h) * sy)))
+                    };
+                    br.w = std::min(br.w, preview.x + preview.w - br.x);
+                    br.h = std::min(br.h, preview.y + preview.h - br.y);
+                    SDL_RenderDrawRect(r, &br);
+                }
+                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
             }
-            SDL_SetRenderDrawColor(r, 70, 70, 90, 180);
-            SDL_RenderDrawRect(r, &row);
-            SDL_Color color = (static_cast<int>(i) == ge.selection)
-                                  ? SDL_Color{240, 240, 120, 255}
-                                  : SDL_Color{200, 200, 210, 255};
-            draw_text(screens[i].label, row.x + 8, row.y + 6, color);
         }
-        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
         return;
     }
 
@@ -358,10 +682,41 @@ void gui_editor_render(SDL_Renderer* r, int width, int height) {
     switch (ge.mode) {
         case decltype(ge.mode)::Layout: mode = "Mode: Layout"; break;
         case decltype(ge.mode)::Nav: mode = "Mode: Navigation"; break;
-        default: mode = "Mode: Neutral (Ctrl+L/Ctrl+N to begin)"; break;
+        case decltype(ge.mode)::Object: mode = "Mode: Objects"; break;
+        case decltype(ge.mode)::Warp: mode = "Mode: Warp"; break;
+        default: mode = "Mode: Neutral (L/N/O/W, H for help)"; break;
     }
     draw_text(headline, margin, y, fg);
     draw_text(mode, margin, y + 28, SDL_Color{220, 220, 230, 255});
     if (!ge.status.empty())
         draw_text(ge.status, margin, y + 52, SDL_Color{200, 160, 160, 255});
+    if (ge.mode == decltype(ge.mode)::Object && ss && ss->menu.objects_edit.enabled)
+        render_object_overlay(r, width, height);
+    if (ge.show_help) {
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_Rect panel{width - 420, 40, 380, 260};
+        SDL_SetRenderDrawColor(r, 10, 10, 20, 230);
+        SDL_RenderFillRect(r, &panel);
+        SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+        SDL_RenderDrawRect(r, &panel);
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+        int tx = panel.x + 16;
+        int ty = panel.y + 12;
+        draw_text("Editor Help", tx, ty, SDL_Color{240, 220, 120, 255});
+        ty += 28;
+        const char* lines[] = {
+            "L: Layout mode (Ctrl+R resets)",
+            "N: Navigation mode",
+            "O: Object mode (Enter spawn, D dup, Delete remove)",
+            "W: Warp mode (coming soon)",
+            "S: Toggle snap grid",
+            "F/Enter in object mode: rename",
+            "Esc: Exit mode, Esc twice returns to screens",
+            "Ctrl+E: Exit editor"
+        };
+        for (const char* line : lines) {
+            draw_text(line, tx, ty, SDL_Color{210, 210, 225, 255});
+            ty += 22;
+        }
+    }
 }

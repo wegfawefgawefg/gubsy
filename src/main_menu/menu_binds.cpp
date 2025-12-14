@@ -1,4 +1,5 @@
 #include "main_menu/menu_internal.hpp"
+#include "main_menu/menu_objects.hpp"
 
 #include "config.hpp"
 #include "engine/input.hpp"
@@ -168,6 +169,7 @@ void menu_text_input_cancel() {
     ss->menu.binds_text_input_error.clear();
     ss->menu.binds_text_input_error_timer = 0.0f;
     ss->menu.text_input_title.clear();
+    ss->menu.objects_edit.rename_target.clear();
 }
 
 void menu_text_input_submit() {
@@ -243,6 +245,11 @@ void menu_text_input_submit() {
     } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_LOBBY_SEED) {
         ss->menu.lobby.seed = trim_copy(raw);
         ss->menu.lobby.seed_randomized = ss->menu.lobby.seed.empty();
+        completed = true;
+    } else if (ss->menu.binds_text_input_mode == TEXT_INPUT_GUI_OBJECT_LABEL) {
+        std::string label = trim_copy(raw);
+        gui_objects_rename(ss->menu.binds_text_input_target, label);
+        ss->menu.objects_edit.rename_target.clear();
         completed = true;
     }
     if (completed) {
