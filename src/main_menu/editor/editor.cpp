@@ -334,6 +334,37 @@ void render_object_overlay(SDL_Renderer* r, int width, int height) {
         return;
     auto items = gui_objects_pixel_items(width, height);
     int selected = ss->menu.objects_edit.selected;
+    auto draw_text = [&](const std::string& text, int x, int y, SDL_Color color) {
+        if (!gg || !gg->ui_font || text.empty())
+            return;
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, text.c_str(), color);
+        if (!surf)
+            return;
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        SDL_FreeSurface(surf);
+        if (!tex)
+            return;
+        int tw=0, th=0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+        SDL_Rect dst{x, y, tw, th};
+        SDL_RenderCopy(r, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+    };
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Rect hint{width - 360, 40, 320, 140};
+    SDL_SetRenderDrawColor(r, 8, 8, 16, 220);
+    SDL_RenderFillRect(r, &hint);
+    SDL_SetRenderDrawColor(r, 180, 180, 200, 255);
+    SDL_RenderDrawRect(r, &hint);
+    int hx = hint.x + 12;
+    int hy = hint.y + 10;
+    draw_text("Object Mode (stubbed)", hx, hy, SDL_Color{240, 220, 120, 255});
+    hy += 24;
+    draw_text("Enter: add placeholder at cursor", hx, hy, SDL_Color{210, 210, 225, 255}); hy += 18;
+    draw_text("Delete: remove selection", hx, hy, SDL_Color{210, 210, 225, 255}); hy += 18;
+    draw_text("D: duplicate selection", hx, hy, SDL_Color{210, 210, 225, 255}); hy += 18;
+    draw_text("F/Enter on selection: rename", hx, hy, SDL_Color{210, 210, 225, 255}); hy += 18;
+    draw_text("S: snap grid toggle", hx, hy, SDL_Color{210, 210, 225, 255});
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     for (std::size_t i = 0; i < items.size(); ++i) {
         const auto& obj = items[i];
@@ -343,7 +374,48 @@ void render_object_overlay(SDL_Renderer* r, int width, int height) {
         SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
         SDL_RenderDrawRect(r, &obj.rect);
     }
+    if (items.empty()) {
+        draw_text("Press Enter to create a placeholder rect.", hint.x, hint.y + hint.h + 18,
+                  SDL_Color{240, 200, 200, 255});
+    }
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+}
+
+void render_warp_stub(SDL_Renderer* r, int width, int height) {
+    if (!r || !gg || !gg->ui_font)
+        return;
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_Rect panel{width - 360, height - 180, 320, 140};
+    SDL_SetRenderDrawColor(r, 12, 8, 20, 220);
+    SDL_RenderFillRect(r, &panel);
+    SDL_SetRenderDrawColor(r, 190, 170, 210, 255);
+    SDL_RenderDrawRect(r, &panel);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    auto draw_text = [&](const std::string& text, int x, int y, SDL_Color color) {
+        if (!gg->ui_font || text.empty())
+            return;
+        SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, text.c_str(), color);
+        if (!surf)
+            return;
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
+        SDL_FreeSurface(surf);
+        if (!tex)
+            return;
+        int tw=0, th=0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
+        SDL_Rect dst{x, y, tw, th};
+        SDL_RenderCopy(r, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+    };
+    int tx = panel.x + 12;
+    int ty = panel.y + 10;
+    draw_text("Warp Mode (stubbed)", tx, ty, SDL_Color{240, 220, 120, 255});
+    ty += 24;
+    draw_text("Eventually: connect widgets across screens.", tx, ty, SDL_Color{210, 210, 225, 255});
+    ty += 18;
+    draw_text("For now this is a placeholder so the hotkey", tx, ty, SDL_Color{210, 210, 225, 255});
+    ty += 18;
+    draw_text("is visible and debugging is easier.", tx, ty, SDL_Color{210, 210, 225, 255});
 }
 
 } // namespace
@@ -385,7 +457,34 @@ void gui_editor_handle_shortcuts(Page current_page) {
         ge.page = current_page;
     }
 
-    (void)current_page;
+    if (ge.view != decltype(ge.view)::Screen)
+        return;
+
+    if (ss->menu_inputs.layout_toggle) {
+        ge.mode = decltype(ge.mode)::Layout;
+        ge.status = "Layout mode active. Esc to exit.";
+    }
+    if (ss->menu_inputs.nav_toggle) {
+        ge.mode = decltype(ge.mode)::Nav;
+        ge.status = "Navigation mode active. Esc to exit.";
+    }
+    if (ss->menu_inputs.object_toggle) {
+        ge.mode = decltype(ge.mode)::Object;
+        ge.status = "Object mode (stubbed): Enter to add, Delete to remove.";
+        start_object_mode();
+    }
+    if (ss->menu_inputs.warp_toggle) {
+        ge.mode = decltype(ge.mode)::Warp;
+        ge.status = "Warp mode (stubbed).";
+    }
+    if (ss->menu_inputs.help_toggle)
+        ge.show_help = !ge.show_help;
+    if (ss->menu_inputs.snap_toggle) {
+        ge.snap_enabled = !ge.snap_enabled;
+        ss->menu.layout_edit.snap = ge.snap_enabled;
+        ss->menu.objects_edit.snap = ge.snap_enabled;
+        ge.status = ge.snap_enabled ? "Snap enabled." : "Snap disabled.";
+    }
 }
 
 bool gui_editor_consumes_input() {
@@ -537,11 +636,11 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
             ge.status = "Navigation mode: WASD sets direction, Space/click targets.";
         } else if (ss->menu_inputs.object_toggle) {
             ge.mode = decltype(ge.mode)::Object;
-            ge.status = "Object mode: Enter spawns, Delete removes, D duplicates.";
+            ge.status = "Object mode (stubbed): Enter spawns, Delete removes, D duplicates.";
             start_object_mode();
         } else if (ss->menu_inputs.warp_toggle) {
             ge.mode = decltype(ge.mode)::Warp;
-            ge.status = "Warp editing not available yet.";
+            ge.status = "Warp mode (stubbed): placeholder only.";
         }
     }
 
@@ -586,9 +685,11 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
     }
     stop_object_mode();
     if (ge.mode == decltype(ge.mode)::Warp) {
-        ge.mode = decltype(ge.mode)::None;
+        ge.status = "Warp mode stubbed out for now.";
     }
-    ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, W=Warp, H=Help. Esc returns to screen list.";
+    if (ge.mode == decltype(ge.mode)::None) {
+        ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, W=Warp, H=Help. Esc returns to screen list.";
+    }
     ss->menu.mouse_left_prev = ss->mouse_inputs.left;
 }
 
@@ -682,8 +783,8 @@ void gui_editor_render(SDL_Renderer* r, int width, int height) {
     switch (ge.mode) {
         case decltype(ge.mode)::Layout: mode = "Mode: Layout"; break;
         case decltype(ge.mode)::Nav: mode = "Mode: Navigation"; break;
-        case decltype(ge.mode)::Object: mode = "Mode: Objects"; break;
-        case decltype(ge.mode)::Warp: mode = "Mode: Warp"; break;
+        case decltype(ge.mode)::Object: mode = "Mode: Objects (stubbed)"; break;
+        case decltype(ge.mode)::Warp: mode = "Mode: Warp (stubbed)"; break;
         default: mode = "Mode: Neutral (L/N/O/W, H for help)"; break;
     }
     draw_text(headline, margin, y, fg);
@@ -692,6 +793,13 @@ void gui_editor_render(SDL_Renderer* r, int width, int height) {
         draw_text(ge.status, margin, y + 52, SDL_Color{200, 160, 160, 255});
     if (ge.mode == decltype(ge.mode)::Object && ss && ss->menu.objects_edit.enabled)
         render_object_overlay(r, width, height);
+    if (ge.mode == decltype(ge.mode)::Warp)
+        render_warp_stub(r, width, height);
+    if (ge.mode == decltype(ge.mode)::Object) {
+        draw_text("Object Mode (stubbed)", margin, y + 80, SDL_Color{200, 200, 230, 255});
+    } else if (ge.mode == decltype(ge.mode)::Warp) {
+        draw_text("Warp Mode (stubbed)", margin, y + 80, SDL_Color{200, 200, 230, 255});
+    }
     if (ge.show_help) {
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         SDL_Rect panel{width - 420, 40, 380, 260};
