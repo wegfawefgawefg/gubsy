@@ -5,11 +5,10 @@
 #include <algorithm>
 #include <cctype>
 #include "mode_registry.hpp"
+#include <engine/mode_registry.hpp>
+#include <SDL_keyboard.h>
+#include <engine/globals.hpp>
 
-static bool sdl_is_down(SDL_Scancode sc) {
-    const Uint8* ks = SDL_GetKeyboardState(nullptr);
-    return ks[sc] != 0;
-}
 
 void process_inputs() {
     // Dispatch to current mode's input processor
@@ -20,39 +19,39 @@ void process_inputs() {
     }
 }
 
-namespace {
-void ensure_default_input_profile() {
-    migrate_legacy_input_config();
-    ensure_input_profiles_dir();
-    auto profiles = list_input_profiles();
-    if (profiles.empty()) {
-        InputBindings defaults{};
-        save_input_profile(default_input_profile_name(), defaults, true);
-        profiles = list_input_profiles();
-    }
-    auto profile_exists = [&](const std::string& name) {
-        return std::any_of(profiles.begin(), profiles.end(),
-                           [&](const InputProfileInfo& info) { return info.name == name; });
-    };
+// namespace {
+// void ensure_default_input_profile() {
+//     migrate_legacy_input_config();
+//     ensure_input_profiles_dir();
+//     auto profiles = list_input_profiles();
+//     if (profiles.empty()) {
+//         InputBindings defaults{};
+//         save_input_profile(default_input_profile_name(), defaults, true);
+//         profiles = list_input_profiles();
+//     }
+//     auto profile_exists = [&](const std::string& name) {
+//         return std::any_of(profiles.begin(), profiles.end(),
+//                            [&](const InputProfileInfo& info) { return info.name == name; });
+//     };
 
-    std::string active_profile = load_active_input_profile_name();
-    if (active_profile.empty() || !profile_exists(active_profile))
-        active_profile = default_input_profile_name();
+//     std::string active_profile = load_active_input_profile_name();
+//     if (active_profile.empty() || !profile_exists(active_profile))
+//         active_profile = default_input_profile_name();
 
-    InputBindings loaded_binds{};
-    if (!load_input_profile(active_profile, &loaded_binds)) {
-        active_profile = default_input_profile_name();
-        load_input_profile(active_profile, &loaded_binds);
-    }
+//     InputBindings loaded_binds{};
+//     if (!load_input_profile(active_profile, &loaded_binds)) {
+//         active_profile = default_input_profile_name();
+//         load_input_profile(active_profile, &loaded_binds);
+//     }
 
-    ss->input_binds = loaded_binds;
-    ss->menu.binds_current_preset = active_profile;
-    ss->menu.binds_snapshot = loaded_binds;
-    ss->menu.binds_dirty = false;
-    refresh_binds_profiles();
-    save_active_input_profile_name(active_profile);
-}
-} // namespace
+//     ss->input_binds = loaded_binds;
+//     ss->menu.binds_current_preset = active_profile;
+//     ss->menu.binds_snapshot = loaded_binds;
+//     ss->menu.binds_dirty = false;
+//     refresh_binds_profiles();
+//     save_active_input_profile_name(active_profile);
+// }
+// } // namespace
 
 
 // old shit
@@ -295,6 +294,3 @@ void ensure_default_input_profile() {
 //     ss->menu.hold_up = held.up;
 //     ss->menu.hold_down = held.down;
 // }
-
-
-

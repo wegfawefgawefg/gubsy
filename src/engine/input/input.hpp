@@ -75,7 +75,7 @@ struct KeyEdge {
 
 
 // enum of all possible inputs across all devices
-enum class GubsyButtons {
+enum class GubsyButton {
     // Keyboard keys
     KB_A, KB_B, KB_C, KB_D, KB_E, KB_F, KB_G, KB_H, KB_I, KB_J, KB_K, KB_L, KB_M,
     KB_N, KB_O, KB_P, KB_Q, KB_R, KB_S, KB_T, KB_U, KB_V, KB_W, KB_X, KB_Y, KB_Z,
@@ -109,13 +109,14 @@ enum class GubsyButtons {
 };
 
 // enum of axes for analog inputs
-enum class GubsyGamepadAxes {
+enum class GubsyAnalog {
     // Gamepad axes
     GP_LEFT_STICK, GP_RIGHT_STICK,
     GP_LEFT_TRIGGER, GP_RIGHT_TRIGGER,
-};
 
-// enum for mouse analog not needed bc dedicated functions
+    // Mouse axes
+    MOUSE_X, MOUSE_Y, MOUSE_WHEEL,
+};
 
 // for edge detection
 struct LastKBInputState {
@@ -151,8 +152,6 @@ struct LastKBInputState {
 
     // Misc
     bool numlock, application, menu;
-
-
 };
 
 // for edge detection - mouse
@@ -249,41 +248,14 @@ struct SourceInputState {
 };
 
 // A source + its profile + its runtime state
-struct SourceProfilePair {
-    InputSource source;
-    InputProfile profile;
-    SourceInputState state;
+struct UserProfileInputProfilePair {
+    int user_profile_id;
+    int input_profile_id;
 };
 
-// All input data for one player
-struct PlayerInputData {
-    std::vector<SourceProfilePair> source_profile_pairs;
-};
-
-// Global input system state - list of all players
-struct InputSystemState {
-    std::vector<PlayerInputData> players;
-};
-
-
-
-// was_pressed(button)
-//     takes in a gubsy input
-//     does a primary mapping lookup
-//     does a secondary mapping lookup
-
-// is_down(button)
-//     takes in a gubsy input
-//     does a primary mapping lookup
-//     does a secondary mapping lookup
-
-// mouse stuff?
-// mouse_motion()
-// mouse_pos()
-// mouse_window_pos()
-
-
-
+struct PlayerInputSources{
+    std::vector<InputSource> sources;
+}
 
 /** dispatches to specific "process_inputs" per mode. */
 void process_inputs();
