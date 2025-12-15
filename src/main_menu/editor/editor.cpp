@@ -456,35 +456,6 @@ void gui_editor_handle_shortcuts(Page current_page) {
     } else {
         ge.page = current_page;
     }
-
-    if (ge.view != decltype(ge.view)::Screen)
-        return;
-
-    if (ss->menu_inputs.layout_toggle) {
-        ge.mode = decltype(ge.mode)::Layout;
-        ge.status = "Layout mode active. Esc to exit.";
-    }
-    if (ss->menu_inputs.nav_toggle) {
-        ge.mode = decltype(ge.mode)::Nav;
-        ge.status = "Navigation mode active. Esc to exit.";
-    }
-    if (ss->menu_inputs.object_toggle) {
-        ge.mode = decltype(ge.mode)::Object;
-        ge.status = "Object mode (stubbed): Enter to add, Delete to remove.";
-        start_object_mode();
-    }
-    if (ss->menu_inputs.warp_toggle) {
-        ge.mode = decltype(ge.mode)::Warp;
-        ge.status = "Warp mode (stubbed).";
-    }
-    if (ss->menu_inputs.help_toggle)
-        ge.show_help = !ge.show_help;
-    if (ss->menu_inputs.snap_toggle) {
-        ge.snap_enabled = !ge.snap_enabled;
-        ss->menu.layout_edit.snap = ge.snap_enabled;
-        ss->menu.objects_edit.snap = ge.snap_enabled;
-        ge.status = ge.snap_enabled ? "Snap enabled." : "Snap disabled.";
-    }
 }
 
 bool gui_editor_consumes_input() {
@@ -535,6 +506,21 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
         }
         ss->menu.mouse_left_prev = ss->mouse_inputs.left;
         return;
+    }
+
+    // Handle help and snap toggles in both Screens and Screen views
+    bool status_was_set = false;
+    if (ss->menu_inputs.help_toggle) {
+        ge.show_help = !ge.show_help;
+        ge.status = ge.show_help ? "Help shown." : "Help hidden.";
+        status_was_set = true;
+    }
+    if (ss->menu_inputs.snap_toggle) {
+        ge.snap_enabled = !ge.snap_enabled;
+        ss->menu.layout_edit.snap = ge.snap_enabled;
+        ss->menu.objects_edit.snap = ge.snap_enabled;
+        ge.status = ge.snap_enabled ? "Snap enabled." : "Snap disabled.";
+        status_was_set = true;
     }
 
     if (ge.view == decltype(ge.view)::Screens) {
@@ -597,7 +583,7 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
                 ge.page = info.page;
                 ge.mode = decltype(ge.mode)::None;
                 ge.view = decltype(ge.view)::Screen;
-                ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, W=Warp, H=Help. Esc to return.";
+                ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, Z=Warp, H=Help, X=Snap. Esc to return.";
                 if (const char* key = page_key(info.page)) {
                     layout_set_page(key);
                     gui_objects_set_page(key);
@@ -618,30 +604,37 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
         return;
     }
 
-    if (ss->menu_inputs.help_toggle)
-        ge.show_help = !ge.show_help;
-    if (ss->menu_inputs.snap_toggle) {
-        ge.snap_enabled = !ge.snap_enabled;
-        ss->menu.layout_edit.snap = ge.snap_enabled;
-        ss->menu.objects_edit.snap = ge.snap_enabled;
-        ge.status = ge.snap_enabled ? "Snap enabled." : "Snap disabled.";
-    }
-
-    if (ge.mode == decltype(ge.mode)::None) {
-        if (ss->menu_inputs.layout_toggle) {
-            ge.mode = decltype(ge.mode)::Layout;
-            ge.status = "Layout mode: drag handles, Ctrl+R resets, Esc exits.";
-        } else if (ss->menu_inputs.nav_toggle) {
-            ge.mode = decltype(ge.mode)::Nav;
-            ge.status = "Navigation mode: WASD sets direction, Space/click targets.";
-        } else if (ss->menu_inputs.object_toggle) {
-            ge.mode = decltype(ge.mode)::Object;
-            ge.status = "Object mode (stubbed): Enter spawns, Delete removes, D duplicates.";
-            start_object_mode();
-        } else if (ss->menu_inputs.warp_toggle) {
-            ge.mode = decltype(ge.mode)::Warp;
-            ge.status = "Warp mode (stubbed): placeholder only.";
+    auto leave_current_mode = [&]() {
+        switch (ge.mode) {
+            case decltype(ge.mode)::Layout: stop_layout_mode(); break;
+            case decltype(ge.mode)::Nav: stop_nav_mode(); break;
+            case decltype(ge.mode)::Object: stop_object_mode(); break;
+            default: break;
         }
+        ge.mode = decltype(ge.mode)::None;
+    };
+    auto switch_mode = [&](decltype(ge.mode) target) {
+        if (ge.mode == target)
+            return;
+        leave_current_mode();
+        ge.mode = target;
+        if (target == decltype(ge.mode)::Object)
+            start_object_mode();
+        ge.dir_prev.fill(false);
+    };
+
+    if (ss->menu_inputs.layout_toggle) {
+        switch_mode(decltype(ge.mode)::Layout);
+        ge.status = "Layout mode: drag handles, Ctrl+R resets, Esc exits.";
+    } else if (ss->menu_inputs.nav_toggle) {
+        switch_mode(decltype(ge.mode)::Nav);
+        ge.status = "Navigation mode: WASD sets direction, Space/click targets.";
+    } else if (ss->menu_inputs.object_toggle) {
+        switch_mode(decltype(ge.mode)::Object);
+        ge.status = "Object mode (stubbed): Enter spawns, Delete removes, D duplicates.";
+    } else if (ss->menu_inputs.warp_toggle) {
+        switch_mode(decltype(ge.mode)::Warp);
+        ge.status = "Warp mode (stubbed): placeholder only.";
     }
 
     if (ge.mode == decltype(ge.mode)::Layout) {
@@ -687,9 +680,10 @@ void gui_editor_step(const std::vector<ButtonDesc>& buttons, int width, int heig
     if (ge.mode == decltype(ge.mode)::Warp) {
         ge.status = "Warp mode stubbed out for now.";
     }
-    if (ge.mode == decltype(ge.mode)::None) {
-        ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, W=Warp, H=Help. Esc returns to screen list.";
+    if (ge.mode == decltype(ge.mode)::None && !status_was_set) {
+        ge.status = "Hotkeys: L=Layout, N=Nav, O=Objects, Z=Warp, H=Help, X=Snap. Esc returns to screen list.";
     }
+    printf("DEBUG END STEP: status='%s', show_help=%d, snap=%d\n", ge.status.c_str(), ge.show_help, ge.snap_enabled);
     ss->menu.mouse_left_prev = ss->mouse_inputs.left;
 }
 
@@ -775,6 +769,35 @@ void gui_editor_render(SDL_Renderer* r, int width, int height) {
                 SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
             }
         }
+        // Render help panel in Screens view before returning
+        if (ge.show_help) {
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+            SDL_Rect panel{width - 420, 40, 380, 280};
+            SDL_SetRenderDrawColor(r, 10, 10, 20, 230);
+            SDL_RenderFillRect(r, &panel);
+            SDL_SetRenderDrawColor(r, 200, 200, 210, 255);
+            SDL_RenderDrawRect(r, &panel);
+            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+            int tx = panel.x + 16;
+            int ty = panel.y + 12;
+            draw_text("Editor Help", tx, ty, SDL_Color{240, 220, 120, 255});
+            ty += 28;
+            const char* lines[] = {
+                "L: Layout mode (Ctrl+R resets)",
+                "N: Navigation mode",
+                "O: Object mode (Enter spawn, D dup, Delete remove)",
+                "Z: Warp mode (coming soon)",
+                "X: Toggle snap grid",
+                "H: Toggle this help panel",
+                "F/Enter in object mode: rename",
+                "Esc: Exit mode, Esc twice returns to screens",
+                "Ctrl+E: Exit editor"
+            };
+            for (const char* line : lines) {
+                draw_text(line, tx, ty, SDL_Color{210, 210, 225, 255});
+                ty += 22;
+            }
+        }
         return;
     }
 
@@ -816,8 +839,9 @@ void gui_editor_render(SDL_Renderer* r, int width, int height) {
             "L: Layout mode (Ctrl+R resets)",
             "N: Navigation mode",
             "O: Object mode (Enter spawn, D dup, Delete remove)",
-            "W: Warp mode (coming soon)",
-            "S: Toggle snap grid",
+            "Z: Warp mode (coming soon)",
+            "X: Toggle snap grid",
+            "H: Toggle this help panel",
             "F/Enter in object mode: rename",
             "Esc: Exit mode, Esc twice returns to screens",
             "Ctrl+E: Exit editor"

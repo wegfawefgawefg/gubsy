@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include "mode_registry.hpp"
 
 // Forward declaration used within this translation unit
 void collect_menu_inputs();
@@ -142,10 +143,10 @@ void collect_menu_inputs() {
     bool kb_layout_toggle = kb(SDL_SCANCODE_L);
     bool kb_nav_toggle = kb(SDL_SCANCODE_N);
     bool kb_object_toggle = kb(SDL_SCANCODE_O);
-    bool kb_warp_toggle = kb(SDL_SCANCODE_W);
+    bool kb_warp_toggle = kb(SDL_SCANCODE_Z);
     bool kb_label_edit = kb(SDL_SCANCODE_F) || kb(SDL_SCANCODE_RETURN);
     bool kb_help_toggle = kb(SDL_SCANCODE_H) || (kb_ctrl && kb(SDL_SCANCODE_H));
-    bool kb_snap_toggle = kb(SDL_SCANCODE_S);
+    bool kb_snap_toggle = kb(SDL_SCANCODE_X);
     bool kb_layout_reset = kb_ctrl && kb(SDL_SCANCODE_R);
     bool kb_duplicate = kb(SDL_SCANCODE_D);
     bool kb_delete_key = kb(SDL_SCANCODE_DELETE);
@@ -261,13 +262,16 @@ void collect_menu_inputs() {
 }
 
 void process_inputs() {
-    if (is_down(SDL_SCANCODE_ESCAPE) && ss->mode != modes::TITLE)
+    // REMOVE THIS WHEN THE GAME IS DONE
+    if (is_down(SDL_SCANCODE_ESCAPE) && ss->mode == modes::TITLE)
         ss->running = false;
+    
 
-    if (ss->mode == modes::TITLE) {
-        process_inputs_title();
-    } else if (ss->mode == modes::PLAYING) {
-        process_inputs_playing();
+    // Dispatch to current mode's input processor
+    if (const ModeDesc* mode = find_mode(ss->mode)) {
+        if (mode->process_inputs_fn) {
+            mode->process_inputs_fn();
+        }
     }
 }
 

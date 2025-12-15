@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/config.hpp"
+#include "config.hpp"
 #include "engine/input.hpp"
 #include "engine/input_defs.hpp"
 #include "modes.hpp"
@@ -71,7 +71,7 @@ struct MenuNavEdges {
     }
 };
 
-struct State {
+struct EngineState {
     struct MenuState {
         // Pages: 0=Main, 1=Settings hub
         int page{0};
@@ -262,5 +262,5 @@ struct State {
     bool show_gun_panel{true};
 };
 
-bool init_state();
-void cleanup_state();
+bool init_engine_state();
+void cleanup_engine_state();

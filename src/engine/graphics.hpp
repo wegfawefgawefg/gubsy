@@ -46,9 +46,9 @@ struct Graphics {
     std::unordered_map<int, SDL_Texture*> textures_by_id;
 };
 
-// Initialize window/renderer into Graphics. When headless is true, no window/renderer is created.
-// Returns true on success (including headless); false if windowed init fails.
-bool init_graphics(bool headless);
+// Initialize window/renderer into Graphics.
+// Returns true on success false if windowed init fails.
+bool init_graphics();
 
 // Destroy renderer/window if present and reset pointers.
 void cleanup_graphics();

@@ -56,7 +56,7 @@ bool try_init_video_with_driver(const char* driver) {
     return false;
 }
 
-bool init_graphics(bool headless) {
+bool init_graphics() {
     gg = new Graphics{};
 
     const char* title = "artificial";
@@ -71,19 +71,6 @@ bool init_graphics(bool headless) {
     const char* env_display = std::getenv("DISPLAY");
     const char* env_wayland = std::getenv("WAYLAND_DISPLAY");
     const char* env_sdl_driver = std::getenv("SDL_VIDEODRIVER");
-
-    if (headless) {
-        if (!try_init_video_with_driver("dummy"))
-            return false;
-        // No window/renderer in headless
-        return true;
-    }
-
-    // Ignore accidental dummy driver in non-headless mode
-    if (env_sdl_driver && std::strcmp(env_sdl_driver, "dummy") == 0) {
-        unsetenv("SDL_VIDEODRIVER");
-        env_sdl_driver = nullptr;
-    }
 
     bool initialized = false;
     if (env_sdl_driver && *env_sdl_driver)

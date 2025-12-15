@@ -144,7 +144,7 @@ void undo_active_bind_changes() {
 }
 
 bool menu_is_text_input_active() {
-    return ss && ss->menu.binds_text_input_active;
+    return ss->menu.binds_text_input_active;
 }
 
 void menu_text_input_append(char c) {

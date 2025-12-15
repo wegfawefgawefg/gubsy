@@ -7,17 +7,18 @@
 #include "game_modes.hpp"
 #include "globals.hpp"
 #include "main_menu/menu.hpp"
-#include "mods.hpp"
+#include "engine/mods.hpp"
 #include "render.hpp"
 #include "settings.hpp"
 #include "state.hpp"
-#include "step.hpp"
+#include "engine/step.hpp"
 
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cstdio>
 #include <string>
 #include <vector>
+#include "engine/step.hpp"
 
 namespace {
 void ensure_default_input_profile() {
@@ -53,24 +54,8 @@ void ensure_default_input_profile() {
 }
 } // namespace
 
-int main(int argc, char** argv) {
-    bool arg_headless = false;
-    long arg_frames = -1;
-    for (int i = 1; i < argc; ++i) {
-        std::string a(argv[i]);
-        if (a == "--headless")
-            arg_headless = true;
-        else if (a.rfind("--frames=", 0) == 0) {
-            std::string v = a.substr(9);
-            try {
-                arg_frames = std::stol(v);
-            } catch (...) {
-                arg_frames = -1;
-            }
-        }
-    }
-
-    if (!init_graphics(arg_headless)) {
+int main() {
+    if (!init_graphics()) {
         SDL_Quit();
         return 1;
     }
@@ -96,8 +81,7 @@ int main(int argc, char** argv) {
 
     discover_mods();
     scan_mods_for_sprite_defs();
-    if (!arg_headless)
-        load_all_textures_in_sprite_lookup();
+    load_all_textures_in_sprite_lookup();
     load_mod_sounds();
     load_demo_content();
 
@@ -131,8 +115,7 @@ int main(int argc, char** argv) {
         process_inputs();
         step();
 
-        if (!arg_headless)
-            render();
+        render();
 
         accum_sec += dt;
         frame_counter += 1;
@@ -141,13 +124,7 @@ int main(int argc, char** argv) {
             frame_counter = 0;
             accum_sec -= 1.0f;
             title_buf = "gubsy demo - FPS: " + std::to_string(last_fps);
-            if (!arg_headless && gg && gg->window)
-                SDL_SetWindowTitle(gg->window, title_buf.c_str());
-        }
-
-        if (arg_frames >= 0) {
-            if (--arg_frames <= 0)
-                ss->running = false;
+            SDL_SetWindowTitle(gg->window, title_buf.c_str());
         }
     }
 

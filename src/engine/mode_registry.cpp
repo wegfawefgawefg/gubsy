@@ -11,13 +11,14 @@ std::unordered_map<std::string, std::size_t> g_mode_lookup;
 
 void register_mode(const std::string& name,
                    void (*step_fn)(),
+                   void (*process_inputs_fn)(),
                    void (*render_fn)()) {
     auto it = g_mode_lookup.find(name);
     if (it != g_mode_lookup.end()) {
-        g_modes[it->second] = ModeDesc{name, step_fn, render_fn};
+        g_modes[it->second] = ModeDesc{name, step_fn, process_inputs_fn, render_fn};
         return;
     }
-    g_modes.push_back(ModeDesc{name, step_fn, render_fn});
+    g_modes.push_back(ModeDesc{name, step_fn, process_inputs_fn, render_fn});
     g_mode_lookup[name] = g_modes.size() - 1;
 }
 

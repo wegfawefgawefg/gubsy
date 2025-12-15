@@ -35,7 +35,7 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
 void add_alert(const std::string& text) {
     if (!ss)
         return;
-    State::Alert al;
+    Alert al;
     al.text = text;
     al.ttl = 1.2f;
     ss->alerts.push_back(al);

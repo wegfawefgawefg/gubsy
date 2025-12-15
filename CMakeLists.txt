@@ -11,38 +11,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(GUB_SOURCES
-  src/main.cpp
-  src/globals.cpp
-  src/state.cpp
-  src/render.cpp
-  src/game_modes.cpp
-  src/step.cpp
-  src/step/mode_playing.cpp
-  src/step/mode_title.cpp
-  src/config.cpp
-  src/input_debounce.cpp
-  src/main_menu/menu_binds.cpp
-  src/main_menu/menu_buttons.cpp
-  src/main_menu/menu_mods.cpp
-  src/main_menu/menu_layout.cpp
-  src/main_menu/menu_objects.cpp
-  src/main_menu/editor/editor.cpp
-  src/main_menu/menu_navgraph.cpp
-  src/main_menu/menu_lobby.cpp
-  src/main_menu/menu_render.cpp
-  src/main_menu/menu_step.cpp
-  src/mods.cpp
-  src/mods_helpers.cpp
-  src/demo_content.cpp
-  src/demo_items.cpp
-  src/engine/alerts.cpp
-  src/engine/audio.cpp
-  src/engine/graphics.cpp
-  src/engine/input.cpp
-  src/engine/mode_registry.cpp
-  src/engine/sprites.cpp
+# Auto-discover all .cpp files in these directories
+set(GUB_SOURCE_DIRS
+  src
+  src/engine
+  src/step
+  src/main_menu
+  src/main_menu/editor
 )
+
+set(GUB_SOURCES "")
+foreach(dir ${GUB_SOURCE_DIRS})
+  file(GLOB sources_in_dir "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/*.cpp")
+  list(APPEND GUB_SOURCES ${sources_in_dir})
+endforeach()
 
 add_executable(gubsy ${GUB_SOURCES})
 

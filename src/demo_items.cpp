@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <sol/sol.hpp>
+#include "engine/alerts.hpp"
 
 namespace {
 
@@ -40,7 +41,7 @@ bool g_use_mod_filter = false;
 struct DemoApi {
     void alert(const std::string& text) const {
         if (!ss) return;
-        State::Alert al;
+        Alert al;
         al.text = text;
         al.ttl = 1.4f;
         ss->alerts.push_back(al);
@@ -282,7 +283,7 @@ bool load_demo_item_defs() {
         } catch (const sol::error& e) {
             std::fprintf(stderr, "[demo_items] exception loading %s: %s\n",
                          script.string().c_str(), e.what());
-            State::Alert al;
+            Alert al;
             al.text = std::string("Mod load failed: ") + mod.name;
             al.ttl = 2.0f;
             al.purge_eof = true;
@@ -347,7 +348,7 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
     } catch (const sol::error& e) {
         std::fprintf(stderr, "[demo_items] on_use exception (%s): %s\n",
                      rec.def.id.c_str(), e.what());
-        State::Alert al;
+        Alert al;
         al.text = std::string("Pad failed: ") + rec.def.label;
         al.ttl = 1.5f;
         if (ss)
@@ -358,7 +359,7 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
         sol::error e = r;
         std::fprintf(stderr, "[demo_items] on_use error (%s): %s\n",
                      rec.def.id.c_str(), e.what());
-        State::Alert al;
+        Alert al;
         al.text = std::string("Pad error: ") + rec.def.label;
         al.ttl = 1.5f;
         if (ss)

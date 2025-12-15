@@ -507,7 +507,7 @@ void step_menu_logic(int width, int height) {
                                         if (aa) play_sound(was_installed ? "base:ui_cant" : "base:ui_confirm");
                                         rebuild_mods_filter();
                                     } else {
-                                        State::Alert al;
+                                        Alert al;
                                         al.text = err.empty() ? "Mod operation failed" : err;
                                         al.ttl = 1.6f;
                                         ss->alerts.push_back(al);
@@ -961,7 +961,7 @@ void step_menu_logic(int width, int height) {
                                         if (aa) play_sound(was_installed ? "base:ui_cant" : "base:ui_confirm");
                                         rebuild_mods_filter();
                                     } else {
-                                        State::Alert al;
+                                        Alert al;
                                         al.text = err.empty() ? "Mod operation failed" : err;
                                         al.ttl = 1.6f;
                                         ss->alerts.push_back(al);
