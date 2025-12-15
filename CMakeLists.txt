@@ -11,20 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Auto-discover all .cpp files in these directories
-set(GUB_SOURCE_DIRS
-  src
-  src/engine
-  src/step
-  src/main_menu
-  src/main_menu/editor
+# Auto-discover all .cpp and .hpp files recursively in src/
+file(GLOB_RECURSE GUB_SOURCES
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
-
-set(GUB_SOURCES "")
-foreach(dir ${GUB_SOURCE_DIRS})
-  file(GLOB sources_in_dir "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/*.cpp")
-  list(APPEND GUB_SOURCES ${sources_in_dir})
-endforeach()
 
 add_executable(gubsy ${GUB_SOURCES})
 

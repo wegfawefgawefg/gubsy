@@ -5,7 +5,7 @@
 #include "engine/engine_state.hpp"
 #include "engine/mods.hpp"
 #include "engine/engine_state.hpp"
-#include "state.hpp"
+#include "game/state.hpp"
 
 // Shared pointers to systems used across modules.
 extern EngineState* es;

@@ -153,7 +153,7 @@ static float clamp01(float v) {
     return std::clamp(v, 0.0f, 1.0f);
 }
 
-bool load_audio_settings_from_ini(const std::string& path) {
+bool load_audio_settings(const std::string& path) {
     if (!ss)
         return false;
     std::ifstream f(path);

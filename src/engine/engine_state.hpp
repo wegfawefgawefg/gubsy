@@ -1,11 +1,6 @@
 #pragma once
 
 #include "config.hpp"
-#include "engine/input.hpp"
-#include "engine/input_defs.hpp"
-#include "modes.hpp"
-#include "settings.hpp"
-#include "main_menu/menu.hpp"
 #include "engine/alerts.hpp"
 
 #include <array>
@@ -15,39 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-struct ModFileEntry {
-    std::string path;
-    std::uint64_t size_bytes{0};
-};
-
-struct ModCatalogEntry {
-    std::string id;
-    std::string folder;
-    std::string title;
-    std::string author;
-    std::string version;
-    std::string summary;
-    std::vector<std::string> dependencies;
-    std::vector<ModFileEntry> files;
-    std::uint64_t total_bytes{0};
-    bool required{false};
-    bool installed{false};
-    bool installing{false};
-    bool uninstalling{false};
-    std::string status_text;
-};
-
-struct LobbyModEntry {
-    std::string id;
-    std::string title;
-    std::string author;
-    std::string description;
-    std::vector<std::string> dependencies;
-    bool required{false};
-    bool enabled{false};
-};
-
+#include "mode_registry.hpp"
 struct LobbySettings {
     std::string session_name{"Local Session"};
     int privacy{0}; // 0=Solo,1=Friends,2=Public
@@ -72,6 +35,17 @@ struct MenuNavEdges {
 };
 
 struct EngineState {
+    bool running{true};
+    
+    double now{0.0};
+    float dt{0.0f};
+    float accumulator{0.0f};
+    std::uint64_t frame{0};
+    
+    std::string mode{"none"};
+    std::vector<ModeDesc> modes;
+    std::unordered_map<std::string, std::size_t> mode_lookup;
+
     struct MenuState {
         // Pages: 0=Main, 1=Settings hub
         int page{0};
@@ -86,12 +60,6 @@ struct EngineState {
         float vol_master{1.0f};
         float vol_music{1.0f};
         float vol_sfx{1.0f};
-        bool audio_settings_dirty{false};
-        int audio_nav_active_id{-1};
-        uint8_t audio_nav_active_mask{0};
-        float audio_slider_preview_cooldown[3]{0.0f, 0.0f, 0.0f};
-        float audio_slider_preview_anchor[3]{0.0f, 0.0f, 0.0f};
-        bool audio_slider_preview_anchor_valid[3]{false, false, false};
 
         // Video
         int video_res_index{0};
@@ -221,45 +189,10 @@ struct EngineState {
         LobbySettings lobby{};
     };
 
-    struct DemoPlayer {
-        glm::vec2 pos{0.0f, 0.0f};
-        glm::vec2 half_size{PLAYER_HALF_SIZE_UNITS, PLAYER_HALF_SIZE_UNITS};
-        float speed_units_per_sec{PLAYER_MOVE_SPEED_UNITS};
-    };
-
-    struct BonkTarget {
-        glm::vec2 pos{2.5f, 0.0f};
-        glm::vec2 half_size{BONK_HALF_SIZE_UNITS, BONK_HALF_SIZE_UNITS};
-        float cooldown{0.0f};
-        std::string sound_key{"base:ui_confirm"};
-        bool enabled{true};
-    };
-
-    bool running{true};
-    std::string mode{modes::TITLE};
-
-    double now{0.0};
-    float dt{0.0f};
-    float accumulator{0.0f};
-    std::uint64_t frame{0};
-
-    MouseInputs mouse_inputs{};
-    MenuInputs menu_inputs{};
-    MenuInputDebounceTimers menu_input_debounce_timers{};
-    PlayingInputs playing_inputs{};
-    PlayingInputDebounceTimers playing_input_debounce_timers{};
-    InputState input_state{};
     InputBindings input_binds{};
 
-    std::vector<Alert> alerts;
+    std::vector<Alert> alerts{};
     MenuState menu{};
-
-    DemoPlayer player{};
-    BonkTarget bonk{};
-    bool use_interact_prev{false};
-
-    bool show_character_panel{false};
-    bool show_gun_panel{true};
 };
 
 bool init_engine_state();

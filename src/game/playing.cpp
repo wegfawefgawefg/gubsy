@@ -1,103 +1,75 @@
-#include "render.hpp"
+#include "game/playing.hpp"
 
-#include "engine/mode_registry.hpp"
-#include "engine/graphics.hpp"
-#include "globals.hpp"
+#include "engine/audio.hpp"
+#include "engine/globals.hpp"
 #include "settings.hpp"
-#include "main_menu/menu.hpp"
 #include "state.hpp"
 #include "demo_items.hpp"
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
 #include <algorithm>
-#include <cmath>
-#include <string>
 #include <glm/glm.hpp>
+#include <string>
+#include <engine/alerts.hpp>
+#include <game/settings.hpp>
+#include <game/demo_items.hpp>
+#include <engine/globals.hpp>
 
-namespace {
-struct ScreenSpace {
-    float scale{64.0f};
-    float cx{0.0f};
-    float cy{0.0f};
-};
 
-ScreenSpace make_space(int width, int height) {
-    ScreenSpace space{};
-    space.scale = static_cast<float>(std::min(width, height)) * 0.08f;
-    space.cx = static_cast<float>(width) * 0.5f;
-    space.cy = static_cast<float>(height) * 0.5f;
-    return space;
+bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
+              const glm::vec2& b_pos, const glm::vec2& b_half) {
+    glm::vec2 delta = glm::abs(a_pos - b_pos);
+    return delta.x <= (a_half.x + b_half.x) && delta.y <= (a_half.y + b_half.y);
 }
 
-SDL_FRect rect_for(const glm::vec2& pos, const glm::vec2& half, const ScreenSpace& space) {
-    float sx = space.cx + pos.x * space.scale - half.x * space.scale;
-    float sy = space.cy + pos.y * space.scale - half.y * space.scale;
-    float sw = half.x * 2.0f * space.scale;
-    float sh = half.y * 2.0f * space.scale;
-    return SDL_FRect{sx, sy, sw, sh};
-}
 
-void fill_and_outline(SDL_Renderer* renderer, const SDL_FRect& rect,
-                      SDL_Color fill, SDL_Color border) {
-    SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-    SDL_RenderFillRectF(renderer, &rect);
-    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRectF(renderer, &rect);
-}
 
-Uint8 channel_from_vec(float v) {
-    float clamped = std::clamp(v, 0.0f, 1.0f);
-    return static_cast<Uint8>(std::round(clamped * 255.0f));
-}
+void step_playing() {
+    const float dt = FIXED_TIMESTEP;
+    auto& player = ss->player;
+    auto& target = ss->bonk;
 
-SDL_Color color_from_vec3(const glm::vec3& v, Uint8 alpha = 255) {
-    return SDL_Color{channel_from_vec(v.r), channel_from_vec(v.g), channel_from_vec(v.b), alpha};
-}
+    glm::vec2 dir = movement_direction();
+    player.pos += dir * player.speed_units_per_sec * dt;
 
-glm::vec3 brighten(const glm::vec3& base, float amount) {
-    return glm::clamp(base + glm::vec3(amount), glm::vec3(0.0f), glm::vec3(1.0f));
-}
+    if (target.cooldown > 0.0f)
+        target.cooldown = std::max(0.0f, target.cooldown - dt);
 
-void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
-    if (!gg || !gg->ui_font || text.empty())
-        return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, text.c_str(), color);
-    if (!surf)
-        return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_FreeSurface(surf);
-    if (!tex)
-        return;
-    int w = 0, h = 0;
-    SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
-    SDL_Rect dst{x, y, w, h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-}
-
-void render_alerts(SDL_Renderer* renderer, int width) {
-    if (!ss || ss->alerts.empty())
-        return;
-    int y = 20;
-    for (const auto& alert : ss->alerts) {
-        draw_text(renderer, alert.text, 24, y, SDL_Color{255, 235, 160, 255});
-        y += 22;
-        if (y > 200)
-            break;
+    if (target.enabled &&
+        overlaps(player.pos, player.half_size, target.pos, target.half_size) &&
+        target.cooldown <= 0.0f) {
+        target.cooldown = BONK_COOLDOWN_SECONDS;
+        add_alert("bonk!");
+        const std::string sound = target.sound_key.empty() ? "base:ui_confirm" : target.sound_key;
+        play_sound(sound);
     }
 
-    // Mode label
-    std::string mode = "Mode: " + ss->mode;
-    draw_text(renderer, mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
+    const bool use_pressed = ss->playing_inputs.use_center && !ss->use_interact_prev;
+    ss->use_interact_prev = ss->playing_inputs.use_center;
+    if (use_pressed) {
+        const float player_radius = glm::length(player.half_size);
+        for (const auto& slot : demo_item_instance_slots()) {
+            if (!slot.active)
+                continue;
+            const DemoItemInstance& inst = slot.value;
+            const DemoItemDef* def = demo_item_def(inst);
+            if (!def)
+                continue;
+            float dist = glm::length(player.pos - inst.position);
+            if (dist <= (player_radius + def->radius)) {
+                trigger_demo_item_use(inst);
+                break;
+            }
+        }
+    }
 }
+
 
 void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, const std::string& text) {
     int margin = 24;
     draw_text(renderer, text, margin, height - 30, SDL_Color{200, 200, 200, 255});
 }
 
-void render_playing_frame() {
+void render_playing() {
     if (!gg || !gg->renderer || !ss) {
         SDL_Delay(16);
         return;
@@ -197,38 +169,5 @@ void render_playing_frame() {
         prompt_text = "Move with WASD. Press Space/E near a pad to run its Lua-defined action.";
     render_instructions(renderer, width, height, prompt_text);
 
-    SDL_RenderPresent(renderer);
-}
-
-} // namespace
-
-void render() {
-    if (!ss)
-        return;
-    if (const ModeDesc* mode = find_mode(ss->mode)) {
-        if (mode->render_fn) {
-            mode->render_fn();
-            return;
-        }
-    }
-    render_mode_playing();
-}
-
-void render_mode_playing() {
-    render_playing_frame();
-}
-
-void render_mode_title() {
-    if (!gg || !gg->renderer) {
-        SDL_Delay(16);
-        return;
-    }
-    SDL_Renderer* renderer = gg->renderer;
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(renderer, &width, &height);
-    SDL_SetRenderDrawColor(renderer, 12, 10, 18, 255);
-    SDL_RenderClear(renderer);
-    render_menu(width, height);
     SDL_RenderPresent(renderer);
 }

@@ -2,8 +2,8 @@
 
 #include "engine/audio.hpp"
 #include "engine/graphics.hpp"
-#include "globals.hpp"
-#include "mods.hpp"
+#include "engine/globals.hpp"
+#include "engine/mods.hpp"
 #include "state.hpp"
 
 #include <cstdio>
@@ -18,6 +18,7 @@
 
 #include <sol/sol.hpp>
 #include "engine/alerts.hpp"
+#include <engine/globals.hpp>
 
 namespace {
 
@@ -40,24 +41,23 @@ bool g_use_mod_filter = false;
 
 struct DemoApi {
     void alert(const std::string& text) const {
-        if (!ss) return;
         Alert al;
         al.text = text;
         al.ttl = 1.4f;
-        ss->alerts.push_back(al);
+        add_alert(al.text);
     }
     void set_player_position(float x, float y) const {
-        if (ss) ss->player.pos = glm::vec2{x, y};
+        ss->player.pos = glm::vec2{x, y};
     }
     void play_sound(const std::string& key) const {
         if (!key.empty())
             ::play_sound(key);
     }
     void set_bonk_enabled(bool enabled) const {
-        if (ss) ss->bonk.enabled = enabled;
+        ss->bonk.enabled = enabled;
     }
     void set_bonk_position(float x, float y) const {
-        if (ss) ss->bonk.pos = glm::vec2{x, y};
+        ss->bonk.pos = glm::vec2{x, y};
     }
     bool set_item_position(const std::string& def_id, float x, float y) const;
     sol::object get_item_position(const std::string& def_id, sol::this_state state) const;
@@ -287,8 +287,7 @@ bool load_demo_item_defs() {
             al.text = std::string("Mod load failed: ") + mod.name;
             al.ttl = 2.0f;
             al.purge_eof = true;
-            if (ss)
-                ss->alerts.push_back(al);
+            add_alert(al.text);
         }
         g_current_mod.clear();
     }
@@ -348,22 +347,14 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
     } catch (const sol::error& e) {
         std::fprintf(stderr, "[demo_items] on_use exception (%s): %s\n",
                      rec.def.id.c_str(), e.what());
-        Alert al;
-        al.text = std::string("Pad failed: ") + rec.def.label;
-        al.ttl = 1.5f;
-        if (ss)
-            ss->alerts.push_back(al);
+        add_alert(std::string("Pad failed: ") + rec.def.label);
         return;
     }
     if (!r.valid()) {
         sol::error e = r;
         std::fprintf(stderr, "[demo_items] on_use error (%s): %s\n",
                      rec.def.id.c_str(), e.what());
-        Alert al;
-        al.text = std::string("Pad error: ") + rec.def.label;
-        al.ttl = 1.5f;
-        if (ss)
-            ss->alerts.push_back(al);
+        add_alert(std::string("Pad error: ") + rec.def.label);
     }
 }
 

@@ -2,14 +2,15 @@
 #include "globals.hpp"
 
 bool init_engine_state() {
-    if (!es)
-        es = new EngineState{};
-    es->mode = modes::TITLE;
-    es->alerts.clear();
+    if (es)
+        return true;
+    es = new EngineState{};
     return true;
 }
 
 void cleanup_engine_state() {
+    if (!es)
+        return;
     delete es;
     es = nullptr;
 }

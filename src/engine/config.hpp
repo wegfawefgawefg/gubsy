@@ -19,7 +19,7 @@ bool load_input_bindings_from_ini(const std::string& path);
 bool save_input_bindings_to_ini(const std::string& path, const struct InputBindings& b);
 
 // Load/save audio slider settings (master/music/sfx) from config/audio.ini style files.
-bool load_audio_settings_from_ini(const std::string& path);
+bool load_audio_settings(const std::string& path);
 bool save_audio_settings_to_ini(const std::string& path);
 
 // Ensure a directory exists (mkdir -p behavior). Returns true on success or already exists.

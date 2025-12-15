@@ -8,6 +8,37 @@
 #include <unordered_map>
 #include <vector>
 
+struct ModFileEntry {
+    std::string path;
+    std::uint64_t size_bytes{0};
+};
+
+struct ModCatalogEntry {
+    std::string id;
+    std::string folder;
+    std::string title;
+    std::string author;
+    std::string version;
+    std::string summary;
+    std::vector<std::string> dependencies;
+    std::vector<ModFileEntry> files;
+    std::uint64_t total_bytes{0};
+    bool required{false};
+    bool installed{false};
+    bool installing{false};
+    bool uninstalling{false};
+    std::string status_text;
+};
+
+struct LobbyModEntry {
+    std::string id;
+    std::string title;
+    std::string author;
+    std::string description;
+    std::vector<std::string> dependencies;
+    bool required{false};
+    bool enabled{false};
+};
 struct ModInfo {
     std::string name;
     std::string title;

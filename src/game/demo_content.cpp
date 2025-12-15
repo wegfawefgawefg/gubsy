@@ -1,8 +1,8 @@
 #include "demo_content.hpp"
 
-#include "globals.hpp"
-#include "mods.hpp"
-#include "state.hpp"
+#include "engine/globals.hpp"
+#include "engine/mods.hpp"
+#include "game/state.hpp"
 
 #include <cstdio>
 #include <filesystem>
