@@ -100,7 +100,6 @@ bool do_the_gubsy(){
 
         poll_fs_mods_hot_reload();
 
-        collect_inputs();
         process_inputs();
         step();
 

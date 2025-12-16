@@ -6,6 +6,7 @@
 #include <cmath>
 #include <filesystem>
 #include <system_error>
+#include <SDL_mixer.h>
 
 bool init_audio() {
     if (!aa) aa = new Audio();
@@ -59,10 +60,8 @@ void play_sound(const std::string& key, int loops, int /*channel_hint*/, int vol
     base_volume = std::clamp(base_volume, 0, MIX_MAX_VOLUME);
     float master = 1.0f;
     float sfx = 1.0f;
-    if (ss) {
-        master = std::clamp(ss->menu.vol_master, 0.0f, 1.0f);
-        sfx = std::clamp(ss->menu.vol_sfx, 0.0f, 1.0f);
-    }
+    master = std::clamp(es->audio_settings.vol_master, 0.0f, 1.0f);
+    sfx = std::clamp(es->audio_settings.vol_sfx, 0.0f, 1.0f);
     float scaled = static_cast<float>(base_volume) * master * sfx;
     int final_volume = static_cast<int>(std::round(std::clamp(scaled, 0.0f, static_cast<float>(MIX_MAX_VOLUME))));
     Mix_Volume(ch, final_volume); // per-channel, not global

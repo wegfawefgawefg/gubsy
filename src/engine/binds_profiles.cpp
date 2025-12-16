@@ -1,6 +1,5 @@
 #include "engine/binds_profiles.hpp"
 
-#include "engine/config.hpp"
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
 

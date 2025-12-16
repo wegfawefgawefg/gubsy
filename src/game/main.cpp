@@ -25,11 +25,6 @@ int main() {
     }
     load_demo_content();
 
-    // load a user profile
-    // check for an input source
-    // load a binds profile
-    // load a settings profile
-
     register_modes();
    
     do_the_gubsy();

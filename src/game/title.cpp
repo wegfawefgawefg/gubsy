@@ -1,4 +1,3 @@
-#include "engine/ui/menu/menu.hpp"
 #include "engine/globals.hpp"
 
 #include <SDL2/SDL_render.h>
@@ -16,6 +15,6 @@ void title_draw() {
     SDL_GetRendererOutputSize(renderer, &width, &height);
     SDL_SetRenderDrawColor(renderer, 12, 10, 18, 255);
     SDL_RenderClear(renderer);
-    render_menu(width, height);
+    // render_menu(width, height);
     SDL_RenderPresent(renderer);
 }
