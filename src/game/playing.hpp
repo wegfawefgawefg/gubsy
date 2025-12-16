@@ -1,4 +1,8 @@
 #pragma once
 
-void step_playing();
-void render_playing();
+namespace playing {
+
+void step();
+void render();
+
+}  // namespace playing

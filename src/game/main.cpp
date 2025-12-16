@@ -3,15 +3,20 @@
 #include "game/playing.hpp"
 #include "demo_content.hpp"
 
+void register_modes(){
+    register_mode(modes::TITLE, title::step, title::process_inputs, title::draw);
+    register_mode(modes::PLAYING, playing::step, nullptr, playing::render);
+}
+
+
 int main() {
     if (!init_state()) {
         return 1;
     }
     load_demo_content();
 
-    register_mode(modes::TITLE, nullptr, nullptr, draw_title);
-    register_mode(modes::PLAYING, step_playing, nullptr, render_playing);
-    
+    register_modes();
+   
     do_the_gubsy();
 
     cleanup_state();

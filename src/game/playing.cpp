@@ -14,6 +14,7 @@
 #include <game/demo_items.hpp>
 #include <engine/globals.hpp>
 
+namespace playing {
 
 bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
               const glm::vec2& b_pos, const glm::vec2& b_half) {
@@ -23,7 +24,7 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
 
 
 
-void step_playing() {
+void step() {
     const float dt = FIXED_TIMESTEP;
     auto& player = ss->player;
     auto& target = ss->bonk;
@@ -69,7 +70,7 @@ void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, cons
     draw_text(renderer, text, margin, height - 30, SDL_Color{200, 200, 200, 255});
 }
 
-void render_playing() {
+void render() {
     if (!gg || !gg->renderer || !ss) {
         SDL_Delay(16);
         return;
@@ -171,3 +172,5 @@ void render_playing() {
 
     SDL_RenderPresent(renderer);
 }
+
+}  // namespace playing

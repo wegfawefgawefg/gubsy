@@ -11,6 +11,21 @@
 #include <unordered_map>
 #include <vector>
 #include "mode_registry.hpp"
+#include "user_profiles.hpp"
+#include "engine/binds_profiles.hpp"
+
+// managing input settings profiles, saves, and binds profiles
+// load all profiles
+// save one profile
+// load all binds profiles
+// save one binds profile
+// load all settings profiles
+// save one settings profile
+// load all saves metadata
+// load one save
+// save one save
+
+
 struct LobbySettings {
     std::string session_name{"Local Session"};
     int privacy{0}; // 0=Solo,1=Friends,2=Public
@@ -45,6 +60,13 @@ struct EngineState {
     std::string mode{"none"};
     std::vector<ModeDesc> modes;
     std::unordered_map<std::string, std::size_t> mode_lookup;
+
+    // user profiles
+    std::vector<UserProfile> user_profiles;
+    // binds profiles
+    std::vector<BindsProfile> binds_profiles;
+    // settings profiles
+    std::vector<SettingsProfile> settings_profiles;
 
     struct MenuState {
         // Pages: 0=Main, 1=Settings hub

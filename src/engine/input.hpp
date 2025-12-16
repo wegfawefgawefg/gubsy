@@ -53,7 +53,6 @@
 #pragma once
 
 #include "engine/graphics.hpp"
-#include "settings.hpp"
 
 #include <SDL2/SDL.h>
 
@@ -108,15 +107,24 @@ enum class GubsyButton {
     GP_START, GP_BACK, GP_GUIDE,
 };
 
-// enum of axes for analog inputs
-enum class GubsyAnalog {
+// enum of 1d axes for analog inputs
+enum class Gubsy1DAnalog {
     // Gamepad axes
-    GP_LEFT_STICK, GP_RIGHT_STICK,
     GP_LEFT_TRIGGER, GP_RIGHT_TRIGGER,
 
     // Mouse axes
-    MOUSE_X, MOUSE_Y, MOUSE_WHEEL,
+    MOUSE_WHEEL,
 };
+
+// enum of axes for 2d analog inputs
+enum class Gubsy2DAnalog {
+    // Gamepad sticks
+    GP_LEFT_STICK, GP_RIGHT_STICK,
+
+    // Mouse
+    MOUSE_XY
+};
+
 
 // for edge detection
 struct LastKBInputState {
