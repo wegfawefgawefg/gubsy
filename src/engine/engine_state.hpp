@@ -13,6 +13,10 @@
 #include "mode_registry.hpp"
 #include "user_profiles.hpp"
 #include "engine/binds_profiles.hpp"
+#include "engine/input_settings_profiles.hpp"
+#include "engine/game_settings.hpp"
+#include "engine/top_level_game_settings.hpp"
+#include "player.hpp"
 
 // managing input settings profiles, saves, and binds profiles
 // load all profiles
@@ -61,12 +65,27 @@ struct EngineState {
     std::vector<ModeDesc> modes;
     std::unordered_map<std::string, std::size_t> mode_lookup;
 
-    // user profiles
-    std::vector<UserProfile> user_profiles;
-    // binds profiles
+    // active players
+    std::vector<Player> players;
+
+    // user profiles pool
+    std::vector<UserProfile> user_profiles_pool;
+
+    // input devices
+    std::vector<InputSource> input_sources;
+
+    // binds profiles pool
     std::vector<BindsProfile> binds_profiles;
+    // input settings profiles pool
+    std::vector<InputSettingsProfile> input_settings_profiles;
+    // game settings pool
+    std::vector<GameSettings> game_settings_pool;
+    // top-level game settings (singleton, global)
+    TopLevelGameSettings top_level_game_settings;
     // settings profiles
     std::vector<SettingsProfile> settings_profiles;
+
+    bool draw_input_device_overlay {false};
 
     struct MenuState {
         // Pages: 0=Main, 1=Settings hub

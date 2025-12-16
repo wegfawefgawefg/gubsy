@@ -9,8 +9,20 @@
 #include "mods.hpp"
 #include "step.hpp"
 #include "globals.hpp"
+#include "data.hpp"
+#include "user_profiles.hpp"
+#include "player.hpp"
+#include "input_sources.hpp"
+#include "binds_profiles.hpp"
+#include "input_settings_profiles.hpp"
+#include "game_settings.hpp"
+#include "top_level_game_settings.hpp"
+
+
 
 bool do_the_gubsy(){
+    ensure_data_folder_structure();
+
     if (!init_graphics()) {
         SDL_Quit();
         return 1;
@@ -21,7 +33,6 @@ bool do_the_gubsy(){
         SDL_Quit();
         return 1;
     }
-
 
     load_audio_settings("config/audio.ini");
 
@@ -37,15 +48,39 @@ bool do_the_gubsy(){
         return 1;
     }
 
-    load_user_profiles();
-    load_input_profiles();
+    // setup user profile state
+    // add one player with no profile
+    add_player();
+
+    // load profiles pool from disk
+    load_user_profiles_pool();
+    if (es->user_profiles_pool.empty()) {
+        UserProfile default_profile = create_default_user_profile();
+        es->user_profiles_pool.push_back(default_profile);
+    }
+
+    // assign first profile from pool to first player
+    if (!es->players.empty() && !es->user_profiles_pool.empty()) {
+        es->players[0].profile = es->user_profiles_pool[0];
+        es->players[0].has_active_profile = true;
+    }
+
+    // detect input sources
+    detect_input_sources();
+    if (es->input_sources.empty()) {
+        std::fprintf(stderr, "[input] Warning: No input sources detected\n");
+    }
+
+    // load all profile pools
+    load_binds_profiles_pool();
+    load_input_settings_profiles_pool();
+    load_game_settings_pool();
+    load_top_level_game_settings_into_state();
 
     discover_mods();
     scan_mods_for_sprite_defs();
     load_all_textures_in_sprite_lookup();
     load_mod_sounds();
-
-    ensure_default_input_profile();
 
     Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 t_last = SDL_GetPerformanceCounter();

@@ -1,5 +1,6 @@
 #include <SDL2/SDL_events.h>
 #include <globals.hpp>
+#include "input_sources.hpp"
 
 void update_gubsy_device_inputs_system_from_sdl_events(){
     SDL_Event ev;
@@ -15,6 +16,12 @@ void update_gubsy_device_inputs_system_from_sdl_events(){
             case SDL_MOUSEMOTION:
                 break;
             case SDL_MOUSEWHEEL:
+                break;
+            case SDL_CONTROLLERDEVICEADDED:
+                on_device_added(ev.cdevice.which);
+                break;
+            case SDL_CONTROLLERDEVICEREMOVED:
+                on_device_removed(ev.cdevice.which);
                 break;
             default:
                 break;

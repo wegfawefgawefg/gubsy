@@ -263,7 +263,7 @@ struct UserProfileInputProfilePair {
 
 struct PlayerInputSources{
     std::vector<InputSource> sources;
-}
+};
 
 /** dispatches to specific "process_inputs" per mode. */
 void process_inputs();

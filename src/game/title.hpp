@@ -1,9 +1,6 @@
 #pragma once
 
-namespace title {
+void title_step();
+void title_process_inputs();
+void title_draw();
 
-void step();
-void process_inputs();
-void draw();
-
-}  // namespace title

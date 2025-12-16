@@ -17,6 +17,12 @@ void process_inputs() {
             mode->process_inputs_fn();
         }
     }
+
+    // toggle debug input device overlay: ctrl-alt-i
+    const Uint8* keystate = SDL_GetKeyboardState(nullptr);
+    if (keystate[SDL_SCANCODE_LCTRL] && keystate[SDL_SCANCODE_LALT] && keystate[SDL_SCANCODE_I]) {
+        es->draw_input_device_overlay = !es->draw_input_device_overlay;
+    }
 }
 
 // namespace {

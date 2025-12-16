@@ -3,15 +3,13 @@
 
 #include <SDL2/SDL_render.h>
 
-namespace title {
-
-void step() {
+void title_step() {
 }
 
-void process_inputs() {
+void title_process_inputs() {
 }
 
-void draw() {
+void title_draw() {
     SDL_Renderer* renderer = gg->renderer;
     int width = 0;
     int height = 0;
@@ -21,5 +19,3 @@ void draw() {
     render_menu(width, height);
     SDL_RenderPresent(renderer);
 }
-
-}  // namespace title
