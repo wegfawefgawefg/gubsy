@@ -55,6 +55,11 @@
 #include "engine/graphics.hpp"
 
 #include <SDL2/SDL.h>
+#include <unordered_map>
+
+extern const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode;
+
+const BindsProfile* get_player_binds(int player_index);
 
 struct KeyEdge {
     bool prev = false;
@@ -105,6 +110,8 @@ enum class GubsyButton {
     GP_LEFT_STICK_BUTTON, GP_RIGHT_STICK_BUTTON,
     GP_DPAD_UP, GP_DPAD_DOWN, GP_DPAD_LEFT, GP_DPAD_RIGHT,
     GP_START, GP_BACK, GP_GUIDE,
+
+    COUNT // Sentinel for array sizing or iteration
 };
 
 // enum of 1d axes for analog inputs
@@ -114,6 +121,8 @@ enum class Gubsy1DAnalog {
 
     // Mouse axes
     MOUSE_WHEEL,
+
+    COUNT
 };
 
 // enum of axes for 2d analog inputs
@@ -122,7 +131,9 @@ enum class Gubsy2DAnalog {
     GP_LEFT_STICK, GP_RIGHT_STICK,
 
     // Mouse
-    MOUSE_XY
+    MOUSE_XY,
+
+    COUNT
 };
 
 

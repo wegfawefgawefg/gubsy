@@ -7,9 +7,9 @@ struct UserProfile {
     std::string name;
     bool guest = false;
 
-    int last_binds_profile; // -1 if none
-    int last_input_settings_profile; // -1 if none
-    int last_game_settings; // -1 if none
+    int last_binds_profile_id; // -1 if none
+    int last_input_settings_profile_id; // -1 if none
+    int last_game_settings_profile_id; // -1 if none
 };
 
 /*

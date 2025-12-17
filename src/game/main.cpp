@@ -8,15 +8,6 @@ void register_modes(){
     register_mode(modes::PLAYING, playing_step, nullptr, playing_draw);
 }
 
-enum GameActions {
-    UP = 0,
-    DOWN = 1,
-    LEFT = 2,
-    RIGHT = 3,
-    USE = 4,
-};
-
-
 
 
 int main() {

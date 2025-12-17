@@ -2,6 +2,9 @@
 
 #include "engine/audio.hpp"
 #include "engine/globals.hpp"
+#include "engine/input_queries.hpp"
+#include "engine/render.hpp"
+#include "game/actions.hpp"
 #include "settings.hpp"
 #include "state.hpp"
 #include "demo_items.hpp"
@@ -29,7 +32,22 @@ void playing_step() {
     auto& player = ss->player;
     auto& target = ss->bonk;
 
-    glm::vec2 dir = movement_direction();
+    glm::vec2 dir(0.0f);
+    if (is_down(0, GameAction::UP)) {
+        dir.y -= 1.0f;
+    }
+    if (is_down(0, GameAction::DOWN)) {
+        dir.y += 1.0f;
+    }
+    if (is_down(0, GameAction::LEFT)) {
+        dir.x -= 1.0f;
+    }
+    if (is_down(0, GameAction::RIGHT)) {
+        dir.x += 1.0f;
+    }
+    if (glm::length(dir) > 0.0f) {
+        dir = glm::normalize(dir);
+    }
     player.pos += dir * player.speed_units_per_sec * dt;
 
     if (target.cooldown > 0.0f)
@@ -44,8 +62,7 @@ void playing_step() {
         play_sound(sound);
     }
 
-    const bool use_pressed = ss->playing_inputs.use_center && !ss->use_interact_prev;
-    ss->use_interact_prev = ss->playing_inputs.use_center;
+    const bool use_pressed = was_pressed(0, GameAction::USE);
     if (use_pressed) {
         const float player_radius = glm::length(player.half_size);
         for (const auto& slot : demo_item_instance_slots()) {

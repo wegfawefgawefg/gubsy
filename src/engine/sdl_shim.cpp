@@ -1,5 +1,5 @@
 #include <SDL2/SDL_events.h>
-#include <globals.hpp>
+#include <engine/globals.hpp>
 #include "input_sources.hpp"
 
 void update_gubsy_device_inputs_system_from_sdl_events(){

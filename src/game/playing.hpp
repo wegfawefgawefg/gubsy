@@ -1,4 +1,4 @@
 #pragma once
 
 void playing_step();
-void playing_render();
+void playing_draw();

@@ -1,6 +1,5 @@
 #include "engine/top_level_game_settings.hpp"
 
-#include "engine/config.hpp"
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
 

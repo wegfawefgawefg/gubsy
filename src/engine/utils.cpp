@@ -1,13 +1,12 @@
-#include "engine/utils.hpp"
-
+#include "utils.hpp"
 #include <filesystem>
-#include <fstream>
-#include <sstream>
+#include <system_error>
 
-bool ensure_dir(const std::string& dir) {
-    namespace fs = std::filesystem;
+bool ensure_dir(const std::string& path) {
+    if (path.empty()) {
+        return false;
+    }
     std::error_code ec;
-    if (dir.empty()) return false;
-    if (fs::exists(dir, ec)) return true;
-    return fs::create_directories(dir, ec);
+    std::filesystem::create_directories(path, ec);
+    return !ec;
 }

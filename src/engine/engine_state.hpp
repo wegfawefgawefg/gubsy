@@ -16,6 +16,7 @@
 #include "engine/game_settings.hpp"
 #include "engine/top_level_game_settings.hpp"
 #include "player.hpp"
+#include "game/events.hpp"
 
 
 struct EngineState {
@@ -49,6 +50,22 @@ struct EngineState {
     TopLevelGameSettings top_level_game_settings;
 
     bool draw_input_device_overlay {false};
+
+    // Input state
+    Uint8 keystate[SDL_NUM_SCANCODES];
+    Uint8 last_keystate[SDL_NUM_SCANCODES];
+
+    // Event queue
+    std::vector<InputEvent> input_event_queue;
+
+    // Game Controller state
+    struct GamepadState {
+        float axes[SDL_CONTROLLER_AXIS_MAX];
+        float last_axes[SDL_CONTROLLER_AXIS_MAX];
+        // We could add buttons here too, but they are handled by the keystate arrays for now
+    };
+    std::unordered_map<int, SDL_GameController*> open_controllers;
+    std::unordered_map<int, GamepadState> gamepad_states;
 
     std::vector<Alert> alerts{};
 

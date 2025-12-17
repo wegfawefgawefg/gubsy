@@ -11,7 +11,6 @@
 #include <string>
 #include <glm/glm.hpp>
 #include <engine/globals.hpp>
-#include <engine/ui/menu/menu.hpp>
 
 struct ScreenSpace {
     float scale{64.0f};

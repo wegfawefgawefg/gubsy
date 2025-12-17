@@ -2,6 +2,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
+#include "engine/utils.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -13,7 +14,7 @@
 
 namespace {
 
-constexpr const char* kBindsProfilesPath = "config/binds_profiles.sxp";
+constexpr const char* kBindsProfilesPath = "data/binds_profiles/default.sxp";
 
 std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;
