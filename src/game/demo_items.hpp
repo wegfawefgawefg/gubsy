@@ -25,12 +25,11 @@ struct DemoItemInstance {
 
 using DemoItemPool = VidPool<DemoItemInstance>;
 
-bool load_demo_item_defs();
-void unload_demo_item_defs();
-bool demo_items_active();
-void set_demo_item_mod_filter(const std::vector<std::string>& ids);
-
 const std::vector<DemoItemDef>& demo_item_defs();
 const std::vector<DemoItemPool::Entry>& demo_item_instance_slots();
 const DemoItemDef* demo_item_def(const DemoItemInstance& inst);
 void trigger_demo_item_use(const DemoItemInstance& inst);
+bool demo_items_active();
+bool load_demo_item_defs();
+void unload_demo_item_defs();
+void set_demo_item_mod_filter(const std::vector<std::string>& ids);

@@ -159,12 +159,20 @@ bool fetch_catalog(std::vector<ModCatalogEntry>& out, std::string& err) {
             cat.author = entry.value("author", "Unknown");
             cat.version = entry.value("version", "0.0.0");
             cat.summary = entry.value("description", "");
+            cat.description = cat.summary;
             cat.required = entry.value("required", false);
+            cat.game_version = entry.value("game_version", "");
             cat.total_bytes = entry.value("size_bytes", static_cast<std::uint64_t>(0));
             if (entry.contains("dependencies") && entry["dependencies"].is_array()) {
                 for (auto& dep : entry["dependencies"]) {
                     if (dep.is_string())
                         cat.dependencies.push_back(dep.get<std::string>());
+                }
+            }
+            if (entry.contains("apis") && entry["apis"].is_array()) {
+                for (auto& api : entry["apis"]) {
+                    if (api.is_string())
+                        cat.apis.push_back(api.get<std::string>());
                 }
             }
             if (entry.contains("files") && entry["files"].is_array()) {

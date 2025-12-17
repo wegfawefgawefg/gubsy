@@ -20,7 +20,10 @@ struct ModCatalogEntry {
     std::string author;
     std::string version;
     std::string summary;
+    std::string description;
     std::vector<std::string> dependencies;
+    std::string game_version;
+    std::vector<std::string> apis;
     std::vector<ModFileEntry> files;
     std::uint64_t total_bytes{0};
     bool required{false};
@@ -44,6 +47,9 @@ struct ModInfo {
     std::string title;
     std::string version;
     std::vector<std::string> deps;
+    std::vector<std::string> optional_deps;
+    std::vector<std::string> apis;
+    std::string game_version;
     std::string path; // absolute or relative root
     std::string manifest_path;
     std::string description;

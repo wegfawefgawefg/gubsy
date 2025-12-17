@@ -3,16 +3,12 @@
 #include "engine/audio.hpp"
 #include "engine/graphics.hpp"
 #include "engine/globals.hpp"
-#include "engine/mods.hpp"
+#include "game/mod_api/demo_items_internal.hpp"
 #include "state.hpp"
 
 #include <cstdio>
-#include <filesystem>
-#include <memory>
-#include <optional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -27,17 +23,22 @@ constexpr std::size_t kMaxDemoItemInstances = 32;
 struct DemoItemRecord {
     DemoItemDef def;
     sol::protected_function on_use;
+    std::string owner_mod;
 };
 
-std::unique_ptr<sol::state> g_lua;
 std::vector<DemoItemRecord> g_records;
 std::vector<DemoItemDef> g_public_defs;
 DemoItemPool g_item_pool{kMaxDemoItemInstances};
 std::unordered_map<std::string, std::size_t> g_lookup;
-std::string g_current_mod;
 bool g_demo_items_active = false;
-std::unordered_set<std::string> g_mod_filter;
-bool g_use_mod_filter = false;
+
+DemoPlayer* ensure_primary_player() {
+    if (!ss)
+        return nullptr;
+    if (ss->players.empty())
+        ss->players.push_back(DemoPlayer{});
+    return &ss->players[0];
+}
 
 struct DemoApi {
     void alert(const std::string& text) const {
@@ -47,7 +48,8 @@ struct DemoApi {
         add_alert(al.text);
     }
     void set_player_position(float x, float y) const {
-        ss->player.pos = glm::vec2{x, y};
+        if (DemoPlayer* player = ensure_primary_player())
+            player->pos = glm::vec2{x, y};
     }
     void play_sound(const std::string& key) const {
         if (!key.empty())
@@ -160,8 +162,8 @@ void apply_def_patch(DemoItemRecord& rec, const sol::table& patch) {
     }
 }
 
-std::string make_default_id() {
-    std::string base = g_current_mod.empty() ? "item" : g_current_mod;
+std::string make_default_id(const std::string& mod_id) {
+    std::string base = mod_id.empty() ? "item" : mod_id;
     base += "_";
     base += std::to_string(g_records.size());
     return base;
@@ -186,48 +188,7 @@ void register_api(sol::state& lua) {
     lua["api"] = &g_api;
 }
 
-void register_bindings(sol::state& lua) {
-    lua.set_function("register_item", [](sol::table t) {
-        DemoItemRecord rec;
-
-        rec.def.id = t.get_or("id", make_default_id());
-        if (g_lookup.find(rec.def.id) != g_lookup.end()) {
-            std::fprintf(stderr, "[demo_items] duplicate id '%s'\n", rec.def.id.c_str());
-            return;
-        }
-
-        rec.def.label = t.get_or("label", rec.def.id);
-        rec.def.position = read_vec2(t.get<sol::object>("position"), rec.def.position);
-        rec.def.radius = t.get_or("radius", rec.def.radius);
-        rec.def.color = read_color(t.get<sol::object>("color"), rec.def.color);
-
-        rec.def.sprite_name = t.get_or("sprite", std::string{});
-        rec.def.sprite_id = rec.def.sprite_name.empty() ? -1 : try_get_sprite_id(rec.def.sprite_name);
-
-        sol::object cb = t.get<sol::object>("on_use");
-        if (cb.is<sol::function>())
-            rec.on_use = cb.as<sol::protected_function>();
-
-        g_lookup.emplace(rec.def.id, g_records.size());
-        g_records.push_back(std::move(rec));
-    });
-
-    lua.set_function("patch_item", [](sol::table t) {
-        std::string id = t.get_or("id", std::string{});
-        if (id.empty()) {
-            std::fprintf(stderr, "[demo_items] patch_item missing id\n");
-            return;
-        }
-        DemoItemRecord* rec = find_record_by_id(id);
-        if (!rec) {
-            std::fprintf(stderr, "[demo_items] patch_item unknown id '%s'\n", id.c_str());
-            return;
-        }
-        apply_def_patch(*rec, t);
-    });
-}
-
-sol::table make_item_table(sol::state& lua, const DemoItemDef& item,
+sol::table make_item_table(sol::state_view lua, const DemoItemDef& item,
                            const DemoItemInstance* inst) {
     sol::table tbl = lua.create_table();
     tbl["id"] = item.id;
@@ -246,75 +207,94 @@ sol::table make_item_table(sol::state& lua, const DemoItemDef& item,
 
 } // namespace
 
-bool load_demo_item_defs() {
-    unload_demo_item_defs();
-    if (!mm)
-        return false;
+namespace demo_items_internal {
 
-    g_lua = std::make_unique<sol::state>();
-    auto& lua = *g_lua;
-    lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table, sol::lib::os);
-    register_api(lua);
-    register_bindings(lua);
+void expose_runtime_api(sol::state& lua) {
+    lua.new_usertype<DemoApi>("DemoAPI",
+        "alert", &DemoApi::alert,
+        "set_player_position", &DemoApi::set_player_position,
+        "play_sound", &DemoApi::play_sound,
+        "set_bonk_enabled", &DemoApi::set_bonk_enabled,
+        "set_bonk_position", &DemoApi::set_bonk_position,
+        "set_item_position", &DemoApi::set_item_position,
+        "get_item_position", &DemoApi::get_item_position);
+    lua["api"] = &g_api;
+}
 
-    auto mod_allowed = [](const std::string& id) {
-        if (!g_use_mod_filter)
-            return true;
-        return g_mod_filter.find(id) != g_mod_filter.end();
-    };
-
-    namespace fs = std::filesystem;
-    bool loaded_any = false;
-    for (const auto& mod : mm->mods) {
-        if (!mod_allowed(mod.name))
-            continue;
-        fs::path script = fs::path(mod.path) / "scripts" / "demo_items.lua";
-        if (!fs::exists(script))
-            continue;
-        g_current_mod = mod.name;
-        try {
-            sol::protected_function_result r = lua.safe_script_file(script.string());
-            if (!r.valid()) {
-                sol::error e = r;
-                std::fprintf(stderr, "[demo_items] %s\n", e.what());
-            } else {
-                loaded_any = true;
-            }
-        } catch (const sol::error& e) {
-            std::fprintf(stderr, "[demo_items] exception loading %s: %s\n",
-                         script.string().c_str(), e.what());
-            Alert al;
-            al.text = std::string("Mod load failed: ") + mod.name;
-            al.ttl = 2.0f;
-            al.purge_eof = true;
-            add_alert(al.text);
-        }
-        g_current_mod.clear();
+void register_item(const std::string& mod_id, const sol::table& t) {
+    DemoItemRecord rec;
+    rec.owner_mod = mod_id;
+    rec.def.id = t.get_or("id", make_default_id(mod_id));
+    if (g_lookup.find(rec.def.id) != g_lookup.end()) {
+        std::fprintf(stderr, "[demo_items] duplicate id '%s'\n", rec.def.id.c_str());
+        return;
     }
 
-    rebuild_public_items();
+    rec.def.label = t.get_or("label", rec.def.id);
+    rec.def.position = read_vec2(t.get<sol::object>("position"), rec.def.position);
+    rec.def.radius = t.get_or("radius", rec.def.radius);
+    rec.def.color = read_color(t.get<sol::object>("color"), rec.def.color);
+    rec.def.sprite_name = t.get_or("sprite", rec.def.sprite_name);
+    rec.def.sprite_id = rec.def.sprite_name.empty() ? -1 : try_get_sprite_id(rec.def.sprite_name);
 
-    // Spawn demo instances: one per def at its authored position.
+    if (auto cb = t.get<sol::optional<sol::protected_function>>("on_use"))
+        rec.on_use = *cb;
+
+    g_lookup.emplace(rec.def.id, g_records.size());
+    g_records.push_back(std::move(rec));
+}
+
+bool patch_item(const std::string& mod_id, const sol::table& patch) {
+    std::string id = patch.get_or("id", std::string{});
+    if (id.empty()) {
+        std::fprintf(stderr, "[demo_items] %s patch_item missing id\n", mod_id.c_str());
+        return false;
+    }
+    DemoItemRecord* rec = find_record_by_id(id);
+    if (!rec) {
+        std::fprintf(stderr, "[demo_items] %s patch_item unknown id '%s'\n",
+                     mod_id.c_str(), id.c_str());
+        return false;
+    }
+    apply_def_patch(*rec, patch);
+    return true;
+}
+
+void remove_mod_items(const std::string& mod_id) {
+    if (g_records.empty())
+        return;
+    std::vector<DemoItemRecord> kept;
+    kept.reserve(g_records.size());
+    for (auto& rec : g_records) {
+        if (rec.owner_mod == mod_id)
+            continue;
+        kept.push_back(std::move(rec));
+    }
+    if (kept.size() == g_records.size())
+        return;
+    g_records = std::move(kept);
+    g_lookup.clear();
+    for (std::size_t i = 0; i < g_records.size(); ++i)
+        g_lookup[g_records[i].def.id] = i;
+    rebuild_public_items();
+    g_demo_items_active = !g_records.empty();
+}
+
+void finalize_items() {
+    rebuild_public_items();
     clear_instances();
     for (std::size_t i = 0; i < g_public_defs.size(); ++i) {
         const auto& def = g_public_defs[i];
         spawn_instance(i, def.position);
     }
-
-    if (!loaded_any)
-        std::fprintf(stderr, "[demo_items] no demo_items.lua files found\n");
-    g_demo_items_active = loaded_any;
-    return loaded_any;
+    g_demo_items_active = !g_public_defs.empty();
 }
 
-void unload_demo_item_defs() {
-    g_lookup.clear();
-    g_records.clear();
-    g_public_defs.clear();
-    g_current_mod.clear();
-    g_lua.reset();
-    g_demo_items_active = false;
+bool has_active_items() {
+    return g_demo_items_active;
 }
+
+} // namespace demo_items_internal
 
 const std::vector<DemoItemDef>& demo_item_defs() {
     return g_public_defs;
@@ -332,15 +312,14 @@ const DemoItemDef* demo_item_def(const DemoItemInstance& inst) {
 }
 
 void trigger_demo_item_use(const DemoItemInstance& inst) {
-    if (!g_lua)
-        return;
     if (inst.def_index < 0 || static_cast<std::size_t>(inst.def_index) >= g_records.size())
         return;
     DemoItemRecord& rec = g_records[static_cast<std::size_t>(inst.def_index)];
     if (!rec.on_use.valid())
         return;
 
-    sol::table info = make_item_table(*g_lua, rec.def, &inst);
+    sol::state_view lua(rec.on_use.lua_state());
+    sol::table info = make_item_table(lua, rec.def, &inst);
     sol::protected_function_result r;
     try {
         r = rec.on_use(info);
@@ -356,6 +335,22 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
                      rec.def.id.c_str(), e.what());
         add_alert(std::string("Pad error: ") + rec.def.label);
     }
+}
+
+bool demo_items_active() {
+    return demo_items_internal::has_active_items();
+}
+
+bool load_demo_item_defs() {
+    return demo_items_active();
+}
+
+void unload_demo_item_defs() {
+    // Legacy stub retained for menu code; mods now stay loaded via ModHost.
+}
+
+void set_demo_item_mod_filter(const std::vector<std::string>&) {
+    // Legacy stub retained for session lobby. Filtering handled by ModHost in future work.
 }
 
 bool demo_items_active() {

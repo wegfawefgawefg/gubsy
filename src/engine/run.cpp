@@ -2,6 +2,7 @@
 #include "run.hpp"
 
 #include <SDL.h>
+#include <filesystem>
 #include "graphics.hpp"
 #include "engine_state.hpp"
 #include <SDL_mixer.h>
@@ -19,11 +20,19 @@
 #include "top_level_game_settings.hpp"
 #include "sdl_shim.hpp"
 #include "render.hpp"
+#include "engine/mod_host.hpp"
+#include "game/mod_api/register_game_mod_apis.hpp"
+
+namespace {
+constexpr const char* kModsRuntimeRoot = "mods_runtime";
+}
 
 
 
 bool do_the_gubsy(){
     ensure_data_folder_structure();
+    std::error_code mods_ec;
+    std::filesystem::create_directories(kModsRuntimeRoot, mods_ec);
 
     if (!init_graphics()) {
         SDL_Quit();
@@ -42,7 +51,7 @@ bool do_the_gubsy(){
     if (!init_audio())
         std::fprintf(stderr, "[audio] SDL_mixer init failed: %s\n", Mix_GetError());
 
-    if (!init_mods_manager()) {
+    if (!init_mods_manager(kModsRuntimeRoot)) {
         cleanup_audio();
         cleanup_engine_state();
         cleanup_graphics();
@@ -84,6 +93,9 @@ bool do_the_gubsy(){
     load_all_textures_in_sprite_lookup();
     load_mod_sounds();
 
+    load_enabled_mods_via_host();
+    finalize_game_mod_apis();
+
     Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 t_last = SDL_GetPerformanceCounter();
     float accum_sec = 0.0f;
@@ -100,7 +112,9 @@ bool do_the_gubsy(){
         update_gubsy_device_inputs_system_from_sdl_events();
         
 
-        poll_fs_mods_hot_reload();
+        bool mods_changed = poll_fs_mods_hot_reload();
+        if (mods_changed)
+            finalize_game_mod_apis();
 
         process_inputs();
         step();
@@ -122,6 +136,7 @@ bool do_the_gubsy(){
 }
 
 bool stop_doing_the_gubsy(){
+    unload_all_mods_via_host();
     cleanup_audio();
     cleanup_engine_state();
     cleanup_graphics();

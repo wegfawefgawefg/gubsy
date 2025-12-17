@@ -2,8 +2,7 @@
 #include "globals.hpp"
 #include "settings.hpp"
 #include "engine/graphics.hpp"
-#include "demo_items.hpp"
-#include "demo_content.hpp"
+#include "engine/mod_host.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -410,22 +409,32 @@ bool poll_fs_mods_hot_reload() {
     if (!any)
         return false;
 
-    if (!changed_assets.empty()) {
-        std::printf("[mods] Asset changes detected (%zu). Rebuilding sprites...\n",
-                    changed_assets.size());
-        scan_mods_for_sprite_defs();
+    std::unordered_set<std::string> touched_mods;
+    auto consider_path = [&](const std::string& file_path) {
+        if (!mm)
+            return;
+        for (const auto& mod : mm->mods) {
+            if (file_path.rfind(mod.path, 0) == 0) {
+                if (active_mod_contexts().count(mod.name))
+                    touched_mods.insert(mod.name);
+                break;
+            }
+        }
+    };
+    for (const auto& path : changed_assets)
+        consider_path(path);
+    for (const auto& path : changed_scripts)
+        consider_path(path);
+
+    if (touched_mods.empty())
+        return false;
+
+    std::vector<std::string> reload_ids(touched_mods.begin(), touched_mods.end());
+    std::printf("[mods] Reloading %zu mod(s) due to changes.\n", reload_ids.size());
+    if (reload_mods(reload_ids)) {
+        if (ss)
+            ss->alerts.push_back({"Mods reloaded", 0.0f, 1.5f, false});
+        return true;
     }
-    if (!changed_scripts.empty()) {
-        std::printf("[mods] Script changes detected (%zu). Reloading demo scripts...\n",
-                    changed_scripts.size());
-        bool content_reloaded = load_demo_content();
-        bool items_reloaded = false;
-        if (demo_items_active())
-            items_reloaded = load_demo_item_defs();
-        else
-            std::printf("[mods] Demo items inactive; skipping item reload until gameplay starts.\n");
-        if (content_reloaded || items_reloaded)
-            ss->alerts.push_back({"Demo script reloaded", 0.0f, 1.5f, false});
-    }
-    return true;
+    return false;
 }

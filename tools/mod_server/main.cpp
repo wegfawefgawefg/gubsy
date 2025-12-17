@@ -29,6 +29,8 @@ struct RepoMod {
     std::string version;
     std::string description;
     std::vector<std::string> dependencies;
+    std::string game_version;
+    std::vector<std::string> apis;
     bool required{false};
     fs::path root;
     std::vector<RepoFile> files;
@@ -76,6 +78,14 @@ bool load_manifest(const fs::path& manifest_path, RepoMod& mod) {
                     mod.dependencies.push_back(dep.get<std::string>());
             }
         }
+        if (auto it = j.find("apis"); it != j.end() && it->is_array()) {
+            mod.apis.clear();
+            for (auto& api : *it) {
+                if (api.is_string())
+                    mod.apis.push_back(api.get<std::string>());
+            }
+        }
+        fetch_string("game_version", mod.game_version);
         if (auto it = j.find("required"); it != j.end() && it->is_boolean())
             mod.required = it->get<bool>();
         return true;
@@ -181,6 +191,8 @@ nlohmann::json build_catalog_json(const RepoState& state) {
         entry["description"] = mod.description;
         entry["dependencies"] = mod.dependencies;
         entry["required"] = mod.required;
+        entry["game_version"] = mod.game_version;
+        entry["apis"] = mod.apis;
         entry["folder"] = mod.root.filename().string();
         entry["size_bytes"] = mod.total_bytes;
         nlohmann::json files = nlohmann::json::array();

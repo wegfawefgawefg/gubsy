@@ -173,6 +173,20 @@ bool parse_manifest_json(const std::string& manifest_path, ModInfo& info) {
                     info.deps.push_back(dep.get<std::string>());
             }
         }
+        if (auto it = j.find("optional_dependencies"); it != j.end() && it->is_array()) {
+            for (auto& dep : *it) {
+                if (dep.is_string())
+                    info.optional_deps.push_back(dep.get<std::string>());
+            }
+        }
+        if (auto it = j.find("apis"); it != j.end() && it->is_array()) {
+            for (auto& api : *it) {
+                if (api.is_string())
+                    info.apis.push_back(api.get<std::string>());
+            }
+        }
+        if (auto it = j.find("game_version"); it != j.end() && it->is_string())
+            info.game_version = it->get<std::string>();
         return true;
     } catch (const std::exception& e) {
         std::printf("[mods] Failed to parse manifest %s: %s\n",

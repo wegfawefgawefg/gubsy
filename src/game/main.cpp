@@ -1,8 +1,9 @@
 #include "engine/run.hpp"
 #include "game/title.hpp"
 #include "game/playing.hpp"
-#include "demo_content.hpp"
+#include "game/setup.hpp"
 #include "engine/ui_layouts.hpp"
+#include "engine/mod_host.hpp"
 
 #include "engine/player.hpp"
 #include "engine/binds_profiles.hpp"
@@ -11,9 +12,15 @@
 #include "engine/top_level_game_settings.hpp"
 #include "engine/game_settings.hpp"
 #include "game/ui_layout_ids.hpp"
+#include "game/mod_api/register_game_mod_apis.hpp"
+#include "engine/globals.hpp"
+
+namespace {
+constexpr const char* kGameModVersion = "0.1.0";
+}
 
 void register_modes(){
-    // register_mode(modes::TITLE, title_step, title_process_inputs, title_draw);
+    register_mode(modes::SETUP, setup_step, nullptr, setup_draw);
     register_mode(modes::PLAYING, playing_step, nullptr, playing_draw);
 }
 
@@ -81,7 +88,11 @@ int main() {
     binds_schema.add_2d_analog(GameAnalog2D::RETICLE_POS, "Reticle Position", "Demo");
     register_binds_schema(binds_schema);
 
-    load_demo_content();
+    register_game_mod_apis();
+    set_required_mod_game_version(kGameModVersion);
+
+    if (es)
+        es->mode = modes::SETUP;
 
     add_player(0);
 

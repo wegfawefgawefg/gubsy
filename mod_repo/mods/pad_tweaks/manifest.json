@@ -4,5 +4,7 @@
   "version": "0.1.0",
   "author": "Gubsy",
   "description": "Demonstrates patching defs from another mod.",
-  "dependencies": ["base"]
+  "dependencies": ["base"],
+  "game_version": "0.1.0",
+  "apis": ["demo_items"]
 }
