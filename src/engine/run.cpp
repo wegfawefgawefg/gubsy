@@ -17,6 +17,8 @@
 #include "input_settings_profiles.hpp"
 #include "game_settings.hpp"
 #include "top_level_game_settings.hpp"
+#include "sdl_shim.hpp"
+#include "render.hpp"
 
 
 

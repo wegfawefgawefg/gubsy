@@ -7,7 +7,6 @@
 
 extern const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode;
 
-
 struct KeyEdge {
     bool prev = false;
     bool rise = false;

@@ -15,8 +15,8 @@ const std::vector<InputEvent>& get_input_events() {
 
 // is_down remains state-based for continuous actions.
 bool is_down(int player_index, int game_button) {
-    const BindsProfile* binds = get_player_binds(player_index);
-    if (!binds || !es->keystate) return false;
+    const BindsProfile* binds = get_player_binds_profile(player_index);
+    if (!binds) return false;
 
     // This is now a linear scan: GameAction -> GubsyButton(s)
     for (const auto& bind : binds->button_binds) {
@@ -69,9 +69,9 @@ float get_1d_analog(int player_index, int game_axis) {
     return result;
 }
 
-float get_1d_analog_delta(int player_index, int game_axis) { 
+float get_1d_analog_delta(int /*player_index*/, int /*game_axis*/) {
     // TODO: Not implemented. Requires historical state access.
-    return 0.0f; 
+    return 0.0f;
 }
 
 glm::vec2 get_2d_analog(int player_index, int game_axis) {
@@ -86,13 +86,13 @@ glm::vec2 get_2d_analog(int player_index, int game_axis) {
     return result;
 }
 
-glm::vec2 get_2d_analog_delta(int player_index, int game_axis) { 
+glm::vec2 get_2d_analog_delta(int /*player_index*/, int /*game_axis*/) {
     // TODO: Not implemented. Requires historical state access.
-    return glm::vec2(0.0f); 
+    return glm::vec2(0.0f);
 }
 
-glm::vec2 get_mouse_pos(int player_index) { return glm::vec2(0.0f); }
-glm::vec2 get_mouse_delta(int player_index) { return glm::vec2(0.0f); }
-glm::vec2 get_mouse_pos_window(int player_index) { return glm::vec2(0.0f); }
-glm::vec2 get_mouse_pos_screen(int player_index) { return glm::vec2(0.0f); }
-int get_mouse_wheel_delta(int player_index) { return 0; }
+glm::vec2 get_mouse_pos(int /*player_index*/) { return glm::vec2(0.0f); }
+glm::vec2 get_mouse_delta(int /*player_index*/) { return glm::vec2(0.0f); }
+glm::vec2 get_mouse_pos_window(int /*player_index*/) { return glm::vec2(0.0f); }
+glm::vec2 get_mouse_pos_screen(int /*player_index*/) { return glm::vec2(0.0f); }
+int get_mouse_wheel_delta(int /*player_index*/) { return 0; }

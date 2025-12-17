@@ -288,3 +288,74 @@ void bind_1d_analog(BindsProfile& profile, Gubsy1DAnalog device_axis, int gubsy_
 void bind_2d_analog(BindsProfile& profile, Gubsy2DAnalog device_stick, int gubsy_2d_analog) {
     bind_2d_analog(profile, static_cast<int>(device_stick), gubsy_2d_analog);
 }
+
+void BindsSchema::add_action(int action_id, const std::string& display_name, const std::string& category) {
+    actions.push_back({action_id, display_name, category});
+}
+
+void BindsSchema::add_1d_analog(int analog_id, const std::string& display_name, const std::string& category) {
+    analogs_1d.push_back({analog_id, display_name, category});
+}
+
+void BindsSchema::add_2d_analog(int analog_id, const std::string& display_name, const std::string& category) {
+    analogs_2d.push_back({analog_id, display_name, category});
+}
+
+void register_binds_schema(const BindsSchema& schema) {
+    // Build sets of valid IDs from schema
+    std::unordered_set<int> valid_actions;
+    valid_actions.reserve(schema.actions.size());
+    for (const auto& entry : schema.actions) {
+        valid_actions.insert(entry.action_id);
+    }
+
+    std::unordered_set<int> valid_analogs_1d;
+    valid_analogs_1d.reserve(schema.analogs_1d.size());
+    for (const auto& entry : schema.analogs_1d) {
+        valid_analogs_1d.insert(entry.analog_id);
+    }
+
+    std::unordered_set<int> valid_analogs_2d;
+    valid_analogs_2d.reserve(schema.analogs_2d.size());
+    for (const auto& entry : schema.analogs_2d) {
+        valid_analogs_2d.insert(entry.analog_id);
+    }
+
+    // Load all existing binds profiles
+    auto all_profiles = load_all_binds_profiles();
+
+    // Reconcile each profile with the new schema
+    for (auto& profile : all_profiles) {
+        // Filter button_binds to keep only valid actions
+        std::vector<std::pair<int, int>> valid_button_binds;
+        for (const auto& [device_btn, gubsy_action] : profile.button_binds) {
+            if (valid_actions.count(gubsy_action)) {
+                valid_button_binds.push_back({device_btn, gubsy_action});
+            }
+        }
+        profile.button_binds = std::move(valid_button_binds);
+
+        // Filter analog_1d_binds to keep only valid 1D analogs
+        std::vector<std::pair<int, int>> valid_analog_1d_binds;
+        for (const auto& [device_axis, gubsy_analog] : profile.analog_1d_binds) {
+            if (valid_analogs_1d.count(gubsy_analog)) {
+                valid_analog_1d_binds.push_back({device_axis, gubsy_analog});
+            }
+        }
+        profile.analog_1d_binds = std::move(valid_analog_1d_binds);
+
+        // Filter analog_2d_binds to keep only valid 2D analogs
+        std::vector<std::pair<int, int>> valid_analog_2d_binds;
+        for (const auto& [device_stick, gubsy_stick] : profile.analog_2d_binds) {
+            if (valid_analogs_2d.count(gubsy_stick)) {
+                valid_analog_2d_binds.push_back({device_stick, gubsy_stick});
+            }
+        }
+        profile.analog_2d_binds = std::move(valid_analog_2d_binds);
+
+        save_binds_profile(profile);
+    }
+
+    // Reload into engine state
+    load_binds_profiles_pool();
+}

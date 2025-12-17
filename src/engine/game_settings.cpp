@@ -1,8 +1,8 @@
 #include "engine/game_settings.hpp"
 
-#include "engine/config.hpp"
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
+#include "engine/utils.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -16,33 +16,8 @@ namespace {
 
 constexpr const char* kGameSettingsPath = "config/game_settings.sxp";
 
-// Helper to parse vec2
-std::optional<GameSettingsVec2> extract_vec2(const sexp::SValue& list, const std::string& symbol) {
-    const sexp::SValue* node = sexp::find_child(list, symbol);
-    if (!node || node->list.size() < 3)
-        return std::nullopt;
-
-    const sexp::SValue& x_val = node->list[1];
-    const sexp::SValue& y_val = node->list[2];
-
-    float x = 0.0f, y = 0.0f;
-
-    if (x_val.type == sexp::SValue::Type::Float)
-        x = static_cast<float>(x_val.float_value);
-    else if (x_val.type == sexp::SValue::Type::Int)
-        x = static_cast<float>(x_val.int_value);
-    else
-        return std::nullopt;
-
-    if (y_val.type == sexp::SValue::Type::Float)
-        y = static_cast<float>(y_val.float_value);
-    else if (y_val.type == sexp::SValue::Type::Int)
-        y = static_cast<float>(y_val.int_value);
-    else
-        return std::nullopt;
-
-    return GameSettingsVec2{x, y};
-}
+// Global schema storage
+GameSettingsSchema g_game_settings_schema;
 
 std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;
@@ -89,7 +64,7 @@ std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValu
                 if (kv.list[1].type != sexp::SValue::Type::String)
                     continue;
 
-                std::string key = kv.list[1].string_value;
+                std::string key = kv.list[1].text;
                 const sexp::SValue& value = kv.list[2];
 
                 // Determine type and store
@@ -98,7 +73,7 @@ std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValu
                 } else if (value.type == sexp::SValue::Type::Float) {
                     settings.settings[key] = static_cast<float>(value.float_value);
                 } else if (value.type == sexp::SValue::Type::String) {
-                    settings.settings[key] = value.string_value;
+                    settings.settings[key] = value.text;
                 } else if (value.type == sexp::SValue::Type::List && value.list.size() >= 3 &&
                            sexp::is_symbol(value.list[0], "vec2")) {
                     // Format: (vec2 x y)
@@ -317,4 +292,70 @@ GameSettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::
     if (const GameSettingsVec2* p = std::get_if<GameSettingsVec2>(&it->second))
         return *p;
     return GameSettingsVec2{default_x, default_y};
+}
+
+void GameSettingsSchema::add_int(const std::string& key, int default_value) {
+    entries.push_back({key, default_value});
+}
+
+void GameSettingsSchema::add_float(const std::string& key, float default_value) {
+    entries.push_back({key, default_value});
+}
+
+void GameSettingsSchema::add_string(const std::string& key, const std::string& default_value) {
+    entries.push_back({key, default_value});
+}
+
+void GameSettingsSchema::add_vec2(const std::string& key, float default_x, float default_y) {
+    entries.push_back({key, GameSettingsVec2{default_x, default_y}});
+}
+
+void register_game_settings_schema(const GameSettingsSchema& schema) {
+    // Store the schema globally
+    g_game_settings_schema = schema;
+
+    // Load all existing game settings profiles
+    auto all_settings = load_all_game_settings();
+
+    // Reconcile each profile with the new schema
+    for (auto& settings : all_settings) {
+        std::unordered_map<std::string, GameSettingsValue> reconciled;
+
+        for (const auto& entry : schema.entries) {
+            auto it = settings.settings.find(entry.key);
+            if (it != settings.settings.end()) {
+                // Key exists - check if types match
+                if (it->second.index() == entry.default_value.index()) {
+                    // Types match - keep the existing value
+                    reconciled[entry.key] = it->second;
+                } else {
+                    // Type mismatch - use default value from schema
+                    reconciled[entry.key] = entry.default_value;
+                }
+            } else {
+                // Key doesn't exist - use default value from schema
+                reconciled[entry.key] = entry.default_value;
+            }
+        }
+
+        settings.settings = reconciled;
+        save_game_settings(settings);
+    }
+
+    // Reload into engine state
+    load_game_settings_pool();
+}
+
+GameSettings create_game_settings_from_schema() {
+    GameSettings settings;
+    settings.id = generate_game_settings_id();
+    settings.name = "NewGameSettings";
+
+    // Populate with defaults from schema
+    for (const auto& entry : g_game_settings_schema.entries) {
+        settings.settings[entry.key] = entry.default_value;
+    }
+
+    save_game_settings(settings);
+    return settings;
 }

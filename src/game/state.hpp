@@ -33,6 +33,8 @@ struct BonkTarget {
 struct State {
     std::vector<DemoPlayer> players;
     BonkTarget bonk{};
+    float bar_height{0.5f};          // 0.0 to 1.0, normalized
+    glm::vec2 reticle_pos{0.0f, 0.0f}; // Screen-space normalized [-1, 1]
 };
 
 bool init_state();

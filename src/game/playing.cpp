@@ -35,6 +35,15 @@ void playing_step() {
     if (target.cooldown > 0.0f)
         target.cooldown = std::max(0.0f, target.cooldown - dt);
 
+    // Update analog inputs (for player 0 for now)
+    if (!ss->players.empty()) {
+        float trigger = get_1d_analog(0, GameAnalog1D::BAR_HEIGHT);
+        ss->bar_height = std::clamp(trigger, 0.0f, 1.0f);
+
+        glm::vec2 stick = get_2d_analog(0, GameAnalog2D::RETICLE_POS);
+        ss->reticle_pos = glm::clamp(stick, glm::vec2(-1.0f), glm::vec2(1.0f));
+    }
+
     // Update each player
     for (int i = 0; i < ss->players.size(); ++i) {
         auto& player = ss->players[i];
@@ -192,6 +201,53 @@ void playing_draw() {
             if (nearby && nearby_label.empty())
                 nearby_label = item->label;
         }
+    }
+
+    // Draw bar height indicator (left side of screen)
+    {
+        float bar_x = 20.0f;
+        float bar_width = 30.0f;
+        float bar_max_height = height * 0.6f;
+        float bar_bottom = height - 80.0f;
+        float bar_current_height = bar_max_height * ss->bar_height;
+
+        // Background
+        SDL_FRect bar_bg{bar_x, bar_bottom - bar_max_height, bar_width, bar_max_height};
+        SDL_SetRenderDrawColor(renderer, 40, 40, 50, 255);
+        SDL_RenderFillRectF(renderer, &bar_bg);
+
+        // Filled portion
+        SDL_FRect bar_fill{bar_x, bar_bottom - bar_current_height, bar_width, bar_current_height};
+        SDL_SetRenderDrawColor(renderer, 120, 200, 100, 255);
+        SDL_RenderFillRectF(renderer, &bar_fill);
+
+        // Border
+        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+        SDL_RenderDrawRectF(renderer, &bar_bg);
+    }
+
+    // Draw reticle (crosshair)
+    {
+        // Convert normalized [-1, 1] to screen space
+        float reticle_screen_x = (ss->reticle_pos.x * 0.5f + 0.5f) * width;
+        float reticle_screen_y = (ss->reticle_pos.y * 0.5f + 0.5f) * height;
+
+        float reticle_size = 10.0f;
+        SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
+
+        // Horizontal line
+        SDL_RenderDrawLineF(renderer,
+            reticle_screen_x - reticle_size, reticle_screen_y,
+            reticle_screen_x + reticle_size, reticle_screen_y);
+
+        // Vertical line
+        SDL_RenderDrawLineF(renderer,
+            reticle_screen_x, reticle_screen_y - reticle_size,
+            reticle_screen_x, reticle_screen_y + reticle_size);
+
+        // Center dot
+        SDL_FRect center_dot{reticle_screen_x - 2.0f, reticle_screen_y - 2.0f, 4.0f, 4.0f};
+        SDL_RenderFillRectF(renderer, &center_dot);
     }
 
     // Alerts + instructions overlay

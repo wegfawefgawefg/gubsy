@@ -19,6 +19,21 @@ struct GameSettings {
     std::unordered_map<std::string, GameSettingsValue> settings;
 };
 
+// Schema entry stores the key name and default value
+struct GameSettingsSchemaEntry {
+    std::string key;
+    GameSettingsValue default_value;
+};
+
+struct GameSettingsSchema {
+    std::vector<GameSettingsSchemaEntry> entries;
+
+    void add_int(const std::string& key, int default_value);
+    void add_float(const std::string& key, float default_value);
+    void add_string(const std::string& key, const std::string& default_value);
+    void add_vec2(const std::string& key, float default_x, float default_y);
+};
+
 /*
  Load all game settings from disk
 */
@@ -61,3 +76,16 @@ int get_game_setting_int(const GameSettings& settings, const std::string& key, i
 float get_game_setting_float(const GameSettings& settings, const std::string& key, float default_value = 0.0f);
 std::string get_game_setting_string(const GameSettings& settings, const std::string& key, const std::string& default_value = "");
 GameSettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::string& key, float default_x = 0.0f, float default_y = 0.0f);
+
+/*
+ Register the game settings schema
+ - Reconciles all existing game settings profiles with the new schema
+ - Keeps compatible values, removes incompatible ones, adds missing ones
+*/
+void register_game_settings_schema(const GameSettingsSchema& schema);
+
+/*
+ Create a new game settings profile from the registered schema
+ Returns a profile with all default values
+*/
+GameSettings create_game_settings_from_schema();

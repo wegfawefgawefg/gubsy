@@ -18,10 +18,9 @@
 #include "engine/user_profiles.hpp"
 #include <unordered_map>
 
-namespace {
 // This map is crucial for translating the abstract GubsyButton enum into a concrete SDL_Scancode
 // that can be used to check the keyboard state array.
-static const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode = {
+const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode = {
     {static_cast<int>(GubsyButton::KB_A), SDL_SCANCODE_A},
     {static_cast<int>(GubsyButton::KB_B), SDL_SCANCODE_B},
     {static_cast<int>(GubsyButton::KB_C), SDL_SCANCODE_C},
@@ -129,8 +128,6 @@ static const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode = {
     {static_cast<int>(GubsyButton::KB_APPLICATION), SDL_SCANCODE_APPLICATION},
     {static_cast<int>(GubsyButton::KB_MENU), SDL_SCANCODE_MENU},
 };
-} // namespace
-
 
 void process_inputs() {
     // 1. Update keyboard state arrays
