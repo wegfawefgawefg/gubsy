@@ -9,3 +9,52 @@ input mapping
 main menu that isnt shit
 
 - networking
+--------------------------------
+
+
+* players
+* user profiles
+* binds profiles and binds
+* global settings
+* game settings per user profile
+test the above
+
+mods:
+    design a mod interface so the engine can manage the mods in a game instance, or a save, and the files
+    and let the dev create a modding api that those mods can interact with the game through?
+
+    we dont want each game dev to have to reinvent the wheel for mod support
+    the engine provides a browser and loader and such.
+    if the dev uses the modding api right then mods will implicitly work with the engine mod support
+    and the dev can define apis for the mods to interact with and state for the mods to interact with yeah?
+
+menu:
+    most of the menu stuff for changing settings, user profiles etc, the engine can provide
+    menus for in game like making choices and talking to npcs, managing items the engine will not provide
+    that stuff, the dev has to make that.
+
+    but we can use the schemas the dev made to automatically produce the sort of settings and top level menus
+    so for like, video settings, audio settings, input settings, user profile management, binds, top level game settings
+    the engine can provide generic menus for those that just work based on the schemas the dev made :3
+
+    other menus the dev wants to make the dev has to make them i think. 
+
+    or maybe we define a menu screen and widgets api or something? i mean the engine can use that internally, but its not really for the dev to use probably
+
+ui layout editor:
+    there is a spec for this somewhere in the docs, 
+    we sketched it out and it compiled before but the code was nasty. 
+    but we have the plan for it. but it does need to be implemented it. 
+    and the rendering and interaction with it are agnostic of the users game code. 
+    like it renders on TOP of that and consumes inputs while its active probably.
+    or maybe we let the consumer dev call its stuff if they want that mode idk?
+
+    but either way it should work on any screen in game that has a ui layout.
+    and should be able to view different resolutions and aspect ratios and stuff.
+
+the graph of menu objects definer might be a seperate system more tightly integrated into the menu system and builder?
+    this was also sketched but needs to be rebuilt. 
+
+
+
+

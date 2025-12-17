@@ -4,10 +4,12 @@
 #include "engine/globals.hpp"
 #include "engine/input_queries.hpp"
 #include "engine/render.hpp"
+#include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
 #include "settings.hpp"
 #include "state.hpp"
 #include "demo_items.hpp"
+#include "game/ui_layout_ids.hpp"
 
 #include <algorithm>
 #include <glm/glm.hpp>
@@ -116,6 +118,9 @@ void playing_draw() {
     SDL_SetRenderDrawColor(renderer, 12, 10, 18, 255);
     SDL_RenderClear(renderer);
 
+    // Get best matching UI layout for current resolution
+    const UILayout* layout = get_ui_layout_for_resolution(UILayoutID::PLAY_SCREEN, width, height);
+
     ScreenSpace space = make_space(width, height);
 
     // Grid backdrop
@@ -203,27 +208,34 @@ void playing_draw() {
         }
     }
 
-    // Draw bar height indicator (left side of screen)
-    {
-        float bar_x = 20.0f;
-        float bar_width = 30.0f;
-        float bar_max_height = height * 0.6f;
-        float bar_bottom = height - 80.0f;
-        float bar_current_height = bar_max_height * ss->bar_height;
+    // Draw UI using layout system
+    if (layout) {
+        // Draw bar height indicator
+        if (const UIObject* bar_obj = get_ui_object(*layout, UIObjectID::BAR_HEIGHT_INDICATOR)) {
+            float bar_x = bar_obj->x * width;
+            float bar_y = bar_obj->y * height;
+            float bar_width = bar_obj->w * width;
+            float bar_height = bar_obj->h * height;
+            float bar_current_height = bar_height * ss->bar_height;
 
-        // Background
-        SDL_FRect bar_bg{bar_x, bar_bottom - bar_max_height, bar_width, bar_max_height};
-        SDL_SetRenderDrawColor(renderer, 40, 40, 50, 255);
-        SDL_RenderFillRectF(renderer, &bar_bg);
+            // Background
+            SDL_FRect bar_bg{bar_x, bar_y, bar_width, bar_height};
+            SDL_SetRenderDrawColor(renderer, 40, 40, 50, 255);
+            SDL_RenderFillRectF(renderer, &bar_bg);
 
-        // Filled portion
-        SDL_FRect bar_fill{bar_x, bar_bottom - bar_current_height, bar_width, bar_current_height};
-        SDL_SetRenderDrawColor(renderer, 120, 200, 100, 255);
-        SDL_RenderFillRectF(renderer, &bar_fill);
+            // Filled portion (from bottom)
+            SDL_FRect bar_fill{
+                bar_x,
+                bar_y + bar_height - bar_current_height,
+                bar_width,
+                bar_current_height};
+            SDL_SetRenderDrawColor(renderer, 120, 200, 100, 255);
+            SDL_RenderFillRectF(renderer, &bar_fill);
 
-        // Border
-        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-        SDL_RenderDrawRectF(renderer, &bar_bg);
+            // Border
+            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+            SDL_RenderDrawRectF(renderer, &bar_bg);
+        }
     }
 
     // Draw reticle (crosshair)
@@ -261,4 +273,3 @@ void playing_draw() {
 
     SDL_RenderPresent(renderer);
 }
-

@@ -15,6 +15,7 @@
 #include "engine/input_settings_profiles.hpp"
 #include "engine/game_settings.hpp"
 #include "engine/top_level_game_settings.hpp"
+#include "engine/ui_layouts.hpp"
 #include "player.hpp"
 #include "game/events.hpp"
 
@@ -68,6 +69,9 @@ struct EngineState {
     std::unordered_map<int, GamepadState> gamepad_states;
 
     std::vector<Alert> alerts{};
+
+    // UI layout pool loaded from disk
+    std::vector<UILayout> ui_layouts_pool;
 
     struct AudioSettings {
         float vol_master{1.0f};
