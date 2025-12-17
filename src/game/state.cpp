@@ -5,6 +5,9 @@
 #include "engine/binds_profiles.hpp"
 
 bool init_state() {
+    if (ss)
+        return true;
+    ss = new State{};
     ss->bonk.pos = glm::vec2{2.5f, 0.0f};
     ss->bonk.cooldown = 0.0f;
     ss->bonk.enabled = true;

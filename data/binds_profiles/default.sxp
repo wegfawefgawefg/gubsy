@@ -14,4 +14,27 @@
     (analog_2d_binds
     )
   )
+  (profile
+    (id 56985097)
+    (name "DefaultBinds")
+    (button_binds
+      (bind (device_button 65) (gubsy_action 0))
+      (bind (device_button 66) (gubsy_action 1))
+      (bind (device_button 67) (gubsy_action 2))
+      (bind (device_button 68) (gubsy_action 3))
+      (bind (device_button 82) (gubsy_action 4))
+      (bind (device_button 22) (gubsy_action 10))
+      (bind (device_button 18) (gubsy_action 11))
+      (bind (device_button 0) (gubsy_action 12))
+      (bind (device_button 3) (gubsy_action 13))
+      (bind (device_button 4) (gubsy_action 14))
+      (bind (device_button 80) (gubsy_action 14))
+    )
+    (analog_1d_binds
+      (bind (device_axis 0) (gubsy_analog 0))
+    )
+    (analog_2d_binds
+      (bind (device_stick 0) (gubsy_stick 0))
+    )
+  )
 )

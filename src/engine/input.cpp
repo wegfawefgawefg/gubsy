@@ -163,7 +163,7 @@ void process_inputs() {
 
             // A press or release was detected for this physical key `i`.
             // Now, find all game actions that are bound to this physical key.
-            for (const auto& [game_action, device_button] : binds->button_binds) {
+            for (const auto& [device_button, game_action] : binds->button_binds) {
                 if (device_button == i) {
                     // Match found! Create and push an event.
                     InputEvent event;
@@ -197,8 +197,8 @@ void process_inputs() {
             glm::vec2 left_stick_now(state.axes[SDL_CONTROLLER_AXIS_LEFTX], state.axes[SDL_CONTROLLER_AXIS_LEFTY]);
             glm::vec2 left_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_LEFTX], state.last_axes[SDL_CONTROLLER_AXIS_LEFTY]);
             if ((glm::length(left_stick_now) > DEADZONE || glm::length(left_stick_last) > DEADZONE) && glm::distance(left_stick_now, left_stick_last) > 0.001f) {
-                for (const auto& [game_action, device_2d_axis] : binds->analog_2d_binds) {
-                    if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK)) {
+            for (const auto& [device_2d_axis, game_action] : binds->analog_2d_binds) {
+                if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK)) {
                         InputEvent event;
                         event.type = InputEventType::ANALOG_2D;
                         event.player_index = player_index;
@@ -212,7 +212,7 @@ void process_inputs() {
             glm::vec2 right_stick_now(state.axes[SDL_CONTROLLER_AXIS_RIGHTX], state.axes[SDL_CONTROLLER_AXIS_RIGHTY]);
             glm::vec2 right_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_RIGHTX], state.last_axes[SDL_CONTROLLER_AXIS_RIGHTY]);
             if ((glm::length(right_stick_now) > DEADZONE || glm::length(right_stick_last) > DEADZONE) && glm::distance(right_stick_now, right_stick_last) > 0.001f) {
-                for (const auto& [game_action, device_2d_axis] : binds->analog_2d_binds) {
+                for (const auto& [device_2d_axis, game_action] : binds->analog_2d_binds) {
                     if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_RIGHT_STICK)) {
                         InputEvent event;
                         event.type = InputEventType::ANALOG_2D;
@@ -229,7 +229,7 @@ void process_inputs() {
             float left_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
             float left_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
             if ((left_trigger_now > DEADZONE || left_trigger_last > DEADZONE) && abs(left_trigger_now - left_trigger_last) > 0.001f) {
-                for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
+                for (const auto& [device_1d_axis, game_action] : binds->analog_1d_binds) {
                     if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_LEFT_TRIGGER)) {
                         InputEvent event;
                         event.type = InputEventType::ANALOG_1D;
@@ -244,7 +244,7 @@ void process_inputs() {
             float right_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
             float right_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
             if ((right_trigger_now > DEADZONE || right_trigger_last > DEADZONE) && abs(right_trigger_now - right_trigger_last) > 0.001f) {
-                for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
+                for (const auto& [device_1d_axis, game_action] : binds->analog_1d_binds) {
                     if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_RIGHT_TRIGGER)) {
                         InputEvent event;
                         event.type = InputEventType::ANALOG_1D;
@@ -273,5 +273,3 @@ void process_inputs() {
     }
     was_debug_combo_down = is_debug_combo_down;
 }
-
-

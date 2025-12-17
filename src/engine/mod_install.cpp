@@ -12,7 +12,14 @@
 #include <fstream>
 #include <sstream>
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
 #include <httplib/httplib.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include <nlohmann/json.hpp>
 
 namespace {

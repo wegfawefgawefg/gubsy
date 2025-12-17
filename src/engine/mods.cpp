@@ -1,6 +1,5 @@
 #include "mods.hpp"
 #include "globals.hpp"
-#include "settings.hpp"
 #include "engine/graphics.hpp"
 #include "engine/mod_host.hpp"
 
@@ -398,7 +397,9 @@ bool scan_mods_for_sprite_defs() {
 
 
 bool poll_fs_mods_hot_reload() {
-    mm->accum_poll += ss->dt;
+    if (!mm || !es)
+        return false;
+    mm->accum_poll += es->dt;
     if (mm->accum_poll < HOT_RELOAD_POLL_INTERVAL)
         return false;
     mm->accum_poll = 0.0f;
@@ -432,8 +433,7 @@ bool poll_fs_mods_hot_reload() {
     std::vector<std::string> reload_ids(touched_mods.begin(), touched_mods.end());
     std::printf("[mods] Reloading %zu mod(s) due to changes.\n", reload_ids.size());
     if (reload_mods(reload_ids)) {
-        if (ss)
-            ss->alerts.push_back({"Mods reloaded", 0.0f, 1.5f, false});
+        es->alerts.push_back({"Mods reloaded", 0.0f, 1.5f, false});
         return true;
     }
     return false;

@@ -176,18 +176,6 @@ void rebuild_public_items() {
         g_public_defs.push_back(rec.def);
 }
 
-void register_api(sol::state& lua) {
-    lua.new_usertype<DemoApi>("DemoAPI",
-        "alert", &DemoApi::alert,
-        "set_player_position", &DemoApi::set_player_position,
-        "play_sound", &DemoApi::play_sound,
-        "set_bonk_enabled", &DemoApi::set_bonk_enabled,
-        "set_bonk_position", &DemoApi::set_bonk_position,
-        "set_item_position", &DemoApi::set_item_position,
-        "get_item_position", &DemoApi::get_item_position);
-    lua["api"] = &g_api;
-}
-
 sol::table make_item_table(sol::state_view lua, const DemoItemDef& item,
                            const DemoItemInstance* inst) {
     sol::table tbl = lua.create_table();
@@ -242,6 +230,10 @@ void register_item(const std::string& mod_id, const sol::table& t) {
 
     g_lookup.emplace(rec.def.id, g_records.size());
     g_records.push_back(std::move(rec));
+    std::printf("[demo_items] %s registered '%s' at (%.2f, %.2f)\n",
+                mod_id.c_str(), g_records.back().def.id.c_str(),
+                static_cast<double>(g_records.back().def.position.x),
+                static_cast<double>(g_records.back().def.position.y));
 }
 
 bool patch_item(const std::string& mod_id, const sol::table& patch) {
@@ -257,6 +249,7 @@ bool patch_item(const std::string& mod_id, const sol::table& patch) {
         return false;
     }
     apply_def_patch(*rec, patch);
+    std::fprintf(stderr, "[demo_items] %s patched '%s'\n", mod_id.c_str(), id.c_str());
     return true;
 }
 
@@ -334,6 +327,9 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
         std::fprintf(stderr, "[demo_items] on_use error (%s): %s\n",
                      rec.def.id.c_str(), e.what());
         add_alert(std::string("Pad error: ") + rec.def.label);
+    } else {
+        std::printf("[demo_items] triggered '%s' (%s)\n",
+                    rec.def.id.c_str(), rec.owner_mod.c_str());
     }
 }
 
@@ -351,17 +347,4 @@ void unload_demo_item_defs() {
 
 void set_demo_item_mod_filter(const std::vector<std::string>&) {
     // Legacy stub retained for session lobby. Filtering handled by ModHost in future work.
-}
-
-bool demo_items_active() {
-    return g_demo_items_active;
-}
-
-void set_demo_item_mod_filter(const std::vector<std::string>& ids) {
-    g_mod_filter.clear();
-    g_use_mod_filter = true;
-    for (const auto& id : ids) {
-        if (!id.empty())
-            g_mod_filter.insert(id);
-    }
 }

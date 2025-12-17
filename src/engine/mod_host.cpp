@@ -34,10 +34,6 @@ ModInfo* find_mod_info_mutable(const std::string& id) {
     return nullptr;
 }
 
-const ModInfo* find_mod_info(const std::string& id) {
-    return find_mod_info_mutable(id);
-}
-
 bool run_mod_scripts(ModContext& ctx) {
     namespace fs = std::filesystem;
     fs::path scripts_dir = fs::path(ctx.path) / "scripts";

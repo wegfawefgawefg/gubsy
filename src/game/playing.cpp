@@ -47,21 +47,22 @@ void playing_step() {
     }
 
     // Update each player
-    for (int i = 0; i < ss->players.size(); ++i) {
+    for (std::size_t i = 0; i < ss->players.size(); ++i) {
         auto& player = ss->players[i];
+        const int player_index = static_cast<int>(i);
         
         // Handle player input and movement
         glm::vec2 dir(0.0f);
-        if (is_down(i, GameAction::UP)) {
+        if (is_down(player_index, GameAction::UP)) {
             dir.y -= 1.0f;
         }
-        if (is_down(i, GameAction::DOWN)) {
+        if (is_down(player_index, GameAction::DOWN)) {
             dir.y += 1.0f;
         }
-        if (is_down(i, GameAction::LEFT)) {
+        if (is_down(player_index, GameAction::LEFT)) {
             dir.x -= 1.0f;
         }
-        if (is_down(i, GameAction::RIGHT)) {
+        if (is_down(player_index, GameAction::RIGHT)) {
             dir.x += 1.0f;
         }
         if (glm::length(dir) > 0.0f) {
@@ -79,8 +80,9 @@ void playing_step() {
             play_sound(sound);
         }
 
-        const bool use_pressed = was_pressed(i, GameAction::USE);
+        const bool use_pressed = was_pressed(player_index, GameAction::USE);
         if (use_pressed) {
+            std::printf("[playing] player %d pressed USE\n", player_index);
             const float player_radius = glm::length(player.half_size);
             for (const auto& slot : demo_item_instance_slots()) {
                 if (!slot.active)
@@ -91,6 +93,9 @@ void playing_step() {
                     continue;
                 float dist = glm::length(player.pos - inst.position);
                 if (dist <= (player_radius + def->radius)) {
+                    std::printf("[playing] player %d triggering '%s' (dist=%.2f)\n",
+                                player_index, def->id.c_str(),
+                                static_cast<double>(dist));
                     trigger_demo_item_use(inst);
                     break; // One player uses it, break for this player
                 }
@@ -115,6 +120,8 @@ void playing_draw() {
     int width = 0;
     int height = 0;
     SDL_GetRendererOutputSize(renderer, &width, &height);
+    const float width_f = static_cast<float>(width);
+    const float height_f = static_cast<float>(height);
     SDL_SetRenderDrawColor(renderer, 12, 10, 18, 255);
     SDL_RenderClear(renderer);
 
@@ -136,7 +143,7 @@ void playing_draw() {
     const auto& target = ss->bonk;
 
     // Draw players
-    for (int i = 0; i < ss->players.size(); ++i) {
+    for (std::size_t i = 0; i < ss->players.size(); ++i) {
         const auto& player = ss->players[i];
         // Cycle through some colors for each player
         SDL_Color player_fill = (i % 2 == 0) ? SDL_Color{80, 200, 255, 255} : SDL_Color{255, 180, 80, 255};
@@ -212,10 +219,10 @@ void playing_draw() {
     if (layout) {
         // Draw bar height indicator
         if (const UIObject* bar_obj = get_ui_object(*layout, UIObjectID::BAR_HEIGHT_INDICATOR)) {
-            float bar_x = bar_obj->x * width;
-            float bar_y = bar_obj->y * height;
-            float bar_width = bar_obj->w * width;
-            float bar_height = bar_obj->h * height;
+            float bar_x = bar_obj->x * width_f;
+            float bar_y = bar_obj->y * height_f;
+            float bar_width = bar_obj->w * width_f;
+            float bar_height = bar_obj->h * height_f;
             float bar_current_height = bar_height * ss->bar_height;
 
             // Background
@@ -241,8 +248,8 @@ void playing_draw() {
     // Draw reticle (crosshair)
     {
         // Convert normalized [-1, 1] to screen space
-        float reticle_screen_x = (ss->reticle_pos.x * 0.5f + 0.5f) * width;
-        float reticle_screen_y = (ss->reticle_pos.y * 0.5f + 0.5f) * height;
+        float reticle_screen_x = (ss->reticle_pos.x * 0.5f + 0.5f) * width_f;
+        float reticle_screen_y = (ss->reticle_pos.y * 0.5f + 0.5f) * height_f;
 
         float reticle_size = 10.0f;
         SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);

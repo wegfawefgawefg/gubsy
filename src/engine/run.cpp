@@ -7,6 +7,7 @@
 #include "engine_state.hpp"
 #include <SDL_mixer.h>
 #include "audio.hpp"
+#include "engine/audio_settings.hpp"
 #include "mods.hpp"
 #include "step.hpp"
 #include "globals.hpp"

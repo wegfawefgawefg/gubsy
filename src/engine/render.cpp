@@ -43,7 +43,7 @@ Uint8 channel_from_vec(float v) {
     return static_cast<Uint8>(std::round(clamped * 255.0f));
 }
 
-SDL_Color color_from_vec3(const glm::vec3& v, Uint8 alpha = 255) {
+SDL_Color color_from_vec3(const glm::vec3& v, Uint8 alpha) {
     return SDL_Color{channel_from_vec(v.r), channel_from_vec(v.g), channel_from_vec(v.b), alpha};
 }
 
@@ -98,6 +98,5 @@ void render() {
     }
 
 }
-
 
 

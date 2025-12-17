@@ -16,19 +16,6 @@ namespace {
 
 constexpr const char* kInputSettingsProfilesPath = "config/input_settings_profiles.sxp";
 
-// Helper to extract float safely
-std::optional<float> extract_float(const sexp::SValue& list, const std::string& symbol) {
-    const sexp::SValue* node = sexp::find_child(list, symbol);
-    if (!node || node->list.size() < 2)
-        return std::nullopt;
-    const sexp::SValue& val = node->list[1];
-    if (val.type == sexp::SValue::Type::Float)
-        return static_cast<float>(val.float_value);
-    if (val.type == sexp::SValue::Type::Int)
-        return static_cast<float>(val.int_value);
-    return std::nullopt;
-}
-
 // Helper to extract bool (treat non-zero int as true)
 std::optional<bool> extract_bool(const sexp::SValue& list, const std::string& symbol) {
     auto val = sexp::extract_int(list, symbol);
@@ -66,16 +53,16 @@ std::vector<InputSettingsProfile> parse_input_settings_profiles_tree(const std::
         InputSettingsProfile profile{};
         profile.id = *id;
         profile.name = *name;
-        profile.mouse_sensitivity = extract_float(entry, "mouse_sensitivity").value_or(1.0f);
+        profile.mouse_sensitivity = sexp::extract_float(entry, "mouse_sensitivity").value_or(1.0f);
         profile.mouse_invert_x = extract_bool(entry, "mouse_invert_x").value_or(false);
         profile.mouse_invert_y = extract_bool(entry, "mouse_invert_y").value_or(false);
-        profile.controller_sensitivity = extract_float(entry, "controller_sensitivity").value_or(1.0f);
-        profile.stick_deadzone = extract_float(entry, "stick_deadzone").value_or(0.15f);
-        profile.trigger_threshold = extract_float(entry, "trigger_threshold").value_or(0.1f);
+        profile.controller_sensitivity = sexp::extract_float(entry, "controller_sensitivity").value_or(1.0f);
+        profile.stick_deadzone = sexp::extract_float(entry, "stick_deadzone").value_or(0.15f);
+        profile.trigger_threshold = sexp::extract_float(entry, "trigger_threshold").value_or(0.1f);
         profile.controller_invert_x = extract_bool(entry, "controller_invert_x").value_or(false);
         profile.controller_invert_y = extract_bool(entry, "controller_invert_y").value_or(false);
         profile.vibration_enabled = extract_bool(entry, "vibration_enabled").value_or(true);
-        profile.vibration_strength = extract_float(entry, "vibration_strength").value_or(1.0f);
+        profile.vibration_strength = sexp::extract_float(entry, "vibration_strength").value_or(1.0f);
 
         profiles.push_back(std::move(profile));
     }

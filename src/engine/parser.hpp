@@ -33,6 +33,7 @@ bool is_symbol(const SValue& value, const std::string& symbol);
 const SValue* find_child(const SValue& list, const std::string& symbol);
 
 std::optional<int> extract_int(const SValue& list, const std::string& symbol);
+std::optional<float> extract_float(const SValue& list, const std::string& symbol);
 std::optional<std::string> extract_string(const SValue& list, const std::string& symbol);
 
 std::string quote_string(const std::string& text);

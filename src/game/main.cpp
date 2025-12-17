@@ -25,7 +25,11 @@ void register_modes(){
 }
 
 int main() {
+    if (!init_engine_state()) {
+        return 1;
+    }
     if (!init_state()) {
+        cleanup_engine_state();
         return 1;
     }
 

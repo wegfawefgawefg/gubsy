@@ -19,11 +19,11 @@ struct UILayout {
     std::vector<UIObject> objects;
 
     // Idempotent - overwrites if object with same id exists
-    void add_object(int obj_id, const std::string& label, float x, float y, float w, float h);
+    void add_object(int obj_id, const std::string& object_label, float x, float y, float w, float h);
 
     // Remove object by id or label
     bool remove_object(int obj_id);
-    bool remove_object(const std::string& label);
+    bool remove_object(const std::string& object_label);
 };
 
 /*

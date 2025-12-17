@@ -99,6 +99,12 @@ bool run_setup_once() {
         g_error = err;
         return false;
     }
+    g_status = "Discovering mods...";
+    if (!mm) {
+        g_error = "Mod manager unavailable";
+        return false;
+    }
+    discover_mods();
     g_status = "Activating mods...";
     if (!set_active_mods(kDemoModChain)) {
         g_error = "Failed to activate mods";

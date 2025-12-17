@@ -9,7 +9,8 @@ int add_player(int player_index) {
     // For now, we ignore player_index and just add to the end.
     // A more robust implementation would handle resizing the vector if needed,
     // and ensure we don't have duplicate player indices.
-    if (!es->players.empty() && player_index < es->players.size()) {
+    if (!es->players.empty() && player_index >= 0 &&
+        static_cast<std::size_t>(player_index) < es->players.size()) {
         // Player at this index already exists
         return player_index;
     }
@@ -72,7 +73,7 @@ UserProfile* get_player_user_profile(int player_index) {
     if (!es || player_index < 0 || player_index >= static_cast<int>(es->players.size())) {
         return nullptr;
     }
-    Player& player = es->players[player_index];
+    Player& player = es->players[static_cast<std::size_t>(player_index)];
     return player.has_active_profile ? &player.profile : nullptr;
 }
 

@@ -237,6 +237,27 @@ std::optional<int> extract_int(const SValue& list, const std::string& symbol) {
     return std::nullopt;
 }
 
+std::optional<float> extract_float(const SValue& list, const std::string& symbol) {
+    const SValue* node = find_child(list, symbol);
+    if (!node || node->list.size() < 2)
+        return std::nullopt;
+    const SValue& val = node->list[1];
+    if (val.type == SValue::Type::Float)
+        return static_cast<float>(val.float_value);
+    if (val.type == SValue::Type::Int)
+        return static_cast<float>(val.int_value);
+    if (val.type == SValue::Type::Symbol) {
+        if (looks_like_float(val.text) || looks_like_integer(val.text)) {
+            try {
+                return std::stof(val.text);
+            } catch (...) {
+                return std::nullopt;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<std::string> extract_string(const SValue& list, const std::string& symbol) {
     const SValue* node = find_child(list, symbol);
     if (!node || node->list.size() < 2)

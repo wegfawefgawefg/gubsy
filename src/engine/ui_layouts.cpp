@@ -138,12 +138,13 @@ bool write_ui_layouts_file(const std::vector<UILayout>& layouts) {
 
 } // namespace
 
-void UILayout::add_object(int obj_id, const std::string& label, float x, float y, float w, float h) {
+void UILayout::add_object(int obj_id, const std::string& object_label,
+                          float x, float y, float w, float h) {
     // Idempotent - check if object with same id exists
     for (auto& obj : objects) {
         if (obj.id == obj_id) {
             // Update existing object
-            obj.label = label;
+            obj.label = object_label;
             obj.x = x;
             obj.y = y;
             obj.w = w;
@@ -152,7 +153,7 @@ void UILayout::add_object(int obj_id, const std::string& label, float x, float y
         }
     }
     // Add new object
-    objects.push_back({obj_id, label, x, y, w, h});
+    objects.push_back({obj_id, object_label, x, y, w, h});
 }
 
 bool UILayout::remove_object(int obj_id) {
@@ -165,9 +166,9 @@ bool UILayout::remove_object(int obj_id) {
     return false;
 }
 
-bool UILayout::remove_object(const std::string& label) {
+bool UILayout::remove_object(const std::string& object_label) {
     auto it = std::remove_if(objects.begin(), objects.end(),
-                             [&label](const UIObject& obj) { return obj.label == label; });
+                             [&object_label](const UIObject& obj) { return obj.label == object_label; });
     if (it != objects.end()) {
         objects.erase(it, objects.end());
         return true;

@@ -1,5 +1,3 @@
-math.randomseed(os.time())
-
 local bonk_enabled = true
 
 register_item{

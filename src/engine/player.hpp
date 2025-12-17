@@ -13,7 +13,7 @@ struct Player {
  add a new player to es->players
  returns the index of the new player
 */
-int add_player(int player_index);
+int add_player(int player_index = -1);
 
 /*
  remove a player from es->players by index
