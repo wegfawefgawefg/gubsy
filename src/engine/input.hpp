@@ -1,55 +1,3 @@
-/*
-    each player has a list of sources
-    sources can be keyboard/mouse/gamepad
-    each source has its own last input state for edge detection/deltas
-
-    each frame well grab events from sdl
-    update each source's input state
-    then for each player we can query their sources for is_down/was_pressed
-
-    in a engine state:
-        list of players
-            each player is either local or remote.
-
-        vec of LocalPlayerProfiles - loaded at launch, saved on change
-            each profile has:
-                name
-                last chosen input profile ids for each source type
-
-        local players:
-            player profile ids
-
-    List of Players
-        Each Player has PlayerInputData
-        PlayerInputData has a list of SourceProfilePairs
-            Each SourceProfilePair has:
-                InputSourceId (which device)
-                InputProfileId (settings for that device)
-
-    hashmaps of LastInputStates (KB/Mouse/Gamepad depending on source type)
-        hashmap of gamepadlastinputstates by device id
-        hashmap of kblastinputstates by device id
-        hashmap of mouselastinputstates by device id
-
-    dev interface: // for making games
-        // buttons
-        is_down(player_idx, input)
-        is_up(player_idx, input) 
-        was_pressed(player_idx, input)
-        was_released(player_idx, input)
-
-        // gamepad analog
-        get_axis(player_idx, axis)
-        get_axis_delta(player_idx, axis) // analog inputs
-
-        // mouse analog
-        get_mouse_pos(player_idx) -> vec2
-        get_mouse_delta(player_idx) -> vec2
-        get_mouse_pos_window(player_idx) -> vec2 // normalized 0-1 in window
-        get_mouse_pos_screen(player_idx) -> vec2 // normalized 0-1 in screen, accounts for player may be in sub screen area
-        get_mouse_wheel_delta(player_idx) -> int
- */
-
 #pragma once
 
 #include "engine/graphics.hpp"
@@ -59,7 +7,6 @@
 
 extern const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode;
 
-const BindsProfile* get_player_binds(int player_index);
 
 struct KeyEdge {
     bool prev = false;

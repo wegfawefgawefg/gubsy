@@ -91,8 +91,8 @@ void set_user_profile_for_player(int player_index, int user_profile_id) {
     }
 
     if (target_profile) {
-        es->players[player_index].profile = *target_profile;
-        es->players[player_index].has_active_profile = true;
+        es->players[static_cast<size_t>(player_index)].profile = *target_profile;
+        es->players[static_cast<size_t>(player_index)].has_active_profile = true;
     }
 }
 

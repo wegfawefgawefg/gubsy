@@ -144,122 +144,122 @@ void process_inputs() {
     // 2. Clear the event queue for the new frame
     es->input_event_queue.clear();
 
-    // 3. Find the active binds profile for player 0 (simplified)
-    const BindsProfile* binds = get_player_binds(0);
-    if (!binds) return;
+    // 3. Process inputs for each player
+    for (int player_index = 0; player_index < static_cast<int>(es->players.size()); ++player_index) {
+        const BindsProfile* binds = get_player_binds_profile(player_index);
+        if (!binds) continue; // Skip players without binds profiles
 
+        // 4. Iterate through all possible physical keys to check for state changes
+        for (int i = 0; i < static_cast<int>(GubsyButton::COUNT); ++i) {
+            // Find the corresponding SDL scancode for this GubsyButton
+            if (gubsy_to_sdl_scancode.count(i) == 0) {
+                continue; // Skip non-keyboard buttons for now
+            }
+            SDL_Scancode scancode = gubsy_to_sdl_scancode.at(i);
 
-// 4. Iterate through all possible physical keys to check for state changes
-    for (int i = 0; i < static_cast<int>(GubsyButton::COUNT); ++i) {
-        // Find the corresponding SDL scancode for this GubsyButton
-        if (gubsy_to_sdl_scancode.count(i) == 0) {
-            continue; // Skip non-keyboard buttons for now
+            bool is_down_now = es->keystate[scancode];
+            bool was_down_before = es->last_keystate[scancode];
+
+            if (is_down_now == was_down_before) {
+                continue; // No change in state for this key
+            }
+
+            // A press or release was detected for this physical key `i`.
+            // Now, find all game actions that are bound to this physical key.
+            for (const auto& [game_action, device_button] : binds->button_binds) {
+                if (device_button == i) {
+                    // Match found! Create and push an event.
+                    InputEvent event;
+                    event.type = InputEventType::BUTTON;
+                    event.player_index = player_index;
+                    event.action = game_action;
+                    event.data.button.pressed = is_down_now;
+                    es->input_event_queue.push_back(event);
+                }
+            }
         }
-        SDL_Scancode scancode = gubsy_to_sdl_scancode.at(i);
 
-        bool is_down_now = es->keystate[scancode];
-        bool was_down_before = es->last_keystate[scancode];
+        // 5. Iterate through all open game controllers for analog changes
+        const float DEADZONE = 0.2f;
+        for (auto const& [device_id, controller] : es->open_controllers) {
+            auto& state = es->gamepad_states[device_id];
 
-        if (is_down_now == was_down_before) {
-            continue; // No change in state for this key
-        }
+            // Copy last state
+            memcpy(state.last_axes, state.axes, sizeof(state.axes));
 
-        // A press or release was detected for this physical key `i`.
-        // Now, find all game actions that are bound to this physical key.
-        for (const auto& [game_action, device_button] : binds->button_binds) {
-            if (device_button == i) {
-                // Match found! Create and push an event.
-                InputEvent event;
-                event.type = InputEventType::BUTTON;
-                event.player_index = 0; // Hardcoded for now
-                event.action = game_action;
-                event.data.button.pressed = is_down_now;
-                es->input_event_queue.push_back(event);
+            // Get new state for all axes
+            for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i) {
+                Sint16 raw_value = SDL_GameControllerGetAxis(controller, (SDL_GameControllerAxis)i);
+                // Normalize to -1.0 to 1.0 for sticks, 0.0 to 1.0 for triggers
+                float normalized_value = raw_value / 32767.0f;
+                state.axes[i] = normalized_value;
+            }
+
+            // Handle 2D sticks
+            // Left Stick
+            glm::vec2 left_stick_now(state.axes[SDL_CONTROLLER_AXIS_LEFTX], state.axes[SDL_CONTROLLER_AXIS_LEFTY]);
+            glm::vec2 left_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_LEFTX], state.last_axes[SDL_CONTROLLER_AXIS_LEFTY]);
+            if ((glm::length(left_stick_now) > DEADZONE || glm::length(left_stick_last) > DEADZONE) && glm::distance(left_stick_now, left_stick_last) > 0.001f) {
+                for (const auto& [game_action, device_2d_axis] : binds->analog_2d_binds) {
+                    if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK)) {
+                        InputEvent event;
+                        event.type = InputEventType::ANALOG_2D;
+                        event.player_index = player_index;
+                        event.action = game_action;
+                        event.data.analog2D.value = left_stick_now;
+                        es->input_event_queue.push_back(event);
+                    }
+                }
+            }
+            // Right Stick
+            glm::vec2 right_stick_now(state.axes[SDL_CONTROLLER_AXIS_RIGHTX], state.axes[SDL_CONTROLLER_AXIS_RIGHTY]);
+            glm::vec2 right_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_RIGHTX], state.last_axes[SDL_CONTROLLER_AXIS_RIGHTY]);
+            if ((glm::length(right_stick_now) > DEADZONE || glm::length(right_stick_last) > DEADZONE) && glm::distance(right_stick_now, right_stick_last) > 0.001f) {
+                for (const auto& [game_action, device_2d_axis] : binds->analog_2d_binds) {
+                    if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_RIGHT_STICK)) {
+                        InputEvent event;
+                        event.type = InputEventType::ANALOG_2D;
+                        event.player_index = player_index;
+                        event.action = game_action;
+                        event.data.analog2D.value = right_stick_now;
+                        es->input_event_queue.push_back(event);
+                    }
+                }
+            }
+
+            // Handle 1D triggers
+            // Left Trigger
+            float left_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
+            float left_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
+            if ((left_trigger_now > DEADZONE || left_trigger_last > DEADZONE) && abs(left_trigger_now - left_trigger_last) > 0.001f) {
+                for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
+                    if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_LEFT_TRIGGER)) {
+                        InputEvent event;
+                        event.type = InputEventType::ANALOG_1D;
+                        event.player_index = player_index;
+                        event.action = game_action;
+                        event.data.analog1D.value = left_trigger_now;
+                        es->input_event_queue.push_back(event);
+                    }
+                }
+            }
+            // Right Trigger
+            float right_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
+            float right_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
+            if ((right_trigger_now > DEADZONE || right_trigger_last > DEADZONE) && abs(right_trigger_now - right_trigger_last) > 0.001f) {
+                for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
+                    if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_RIGHT_TRIGGER)) {
+                        InputEvent event;
+                        event.type = InputEventType::ANALOG_1D;
+                        event.player_index = player_index;
+                        event.action = game_action;
+                        event.data.analog1D.value = right_trigger_now;
+                        es->input_event_queue.push_back(event);
+                    }
+                }
             }
         }
     }
-
-    // 5. Iterate through all open game controllers for analog changes
-    const float DEADZONE = 0.2f;
-    for (auto const& [device_id, controller] : es->open_controllers) {
-        auto& state = es->gamepad_states[device_id];
-        
-        // Copy last state
-        memcpy(state.last_axes, state.axes, sizeof(state.axes));
-
-        // Get new state for all axes
-        for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i) {
-            Sint16 raw_value = SDL_GameControllerGetAxis(controller, (SDL_GameControllerAxis)i);
-            // Normalize to -1.0 to 1.0 for sticks, 0.0 to 1.0 for triggers
-            float normalized_value = raw_value / 32767.0f;
-            state.axes[i] = normalized_value;
-        }
-
-        // Handle 2D sticks
-        // Left Stick
-        glm::vec2 left_stick_now(state.axes[SDL_CONTROLLER_AXIS_LEFTX], state.axes[SDL_CONTROLLER_AXIS_LEFTY]);
-        glm::vec2 left_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_LEFTX], state.last_axes[SDL_CONTROLLER_AXIS_LEFTY]);
-        if ((glm::length(left_stick_now) > DEADZONE || glm::length(left_stick_last) > DEADZONE) && glm::distance(left_stick_now, left_stick_last) > 0.001f) {
-            for (const auto& [game_action, device_2d_axis] : binds->analog_2d_binds) {
-                if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK)) {
-                    InputEvent event;
-                    event.type = InputEventType::ANALOG_2D;
-                    event.player_index = 0;
-                    event.action = game_action;
-                    event.data.analog2D.value = left_stick_now;
-                    es->input_event_queue.push_back(event);
-                }
-            }
-        }
-        // Right Stick
-        glm::vec2 right_stick_now(state.axes[SDL_CONTROLLER_AXIS_RIGHTX], state.axes[SDL_CONTROLLER_AXIS_RIGHTY]);
-        glm::vec2 right_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_RIGHTX], state.last_axes[SDL_CONTROLLER_AXIS_RIGHTY]);
-        if ((glm::length(right_stick_now) > DEADZONE || glm::length(right_stick_last) > DEADZONE) && glm::distance(right_stick_now, right_stick_last) > 0.001f) {
-            for (const auto& [game_action, device_2d_axis] : binds->analog_2d_binds) {
-                if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_RIGHT_STICK)) {
-                    InputEvent event;
-                    event.type = InputEventType::ANALOG_2D;
-                    event.player_index = 0;
-                    event.action = game_action;
-                    event.data.analog2D.value = right_stick_now;
-                    es->input_event_queue.push_back(event);
-                }
-            }
-        }
-
-        // Handle 1D triggers
-        // Left Trigger
-        float left_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
-        float left_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
-        if ((left_trigger_now > DEADZONE || left_trigger_last > DEADZONE) && abs(left_trigger_now - left_trigger_last) > 0.001f) {
-            for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
-                if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_LEFT_TRIGGER)) {
-                    InputEvent event;
-                    event.type = InputEventType::ANALOG_1D;
-                    event.player_index = 0;
-                    event.action = game_action;
-                    event.data.analog1D.value = left_trigger_now;
-                    es->input_event_queue.push_back(event);
-                }
-            }
-        }
-        // Right Trigger
-        float right_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
-        float right_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
-        if ((right_trigger_now > DEADZONE || right_trigger_last > DEADZONE) && abs(right_trigger_now - right_trigger_last) > 0.001f) {
-            for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
-                if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_RIGHT_TRIGGER)) {
-                    InputEvent event;
-                    event.type = InputEventType::ANALOG_1D;
-                    event.player_index = 0;
-                    event.action = game_action;
-                    event.data.analog1D.value = right_trigger_now;
-                    es->input_event_queue.push_back(event);
-                }
-            }
-        }
-    }
-
 
     // 6. Dispatch to legacy mode-specific input processor (will be phased out)
     if (const ModeDesc* mode = find_mode(es->mode)) {
@@ -277,40 +277,4 @@ void process_inputs() {
     was_debug_combo_down = is_debug_combo_down;
 }
 
-const BindsProfile* get_player_binds(int player_index) {
-    if (!es || player_index < 0 || player_index >= es->players.size()) {
-        return nullptr;
-    }
-    const auto& player = es->players[static_cast<std::size_t>(player_index)];
-
-    // Find user profile
-    const UserProfile* user_profile = nullptr;
-    for (const auto& up : es->user_profiles_pool) {
-        if (up.id == player.profile.id) {
-            user_profile = &up;
-            break;
-        }
-    }
-
-    // if there isnt one, just set it to the first one that exists
-    if (!user_profile && !es->user_profiles_pool.empty()) {
-        user_profile = &es->user_profiles_pool[0];
-    }
-
-    // Find binds profile
-    const BindsProfile* binds_profile = nullptr;
-    for (const auto& bp : es->binds_profiles) {
-        if (bp.id == user_profile->last_binds_profile_id) {
-            binds_profile = &bp;
-            break;
-        }
-    }
-
-    // As a fallback, just grab the first binds profile
-    if (!binds_profile && !es->binds_profiles.empty()) {
-        binds_profile = &es->binds_profiles[0];
-    }
-
-    return binds_profile;
-}
 
