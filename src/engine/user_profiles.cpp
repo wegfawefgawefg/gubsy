@@ -42,9 +42,9 @@ std::vector<UserProfile> parse_profiles_tree(const std::vector<sexp::SValue>& ro
         UserProfile profile{};
         profile.id = *id;
         profile.name = *name;
-        profile.last_binds_profile = sexp::extract_int(entry, "last_binds_profile").value_or(-1);
-        profile.last_input_settings_profile = sexp::extract_int(entry, "last_input_settings_profile").value_or(-1);
-        profile.last_game_settings = sexp::extract_int(entry, "last_game_settings").value_or(-1);
+        profilelast_binds_profile_id = sexp::extract_int(entry, "last_binds_profile").value_or(-1);
+        profile.last_input_settings_profile_id = sexp::extract_int(entry, "last_input_settings_profile_id").value_or(-1);
+        profile.last_game_settings_profile_id = sexp::extract_int(entry, "last_game_settings").value_or(-1);
         profiles.push_back(std::move(profile));
     }
     return profiles;
@@ -79,9 +79,9 @@ bool write_profiles_file(const std::vector<UserProfile>& profiles) {
         out << "  (profile\n";
         out << "    (id " << profile.id << ")\n";
         out << "    (name " << sexp::quote_string(profile.name) << ")\n";
-        out << "    (last_binds_profile " << profile.last_binds_profile << ")\n";
-        out << "    (last_input_settings_profile " << profile.last_input_settings_profile << ")\n";
-        out << "    (last_game_settings " << profile.last_game_settings << ")\n";
+        out << "    (last_binds_profile " << profilelast_binds_profile_id << ")\n";
+        out << "    (last_input_settings_profile_id " << profile.last_input_settings_profile_id << ")\n";
+        out << "    (last_game_settings " << profile.last_game_settings_profile_id << ")\n";
         out << "  )\n";
     }
     out << ")\n";
@@ -102,9 +102,9 @@ UserProfile load_user_profile(int profile_id) {
         return *it;
     UserProfile empty{};
     empty.id = -1;
-    empty.last_binds_profile = -1;
-    empty.last_input_settings_profile = -1;
-    empty.last_game_settings = -1;
+    emptylast_binds_profile_id = -1;
+    empty.last_input_settings_profile_id = -1;
+    empty.last_game_settings_profile_id = -1;
     return empty;
 }
 
@@ -163,9 +163,13 @@ UserProfile create_default_user_profile() {
     UserProfile profile;
     profile.id = generate_user_profile_id();
     profile.name = "DefaultProfile";
-    profile.last_binds_profile = -1;
-    profile.last_input_settings_profile = -1;
-    profile.last_game_settings = -1;
+    profilelast_binds_profile_id = -1;
+    profile.last_input_settings_profile_id = -1;
+    profile.last_game_settings_profile_id = -1;
     save_user_profile(profile);
     return profile;
+}
+
+std::vector<UserProfile>& get_user_profiles_pool() {
+    return es->user_profiles_pool;
 }

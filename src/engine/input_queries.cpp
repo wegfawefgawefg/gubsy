@@ -18,16 +18,22 @@ bool is_down(int player_index, int game_button) {
     const BindsProfile* binds = get_player_binds(player_index);
     if (!binds || !es->keystate) return false;
 
-    // This is a fast lookup: GameAction -> GubsyButton
-    if (binds->button_binds.count(game_button)) {
-        int device_button = binds->button_binds.at(game_button);
+    // This is now a linear scan: GameAction -> GubsyButton(s)
+    for (const auto& bind : binds->button_binds) {
+        const int device_button = bind.first;
+        const int gubsy_action = bind.second;
 
-        // Then GubsyButton -> SDL_Scancode
-        if (gubsy_to_sdl_scancode.count(device_button)) {
-            SDL_Scancode scancode = gubsy_to_sdl_scancode.at(device_button);
-            return es->keystate[scancode];
+        if (gubsy_action == game_button) {
+            // Then GubsyButton -> SDL_Scancode
+            if (gubsy_to_sdl_scancode.count(device_button)) {
+                SDL_Scancode scancode = gubsy_to_sdl_scancode.at(device_button);
+                if (es->keystate[scancode]) {
+                    return true; // Return true if any bound key is down
+                }
+            }
         }
     }
+
     return false;
 }
 

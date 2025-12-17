@@ -56,7 +56,7 @@ std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SVal
                         auto device_btn = sexp::extract_int(bind, "device_button");
                         auto gubsy_act = sexp::extract_int(bind, "gubsy_action");
                         if (device_btn && gubsy_act) {
-                            profile.button_binds[*device_btn] = *gubsy_act;
+                            profile.button_binds.push_back({*device_btn, *gubsy_act});
                         }
                     }
                 }
@@ -73,7 +73,7 @@ std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SVal
                         auto device_axis = sexp::extract_int(bind, "device_axis");
                         auto gubsy_analog = sexp::extract_int(bind, "gubsy_analog");
                         if (device_axis && gubsy_analog) {
-                            profile.analog_1d_binds[*device_axis] = *gubsy_analog;
+                            profile.analog_1d_binds.push_back({*device_axis, *gubsy_analog});
                         }
                     }
                 }
@@ -90,7 +90,7 @@ std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SVal
                         auto device_stick = sexp::extract_int(bind, "device_stick");
                         auto gubsy_stick = sexp::extract_int(bind, "gubsy_stick");
                         if (device_stick && gubsy_stick) {
-                            profile.analog_2d_binds[*device_stick] = *gubsy_stick;
+                            profile.analog_2d_binds.push_back({*device_stick, *gubsy_stick});
                         }
                     }
                 }
@@ -244,13 +244,47 @@ BindsProfile create_default_binds_profile() {
 }
 
 void bind_button(BindsProfile& profile, int device_button, int gubsy_action) {
-    profile.button_binds[device_button] = gubsy_action;
+    const auto new_bind = std::make_pair(device_button, gubsy_action);
+    for (const auto& existing_bind : profile.button_binds) {
+        if (existing_bind == new_bind) {
+            return; // Already exists
+        }
+    }
+    profile.button_binds.push_back(new_bind);
 }
 
 void bind_1d_analog(BindsProfile& profile, int device_axis, int gubsy_1d_analog) {
-    profile.analog_1d_binds[device_axis] = gubsy_1d_analog;
+    const auto new_bind = std::make_pair(device_axis, gubsy_1d_analog);
+    for (const auto& existing_bind : profile.analog_1d_binds) {
+        if (existing_bind == new_bind) {
+            return; // Already exists
+        }
+    }
+    profile.analog_1d_binds.push_back(new_bind);
 }
 
 void bind_2d_analog(BindsProfile& profile, int device_stick, int gubsy_2d_analog) {
-    profile.analog_2d_binds[device_stick] = gubsy_2d_analog;
+    const auto new_bind = std::make_pair(device_stick, gubsy_2d_analog);
+    for (const auto& existing_bind : profile.analog_2d_binds) {
+        if (existing_bind == new_bind) {
+            return; // Already exists
+        }
+    }
+    profile.analog_2d_binds.push_back(new_bind);
+}
+
+std::vector<BindsProfile>& get_binds_profiles_pool() {
+    return es->binds_profiles;
+}
+
+void bind_button(BindsProfile& profile, GubsyButton device_button, int gubsy_action) {
+    bind_button(profile, static_cast<int>(device_button), gubsy_action);
+}
+
+void bind_1d_analog(BindsProfile& profile, Gubsy1DAnalog device_axis, int gubsy_1d_analog) {
+    bind_1d_analog(profile, static_cast<int>(device_axis), gubsy_1d_analog);
+}
+
+void bind_2d_analog(BindsProfile& profile, Gubsy2DAnalog device_stick, int gubsy_2d_analog) {
+    bind_2d_analog(profile, static_cast<int>(device_stick), gubsy_2d_analog);
 }

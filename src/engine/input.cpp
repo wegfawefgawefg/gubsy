@@ -226,6 +226,38 @@ void process_inputs() {
                 }
             }
         }
+
+        // Handle 1D triggers
+        // Left Trigger
+        float left_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
+        float left_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
+        if ((left_trigger_now > DEADZONE || left_trigger_last > DEADZONE) && abs(left_trigger_now - left_trigger_last) > 0.001f) {
+            for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
+                if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_LEFT_TRIGGER)) {
+                    InputEvent event;
+                    event.type = InputEventType::ANALOG_1D;
+                    event.player_index = 0;
+                    event.action = game_action;
+                    event.data.analog1D.value = left_trigger_now;
+                    es->input_event_queue.push_back(event);
+                }
+            }
+        }
+        // Right Trigger
+        float right_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
+        float right_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
+        if ((right_trigger_now > DEADZONE || right_trigger_last > DEADZONE) && abs(right_trigger_now - right_trigger_last) > 0.001f) {
+            for (const auto& [game_action, device_1d_axis] : binds->analog_1d_binds) {
+                if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_RIGHT_TRIGGER)) {
+                    InputEvent event;
+                    event.type = InputEventType::ANALOG_1D;
+                    event.player_index = 0;
+                    event.action = game_action;
+                    event.data.analog1D.value = right_trigger_now;
+                    es->input_event_queue.push_back(event);
+                }
+            }
+        }
     }
 
 

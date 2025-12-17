@@ -37,3 +37,8 @@ int generate_user_profile_id();
  returns the created profile
 */
 UserProfile create_default_user_profile();
+
+/*
+ get the global pool of user profiles
+*/
+std::vector<UserProfile>& get_user_profiles_pool();

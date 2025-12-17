@@ -12,11 +12,7 @@
 #include <glm/glm.hpp>
 #include <engine/globals.hpp>
 
-struct ScreenSpace {
-    float scale{64.0f};
-    float cx{0.0f};
-    float cy{0.0f};
-};
+
 
 ScreenSpace make_space(int width, int height) {
     ScreenSpace space{};

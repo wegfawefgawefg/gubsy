@@ -31,7 +31,7 @@ struct BonkTarget {
 };
 
 struct State {
-    DemoPlayer player{};
+    std::vector<DemoPlayer> players;
     BonkTarget bonk{};
 };
 
