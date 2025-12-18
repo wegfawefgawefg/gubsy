@@ -2,15 +2,11 @@
 
 #include "engine/alerts.hpp"
 #include "engine/mode_registry.hpp"
-#include "engine/input_sources.hpp"
 #include "globals.hpp"
 #include "engine/input_system.hpp"
 
 void step() {
     age_and_prune_alerts(es->dt);
-
-    // Refresh input sources every frame
-    refresh_input_sources();
 
     const float fixed_dt = FIXED_TIMESTEP;
     es->accumulator += es->dt;
