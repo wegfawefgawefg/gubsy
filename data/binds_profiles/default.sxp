@@ -32,9 +32,11 @@
     )
     (analog_1d_binds
       (bind (device_axis 0) (gubsy_analog 0))
+      (bind (device_axis 2) (gubsy_analog 0))
     )
     (analog_2d_binds
       (bind (device_stick 0) (gubsy_stick 0))
+      (bind (device_stick 2) (gubsy_stick 0))
     )
   )
 )

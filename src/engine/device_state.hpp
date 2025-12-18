@@ -8,7 +8,9 @@
 
 struct DeviceState {
     struct ControllerState {
+        int device_id{-1};
         std::array<float, SDL_CONTROLLER_AXIS_MAX> axes{};
+        std::array<Uint8, SDL_CONTROLLER_BUTTON_MAX> buttons{};
     };
 
     std::array<Uint8, SDL_NUM_SCANCODES> keyboard{};

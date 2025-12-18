@@ -123,7 +123,9 @@ int main() {
 
         // Set analog binds
         bind_1d_analog(*binds_profile, Gubsy1DAnalog::GP_LEFT_TRIGGER, GameAnalog1D::BAR_HEIGHT);
+        bind_1d_analog(*binds_profile, Gubsy1DAnalog::MOUSE_WHEEL, GameAnalog1D::BAR_HEIGHT);
         bind_2d_analog(*binds_profile, Gubsy2DAnalog::GP_LEFT_STICK, GameAnalog2D::RETICLE_POS);
+        bind_2d_analog(*binds_profile, Gubsy2DAnalog::MOUSE_XY, GameAnalog2D::RETICLE_POS);
 
         // Save the now-populated binds profile to disk
         save_binds_profile(*binds_profile);

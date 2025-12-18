@@ -1,10 +1,6 @@
 #pragma once
 
 #include <SDL2/SDL.h>
-#include <unordered_map>
-
-// Map from abstract Gubsy buttons to SDL scancodes (keyboard only for now).
-extern const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode;
 
 enum class GubsyButton {
     // Keyboard keys
@@ -23,6 +19,34 @@ enum class GubsyButton {
     KB_MINUS, KB_EQUALS, KB_LEFTBRACKET, KB_RIGHTBRACKET, KB_BACKSLASH,
     KB_SEMICOLON, KB_APOSTROPHE, KB_GRAVE, KB_COMMA, KB_PERIOD, KB_SLASH,
     KB_NUMLOCK, KB_APPLICATION, KB_MENU,
+
+    MOUSE_LEFT,
+    MOUSE_RIGHT,
+    MOUSE_MIDDLE,
+    MOUSE_X1,
+    MOUSE_X2,
+
+    GP_A,
+    GP_B,
+    GP_X,
+    GP_Y,
+    GP_BACK,
+    GP_GUIDE,
+    GP_START,
+    GP_LEFT_STICK_BUTTON,
+    GP_RIGHT_STICK_BUTTON,
+    GP_LEFT_SHOULDER,
+    GP_RIGHT_SHOULDER,
+    GP_DPAD_UP,
+    GP_DPAD_DOWN,
+    GP_DPAD_LEFT,
+    GP_DPAD_RIGHT,
+    GP_MISC1,
+    GP_PADDLE1,
+    GP_PADDLE2,
+    GP_PADDLE3,
+    GP_PADDLE4,
+    GP_TOUCHPAD,
 
     COUNT
 };

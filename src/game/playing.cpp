@@ -3,6 +3,7 @@
 #include "engine/audio.hpp"
 #include "engine/globals.hpp"
 #include "engine/input_queries.hpp"
+#include "engine/input_binding_utils.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
@@ -44,6 +45,18 @@ void playing_step() {
 
         glm::vec2 stick = get_2d_analog(0, GameAnalog2D::RETICLE_POS);
         ss->reticle_pos = glm::clamp(stick, glm::vec2(-1.0f), glm::vec2(1.0f));
+    } else {
+        ss->reticle_pos = glm::vec2(0.0f);
+    }
+
+    if (es) {
+        glm::vec2 raw_gamepad =
+            sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
+        ss->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
+        ss->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
+    } else {
+        ss->reticle_pos_gamepad = glm::vec2(0.0f);
+        ss->reticle_pos_mouse = glm::vec2(0.0f);
     }
 
     // Update each player
@@ -131,6 +144,8 @@ void playing_draw() {
     SDL_GetRendererOutputSize(renderer, &width, &height);
     const float width_f = static_cast<float>(width);
     const float height_f = static_cast<float>(height);
+    const float width_span = static_cast<float>(std::max(1, width - 1));
+    const float height_span = static_cast<float>(std::max(1, height - 1));
     SDL_SetRenderDrawColor(renderer, 12, 10, 18, 255);
     SDL_RenderClear(renderer);
 
@@ -254,11 +269,12 @@ void playing_draw() {
         }
     }
 
-    // Draw reticle (crosshair)
+    // Draw reticles (gamepad crosshair + mouse marker)
     {
-        // Convert normalized [-1, 1] to screen space
-        float reticle_screen_x = (ss->reticle_pos.x * 0.5f + 0.5f) * width_f;
-        float reticle_screen_y = (ss->reticle_pos.y * 0.5f + 0.5f) * height_f;
+        // Gamepad-driven crosshair
+        glm::vec2 gp = ss->reticle_pos_gamepad;
+        float reticle_screen_x = (gp.x * 0.5f + 0.5f) * width_span;
+        float reticle_screen_y = (gp.y * 0.5f + 0.5f) * height_span;
 
         float reticle_size = 10.0f;
         SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
@@ -276,6 +292,16 @@ void playing_draw() {
         // Center dot
         SDL_FRect center_dot{reticle_screen_x - 2.0f, reticle_screen_y - 2.0f, 4.0f, 4.0f};
         SDL_RenderFillRectF(renderer, &center_dot);
+
+        // Mouse pointer marker (little green circle)
+        glm::vec2 mouse = ss->reticle_pos_mouse;
+        float mouse_screen_x = (mouse.x * 0.5f + 0.5f) * width_span;
+        float mouse_screen_y = (mouse.y * 0.5f + 0.5f) * height_span;
+        SDL_SetRenderDrawColor(renderer, 120, 255, 120, 200);
+        SDL_FRect mouse_dot{mouse_screen_x - 4.0f, mouse_screen_y - 4.0f, 8.0f, 8.0f};
+        SDL_RenderFillRectF(renderer, &mouse_dot);
+        SDL_SetRenderDrawColor(renderer, 40, 150, 60, 255);
+        SDL_RenderDrawRectF(renderer, &mouse_dot);
     }
 
     // Alerts + instructions overlay
