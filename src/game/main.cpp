@@ -87,6 +87,9 @@ int main() {
     binds_schema.add_action(GameAction::MENU_LEFT, "Move Left", "Menu");
     binds_schema.add_action(GameAction::MENU_RIGHT, "Move Right", "Menu");
     binds_schema.add_action(GameAction::MENU_SELECT, "Select", "Menu");
+    binds_schema.add_action(GameAction::MENU_BACK, "Back", "Menu");
+    binds_schema.add_action(GameAction::MENU_SCALE_UP, "Scale Up", "Menu");
+    binds_schema.add_action(GameAction::MENU_SCALE_DOWN, "Scale Down", "Menu");
     binds_schema.add_action(GameAction::UP, "Move Up", "Movement");
     binds_schema.add_action(GameAction::DOWN, "Move Down", "Movement");
     binds_schema.add_action(GameAction::LEFT, "Move Left", "Movement");
@@ -113,6 +116,13 @@ int main() {
         bind_button(*binds_profile, GubsyButton::KB_LEFT, GameAction::MENU_LEFT);
         bind_button(*binds_profile, GubsyButton::KB_RIGHT, GameAction::MENU_RIGHT);
         bind_button(*binds_profile, GubsyButton::KB_ENTER, GameAction::MENU_SELECT);
+        bind_button(*binds_profile, GubsyButton::KB_ESCAPE, GameAction::MENU_BACK);
+        bind_button(*binds_profile, GubsyButton::KB_EQUALS, GameAction::MENU_SCALE_UP);
+        bind_button(*binds_profile, GubsyButton::KB_MINUS, GameAction::MENU_SCALE_DOWN);
+        bind_button(*binds_profile, GubsyButton::KB_W, GameAction::MENU_UP);
+        bind_button(*binds_profile, GubsyButton::KB_S, GameAction::MENU_DOWN);
+        bind_button(*binds_profile, GubsyButton::KB_A, GameAction::MENU_LEFT);
+        bind_button(*binds_profile, GubsyButton::KB_D, GameAction::MENU_RIGHT);
 
         // Set game action binds
         bind_button(*binds_profile, GubsyButton::KB_W, GameAction::UP);
@@ -121,6 +131,14 @@ int main() {
         bind_button(*binds_profile, GubsyButton::KB_D, GameAction::RIGHT);
         bind_button(*binds_profile, GubsyButton::KB_E, GameAction::USE);
         bind_button(*binds_profile, GubsyButton::KB_SPACE, GameAction::USE);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_UP, GameAction::MENU_UP);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_DOWN, GameAction::MENU_DOWN);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_LEFT, GameAction::MENU_LEFT);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_RIGHT, GameAction::MENU_RIGHT);
+        bind_button(*binds_profile, GubsyButton::GP_A, GameAction::MENU_SELECT);
+        bind_button(*binds_profile, GubsyButton::GP_RIGHT_SHOULDER, GameAction::MENU_SCALE_UP);
+        bind_button(*binds_profile, GubsyButton::GP_LEFT_SHOULDER, GameAction::MENU_SCALE_DOWN);
+        bind_button(*binds_profile, GubsyButton::GP_B, GameAction::MENU_BACK);
 
         // Set analog binds
         bind_1d_analog(*binds_profile, Gubsy1DAnalog::GP_LEFT_TRIGGER, GameAnalog1D::BAR_HEIGHT);

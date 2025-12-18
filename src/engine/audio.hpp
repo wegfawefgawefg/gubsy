@@ -26,3 +26,5 @@ void play_sound(const std::string& key, int loops = 0, int channel = -1, int vol
 // Scan mods/*/sounds for audio assets and load into global store.
 void load_mod_sounds(const std::string& mods_root = "mods");
 
+// Load built-in sounds from assets/sounds directory.
+void load_builtin_sounds(const std::string& root = "assets/sounds");

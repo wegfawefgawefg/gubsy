@@ -101,3 +101,28 @@ void load_mod_sounds(const std::string& mods_root) {
         }
     }
 }
+
+void load_builtin_sounds(const std::string& root) {
+    if (!aa)
+        return;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path base = fs::path(root);
+    if (!fs::exists(base, ec) || !fs::is_directory(base, ec))
+        return;
+    for (const auto& entry : fs::directory_iterator(base, ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        if (!entry.is_regular_file())
+            continue;
+        auto ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (ext != ".wav" && ext != ".ogg")
+            continue;
+        std::string key = "base:" + entry.path().stem().string();
+        load_sound(key, entry.path().string());
+    }
+}

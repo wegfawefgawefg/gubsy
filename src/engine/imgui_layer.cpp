@@ -1,5 +1,7 @@
 #include "engine/imgui_layer.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <imgui.h>
 #include <backends/imgui_impl_sdl2.h>
 #include <backends/imgui_impl_sdlrenderer2.h>
@@ -7,6 +9,20 @@
 namespace {
 bool g_imgui_init = false;
 SDL_Renderer* g_imgui_renderer = nullptr;
+float g_imgui_scale = 1.0f;
+ImGuiStyle g_base_style{};
+bool g_style_cached = false;
+constexpr float kImguiScaleMin = 1.0f;
+constexpr float kImguiScaleMax = 4.0f;
+
+void apply_scale() {
+    if (!g_imgui_init)
+        return;
+    ImGuiStyle style = g_base_style;
+    style.ScaleAllSizes(g_imgui_scale);
+    ImGui::GetStyle() = style;
+    ImGui::GetIO().FontGlobalScale = g_imgui_scale;
+}
 } // namespace
 
 bool init_imgui_layer(SDL_Window* window, SDL_Renderer* renderer) {
@@ -23,6 +39,9 @@ bool init_imgui_layer(SDL_Window* window, SDL_Renderer* renderer) {
         return false;
     g_imgui_init = true;
     g_imgui_renderer = renderer;
+    g_base_style = ImGui::GetStyle();
+    g_style_cached = true;
+    apply_scale();
     return true;
 }
 
@@ -54,9 +73,40 @@ void imgui_render_layer() {
 void imgui_process_event(const SDL_Event& event) {
     if (!g_imgui_init)
         return;
+    switch (event.type) {
+        case SDL_CONTROLLERAXISMOTION:
+        case SDL_CONTROLLERBUTTONDOWN:
+        case SDL_CONTROLLERBUTTONUP:
+        case SDL_CONTROLLERDEVICEADDED:
+        case SDL_CONTROLLERDEVICEREMOVED:
+        case SDL_CONTROLLERDEVICEREMAPPED:
+        case SDL_CONTROLLERTOUCHPADDOWN:
+        case SDL_CONTROLLERTOUCHPADMOTION:
+        case SDL_CONTROLLERTOUCHPADUP:
+        case SDL_CONTROLLERSENSORUPDATE:
+            return; // Controller input is routed through our binds, not ImGui.
+        default:
+            break;
+    }
     ImGui_ImplSDL2_ProcessEvent(&event);
 }
 
 bool imgui_is_initialized() {
     return g_imgui_init;
+}
+
+void imgui_set_scale(float scale) {
+    float clamped = std::clamp(scale, kImguiScaleMin, kImguiScaleMax);
+    float snapped = std::round(clamped);
+    g_imgui_scale = std::clamp(snapped, kImguiScaleMin, kImguiScaleMax);
+    if (g_style_cached)
+        apply_scale();
+}
+
+void imgui_adjust_scale(float delta) {
+    imgui_set_scale(g_imgui_scale + delta);
+}
+
+float imgui_get_scale() {
+    return g_imgui_scale;
 }

@@ -9,3 +9,6 @@ void imgui_new_frame();
 void imgui_render_layer();
 void imgui_process_event(const SDL_Event& event);
 bool imgui_is_initialized();
+void imgui_set_scale(float scale);
+void imgui_adjust_scale(float delta);
+float imgui_get_scale();

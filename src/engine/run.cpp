@@ -66,6 +66,7 @@ bool do_the_gubsy(){
         SDL_Quit();
         return 1;
     }
+    load_builtin_sounds();
 
     // load profiles pool from disk
     load_user_profiles_pool();

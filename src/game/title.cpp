@@ -1,6 +1,8 @@
 #include "game/title.hpp"
 
 #include "engine/globals.hpp"
+#include "engine/imgui_layer.hpp"
+#include "engine/audio.hpp"
 #include "game/modes.hpp"
 #include "game/actions.hpp"
 #include "engine/player.hpp"
@@ -13,23 +15,23 @@
 
 namespace {
 
-constexpr std::array<int, 5> kMenuActions = {
+constexpr std::array<int, 6> kNavActions = {
     GameAction::MENU_UP,
     GameAction::MENU_DOWN,
     GameAction::MENU_LEFT,
     GameAction::MENU_RIGHT,
     GameAction::MENU_SELECT,
+    GameAction::MENU_BACK,
+};
+
+constexpr std::array<int, 2> kScaleActions = {
+    GameAction::MENU_SCALE_UP,
+    GameAction::MENU_SCALE_DOWN,
 };
 
 std::array<bool, GameAction::COUNT> g_menu_action_down{};
-
-bool is_menu_action(int action) {
-    for (int a : kMenuActions) {
-        if (a == action)
-            return true;
-    }
-    return false;
-}
+std::array<bool, GameAction::COUNT> g_prev_action_down{};
+bool g_quit_requested = false;
 
 ImGuiKey imgui_key_for_action(int action) {
     switch (action) {
@@ -38,6 +40,7 @@ ImGuiKey imgui_key_for_action(int action) {
         case GameAction::MENU_LEFT: return ImGuiKey_LeftArrow;
         case GameAction::MENU_RIGHT: return ImGuiKey_RightArrow;
         case GameAction::MENU_SELECT: return ImGuiKey_Enter;
+        case GameAction::MENU_BACK: return ImGuiKey_Escape;
         default: return ImGuiKey_None;
     }
 }
@@ -50,13 +53,11 @@ void sync_menu_actions_to_imgui() {
         return;
     std::array<bool, GameAction::COUNT> current{};
     for (const auto& [device_button, action] : profile->button_binds) {
-        if (!is_menu_action(action))
-            continue;
         if (device_button_is_down(es->device_state, device_button))
             current[static_cast<std::size_t>(action)] = true;
     }
     ImGuiIO& io = ImGui::GetIO();
-    for (int action : kMenuActions) {
+    for (int action : kNavActions) {
         std::size_t idx = static_cast<std::size_t>(action);
         bool down = current[idx];
         if (down == g_menu_action_down[idx])
@@ -65,15 +66,37 @@ void sync_menu_actions_to_imgui() {
         ImGuiKey key = imgui_key_for_action(action);
         if (key != ImGuiKey_None)
             io.AddKeyEvent(key, down);
+
+        if (down && !g_prev_action_down[idx]) {
+            if (action == GameAction::MENU_SELECT)
+                play_sound("base:ui_confirm");
+            else if (action == GameAction::MENU_BACK)
+                play_sound("base:ui_cant");
+            else
+                play_sound("base:ui_cursor_move");
+        }
     }
+    for (int action : kScaleActions) {
+        std::size_t idx = static_cast<std::size_t>(action);
+        bool down = current[idx];
+        if (down && !g_menu_action_down[idx]) {
+            if (action == GameAction::MENU_SCALE_UP)
+                imgui_adjust_scale(1.0f);
+            else if (action == GameAction::MENU_SCALE_DOWN)
+                imgui_adjust_scale(-1.0f);
+        }
+        g_menu_action_down[idx] = down;
+    }
+    g_prev_action_down = g_menu_action_down;
 }
 
 void draw_menu_content(int width, int height) {
     if (!ImGui::GetCurrentContext())
         return;
 
-    const float window_width = 360.0f;
-    const float window_height = 220.0f;
+    const float scale = imgui_get_scale();
+    const float window_width = 360.0f * scale;
+    const float window_height = 180.0f * scale;
     const float wx = static_cast<float>(width);
     const float wy = static_cast<float>(height);
     const ImVec2 pos{(wx - window_width) * 0.5f, (wy - window_height) * 0.5f};
@@ -96,14 +119,8 @@ void draw_menu_content(int width, int height) {
         ImGui::Button("Settings", ImVec2(-1.0f, 0.0f));
         ImGui::EndDisabled();
 
-        if (ImGui::Button("Quit", ImVec2(-1.0f, 0.0f))) {
-            if (es)
-                es->running = false;
-        }
-
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.8f, 0.7f, 0.4f, 1.0f),
-                           "Settings and Quit will arrive after the flow is finalized.");
+        if (ImGui::Button("Quit", ImVec2(-1.0f, 0.0f)))
+            g_quit_requested = true;
     }
     ImGui::End();
 }
@@ -114,6 +131,8 @@ void title_step() {}
 
 void title_process_inputs() {
     sync_menu_actions_to_imgui();
+    if (g_quit_requested && es)
+        es->running = false;
 }
 
 void title_draw() {
