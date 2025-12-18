@@ -15,6 +15,8 @@ bool init_imgui_layer(SDL_Window* window, SDL_Renderer* renderer) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
     if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer))
         return false;
     if (!ImGui_ImplSDLRenderer2_Init(renderer))
