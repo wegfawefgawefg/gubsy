@@ -22,6 +22,7 @@ constexpr const char* kGameModVersion = "0.1.0";
 }
 
 void register_modes(){
+    register_mode(modes::TITLE, title_step, title_process_inputs, title_draw);
     register_mode(modes::SETUP, setup_step, nullptr, setup_draw);
     register_mode(modes::PLAYING, playing_step, nullptr, playing_draw);
 }
@@ -99,7 +100,7 @@ int main() {
     set_required_mod_game_version(kGameModVersion);
 
     if (es)
-        es->mode = modes::SETUP;
+        es->mode = modes::TITLE;
 
     add_player(0);
 

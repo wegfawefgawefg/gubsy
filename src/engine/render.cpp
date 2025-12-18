@@ -2,6 +2,7 @@
 
 #include "engine/mode_registry.hpp"
 #include "engine/graphics.hpp"
+#include "engine/imgui_layer.hpp"
 #include "engine/input_sources.hpp"
 
 #include <SDL2/SDL.h>
@@ -85,18 +86,21 @@ void render_alerts(SDL_Renderer* renderer, int width) {
 }
 
 void render() {
+    SDL_Renderer* renderer = (gg ? gg->renderer : nullptr);
+    if (!renderer)
+        return;
+
     if (const ModeDesc* mode = find_mode(es->mode)) {
         if (mode->render_fn) {
             mode->render_fn();
-            return;
         }
     }
 
-    // debug input device overlay:
     if (es->draw_input_device_overlay) {
-        draw_input_devices_overlay(gg->renderer);
+        draw_input_devices_overlay(renderer);
     }
 
+    imgui_render_layer();
+    SDL_RenderPresent(renderer);
 }
-
 

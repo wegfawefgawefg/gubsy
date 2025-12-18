@@ -2,10 +2,12 @@
 #include <engine/globals.hpp>
 #include "input_sources.hpp"
 #include "engine/input_system.hpp"
+#include "engine/imgui_layer.hpp"
 
 void update_gubsy_device_inputs_system_from_sdl_events(){
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
+        imgui_process_event(ev);
         switch (ev.type) {
             case SDL_QUIT:
                 es->running = false;

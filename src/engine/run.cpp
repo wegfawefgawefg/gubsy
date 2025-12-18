@@ -25,6 +25,7 @@
 #include "game/mod_api/register_game_mod_apis.hpp"
 #include "engine/input_system.hpp"
 #include "engine/mode_registry.hpp"
+#include "engine/imgui_layer.hpp"
 
 namespace {
 constexpr const char* kModsRuntimeRoot = "mods_runtime";
@@ -46,6 +47,10 @@ bool do_the_gubsy(){
         cleanup_graphics();
         SDL_Quit();
         return 1;
+    }
+
+    if (!init_imgui_layer(gg->window, gg->renderer)) {
+        std::fprintf(stderr, "[imgui] init failed\n");
     }
 
     load_audio_settings("config/audio.ini");
@@ -110,6 +115,7 @@ bool do_the_gubsy(){
 
         update_gubsy_device_inputs_system_from_sdl_events();
         update_device_state_from_sdl();
+        imgui_new_frame();
 
         if (const ModeDesc* mode = find_mode(es->mode)) {
             if (mode->process_inputs_fn)
@@ -139,6 +145,7 @@ bool do_the_gubsy(){
 }
 
 bool stop_doing_the_gubsy(){
+    shutdown_imgui_layer();
     unload_all_mods_via_host();
     cleanup_audio();
     cleanup_engine_state();

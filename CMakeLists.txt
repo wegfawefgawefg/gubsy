@@ -19,6 +19,19 @@ file(GLOB_RECURSE GUB_SOURCES
 
 add_executable(gubsy ${GUB_SOURCES})
 
+# Dear ImGui sources
+set(IMGUI_SOURCES
+  ${CMAKE_SOURCE_DIR}/imgui/imgui.cpp
+  ${CMAKE_SOURCE_DIR}/imgui/imgui_demo.cpp
+  ${CMAKE_SOURCE_DIR}/imgui/imgui_draw.cpp
+  ${CMAKE_SOURCE_DIR}/imgui/imgui_tables.cpp
+  ${CMAKE_SOURCE_DIR}/imgui/imgui_widgets.cpp
+  ${CMAKE_SOURCE_DIR}/imgui/backends/imgui_impl_sdl2.cpp
+  ${CMAKE_SOURCE_DIR}/imgui/backends/imgui_impl_sdlrenderer2.cpp
+)
+target_sources(gubsy PRIVATE ${IMGUI_SOURCES})
+set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
+
 # Developer convenience: alias target and CLI symlink 'arti'
 add_executable(arti ALIAS gubsy)
 add_custom_command(
@@ -132,6 +145,8 @@ endif()
 target_include_directories(gubsy PRIVATE
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/third_party
+  ${CMAKE_SOURCE_DIR}/imgui
+  ${CMAKE_SOURCE_DIR}/imgui/backends
 )
 
 add_executable(mod_server tools/mod_server/main.cpp)

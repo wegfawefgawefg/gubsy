@@ -312,6 +312,4 @@ void playing_draw() {
     else
         prompt_text = "Move with WASD. Press Space/E near a pad to run its Lua-defined action.";
     render_instructions(renderer, width, height, prompt_text);
-
-    SDL_RenderPresent(renderer);
 }

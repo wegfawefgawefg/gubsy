@@ -166,5 +166,4 @@ void setup_draw() {
                   SDL_Color{180, 180, 200, 255});
     }
 
-    SDL_RenderPresent(renderer);
 }
