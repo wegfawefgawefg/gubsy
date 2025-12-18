@@ -84,6 +84,7 @@ void playing_step() {
         if (use_pressed) {
             std::printf("[playing] player %d pressed USE\n", player_index);
             const float player_radius = glm::length(player.half_size);
+            bool triggered = false;
             for (const auto& slot : demo_item_instance_slots()) {
                 if (!slot.active)
                     continue;
@@ -92,13 +93,21 @@ void playing_step() {
                 if (!def)
                     continue;
                 float dist = glm::length(player.pos - inst.position);
+                std::printf("[playing]   candidate '%s' dist=%.2f radius=%.2f\n",
+                            def->id.c_str(), static_cast<double>(dist),
+                            static_cast<double>(player_radius + def->radius));
                 if (dist <= (player_radius + def->radius)) {
                     std::printf("[playing] player %d triggering '%s' (dist=%.2f)\n",
                                 player_index, def->id.c_str(),
                                 static_cast<double>(dist));
                     trigger_demo_item_use(inst);
+                    triggered = true;
                     break; // One player uses it, break for this player
                 }
+            }
+            if (!triggered) {
+                std::printf("[playing] player %d USE ignored (no pads in range)\n",
+                            player_index);
             }
         }
     }

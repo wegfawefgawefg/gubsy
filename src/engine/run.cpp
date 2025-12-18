@@ -60,10 +60,6 @@ bool do_the_gubsy(){
         return 1;
     }
 
-    // setup user profile state
-    // add one player with no profile
-    add_player();
-
     // load profiles pool from disk
     load_user_profiles_pool();
     if (es->user_profiles_pool.empty()) {
