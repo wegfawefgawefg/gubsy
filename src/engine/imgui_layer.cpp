@@ -13,7 +13,7 @@ float g_imgui_scale = 1.0f;
 ImGuiStyle g_base_style{};
 bool g_style_cached = false;
 constexpr float kImguiScaleMin = 1.0f;
-constexpr float kImguiScaleMax = 4.0f;
+constexpr float kImguiScaleMax = 3.0f;
 
 void apply_scale() {
     if (!g_imgui_init)

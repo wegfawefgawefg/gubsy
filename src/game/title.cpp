@@ -107,18 +107,15 @@ void draw_menu_content(int width, int height) {
                              ImGuiWindowFlags_NoCollapse |
                              ImGuiWindowFlags_NoSavedSettings |
                              ImGuiWindowFlags_NoMove;
-    if (ImGui::Begin("gubsy_main_menu", nullptr, flags)) {
-        ImGui::Text("gubsy demo");
-        ImGui::Separator();
+    if (ImGui::Begin("Main Menu##gubsy_main_menu", nullptr, flags)) {
+        ImGui::Spacing();
         if (ImGui::Button("Play", ImVec2(-1.0f, 0.0f))) {
             if (es)
                 es->mode = modes::SETUP;
         }
-
         ImGui::BeginDisabled(true);
         ImGui::Button("Settings", ImVec2(-1.0f, 0.0f));
         ImGui::EndDisabled();
-
         if (ImGui::Button("Quit", ImVec2(-1.0f, 0.0f)))
             g_quit_requested = true;
     }
