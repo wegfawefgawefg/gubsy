@@ -23,6 +23,8 @@
 #include "render.hpp"
 #include "engine/mod_host.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
+#include "engine/input_system.hpp"
+#include "engine/mode_registry.hpp"
 
 namespace {
 constexpr const char* kModsRuntimeRoot = "mods_runtime";
@@ -107,13 +109,17 @@ bool do_the_gubsy(){
         t_last = t_now;
 
         update_gubsy_device_inputs_system_from_sdl_events();
-        
+        update_device_state_from_sdl();
+
+        if (const ModeDesc* mode = find_mode(es->mode)) {
+            if (mode->process_inputs_fn)
+                mode->process_inputs_fn();
+        }
 
         bool mods_changed = poll_fs_mods_hot_reload();
         if (mods_changed)
             finalize_game_mod_apis();
 
-        process_inputs();
         step();
 
         render();

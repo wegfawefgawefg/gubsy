@@ -14,6 +14,8 @@
 #include "game/ui_layout_ids.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
 #include "engine/globals.hpp"
+#include "engine/input_system.hpp"
+#include "game/input_frame.hpp"
 
 namespace {
 constexpr const char* kGameModVersion = "0.1.0";
@@ -32,6 +34,7 @@ int main() {
         cleanup_engine_state();
         return 1;
     }
+    register_input_frame_builder(build_input_frame);
 
     // Define global game settings schema (singleton, per-install)
     TopLevelGameSettingsSchema global_schema;

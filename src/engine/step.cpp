@@ -4,6 +4,7 @@
 #include "engine/mode_registry.hpp"
 #include "engine/input_sources.hpp"
 #include "globals.hpp"
+#include "engine/input_system.hpp"
 
 void step() {
     age_and_prune_alerts(es->dt);
@@ -17,6 +18,8 @@ void step() {
     while (es->accumulator >= fixed_dt) {
         es->accumulator -= fixed_dt;
         es->now += static_cast<double>(fixed_dt);
+
+        build_input_frames_for_step();
 
         if (const ModeDesc* mode = find_mode(es->mode)) {
             if (mode->step_fn) {

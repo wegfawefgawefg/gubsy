@@ -60,6 +60,8 @@ int add_player(int player_index) {
 
     // Add the fully configured player.
     es->players.push_back(player);
+    es->input_frames_current.resize(es->players.size());
+    es->input_frames_previous.resize(es->players.size());
     return static_cast<int>(es->players.size()) - 1;
 }
 
@@ -67,6 +69,10 @@ void remove_player(int player_index) {
     if (!es) return;
     if (player_index < 0 || player_index >= static_cast<int>(es->players.size())) return;
     es->players.erase(es->players.begin() + player_index);
+    if (player_index < static_cast<int>(es->input_frames_current.size())) {
+        es->input_frames_current.erase(es->input_frames_current.begin() + player_index);
+        es->input_frames_previous.erase(es->input_frames_previous.begin() + player_index);
+    }
 }
 
 UserProfile* get_player_user_profile(int player_index) {

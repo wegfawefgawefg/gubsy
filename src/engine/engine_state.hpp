@@ -17,7 +17,8 @@
 #include "engine/top_level_game_settings.hpp"
 #include "engine/ui_layouts.hpp"
 #include "player.hpp"
-#include "game/events.hpp"
+#include "engine/input_system.hpp"
+#include "engine/input_sources.hpp"
 
 
 struct EngineState {
@@ -52,12 +53,10 @@ struct EngineState {
 
     bool draw_input_device_overlay {false};
 
-    // Input state
-    Uint8 keystate[SDL_NUM_SCANCODES];
-    Uint8 last_keystate[SDL_NUM_SCANCODES];
-
-    // Event queue
-    std::vector<InputEvent> input_event_queue;
+    DeviceState device_state{};
+    BuildInputFrameFn input_frame_builder{nullptr};
+    std::vector<InputFrame> input_frames_current;
+    std::vector<InputFrame> input_frames_previous;
 
     // Game Controller state
     struct GamepadState {

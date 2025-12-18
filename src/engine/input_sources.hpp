@@ -2,6 +2,21 @@
 
 struct SDL_Renderer;
 
+enum class InputSourceType {
+    Keyboard,
+    Mouse,
+    Gamepad
+};
+
+struct DeviceIdentifier {
+    int id{0};
+};
+
+struct InputSource {
+    InputSourceType type{};
+    DeviceIdentifier device_id{};
+};
+
 /*
  Detect all currently connected input devices and populate es->input_sources
  - Keyboard: always ID 0 (singleton, aggregates all keyboards)

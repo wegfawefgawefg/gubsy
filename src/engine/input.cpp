@@ -1,25 +1,14 @@
-#include <algorithm>
-#include <cctype>
-#include "mode_registry.hpp"
-#include <engine/mode_registry.hpp>
-#include <SDL_keyboard.h>
-#include <engine/globals.hpp>
+#include "engine/input_system.hpp"
 
+#include <SDL2/SDL_keyboard.h>
 
 #include <algorithm>
-#include <cctype>
-#include "mode_registry.hpp"
-#include <engine/mode_registry.hpp>
-#include <SDL_keyboard.h>
-#include <engine/globals.hpp>
-#include <engine/input.hpp>
-#include "engine/binds_profiles.hpp"
-#include "engine/player.hpp"
-#include "engine/user_profiles.hpp"
 #include <unordered_map>
 
-// This map is crucial for translating the abstract GubsyButton enum into a concrete SDL_Scancode
-// that can be used to check the keyboard state array.
+#include "engine/globals.hpp"
+#include "engine/input.hpp"
+#include "engine/player.hpp"
+
 const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode = {
     {static_cast<int>(GubsyButton::KB_A), SDL_SCANCODE_A},
     {static_cast<int>(GubsyButton::KB_B), SDL_SCANCODE_B},
@@ -129,147 +118,93 @@ const std::unordered_map<int, SDL_Scancode> gubsy_to_sdl_scancode = {
     {static_cast<int>(GubsyButton::KB_MENU), SDL_SCANCODE_MENU},
 };
 
-void process_inputs() {
-    // 1. Update keyboard state arrays
+void register_input_frame_builder(BuildInputFrameFn fn) {
+    if (!es)
+        return;
+    es->input_frame_builder = fn;
+}
+
+void update_device_state_from_sdl() {
+    if (!es)
+        return;
+
+    auto& state = es->device_state;
     const Uint8* sdl_keystate = SDL_GetKeyboardState(nullptr);
-    memcpy(es->last_keystate, es->keystate, SDL_NUM_SCANCODES * sizeof(Uint8));
-    memcpy(es->keystate, sdl_keystate, SDL_NUM_SCANCODES * sizeof(Uint8));
-    if (es->frame == 0) {
-        memset(es->last_keystate, 0, SDL_NUM_SCANCODES * sizeof(Uint8));
-    }
+    std::copy(sdl_keystate, sdl_keystate + SDL_NUM_SCANCODES, state.keyboard.begin());
 
-    // 2. Clear the event queue for the new frame
-    es->input_event_queue.clear();
-
-    // 3. Process inputs for each player
-    for (int player_index = 0; player_index < static_cast<int>(es->players.size()); ++player_index) {
-        const BindsProfile* binds = get_player_binds_profile(player_index);
-        if (!binds) continue; // Skip players without binds profiles
-
-        // 4. Iterate through all possible physical keys to check for state changes
-        for (int i = 0; i < static_cast<int>(GubsyButton::COUNT); ++i) {
-            // Find the corresponding SDL scancode for this GubsyButton
-            if (gubsy_to_sdl_scancode.count(i) == 0) {
-                continue; // Skip non-keyboard buttons for now
-            }
-            SDL_Scancode scancode = gubsy_to_sdl_scancode.at(i);
-
-            bool is_down_now = es->keystate[scancode];
-            bool was_down_before = es->last_keystate[scancode];
-
-            if (is_down_now == was_down_before) {
-                continue; // No change in state for this key
-            }
-
-            // A press or release was detected for this physical key `i`.
-            // Now, find all game actions that are bound to this physical key.
-            for (const auto& [device_button, game_action] : binds->button_binds) {
-                if (device_button == i) {
-                    // Match found! Create and push an event.
-                    InputEvent event;
-                    event.type = InputEventType::BUTTON;
-                    event.player_index = player_index;
-                    event.action = game_action;
-                    event.data.button.pressed = is_down_now;
-                    es->input_event_queue.push_back(event);
-                }
-            }
+    int x = 0;
+    int y = 0;
+    state.mouse_buttons = SDL_GetMouseState(&x, &y);
+    state.mouse_dx = x - state.mouse_x;
+    state.mouse_dy = y - state.mouse_y;
+    state.mouse_x = x;
+    state.mouse_y = y;
+    state.controllers.clear();
+    state.controllers.reserve(es->open_controllers.size());
+    for (auto const& [device_id, controller] : es->open_controllers) {
+        DeviceState::ControllerState controller_state{};
+        for (int axis = 0; axis < SDL_CONTROLLER_AXIS_MAX; ++axis) {
+            Sint16 raw_value = SDL_GameControllerGetAxis(controller, static_cast<SDL_GameControllerAxis>(axis));
+            controller_state.axes[static_cast<std::size_t>(axis)] =
+                static_cast<float>(raw_value) / 32767.0f;
         }
+        state.controllers.push_back(controller_state);
+    }
+}
 
-        // 5. Iterate through all open game controllers for analog changes
-        const float DEADZONE = 0.2f;
-        for (auto const& [device_id, controller] : es->open_controllers) {
-            auto& state = es->gamepad_states[device_id];
+void accumulate_mouse_wheel_delta(int delta) {
+    if (!es)
+        return;
+    es->device_state.mouse_wheel += delta;
+}
 
-            // Copy last state
-            memcpy(state.last_axes, state.axes, sizeof(state.axes));
+namespace {
 
-            // Get new state for all axes
-            for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i) {
-                Sint16 raw_value = SDL_GameControllerGetAxis(controller, (SDL_GameControllerAxis)i);
-                // Normalize to -1.0 to 1.0 for sticks, 0.0 to 1.0 for triggers
-                float normalized_value = raw_value / 32767.0f;
-                state.axes[i] = normalized_value;
-            }
+void ensure_input_frame_capacity() {
+    const std::size_t count = es ? es->players.size() : 0;
+    if (!es)
+        return;
+    if (es->input_frames_current.size() < count) {
+        es->input_frames_current.resize(count);
+        es->input_frames_previous.resize(count);
+    }
+}
 
-            // Handle 2D sticks
-            // Left Stick
-            glm::vec2 left_stick_now(state.axes[SDL_CONTROLLER_AXIS_LEFTX], state.axes[SDL_CONTROLLER_AXIS_LEFTY]);
-            glm::vec2 left_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_LEFTX], state.last_axes[SDL_CONTROLLER_AXIS_LEFTY]);
-            if ((glm::length(left_stick_now) > DEADZONE || glm::length(left_stick_last) > DEADZONE) && glm::distance(left_stick_now, left_stick_last) > 0.001f) {
-            for (const auto& [device_2d_axis, game_action] : binds->analog_2d_binds) {
-                if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK)) {
-                        InputEvent event;
-                        event.type = InputEventType::ANALOG_2D;
-                        event.player_index = player_index;
-                        event.action = game_action;
-                        event.data.analog2D.value = left_stick_now;
-                        es->input_event_queue.push_back(event);
-                    }
-                }
-            }
-            // Right Stick
-            glm::vec2 right_stick_now(state.axes[SDL_CONTROLLER_AXIS_RIGHTX], state.axes[SDL_CONTROLLER_AXIS_RIGHTY]);
-            glm::vec2 right_stick_last(state.last_axes[SDL_CONTROLLER_AXIS_RIGHTX], state.last_axes[SDL_CONTROLLER_AXIS_RIGHTY]);
-            if ((glm::length(right_stick_now) > DEADZONE || glm::length(right_stick_last) > DEADZONE) && glm::distance(right_stick_now, right_stick_last) > 0.001f) {
-                for (const auto& [device_2d_axis, game_action] : binds->analog_2d_binds) {
-                    if (device_2d_axis == static_cast<int>(Gubsy2DAnalog::GP_RIGHT_STICK)) {
-                        InputEvent event;
-                        event.type = InputEventType::ANALOG_2D;
-                        event.player_index = player_index;
-                        event.action = game_action;
-                        event.data.analog2D.value = right_stick_now;
-                        es->input_event_queue.push_back(event);
-                    }
-                }
-            }
+const InputFrame& safe_frame(const std::vector<InputFrame>& frames, int player_index) {
+    static InputFrame empty{};
+    if (!es)
+        return empty;
+    if (player_index < 0 || static_cast<std::size_t>(player_index) >= frames.size())
+        return empty;
+    return frames[static_cast<std::size_t>(player_index)];
+}
 
-            // Handle 1D triggers
-            // Left Trigger
-            float left_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
-            float left_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERLEFT];
-            if ((left_trigger_now > DEADZONE || left_trigger_last > DEADZONE) && abs(left_trigger_now - left_trigger_last) > 0.001f) {
-                for (const auto& [device_1d_axis, game_action] : binds->analog_1d_binds) {
-                    if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_LEFT_TRIGGER)) {
-                        InputEvent event;
-                        event.type = InputEventType::ANALOG_1D;
-                        event.player_index = player_index;
-                        event.action = game_action;
-                        event.data.analog1D.value = left_trigger_now;
-                        es->input_event_queue.push_back(event);
-                    }
-                }
-            }
-            // Right Trigger
-            float right_trigger_now = state.axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
-            float right_trigger_last = state.last_axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT];
-            if ((right_trigger_now > DEADZONE || right_trigger_last > DEADZONE) && abs(right_trigger_now - right_trigger_last) > 0.001f) {
-                for (const auto& [device_1d_axis, game_action] : binds->analog_1d_binds) {
-                    if (device_1d_axis == static_cast<int>(Gubsy1DAnalog::GP_RIGHT_TRIGGER)) {
-                        InputEvent event;
-                        event.type = InputEventType::ANALOG_1D;
-                        event.player_index = player_index;
-                        event.action = game_action;
-                        event.data.analog1D.value = right_trigger_now;
-                        es->input_event_queue.push_back(event);
-                    }
-                }
-            }
-        }
+} // namespace
+
+void build_input_frames_for_step() {
+    if (!es)
+        return;
+
+    ensure_input_frame_capacity();
+
+    const std::size_t player_count = es->players.size();
+    for (std::size_t i = 0; i < player_count; ++i) {
+        InputFrame next{};
+        if (es->input_frame_builder)
+            es->input_frame_builder(static_cast<int>(i), es->device_state, next);
+        es->input_frames_previous[i] = es->input_frames_current[i];
+        es->input_frames_current[i] = next;
     }
 
-    // 6. Dispatch to legacy mode-specific input processor (will be phased out)
-    if (const ModeDesc* mode = find_mode(es->mode)) {
-        if (mode->process_inputs_fn) {
-            mode->process_inputs_fn();
-        }
-    }
+    es->device_state.mouse_wheel = 0;
+    es->device_state.mouse_dx = 0;
+    es->device_state.mouse_dy = 0;
+}
 
-    // 7. Handle hardcoded debug inputs
-    static bool was_debug_combo_down = false;
-    bool is_debug_combo_down = es->keystate[SDL_SCANCODE_LCTRL] && es->keystate[SDL_SCANCODE_LALT] && es->keystate[SDL_SCANCODE_I];
-    if (is_debug_combo_down && !was_debug_combo_down) {
-        es->draw_input_device_overlay = !es->draw_input_device_overlay;
-    }
-    was_debug_combo_down = is_debug_combo_down;
+const InputFrame& current_input_frame(int player_index) {
+    return safe_frame(es->input_frames_current, player_index);
+}
+
+const InputFrame& previous_input_frame(int player_index) {
+    return safe_frame(es->input_frames_previous, player_index);
 }

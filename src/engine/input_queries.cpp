@@ -1,72 +1,42 @@
 #include "engine/input_queries.hpp"
 #include "engine/globals.hpp"
 #include "engine/input.hpp"
-#include "game/events.hpp"
+#include "game/input_frame.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/player.hpp"
 #include "engine/user_profiles.hpp"
+#include "engine/input_system.hpp"
 
-#include <SDL_scancode.h>
-#include <vector>
-
-const std::vector<InputEvent>& get_input_events() {
-    return es->input_event_queue;
-}
-
-// is_down remains state-based for continuous actions.
 bool is_down(int player_index, int game_button) {
-    const BindsProfile* binds = get_player_binds_profile(player_index);
-    if (!binds) return false;
-
-    // This is now a linear scan: GameAction -> GubsyButton(s)
-    for (const auto& bind : binds->button_binds) {
-        const int device_button = bind.first;
-        const int gubsy_action = bind.second;
-
-        if (gubsy_action == game_button) {
-            // Then GubsyButton -> SDL_Scancode
-            if (gubsy_to_sdl_scancode.count(device_button)) {
-                SDL_Scancode scancode = gubsy_to_sdl_scancode.at(device_button);
-                if (es->keystate[scancode]) {
-                    return true; // Return true if any bound key is down
-                }
-            }
-        }
-    }
-
-    return false;
+    if (!es || game_button < 0 || game_button >= 32)
+        return false;
+    const InputFrame& frame = current_input_frame(player_index);
+    return (frame.down_bits & (1u << game_button)) != 0;
 }
 
-// was_pressed is now event-based for reliability
 bool was_pressed(int player_index, int game_button) {
-    for (const auto& event : es->input_event_queue) {
-        if (event.player_index == player_index && event.action == game_button && event.type == InputEventType::BUTTON && event.data.button.pressed) {
-            return true;
-        }
-    }
-    return false;
+    if (!es || game_button < 0 || game_button >= 32)
+        return false;
+    const InputFrame& cur = current_input_frame(player_index);
+    const InputFrame& prev = previous_input_frame(player_index);
+    const uint32_t mask = (1u << game_button);
+    return (cur.down_bits & mask) && !(prev.down_bits & mask);
 }
 
-// was_released is now event-based for reliability
 bool was_released(int player_index, int game_button) {
-    for (const auto& event : es->input_event_queue) {
-        if (event.player_index == player_index && event.action == game_button && event.type == InputEventType::BUTTON && !event.data.button.pressed) {
-            return true;
-        }
-    }
-    return false;
+    if (!es || game_button < 0 || game_button >= 32)
+        return false;
+    const InputFrame& cur = current_input_frame(player_index);
+    const InputFrame& prev = previous_input_frame(player_index);
+    const uint32_t mask = (1u << game_button);
+    return !(cur.down_bits & mask) && (prev.down_bits & mask);
 }
 
 float get_1d_analog(int player_index, int game_axis) {
-    float result = 0.0f;
-    // Iterate backwards to find the most recent event for this action
-    for (auto it = es->input_event_queue.rbegin(); it != es->input_event_queue.rend(); ++it) {
-        const auto& event = *it;
-        if (event.player_index == player_index && event.action == game_axis && event.type == InputEventType::ANALOG_1D) {
-            return event.data.analog1D.value;
-        }
-    }
-    return result;
+    if (!es || game_axis < 0 || static_cast<std::size_t>(game_axis) >= GameAnalog1D::COUNT)
+        return 0.0f;
+    const InputFrame& frame = current_input_frame(player_index);
+    return static_cast<float>(frame.analog_1d[static_cast<std::size_t>(game_axis)]) / 32767.0f;
 }
 
 float get_1d_analog_delta(int /*player_index*/, int /*game_axis*/) {
@@ -75,15 +45,12 @@ float get_1d_analog_delta(int /*player_index*/, int /*game_axis*/) {
 }
 
 glm::vec2 get_2d_analog(int player_index, int game_axis) {
-    glm::vec2 result(0.0f);
-    // Iterate backwards to find the most recent event for this action
-    for (auto it = es->input_event_queue.rbegin(); it != es->input_event_queue.rend(); ++it) {
-        const auto& event = *it;
-        if (event.player_index == player_index && event.action == game_axis && event.type == InputEventType::ANALOG_2D) {
-            return event.data.analog2D.value;
-        }
-    }
-    return result;
+    if (!es || game_axis < 0 || static_cast<std::size_t>(game_axis) >= GameAnalog2D::COUNT)
+        return glm::vec2(0.0f);
+    const InputFrame& frame = current_input_frame(player_index);
+    const auto& analog = frame.analog_2d[static_cast<std::size_t>(game_axis)];
+    return glm::vec2(static_cast<float>(analog.x) / 32767.0f,
+                     static_cast<float>(analog.y) / 32767.0f);
 }
 
 glm::vec2 get_2d_analog_delta(int /*player_index*/, int /*game_axis*/) {
