@@ -3,6 +3,7 @@
 #include "input_sources.hpp"
 #include "engine/input_system.hpp"
 #include "engine/imgui_layer.hpp"
+#include "engine/menu/menu_system.hpp"
 
 void update_gubsy_device_inputs_system_from_sdl_events(){
     SDL_Event ev;
@@ -13,13 +14,18 @@ void update_gubsy_device_inputs_system_from_sdl_events(){
                 es->running = false;
                 break;
             case SDL_KEYDOWN:
+                if (ev.key.keysym.sym == SDLK_BACKSPACE)
+                    menu_system_handle_backspace();
+                break;
             case SDL_KEYUP:
-                // Handled in process_event
                 break;
             case SDL_MOUSEMOTION:
                 break;
             case SDL_MOUSEWHEEL:
                 accumulate_mouse_wheel_delta(ev.wheel.y);
+                break;
+            case SDL_TEXTINPUT:
+                menu_system_handle_text_input(ev.text.text);
                 break;
             case SDL_CONTROLLERDEVICEADDED:
                 on_device_added(ev.cdevice.which);

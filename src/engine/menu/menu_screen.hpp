@@ -24,6 +24,7 @@ struct BuiltScreen {
     UILayoutId layout{kMenuIdInvalid};
     MenuWidgetList widgets{};
     MenuActionList frame_actions{};
+    WidgetId default_focus{kMenuIdInvalid};
 };
 
 struct ScreenStateOps {

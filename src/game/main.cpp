@@ -16,6 +16,8 @@
 #include "engine/globals.hpp"
 #include "engine/input_system.hpp"
 #include "game/input_frame.hpp"
+#include "game/menu/screens/main_menu_screen.hpp"
+#include "game/menu/screens/mods_screen.hpp"
 
 namespace {
 constexpr const char* kGameModVersion = "0.1.0";
@@ -101,6 +103,8 @@ int main() {
 
     register_game_mod_apis();
     set_required_mod_game_version(kGameModVersion);
+    register_main_menu_screen();
+    register_mods_menu_screen();
 
     if (es)
         es->mode = modes::TITLE;

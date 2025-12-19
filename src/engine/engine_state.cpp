@@ -5,6 +5,7 @@ bool init_engine_state() {
     if (es)
         return true;
     es = new EngineState{};
+    es->menu_manager.set_command_registry(&es->menu_commands);
     return true;
 }
 

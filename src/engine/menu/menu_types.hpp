@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 inline constexpr std::uint32_t kMenuIdInvalid = 0;
 
 using MenuScreenId = std::uint32_t;
@@ -94,13 +95,21 @@ struct MenuWidget {
     MenuStyle style{};
     const char* label{nullptr};
     const char* secondary{nullptr};
+    const char* placeholder{nullptr};
     void* bind_ptr{nullptr};
     float min{0.0f};
     float max{1.0f};
     int option_count{0};
+    std::string* text_buffer{nullptr};
+    int text_max_len{0};
 
     MenuAction on_select{};
     MenuAction on_left{};
     MenuAction on_right{};
     MenuAction on_back{};
+
+    WidgetId nav_up{kMenuIdInvalid};
+    WidgetId nav_down{kMenuIdInvalid};
+    WidgetId nav_left{kMenuIdInvalid};
+    WidgetId nav_right{kMenuIdInvalid};
 };
