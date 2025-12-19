@@ -414,14 +414,21 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     widgets.push_back(search);
     const std::size_t search_idx = widgets.size() - 1;
 
+    int filtered_count = static_cast<int>(state.filtered_indices.size());
+    int total_pages = filtered_count == 0 ? 0 : ((filtered_count + kModsPerPage - 1) / kModsPerPage);
+    bool has_prev_page = state.page > 0;
+    bool has_next_page = total_pages > 0 && (state.page + 1) < total_pages;
+
     MenuWidget prev_btn;
     prev_btn.id = 503;
     prev_btn.slot = ModsObjectID::PREV;
     prev_btn.type = WidgetType::Button;
     prev_btn.label = "<";
-    prev_btn.on_select = MenuAction::run_command(g_cmd_prev_page);
-    prev_btn.on_left = MenuAction::run_command(g_cmd_prev_page);
-    prev_btn.on_right = MenuAction::run_command(g_cmd_next_page);
+    prev_btn.on_select = has_prev_page ? MenuAction::run_command(g_cmd_prev_page)
+                                       : MenuAction::none();
+    prev_btn.on_left = prev_btn.on_select;
+    prev_btn.on_right = has_next_page ? MenuAction::run_command(g_cmd_next_page)
+                                      : MenuAction::none();
     widgets.push_back(prev_btn);
     const std::size_t prev_idx = widgets.size() - 1;
 
@@ -430,9 +437,11 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     next_btn.slot = ModsObjectID::NEXT;
     next_btn.type = WidgetType::Button;
     next_btn.label = ">";
-    next_btn.on_select = MenuAction::run_command(g_cmd_next_page);
-    next_btn.on_left = MenuAction::run_command(g_cmd_prev_page);
-    next_btn.on_right = MenuAction::run_command(g_cmd_next_page);
+    next_btn.on_select = has_next_page ? MenuAction::run_command(g_cmd_next_page)
+                                       : MenuAction::none();
+    next_btn.on_left = has_prev_page ? MenuAction::run_command(g_cmd_prev_page)
+                                     : MenuAction::none();
+    next_btn.on_right = next_btn.on_select;
     widgets.push_back(next_btn);
     const std::size_t next_idx = widgets.size() - 1;
 
@@ -500,8 +509,8 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
 
         card.badge = entry.status_text.c_str();
         card.badge_color = badge_color_for(entry.status_text);
-        card.on_left = MenuAction::run_command(g_cmd_prev_page);
-        card.on_right = MenuAction::run_command(g_cmd_next_page);
+        card.on_left = has_prev_page ? MenuAction::run_command(g_cmd_prev_page) : MenuAction::none();
+        card.on_right = has_next_page ? MenuAction::run_command(g_cmd_next_page) : MenuAction::none();
         widgets.push_back(card);
         if (first_card_id == kMenuIdInvalid)
             first_card_id = card.id;
@@ -522,8 +531,8 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     MenuWidget& next_ref = widgets[next_idx];
     MenuWidget& back_ref = widgets[back_idx];
 
-    search_ref.on_left = MenuAction::run_command(g_cmd_prev_page);
-    search_ref.on_right = MenuAction::run_command(g_cmd_next_page);
+    search_ref.on_left = has_prev_page ? MenuAction::run_command(g_cmd_prev_page) : MenuAction::none();
+    search_ref.on_right = has_next_page ? MenuAction::run_command(g_cmd_next_page) : MenuAction::none();
     WidgetId cards_start = first_card_id != kMenuIdInvalid ? first_card_id : back_ref.id;
     search_ref.nav_down = cards_start;
     search_ref.nav_left = prev_ref.id;
