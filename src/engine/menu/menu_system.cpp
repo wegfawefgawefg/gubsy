@@ -405,31 +405,36 @@ void menu_system_render(SDL_Renderer* renderer) {
             }
         }
 
+        bool is_label = widget.type == WidgetType::Label;
+        SDL_Rect clip{
+            static_cast<int>(rect.x) + 8,
+            static_cast<int>(rect.y) + 4,
+            std::max(0, static_cast<int>(rect.w) - 16),
+            std::max(0, static_cast<int>(rect.h) - 8)};
+        const SDL_Rect* clip_ptr = is_label ? nullptr : &clip;
+        int line_x = static_cast<int>(rect.x) + (is_label ? 0 : 16);
+        int line_y = static_cast<int>(rect.y) + (is_label ? 0 : 6);
+        auto next_line = [&]() {
+            line_y += 22;
+        };
         if (text_ptr) {
-            SDL_Rect clip{
-                static_cast<int>(rect.x) + 8,
-                static_cast<int>(rect.y) + 4,
-                std::max(0, static_cast<int>(rect.w) - 16),
-                std::max(0, static_cast<int>(rect.h) - 8)};
-            const SDL_Rect* clip_ptr = (widget.type == WidgetType::Label) ? nullptr : &clip;
-            int text_x = static_cast<int>(rect.x) + (widget.type == WidgetType::Label ? 0 : 16);
-            int text_y = static_cast<int>(rect.y) + (widget.type == WidgetType::Label ? 0 : 6);
-            draw_text_with_clip(renderer, text_ptr, text_x, text_y, text_color, clip_ptr);
+            draw_text_with_clip(renderer, text_ptr, line_x, line_y, text_color, clip_ptr);
+            next_line();
         }
         if (widget.secondary) {
-            int sec_x = static_cast<int>(rect.x) + 16;
-            int sec_y = static_cast<int>(rect.y + rect.h) - 24;
             SDL_Color sec_color{static_cast<Uint8>(widget.style.fg_r / 2 + 50),
                                 static_cast<Uint8>(widget.style.fg_g / 2 + 50),
                                 static_cast<Uint8>(widget.style.fg_b / 2 + 50),
                                 255};
-            SDL_Rect clip{
-                static_cast<int>(rect.x) + 8,
-                static_cast<int>(rect.y) + 4,
-                std::max(0, static_cast<int>(rect.w) - 16),
-                std::max(0, static_cast<int>(rect.h) - 8)};
-            const SDL_Rect* clip_ptr = (widget.type == WidgetType::Label) ? nullptr : &clip;
-            draw_text_with_clip(renderer, widget.secondary, sec_x, sec_y, sec_color, clip_ptr);
+            draw_text_with_clip(renderer, widget.secondary, line_x, line_y, sec_color, clip_ptr);
+            next_line();
+        }
+        if (widget.tertiary) {
+            SDL_Color tert_color{static_cast<Uint8>(widget.style.fg_r / 3 + 60),
+                                 static_cast<Uint8>(widget.style.fg_g / 3 + 60),
+                                 static_cast<Uint8>(widget.style.fg_b / 3 + 60),
+                                 255};
+            draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
         }
         if (widget.badge) {
             int badge_w = measure_text_width(widget.badge);
@@ -437,12 +442,12 @@ void menu_system_render(SDL_Renderer* renderer) {
             if (badge_x < static_cast<int>(rect.x) + 8)
                 badge_x = static_cast<int>(rect.x) + 8;
             int badge_y = static_cast<int>(rect.y) + 6;
-            SDL_Rect clip{
+            SDL_Rect badge_clip{
                 static_cast<int>(rect.x) + 8,
                 static_cast<int>(rect.y) + 4,
                 std::max(0, static_cast<int>(rect.w) - 16),
                 std::max(0, static_cast<int>(rect.h) - 8)};
-            draw_text_with_clip(renderer, widget.badge, badge_x, badge_y, widget.badge_color, &clip);
+            draw_text_with_clip(renderer, widget.badge, badge_x, badge_y, widget.badge_color, &badge_clip);
         }
     }
 }

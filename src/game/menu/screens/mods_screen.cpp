@@ -4,6 +4,7 @@
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
+#include "engine/mod_host.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mods.hpp"
 #include "game/menu/menu_ids.hpp"
@@ -36,8 +37,11 @@ struct ModsScreenState {
     std::vector<ModCatalogEntry> catalog;
     std::vector<int> filtered_indices;
     std::array<std::string, kModsPerPage> label_cache;
-    std::array<std::string, kModsPerPage> summary_cache;
+    std::array<std::string, kModsPerPage> subtitle_cache;
+    std::array<std::string, kModsPerPage> detail_cache;
 };
+
+bool version_compatible(const ModCatalogEntry& entry);
 
 bool path_exists(const ModCatalogEntry& entry) {
     std::filesystem::path mods_root = mm && !mm->root.empty()
@@ -56,10 +60,13 @@ void update_install_flags(ModsScreenState& state) {
             continue;
         }
         entry.installed = path_exists(entry);
+        bool version_ok = version_compatible(entry);
         if (entry.installed)
-            entry.status_text = "Installed";
+            entry.status_text = version_ok ? "Installed" : "Incompatible";
         else if (entry.status_text.empty())
-            entry.status_text = "Not installed";
+            entry.status_text = version_ok ? "Not installed" : "Incompatible";
+        if (!version_ok && !entry.game_version.empty())
+            entry.status_text = "Needs game v" + entry.game_version;
     }
 }
 
@@ -81,6 +88,8 @@ SDL_Color badge_color_for(const std::string& status) {
         return SDL_Color{120, 170, 255, 255};
     if (lower.find("remove") != std::string::npos || lower.find("failed") != std::string::npos)
         return SDL_Color{230, 120, 120, 255};
+    if (lower.find("incompatible") != std::string::npos || lower.find("needs game") != std::string::npos)
+        return SDL_Color{240, 190, 120, 255};
     if (lower.find("core") != std::string::npos)
         return SDL_Color{240, 210, 120, 255};
     if (lower.find("not install") != std::string::npos)
@@ -88,6 +97,98 @@ SDL_Color badge_color_for(const std::string& status) {
     if (lower.find("installed") != std::string::npos)
         return SDL_Color{150, 220, 150, 255};
     return SDL_Color{170, 170, 190, 255};
+}
+
+bool version_compatible(const ModCatalogEntry& entry) {
+    const std::string& required = required_mod_game_version();
+    if (required.empty() || entry.game_version.empty())
+        return true;
+    return entry.game_version == required;
+}
+
+std::string join_names(const std::vector<std::string>& names, std::size_t max_chars = 80) {
+    std::string out;
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        if (!out.empty())
+            out += ", ";
+        out += names[i];
+        if (out.size() > max_chars) {
+            out.resize(max_chars);
+            out += "...";
+            break;
+        }
+    }
+    return out;
+}
+
+std::vector<std::string> installed_dependents(const ModsScreenState& state, const std::string& id) {
+    std::vector<std::string> names;
+    for (const auto& other : state.catalog) {
+        if (!other.installed)
+            continue;
+        if (std::find(other.dependencies.begin(), other.dependencies.end(), id) != other.dependencies.end())
+            names.push_back(other.title);
+    }
+    return names;
+}
+
+MenuStyle style_for_entry(const ModCatalogEntry& entry,
+                          bool version_ok,
+                          bool locked,
+                          bool interactive) {
+    MenuStyle style;
+    style.bg_r = 28;
+    style.bg_g = 28;
+    style.bg_b = 36;
+    style.fg_r = 220;
+    style.fg_g = 220;
+    style.fg_b = 230;
+    style.focus_r = 90;
+    style.focus_g = 140;
+    style.focus_b = 255;
+
+    if (!version_ok) {
+        style.bg_r = 44;
+        style.bg_g = 30;
+        style.bg_b = 30;
+        style.focus_r = 200;
+        style.focus_g = 120;
+        style.focus_b = 120;
+    } else if (entry.required) {
+        style.bg_r = 42;
+        style.bg_g = 34;
+        style.bg_b = 20;
+        style.focus_r = 220;
+        style.focus_g = 180;
+        style.focus_b = 100;
+    } else if (entry.installed) {
+        style.bg_r = 28;
+        style.bg_g = 42;
+        style.bg_b = 32;
+        style.focus_r = 110;
+        style.focus_g = 200;
+        style.focus_b = 160;
+    } else {
+        style.bg_r = 26;
+        style.bg_g = 30;
+        style.bg_b = 42;
+    }
+
+    if (locked) {
+        style.bg_r = static_cast<std::uint8_t>((style.bg_r + 80) / 2);
+        style.bg_g = static_cast<std::uint8_t>((style.bg_g + 80) / 2);
+        style.bg_b = static_cast<std::uint8_t>((style.bg_b + 80) / 2);
+    }
+
+    if (!interactive) {
+        style.fg_r = 150;
+        style.fg_g = 150;
+        style.fg_b = 160;
+        style.focus_r = 110;
+        style.focus_g = 110;
+        style.focus_b = 120;
+    }
+    return style;
 }
 
 void recalc_page_text(ModsScreenState& state) {
@@ -358,14 +459,45 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
         int catalog_idx = state.filtered_indices[static_cast<std::size_t>(absolute)];
         ModCatalogEntry& entry = state.catalog[static_cast<std::size_t>(catalog_idx)];
         std::string& label_text = state.label_cache[static_cast<std::size_t>(i)];
-        label_text = entry.title + "  v" + entry.version + "  by " + entry.author;
-        std::string& summary_text = state.summary_cache[static_cast<std::size_t>(i)];
-        summary_text = summarize(entry.summary, 96);
+        label_text = entry.title;
+        std::string& subtitle_text = state.subtitle_cache[static_cast<std::size_t>(i)];
+        subtitle_text = "v" + entry.version;
+        if (!entry.author.empty())
+            subtitle_text += "  ·  by " + entry.author;
+        if (!entry.game_version.empty())
+            subtitle_text += "  ·  Game v" + entry.game_version;
         card.label = label_text.c_str();
-        card.secondary = summary_text.c_str();
-        bool installed = entry.installed;
-        card.on_select = MenuAction::run_command(installed ? g_cmd_uninstall : g_cmd_install,
-                                                 catalog_idx);
+        card.secondary = subtitle_text.c_str();
+
+        bool version_ok = version_compatible(entry);
+        std::vector<std::string> dependents = installed_dependents(state, entry.id);
+        bool has_dependents = !dependents.empty();
+        bool can_install = !entry.installed && version_ok;
+        bool can_uninstall = entry.installed && !entry.required && !has_dependents;
+        bool interactive = can_install || can_uninstall;
+        if (interactive)
+            card.on_select = MenuAction::run_command(can_install ? g_cmd_install : g_cmd_uninstall,
+                                                     catalog_idx);
+        else
+            card.on_select = MenuAction::none();
+        card.style = style_for_entry(entry, version_ok, has_dependents || entry.required, interactive);
+
+        std::string& detail_text = state.detail_cache[static_cast<std::size_t>(i)];
+        detail_text = summarize(entry.summary, 80);
+        if (!entry.dependencies.empty()) {
+            std::string requires_line = "Requires: " + join_names(entry.dependencies);
+            if (!detail_text.empty())
+                detail_text += "  ";
+            detail_text += requires_line;
+        }
+        if (!dependents.empty()) {
+            std::string required_line = "Required by: " + join_names(dependents);
+            if (!detail_text.empty())
+                detail_text += "  ";
+            detail_text += required_line;
+        }
+        card.tertiary = detail_text.empty() ? nullptr : detail_text.c_str();
+
         card.badge = entry.status_text.c_str();
         card.badge_color = badge_color_for(entry.status_text);
         card.on_left = MenuAction::run_command(g_cmd_prev_page);

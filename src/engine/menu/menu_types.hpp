@@ -96,6 +96,7 @@ struct MenuWidget {
     MenuStyle style{};
     const char* label{nullptr};
     const char* secondary{nullptr};
+    const char* tertiary{nullptr};
     const char* badge{nullptr};
     SDL_Color badge_color{180, 180, 200, 255};
     const char* placeholder{nullptr};
