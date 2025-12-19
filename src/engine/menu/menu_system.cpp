@@ -38,6 +38,7 @@ bool g_has_focus_color{false};
 bool g_text_edit_active{false};
 WidgetId g_text_edit_widget{kMenuIdInvalid};
 float g_caret_time{0.0f};
+std::vector<WidgetId> g_focus_return_stack;
 
 struct FocusArrowState {
     SDL_FPoint left_pos{0.0f, 0.0f};
@@ -63,6 +64,14 @@ WidgetId resolve_focus(WidgetId target) {
         return kMenuIdInvalid;
     if (find_widget(target))
         return target;
+    return kMenuIdInvalid;
+}
+
+WidgetId first_selectable_widget() {
+    for (const auto& widget : g_cache.widgets) {
+        if (widget.type != WidgetType::Label)
+            return widget.id;
+    }
     return kMenuIdInvalid;
 }
 
@@ -108,20 +117,57 @@ void draw_text_with_clip(SDL_Renderer* renderer,
     }
 }
 
+void begin_text_edit(MenuWidget& widget) {
+    if (widget.type != WidgetType::TextInput || !widget.text_buffer)
+        return;
+    g_text_edit_active = true;
+    g_text_edit_widget = widget.id;
+    g_active_text_buffer = widget.text_buffer;
+    g_active_text_max = widget.text_max_len;
+    g_caret_time = 0.0f;
+    if (!g_text_input_enabled) {
+        SDL_StartTextInput();
+        g_text_input_enabled = true;
+    }
+}
+
+void end_text_edit() {
+    if (!g_text_edit_active)
+        return;
+    g_text_edit_active = false;
+    g_text_edit_widget = kMenuIdInvalid;
+    g_active_text_buffer = nullptr;
+    if (g_text_input_enabled) {
+        SDL_StopTextInput();
+        g_text_input_enabled = false;
+    }
+}
+
 
 bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_changed) {
     switch (action.type) {
         case MenuActionType::None:
             return false;
-        case MenuActionType::PushScreen:
-            ctx.manager.push_screen(static_cast<MenuScreenId>(action.a));
+        case MenuActionType::PushScreen: {
+            g_focus_return_stack.push_back(g_focus);
+            if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a))) {
+                g_focus_return_stack.pop_back();
+                return false;
+            }
             stack_changed = true;
             g_focus = kMenuIdInvalid;
             return true;
+        }
         case MenuActionType::PopScreen:
             ctx.manager.pop_screen();
             stack_changed = true;
-            g_focus = kMenuIdInvalid;
+            if (!g_focus_return_stack.empty()) {
+                g_focus = g_focus_return_stack.back();
+                g_focus_return_stack.pop_back();
+            } else {
+                g_focus = first_selectable_widget();
+            }
+            end_text_edit();
             return true;
         case MenuActionType::ToggleBool:
             if (action.ptr)
@@ -154,8 +200,8 @@ void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
     if (g_focus == kMenuIdInvalid) {
         if (built.default_focus != kMenuIdInvalid)
             g_focus = built.default_focus;
-        else if (!g_cache.widgets.empty())
-            g_focus = g_cache.widgets.front().id;
+        else
+            g_focus = first_selectable_widget();
     }
     for (const MenuAction& act : built.frame_actions.items) {
         bool unused = false;
@@ -209,32 +255,6 @@ void draw_focus_arrows(SDL_Renderer* renderer) {
     SDL_FPoint right_tip{g_arrows.right_pos.x - osc, g_arrows.right_pos.y};
     draw_arrow(renderer, left_tip, 1.0f, g_focus_outline_color);
     draw_arrow(renderer, right_tip, -1.0f, g_focus_outline_color);
-}
-
-void begin_text_edit(MenuWidget& widget) {
-    if (widget.type != WidgetType::TextInput || !widget.text_buffer)
-        return;
-    g_text_edit_active = true;
-    g_text_edit_widget = widget.id;
-    g_active_text_buffer = widget.text_buffer;
-    g_active_text_max = widget.text_max_len;
-    g_caret_time = 0.0f;
-    if (!g_text_input_enabled) {
-        SDL_StartTextInput();
-        g_text_input_enabled = true;
-    }
-}
-
-void end_text_edit() {
-    if (!g_text_edit_active)
-        return;
-    g_text_edit_active = false;
-    g_text_edit_widget = kMenuIdInvalid;
-    g_active_text_buffer = nullptr;
-    if (g_text_input_enabled) {
-        SDL_StopTextInput();
-        g_text_input_enabled = false;
-    }
 }
 
 } // namespace
@@ -399,6 +419,10 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         }
 
         focus = find_widget(g_focus);
+        if (!focus) {
+            g_focus = first_selectable_widget();
+            focus = find_widget(g_focus);
+        }
         editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
         if (g_text_edit_active && !editing_focus)
             end_text_edit();
@@ -447,6 +471,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
     if (manager.stack().empty()) {
         end_text_edit();
+        g_focus_return_stack.clear();
         g_cache.widgets.clear();
         g_cache.layout = kMenuIdInvalid;
         g_focus = kMenuIdInvalid;
@@ -630,6 +655,7 @@ void menu_system_render(SDL_Renderer* renderer) {
 
 void menu_system_reset() {
     end_text_edit();
+    g_focus_return_stack.clear();
     g_cache.widgets.clear();
     g_cache.layout = kMenuIdInvalid;
     g_cache.rects.clear();
