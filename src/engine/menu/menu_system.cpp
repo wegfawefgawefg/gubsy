@@ -41,6 +41,10 @@ WidgetId g_text_edit_widget{kMenuIdInvalid};
 float g_caret_time{0.0f};
 std::unordered_map<MenuScreenId, WidgetId> g_last_focus;
 MenuScreenId g_current_screen{kMenuIdInvalid};
+bool g_allow_mouse_focus{false};
+bool g_mouse_focus_locked{false};
+int g_mouse_focus_lock_x{0};
+int g_mouse_focus_lock_y{0};
 
 struct FocusArrowState {
     SDL_FPoint left_pos{0.0f, 0.0f};
@@ -259,6 +263,32 @@ void draw_focus_arrows(SDL_Renderer* renderer) {
     draw_arrow(renderer, right_tip, -1.0f, g_focus_outline_color);
 }
 
+void lock_mouse_focus_at(int x, int y) {
+    g_allow_mouse_focus = false;
+    g_mouse_focus_locked = true;
+    g_mouse_focus_lock_x = x;
+    g_mouse_focus_lock_y = y;
+}
+
+void ensure_mouse_lock(int x, int y) {
+    if (!g_allow_mouse_focus && !g_mouse_focus_locked)
+        lock_mouse_focus_at(x, y);
+}
+
+void unlock_mouse_focus_if_moved(int x, int y) {
+    if (!g_allow_mouse_focus || !g_mouse_focus_locked)
+        return;
+    if (x != g_mouse_focus_lock_x || y != g_mouse_focus_lock_y) {
+        g_mouse_focus_locked = false;
+        g_allow_mouse_focus = true;
+    }
+}
+
+void unlock_mouse_focus_now() {
+    g_allow_mouse_focus = true;
+    g_mouse_focus_locked = false;
+}
+
 } // namespace
 
 void menu_system_set_input(const MenuInputState& input) {
@@ -294,7 +324,6 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             break;
         MenuContext ctx{*es, *ss, manager, screen_width, screen_height, inst.state_ptr};
         rebuild_cache(inst, ctx);
-
         MenuWidget* focus = find_widget(g_focus);
         MenuInputState prev = g_prev_input;
         g_prev_input = g_current_input;
@@ -304,6 +333,10 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_prev_mouse_down = mouse_down;
         int mouse_x = es->device_state.mouse_x;
         int mouse_y = es->device_state.mouse_y;
+        ensure_mouse_lock(mouse_x, mouse_y);
+        unlock_mouse_focus_if_moved(mouse_x, mouse_y);
+        if (mouse_clicked)
+            unlock_mouse_focus_now();
 
         const UILayout* layout_rects = get_ui_layout_for_resolution(static_cast<int>(g_cache.layout),
                                                                    g_cache.width,
@@ -368,14 +401,17 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
         if (focus && !editing_focus) {
             if (up_pressed) {
+                lock_mouse_focus_at(mouse_x, mouse_y);
                 if (focus->nav_up != kMenuIdInvalid)
                     g_focus = resolve_focus(focus->nav_up);
             } else if (down_pressed) {
+                lock_mouse_focus_at(mouse_x, mouse_y);
                 if (focus->nav_down != kMenuIdInvalid)
                     g_focus = resolve_focus(focus->nav_down);
             }
 
             if (!needs_rebuild && left_pressed) {
+                lock_mouse_focus_at(mouse_x, mouse_y);
                 if (focus->nav_left != kMenuIdInvalid) {
                     g_focus = resolve_focus(focus->nav_left);
                 } else if (focus->on_left.type != MenuActionType::None) {
@@ -386,6 +422,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             }
 
             if (!needs_rebuild && right_pressed) {
+                lock_mouse_focus_at(mouse_x, mouse_y);
                 if (focus->nav_right != kMenuIdInvalid) {
                     g_focus = resolve_focus(focus->nav_right);
                 } else if (focus->on_right.type != MenuActionType::None) {
@@ -397,15 +434,18 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
             if (!needs_rebuild) {
                 if (select_pressed && focus->on_select.type != MenuActionType::None) {
+                    lock_mouse_focus_at(mouse_x, mouse_y);
                     execute_action(focus->on_select, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
                 } else if (back_pressed) {
                     if (focus->on_back.type != MenuActionType::None) {
+                        lock_mouse_focus_at(mouse_x, mouse_y);
                         execute_action(focus->on_back, ctx, stack_changed);
                         needs_rebuild = true;
                         continue;
                     } else if (manager.stack().size() > 1) {
+                        lock_mouse_focus_at(mouse_x, mouse_y);
                         MenuAction pop = MenuAction::pop();
                         execute_action(pop, ctx, stack_changed);
                         needs_rebuild = true;
@@ -417,11 +457,13 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             }
 
             if (!needs_rebuild && page_prev_pressed && focus->on_left.type != MenuActionType::None) {
+                lock_mouse_focus_at(mouse_x, mouse_y);
                 execute_action(focus->on_left, ctx, stack_changed);
                 needs_rebuild = true;
                 continue;
             }
             if (!needs_rebuild && page_next_pressed && focus->on_right.type != MenuActionType::None) {
+                lock_mouse_focus_at(mouse_x, mouse_y);
                 execute_action(focus->on_right, ctx, stack_changed);
                 needs_rebuild = true;
                 continue;
@@ -458,7 +500,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 break;
             }
         }
-        if (hovered != kMenuIdInvalid && hovered != g_focus && !mouse_down) {
+        bool hover_changed = hovered != g_focus;
+        if (g_allow_mouse_focus && hover_changed &&
+            hovered != kMenuIdInvalid && !mouse_down) {
             g_focus = hovered;
             focus = find_widget(g_focus);
         }
@@ -495,6 +539,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_arrows.initialized = false;
         g_has_focus_rect = false;
         g_has_focus_color = false;
+        g_allow_mouse_focus = false;
+        g_mouse_focus_locked = false;
     }
 }
 
@@ -682,6 +728,10 @@ void menu_system_reset() {
         SDL_StopTextInput();
         g_text_input_enabled = false;
     }
+    g_allow_mouse_focus = false;
+    g_mouse_focus_locked = false;
+    g_mouse_focus_lock_x = 0;
+    g_mouse_focus_lock_y = 0;
 }
 
 bool menu_system_active() {
