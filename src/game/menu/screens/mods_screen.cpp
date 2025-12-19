@@ -77,14 +77,16 @@ SDL_Color badge_color_for(const std::string& status) {
     std::string lower = status;
     std::transform(lower.begin(), lower.end(), lower.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (lower.find("install") != std::string::npos && lower.find("ing") != std::string::npos)
+    if (lower.find("installing") != std::string::npos)
         return SDL_Color{120, 170, 255, 255};
-    if (lower.find("remove") != std::string::npos)
-        return SDL_Color{255, 140, 140, 255};
+    if (lower.find("remove") != std::string::npos || lower.find("failed") != std::string::npos)
+        return SDL_Color{230, 120, 120, 255};
     if (lower.find("core") != std::string::npos)
         return SDL_Color{240, 210, 120, 255};
+    if (lower.find("not install") != std::string::npos)
+        return SDL_Color{235, 200, 110, 255};
     if (lower.find("installed") != std::string::npos)
-        return SDL_Color{160, 220, 160, 255};
+        return SDL_Color{150, 220, 150, 255};
     return SDL_Color{170, 170, 190, 255};
 }
 
@@ -348,6 +350,9 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
             card.label = "Empty";
             card.on_select = MenuAction::none();
             widgets.push_back(card);
+            if (first_card_id == kMenuIdInvalid)
+                first_card_id = card.id;
+            last_card_id = card.id;
             continue;
         }
         int catalog_idx = state.filtered_indices[static_cast<std::size_t>(absolute)];
@@ -355,7 +360,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
         std::string& label_text = state.label_cache[static_cast<std::size_t>(i)];
         label_text = entry.title + "  v" + entry.version + "  by " + entry.author;
         std::string& summary_text = state.summary_cache[static_cast<std::size_t>(i)];
-        summary_text = summarize(entry.summary);
+        summary_text = summarize(entry.summary, 96);
         card.label = label_text.c_str();
         card.secondary = summary_text.c_str();
         bool installed = entry.installed;
@@ -387,10 +392,10 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
 
     search_ref.on_left = MenuAction::run_command(g_cmd_prev_page);
     search_ref.on_right = MenuAction::run_command(g_cmd_next_page);
-    search_ref.nav_right = prev_ref.id;
-    search_ref.nav_left = prev_ref.id;
     WidgetId cards_start = first_card_id != kMenuIdInvalid ? first_card_id : back_ref.id;
     search_ref.nav_down = cards_start;
+    search_ref.nav_left = prev_ref.id;
+    search_ref.nav_right = next_ref.id;
 
     prev_ref.nav_left = search_ref.id;
     prev_ref.nav_right = next_ref.id;
@@ -398,7 +403,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     prev_ref.nav_down = cards_start;
 
     next_ref.nav_left = prev_ref.id;
-    next_ref.nav_right = prev_ref.id;
+    next_ref.nav_right = next_ref.id;
     next_ref.nav_up = search_ref.id;
     next_ref.nav_down = cards_start;
 
@@ -411,10 +416,13 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
                                : widgets[cards_offset + static_cast<std::size_t>(i + 1)].id;
         card.nav_up = up_id;
         card.nav_down = down_id;
+        card.nav_left = prev_ref.id;
+        card.nav_right = next_ref.id;
     }
 
     back_ref.nav_up = (last_card_id != kMenuIdInvalid) ? last_card_id : search_ref.id;
-    back_ref.nav_left = search_ref.id;
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::MODS_SCREEN;

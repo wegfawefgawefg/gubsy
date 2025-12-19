@@ -11,6 +11,8 @@ struct MenuInputState {
     bool right{false};
     bool select{false};
     bool back{false};
+    bool page_prev{false};
+    bool page_next{false};
 };
 
 void menu_system_set_input(const MenuInputState& input);

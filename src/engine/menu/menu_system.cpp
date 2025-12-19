@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 #include <algorithm>
 
@@ -55,6 +56,39 @@ SDL_FRect rect_from_object(const UIObject& obj, int width, int height) {
     rect.w = obj.w * static_cast<float>(width);
     rect.h = obj.h * static_cast<float>(height);
     return rect;
+}
+
+int measure_text_width(const char* text) {
+    if (!text || !gg || !gg->ui_font)
+        return 0;
+    int w = 0;
+    int h = 0;
+    if (TTF_SizeUTF8(gg->ui_font, text, &w, &h) != 0)
+        return 0;
+    return w;
+}
+
+void draw_text_with_clip(SDL_Renderer* renderer,
+                         const char* text,
+                         int x,
+                         int y,
+                         SDL_Color color,
+                         const SDL_Rect* clip) {
+    if (!text)
+        return;
+    SDL_Rect prev_clip{};
+    SDL_bool had_clip = SDL_RenderIsClipEnabled(renderer);
+    if (had_clip)
+        SDL_RenderGetClipRect(renderer, &prev_clip);
+    if (clip)
+        SDL_RenderSetClipRect(renderer, clip);
+    draw_text(renderer, text, x, y, color);
+    if (clip) {
+        if (had_clip)
+            SDL_RenderSetClipRect(renderer, &prev_clip);
+        else
+            SDL_RenderSetClipRect(renderer, nullptr);
+    }
 }
 
 bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_changed) {
@@ -177,6 +211,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         bool right_pressed = g_current_input.right && !prev.right;
         bool select_pressed = g_current_input.select && !prev.select;
         bool back_pressed = g_current_input.back && !prev.back;
+        bool page_prev_pressed = g_current_input.page_prev && !prev.page_prev;
+        bool page_next_pressed = g_current_input.page_next && !prev.page_next;
 
         if (focus) {
             if (up_pressed) {
@@ -185,19 +221,23 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             } else if (down_pressed) {
                 if (focus->nav_down != kMenuIdInvalid)
                     g_focus = resolve_focus(focus->nav_down);
-            } else if (left_pressed) {
-                if (focus->on_left.type != MenuActionType::None) {
+            }
+
+            if (!needs_rebuild && left_pressed) {
+                if (focus->nav_left != kMenuIdInvalid) {
+                    g_focus = resolve_focus(focus->nav_left);
+                } else if (focus->on_left.type != MenuActionType::None) {
                     execute_action(focus->on_left, ctx, stack_changed);
                     needs_rebuild = true;
-                } else if (focus->nav_left != kMenuIdInvalid) {
-                    g_focus = resolve_focus(focus->nav_left);
                 }
-            } else if (right_pressed) {
-                if (focus->on_right.type != MenuActionType::None) {
+            }
+
+            if (!needs_rebuild && right_pressed) {
+                if (focus->nav_right != kMenuIdInvalid) {
+                    g_focus = resolve_focus(focus->nav_right);
+                } else if (focus->on_right.type != MenuActionType::None) {
                     execute_action(focus->on_right, ctx, stack_changed);
                     needs_rebuild = true;
-                } else if (focus->nav_right != kMenuIdInvalid) {
-                    g_focus = resolve_focus(focus->nav_right);
                 }
             }
 
@@ -215,6 +255,15 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         needs_rebuild = true;
                     }
                 }
+            }
+
+            if (!needs_rebuild && page_prev_pressed && focus->on_left.type != MenuActionType::None) {
+                execute_action(focus->on_left, ctx, stack_changed);
+                needs_rebuild = true;
+            }
+            if (!needs_rebuild && page_next_pressed && focus->on_right.type != MenuActionType::None) {
+                execute_action(focus->on_right, ctx, stack_changed);
+                needs_rebuild = true;
             }
         } else {
             g_focus = (!g_cache.widgets.empty()) ? g_cache.widgets.front().id : kMenuIdInvalid;
@@ -357,9 +406,15 @@ void menu_system_render(SDL_Renderer* renderer) {
         }
 
         if (text_ptr) {
+            SDL_Rect clip{
+                static_cast<int>(rect.x) + 8,
+                static_cast<int>(rect.y) + 4,
+                std::max(0, static_cast<int>(rect.w) - 16),
+                std::max(0, static_cast<int>(rect.h) - 8)};
+            const SDL_Rect* clip_ptr = (widget.type == WidgetType::Label) ? nullptr : &clip;
             int text_x = static_cast<int>(rect.x) + (widget.type == WidgetType::Label ? 0 : 16);
             int text_y = static_cast<int>(rect.y) + (widget.type == WidgetType::Label ? 0 : 6);
-            draw_text(renderer, text_ptr, text_x, text_y, text_color);
+            draw_text_with_clip(renderer, text_ptr, text_x, text_y, text_color, clip_ptr);
         }
         if (widget.secondary) {
             int sec_x = static_cast<int>(rect.x) + 16;
@@ -368,14 +423,26 @@ void menu_system_render(SDL_Renderer* renderer) {
                                 static_cast<Uint8>(widget.style.fg_g / 2 + 50),
                                 static_cast<Uint8>(widget.style.fg_b / 2 + 50),
                                 255};
-            draw_text(renderer, widget.secondary, sec_x, sec_y, sec_color);
+            SDL_Rect clip{
+                static_cast<int>(rect.x) + 8,
+                static_cast<int>(rect.y) + 4,
+                std::max(0, static_cast<int>(rect.w) - 16),
+                std::max(0, static_cast<int>(rect.h) - 8)};
+            const SDL_Rect* clip_ptr = (widget.type == WidgetType::Label) ? nullptr : &clip;
+            draw_text_with_clip(renderer, widget.secondary, sec_x, sec_y, sec_color, clip_ptr);
         }
         if (widget.badge) {
-            int badge_x = static_cast<int>(rect.x + rect.w) - 150;
+            int badge_w = measure_text_width(widget.badge);
+            int badge_x = static_cast<int>(rect.x + rect.w) - badge_w - 12;
             if (badge_x < static_cast<int>(rect.x) + 8)
                 badge_x = static_cast<int>(rect.x) + 8;
             int badge_y = static_cast<int>(rect.y) + 6;
-            draw_text(renderer, widget.badge, badge_x, badge_y, widget.badge_color);
+            SDL_Rect clip{
+                static_cast<int>(rect.x) + 8,
+                static_cast<int>(rect.y) + 4,
+                std::max(0, static_cast<int>(rect.w) - 16),
+                std::max(0, static_cast<int>(rect.h) - 8)};
+            draw_text_with_clip(renderer, widget.badge, badge_x, badge_y, widget.badge_color, &clip);
         }
     }
 }
