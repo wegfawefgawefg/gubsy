@@ -29,6 +29,7 @@ inline constexpr int STATUS = 302;
 inline constexpr int SEARCH = 303;
 inline constexpr int PREV = 304;
 inline constexpr int NEXT = 305;
+inline constexpr int PAGE = 306;
 inline constexpr int CARD0 = 320;
 inline constexpr int CARD1 = 321;
 inline constexpr int CARD2 = 322;

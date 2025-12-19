@@ -30,6 +30,8 @@ MenuInputState gather_menu_input() {
             case GameAction::MENU_RIGHT: state.right |= down; break;
             case GameAction::MENU_SELECT: state.select |= down; break;
             case GameAction::MENU_BACK: state.back |= down; break;
+            case GameAction::MENU_SCALE_DOWN: state.left |= down; break;
+            case GameAction::MENU_SCALE_UP: state.right |= down; break;
             default: break;
         }
     }

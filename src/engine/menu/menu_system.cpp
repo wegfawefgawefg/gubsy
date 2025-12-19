@@ -370,6 +370,13 @@ void menu_system_render(SDL_Renderer* renderer) {
                                 255};
             draw_text(renderer, widget.secondary, sec_x, sec_y, sec_color);
         }
+        if (widget.badge) {
+            int badge_x = static_cast<int>(rect.x + rect.w) - 150;
+            if (badge_x < static_cast<int>(rect.x) + 8)
+                badge_x = static_cast<int>(rect.x) + 8;
+            int badge_y = static_cast<int>(rect.y) + 6;
+            draw_text(renderer, widget.badge, badge_x, badge_y, widget.badge_color);
+        }
     }
 }
 

@@ -13,6 +13,7 @@
 #include <array>
 #include <filesystem>
 #include <unordered_set>
+#include <SDL2/SDL.h>
 
 namespace {
 
@@ -28,14 +29,14 @@ struct ModsScreenState {
     bool loaded = false;
     bool busy = false;
     std::string status{"Loading catalog..."};
-    std::string error;
+    std::string page_text{"Page 0 / 0"};
     std::string search_query;
     std::string prev_search;
     int page = 0;
     std::vector<ModCatalogEntry> catalog;
     std::vector<int> filtered_indices;
     std::array<std::string, kModsPerPage> label_cache;
-    std::array<std::string, kModsPerPage> secondary_cache;
+    std::array<std::string, kModsPerPage> summary_cache;
 };
 
 bool path_exists(const ModCatalogEntry& entry) {
@@ -62,6 +63,43 @@ void update_install_flags(ModsScreenState& state) {
     }
 }
 
+std::string summarize(const std::string& src, std::size_t max_len = 140) {
+    if (src.size() <= max_len)
+        return src;
+    if (max_len < 4)
+        return src.substr(0, max_len);
+    std::string out = src.substr(0, max_len - 3);
+    out += "...";
+    return out;
+}
+
+SDL_Color badge_color_for(const std::string& status) {
+    std::string lower = status;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower.find("install") != std::string::npos && lower.find("ing") != std::string::npos)
+        return SDL_Color{120, 170, 255, 255};
+    if (lower.find("remove") != std::string::npos)
+        return SDL_Color{255, 140, 140, 255};
+    if (lower.find("core") != std::string::npos)
+        return SDL_Color{240, 210, 120, 255};
+    if (lower.find("installed") != std::string::npos)
+        return SDL_Color{160, 220, 160, 255};
+    return SDL_Color{170, 170, 190, 255};
+}
+
+void recalc_page_text(ModsScreenState& state) {
+    int filtered = static_cast<int>(state.filtered_indices.size());
+    if (filtered == 0) {
+        state.page = 0;
+        state.page_text = "Page 0 / 0";
+        return;
+    }
+    int max_page = std::max(0, (filtered - 1) / kModsPerPage);
+    state.page = std::clamp(state.page, 0, max_page);
+    state.page_text = "Page " + std::to_string(state.page + 1) + " / " + std::to_string(max_page + 1);
+}
+
 int find_entry_index(const ModsScreenState& state, const std::string& id) {
     for (std::size_t i = 0; i < state.catalog.size(); ++i) {
         if (state.catalog[i].id == id)
@@ -86,12 +124,15 @@ void rebuild_filter(ModsScreenState& state) {
         }
         state.filtered_indices.push_back(static_cast<int>(i));
     }
-    if (state.filtered_indices.empty())
+    int filtered = static_cast<int>(state.filtered_indices.size());
+    if (filtered == 0) {
         state.page = 0;
-    else {
-        int max_page = std::max(0, (static_cast<int>(state.filtered_indices.size()) - 1) / kModsPerPage);
-        state.page = std::clamp(state.page, 0, max_page);
+        state.page_text = "Page 0 / 0";
+        return;
     }
+    int max_page = std::max(0, (filtered - 1) / kModsPerPage);
+    state.page = std::clamp(state.page, 0, max_page);
+    state.page_text = "Page " + std::to_string(state.page + 1) + " / " + std::to_string(max_page + 1);
 }
 
 bool ensure_catalog_loaded(ModsScreenState& state) {
@@ -178,6 +219,7 @@ void command_prev(MenuContext& ctx, std::int32_t) {
     auto& state = ctx.state<ModsScreenState>();
     if (state.page > 0)
         state.page -= 1;
+    recalc_page_text(state);
 }
 
 void command_next(MenuContext& ctx, std::int32_t) {
@@ -187,6 +229,7 @@ void command_next(MenuContext& ctx, std::int32_t) {
         max_page = std::max(0, (static_cast<int>(state.filtered_indices.size()) - 1) / kModsPerPage);
     if (state.page < max_page)
         state.page += 1;
+    recalc_page_text(state);
 }
 
 void command_install(MenuContext& ctx, std::int32_t payload) {
@@ -202,6 +245,7 @@ void command_install(MenuContext& ctx, std::int32_t payload) {
         state.status = "Installed mod";
     }
     update_install_flags(state);
+    recalc_page_text(state);
     state.busy = false;
 }
 
@@ -216,6 +260,7 @@ void command_uninstall(MenuContext& ctx, std::int32_t payload) {
     else
         state.status = "Removed mod";
     update_install_flags(state);
+    recalc_page_text(state);
     state.busy = false;
 }
 
@@ -249,6 +294,13 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     status.label = state.status.c_str();
     widgets.push_back(status);
 
+    MenuWidget page_label;
+    page_label.id = 505;
+    page_label.slot = ModsObjectID::PAGE;
+    page_label.type = WidgetType::Label;
+    page_label.label = state.page_text.c_str();
+    widgets.push_back(page_label);
+
     MenuWidget search;
     search.id = 502;
     search.slot = ModsObjectID::SEARCH;
@@ -257,6 +309,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     search.text_max_len = 48;
     search.placeholder = "Search mods...";
     widgets.push_back(search);
+    const std::size_t search_idx = widgets.size() - 1;
 
     MenuWidget prev_btn;
     prev_btn.id = 503;
@@ -264,7 +317,10 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     prev_btn.type = WidgetType::Button;
     prev_btn.label = "<";
     prev_btn.on_select = MenuAction::run_command(g_cmd_prev_page);
+    prev_btn.on_left = MenuAction::run_command(g_cmd_prev_page);
+    prev_btn.on_right = MenuAction::run_command(g_cmd_next_page);
     widgets.push_back(prev_btn);
+    const std::size_t prev_idx = widgets.size() - 1;
 
     MenuWidget next_btn;
     next_btn.id = 504;
@@ -272,10 +328,16 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     next_btn.type = WidgetType::Button;
     next_btn.label = ">";
     next_btn.on_select = MenuAction::run_command(g_cmd_next_page);
+    next_btn.on_left = MenuAction::run_command(g_cmd_prev_page);
+    next_btn.on_right = MenuAction::run_command(g_cmd_next_page);
     widgets.push_back(next_btn);
+    const std::size_t next_idx = widgets.size() - 1;
 
     const int start = state.page * kModsPerPage;
+    WidgetId first_card_id = kMenuIdInvalid;
+    WidgetId last_card_id = kMenuIdInvalid;
     constexpr WidgetId kCardIdBase = 520;
+    const std::size_t cards_offset = widgets.size();
     for (int i = 0; i < kModsPerPage; ++i) {
         int absolute = start + i;
         MenuWidget card;
@@ -292,18 +354,21 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
         ModCatalogEntry& entry = state.catalog[static_cast<std::size_t>(catalog_idx)];
         std::string& label_text = state.label_cache[static_cast<std::size_t>(i)];
         label_text = entry.title + "  v" + entry.version + "  by " + entry.author;
-        std::string& secondary_text = state.secondary_cache[static_cast<std::size_t>(i)];
-        secondary_text = entry.status_text;
-        if (!entry.summary.empty()) {
-            secondary_text += "  •  ";
-            secondary_text += entry.summary;
-        }
+        std::string& summary_text = state.summary_cache[static_cast<std::size_t>(i)];
+        summary_text = summarize(entry.summary);
         card.label = label_text.c_str();
-        card.secondary = secondary_text.c_str();
+        card.secondary = summary_text.c_str();
         bool installed = entry.installed;
         card.on_select = MenuAction::run_command(installed ? g_cmd_uninstall : g_cmd_install,
                                                  catalog_idx);
+        card.badge = entry.status_text.c_str();
+        card.badge_color = badge_color_for(entry.status_text);
+        card.on_left = MenuAction::run_command(g_cmd_prev_page);
+        card.on_right = MenuAction::run_command(g_cmd_next_page);
         widgets.push_back(card);
+        if (first_card_id == kMenuIdInvalid)
+            first_card_id = card.id;
+        last_card_id = card.id;
     }
 
     MenuWidget back_btn;
@@ -313,6 +378,43 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     back_btn.label = "Back";
     back_btn.on_select = MenuAction::pop();
     widgets.push_back(back_btn);
+    const std::size_t back_idx = widgets.size() - 1;
+
+    MenuWidget& search_ref = widgets[search_idx];
+    MenuWidget& prev_ref = widgets[prev_idx];
+    MenuWidget& next_ref = widgets[next_idx];
+    MenuWidget& back_ref = widgets[back_idx];
+
+    search_ref.on_left = MenuAction::run_command(g_cmd_prev_page);
+    search_ref.on_right = MenuAction::run_command(g_cmd_next_page);
+    search_ref.nav_right = prev_ref.id;
+    search_ref.nav_left = prev_ref.id;
+    WidgetId cards_start = first_card_id != kMenuIdInvalid ? first_card_id : back_ref.id;
+    search_ref.nav_down = cards_start;
+
+    prev_ref.nav_left = search_ref.id;
+    prev_ref.nav_right = next_ref.id;
+    prev_ref.nav_up = search_ref.id;
+    prev_ref.nav_down = cards_start;
+
+    next_ref.nav_left = prev_ref.id;
+    next_ref.nav_right = prev_ref.id;
+    next_ref.nav_up = search_ref.id;
+    next_ref.nav_down = cards_start;
+
+    for (int i = 0; i < kModsPerPage; ++i) {
+        MenuWidget& card = widgets[cards_offset + static_cast<std::size_t>(i)];
+        WidgetId up_id = (i == 0) ? search_ref.id
+                                  : widgets[cards_offset + static_cast<std::size_t>(i - 1)].id;
+        WidgetId down_id = (i == kModsPerPage - 1)
+                               ? back_ref.id
+                               : widgets[cards_offset + static_cast<std::size_t>(i + 1)].id;
+        card.nav_up = up_id;
+        card.nav_down = down_id;
+    }
+
+    back_ref.nav_up = (last_card_id != kMenuIdInvalid) ? last_card_id : search_ref.id;
+    back_ref.nav_left = search_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::MODS_SCREEN;
