@@ -6,6 +6,7 @@
 #include "game/state.hpp"
 
 #include <vector>
+#include <cmath>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
@@ -30,6 +31,19 @@ bool g_prev_mouse_down{false};
 std::string* g_active_text_buffer{nullptr};
 int g_active_text_max{0};
 bool g_text_input_enabled{false};
+SDL_FRect g_focus_rect{};
+bool g_has_focus_rect{false};
+SDL_Color g_focus_outline_color{120, 170, 255, 255};
+bool g_has_focus_color{false};
+
+struct FocusArrowState {
+    SDL_FPoint left_pos{0.0f, 0.0f};
+    SDL_FPoint right_pos{0.0f, 0.0f};
+    SDL_FPoint left_target{0.0f, 0.0f};
+    SDL_FPoint right_target{0.0f, 0.0f};
+    bool initialized{false};
+    float time{0.0f};
+} g_arrows;
 
 MenuWidget* find_widget(WidgetId id) {
     if (id == kMenuIdInvalid)
@@ -91,6 +105,7 @@ void draw_text_with_clip(SDL_Renderer* renderer,
     }
 }
 
+
 bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_changed) {
     switch (action.type) {
         case MenuActionType::None:
@@ -145,6 +160,54 @@ void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
     }
 }
 
+void update_arrows(float dt) {
+    if (!g_has_focus_rect) {
+        g_arrows.initialized = false;
+        return;
+    }
+    g_arrows.left_target = SDL_FPoint{g_focus_rect.x - 28.0f, g_focus_rect.y + g_focus_rect.h * 0.5f};
+    g_arrows.right_target = SDL_FPoint{g_focus_rect.x + g_focus_rect.w + 28.0f,
+                                       g_focus_rect.y + g_focus_rect.h * 0.5f};
+    if (!g_arrows.initialized) {
+        g_arrows.left_pos = g_arrows.left_target;
+        g_arrows.right_pos = g_arrows.right_target;
+        g_arrows.initialized = true;
+    }
+    float t = std::clamp(dt * 10.0f, 0.0f, 1.0f);
+    auto blend = [t](float current, float target) {
+        return current + (target - current) * t;
+    };
+    g_arrows.left_pos.x = blend(g_arrows.left_pos.x, g_arrows.left_target.x);
+    g_arrows.left_pos.y = blend(g_arrows.left_pos.y, g_arrows.left_target.y);
+    g_arrows.right_pos.x = blend(g_arrows.right_pos.x, g_arrows.right_target.x);
+    g_arrows.right_pos.y = blend(g_arrows.right_pos.y, g_arrows.right_target.y);
+    g_arrows.time += dt;
+}
+
+void draw_arrow(SDL_Renderer* renderer, const SDL_FPoint& tip, float dir, SDL_Color color) {
+    float arrow_len = 18.0f;
+    float wing = 7.0f;
+    SDL_FPoint base{tip.x - dir * arrow_len, tip.y};
+    SDL_FPoint wing_top{base.x, base.y - wing};
+    SDL_FPoint wing_bottom{base.x, base.y + wing};
+
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
+    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
+    SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, base.x, base.y);
+    SDL_RenderDrawLineF(renderer, wing_bottom.x, wing_bottom.y, base.x, base.y);
+}
+
+void draw_focus_arrows(SDL_Renderer* renderer) {
+    if (!g_arrows.initialized || !g_has_focus_rect || !g_has_focus_color)
+        return;
+    float osc = std::sin(g_arrows.time * 6.0f) * 3.0f;
+    SDL_FPoint left_tip{g_arrows.left_pos.x + osc, g_arrows.left_pos.y};
+    SDL_FPoint right_tip{g_arrows.right_pos.x - osc, g_arrows.right_pos.y};
+    draw_arrow(renderer, left_tip, 1.0f, g_focus_outline_color);
+    draw_arrow(renderer, right_tip, -1.0f, g_focus_outline_color);
+}
+
 } // namespace
 
 void menu_system_set_input(const MenuInputState& input) {
@@ -152,7 +215,6 @@ void menu_system_set_input(const MenuInputState& input) {
 }
 
 void menu_system_update(float dt, int screen_width, int screen_height) {
-    (void)dt;
     g_active = false;
     if (!es || !ss)
         return;
@@ -165,6 +227,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
     bool stack_changed = false;
     bool needs_rebuild = true;
+
+    g_has_focus_rect = false;
+    g_has_focus_color = false;
 
     while (needs_rebuild && !manager.stack().empty()) {
         needs_rebuild = false;
@@ -203,6 +268,16 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 g_cache.rects.push_back(rect);
             else
                 g_cache.rects[idx] = rect;
+
+            if (widget.id == g_focus) {
+                g_focus_rect = rect;
+                g_has_focus_rect = true;
+                g_focus_outline_color = SDL_Color{widget.style.focus_r,
+                                                  widget.style.focus_g,
+                                                  widget.style.focus_b,
+                                                  widget.style.focus_a};
+                g_has_focus_color = true;
+            }
         }
 
         bool up_pressed = g_current_input.up && !prev.up;
@@ -316,6 +391,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         }
     }
 
+    update_arrows(dt);
+
     if (manager.stack().empty()) {
         g_cache.widgets.clear();
         g_cache.layout = kMenuIdInvalid;
@@ -326,6 +403,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             SDL_StopTextInput();
             g_text_input_enabled = false;
         }
+        g_arrows.initialized = false;
+        g_has_focus_rect = false;
+        g_has_focus_color = false;
     }
 }
 
@@ -393,7 +473,7 @@ void menu_system_render(SDL_Renderer* renderer) {
                     adjust(widget.style.bg_r, delta),
                     adjust(widget.style.bg_g, delta),
                     adjust(widget.style.bg_b, delta),
-                    55};
+                    70};
                 SDL_SetRenderDrawColor(renderer, focus_overlay.r, focus_overlay.g, focus_overlay.b, focus_overlay.a);
                 SDL_RenderFillRectF(renderer, &rect);
 
@@ -411,9 +491,9 @@ void menu_system_render(SDL_Renderer* renderer) {
                 inner.w -= 2.0f;
                 inner.h -= 2.0f;
                 SDL_Color inner_col{
-                    adjust(focus.r, (delta > 0) ? 10 : -10),
-                    adjust(focus.g, (delta > 0) ? 10 : -10),
-                    adjust(focus.b, (delta > 0) ? 10 : -10),
+                    adjust(focus.r, 10),
+                    adjust(focus.g, 10),
+                    adjust(focus.b, 10),
                     focus.a};
                 SDL_SetRenderDrawColor(renderer, inner_col.r, inner_col.g, inner_col.b, inner_col.a);
                 SDL_RenderDrawRectF(renderer, &inner);
@@ -478,6 +558,8 @@ void menu_system_render(SDL_Renderer* renderer) {
             draw_text_with_clip(renderer, widget.badge, badge_x, badge_y, widget.badge_color, &badge_clip);
         }
     }
+
+    draw_focus_arrows(renderer);
 }
 
 void menu_system_reset() {
