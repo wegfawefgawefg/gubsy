@@ -15,6 +15,8 @@
 #include "engine/input_settings_profiles.hpp"
 #include "engine/game_settings.hpp"
 #include "engine/top_level_game_settings.hpp"
+#include "engine/menu/menu_manager.hpp"
+#include "engine/menu/menu_commands.hpp"
 #include "engine/ui_layouts.hpp"
 #include "player.hpp"
 #include "engine/input_system.hpp"
@@ -77,6 +79,9 @@ struct EngineState {
         float vol_music{1.0f};
         float vol_sfx{1.0f};
     } audio_settings;
+
+    MenuManager menu_manager;
+    MenuCommandRegistry menu_commands;
 };
 
 bool init_engine_state();
