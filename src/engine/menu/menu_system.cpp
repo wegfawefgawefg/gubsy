@@ -41,7 +41,7 @@ WidgetId g_text_edit_widget{kMenuIdInvalid};
 float g_caret_time{0.0f};
 std::unordered_map<MenuScreenId, WidgetId> g_last_focus;
 MenuScreenId g_current_screen{kMenuIdInvalid};
-bool g_allow_mouse_focus{false};
+bool g_allow_mouse_focus{true};
 bool g_mouse_focus_locked{false};
 int g_mouse_focus_lock_x{0};
 int g_mouse_focus_lock_y{0};
@@ -328,11 +328,15 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         MenuInputState prev = g_prev_input;
         g_prev_input = g_current_input;
 
-        bool mouse_down = (es->device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+        int mouse_x = 0;
+        int mouse_y = 0;
+        Uint32 mouse_buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
+        es->device_state.mouse_x = mouse_x;
+        es->device_state.mouse_y = mouse_y;
+        es->device_state.mouse_buttons = mouse_buttons;
+        bool mouse_down = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
         bool mouse_clicked = mouse_down && !g_prev_mouse_down;
         g_prev_mouse_down = mouse_down;
-        int mouse_x = es->device_state.mouse_x;
-        int mouse_y = es->device_state.mouse_y;
         ensure_mouse_lock(mouse_x, mouse_y);
         unlock_mouse_focus_if_moved(mouse_x, mouse_y);
         if (mouse_clicked)
@@ -539,7 +543,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_arrows.initialized = false;
         g_has_focus_rect = false;
         g_has_focus_color = false;
-        g_allow_mouse_focus = false;
+        g_allow_mouse_focus = true;
         g_mouse_focus_locked = false;
     }
 }
@@ -728,7 +732,7 @@ void menu_system_reset() {
         SDL_StopTextInput();
         g_text_input_enabled = false;
     }
-    g_allow_mouse_focus = false;
+    g_allow_mouse_focus = true;
     g_mouse_focus_locked = false;
     g_mouse_focus_lock_x = 0;
     g_mouse_focus_lock_y = 0;
