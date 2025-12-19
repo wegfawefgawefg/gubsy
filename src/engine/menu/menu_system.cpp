@@ -469,6 +469,13 @@ void menu_system_handle_text_input(const char* text) {
 }
 
 void menu_system_handle_backspace() {
+    if (!g_active_text_buffer) {
+        if (g_focus != kMenuIdInvalid) {
+            MenuWidget* focus_widget = find_widget(g_focus);
+            if (focus_widget && focus_widget->type == WidgetType::TextInput)
+                begin_text_edit(*focus_widget);
+        }
+    }
     if (!g_text_edit_active || !g_active_text_buffer)
         return;
     if (!g_active_text_buffer->empty())
