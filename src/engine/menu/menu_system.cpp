@@ -6,6 +6,7 @@
 #include "game/state.hpp"
 
 #include <vector>
+#include <unordered_map>
 #include <cmath>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -38,7 +39,8 @@ bool g_has_focus_color{false};
 bool g_text_edit_active{false};
 WidgetId g_text_edit_widget{kMenuIdInvalid};
 float g_caret_time{0.0f};
-std::vector<WidgetId> g_focus_return_stack;
+std::unordered_map<MenuScreenId, WidgetId> g_last_focus;
+MenuScreenId g_current_screen{kMenuIdInvalid};
 
 struct FocusArrowState {
     SDL_FPoint left_pos{0.0f, 0.0f};
@@ -149,11 +151,8 @@ bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_chan
         case MenuActionType::None:
             return false;
         case MenuActionType::PushScreen: {
-            g_focus_return_stack.push_back(g_focus);
-            if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a))) {
-                g_focus_return_stack.pop_back();
+            if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a)))
                 return false;
-            }
             stack_changed = true;
             g_focus = kMenuIdInvalid;
             return true;
@@ -161,12 +160,7 @@ bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_chan
         case MenuActionType::PopScreen:
             ctx.manager.pop_screen();
             stack_changed = true;
-            if (!g_focus_return_stack.empty()) {
-                g_focus = g_focus_return_stack.back();
-                g_focus_return_stack.pop_back();
-            } else {
-                g_focus = first_selectable_widget();
-            }
+            g_focus = kMenuIdInvalid;
             end_text_edit();
             return true;
         case MenuActionType::ToggleBool:
@@ -197,12 +191,20 @@ void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
     g_cache.height = ctx.screen_height;
     g_cache.widgets.assign(built.widgets.items.begin(), built.widgets.items.end());
     g_cache.rects.assign(g_cache.widgets.size(), SDL_FRect{});
+    WidgetId remembered = kMenuIdInvalid;
+    auto remembered_it = g_last_focus.find(g_current_screen);
+    if (remembered_it != g_last_focus.end())
+        remembered = remembered_it->second;
+    if (g_focus == kMenuIdInvalid && remembered != kMenuIdInvalid)
+        g_focus = remembered;
     if (g_focus == kMenuIdInvalid) {
         if (built.default_focus != kMenuIdInvalid)
             g_focus = built.default_focus;
         else
             g_focus = first_selectable_widget();
     }
+    if (!find_widget(g_focus))
+        g_focus = first_selectable_widget();
     for (const MenuAction& act : built.frame_actions.items) {
         bool unused = false;
         execute_action(act, ctx, unused);
@@ -287,6 +289,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
     while (needs_rebuild && !manager.stack().empty()) {
         needs_rebuild = false;
         auto& inst = const_cast<MenuManager::ScreenInstance&>(manager.stack().back());
+        g_current_screen = inst.def ? inst.def->id : kMenuIdInvalid;
         if (!inst.def || !inst.def->build)
             break;
         MenuContext ctx{*es, *ss, manager, screen_width, screen_height, inst.state_ptr};
@@ -378,6 +381,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 } else if (focus->on_left.type != MenuActionType::None) {
                     execute_action(focus->on_left, ctx, stack_changed);
                     needs_rebuild = true;
+                    continue;
                 }
             }
 
@@ -387,6 +391,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 } else if (focus->on_right.type != MenuActionType::None) {
                     execute_action(focus->on_right, ctx, stack_changed);
                     needs_rebuild = true;
+                    continue;
                 }
             }
 
@@ -394,14 +399,17 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (select_pressed && focus->on_select.type != MenuActionType::None) {
                     execute_action(focus->on_select, ctx, stack_changed);
                     needs_rebuild = true;
+                    continue;
                 } else if (back_pressed) {
                     if (focus->on_back.type != MenuActionType::None) {
                         execute_action(focus->on_back, ctx, stack_changed);
                         needs_rebuild = true;
+                        continue;
                     } else if (manager.stack().size() > 1) {
                         MenuAction pop = MenuAction::pop();
                         execute_action(pop, ctx, stack_changed);
                         needs_rebuild = true;
+                        continue;
                     } else {
                         back_pressed = false;
                     }
@@ -411,10 +419,12 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!needs_rebuild && page_prev_pressed && focus->on_left.type != MenuActionType::None) {
                 execute_action(focus->on_left, ctx, stack_changed);
                 needs_rebuild = true;
+                continue;
             }
             if (!needs_rebuild && page_next_pressed && focus->on_right.type != MenuActionType::None) {
                 execute_action(focus->on_right, ctx, stack_changed);
                 needs_rebuild = true;
+                continue;
             }
         }
 
@@ -462,16 +472,21 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (focus && focus->on_select.type != MenuActionType::None) {
                 execute_action(focus->on_select, ctx, stack_changed);
                 needs_rebuild = true;
+                continue;
             }
         }
+
+        if (g_current_screen != kMenuIdInvalid && focus)
+            g_last_focus[g_current_screen] = focus->id;
 
     }
 
     update_arrows(dt);
 
     if (manager.stack().empty()) {
+        g_current_screen = kMenuIdInvalid;
         end_text_edit();
-        g_focus_return_stack.clear();
+        g_last_focus.clear();
         g_cache.widgets.clear();
         g_cache.layout = kMenuIdInvalid;
         g_focus = kMenuIdInvalid;
@@ -655,7 +670,7 @@ void menu_system_render(SDL_Renderer* renderer) {
 
 void menu_system_reset() {
     end_text_edit();
-    g_focus_return_stack.clear();
+    g_last_focus.clear();
     g_cache.widgets.clear();
     g_cache.layout = kMenuIdInvalid;
     g_cache.rects.clear();
