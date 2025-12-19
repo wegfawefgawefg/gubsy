@@ -55,6 +55,9 @@ struct FocusArrowState {
     float time{0.0f};
 } g_arrows;
 
+void lock_mouse_focus_at(int x, int y);
+void unlock_mouse_focus_now();
+
 MenuWidget* find_widget(WidgetId id) {
     if (id == kMenuIdInvalid)
         return nullptr;
@@ -147,6 +150,8 @@ void end_text_edit() {
         SDL_StopTextInput();
         g_text_input_enabled = false;
     }
+    if (es)
+        lock_mouse_focus_at(es->device_state.mouse_x, es->device_state.mouse_y);
 }
 
 
@@ -276,7 +281,7 @@ void ensure_mouse_lock(int x, int y) {
 }
 
 void unlock_mouse_focus_if_moved(int x, int y) {
-    if (!g_allow_mouse_focus || !g_mouse_focus_locked)
+    if (!g_mouse_focus_locked)
         return;
     if (x != g_mouse_focus_lock_x || y != g_mouse_focus_lock_y) {
         g_mouse_focus_locked = false;
