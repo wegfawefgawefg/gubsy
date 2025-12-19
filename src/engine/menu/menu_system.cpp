@@ -382,6 +382,21 @@ void menu_system_render(SDL_Renderer* renderer) {
 
             if (widget.id == g_focus) {
                 SDL_Color focus{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, widget.style.focus_a};
+                auto adjust = [](Uint8 base, int delta) -> Uint8 {
+                    return static_cast<Uint8>(std::clamp(static_cast<int>(base) + delta, 0, 255));
+                };
+                int luma = static_cast<int>(0.2126f * widget.style.bg_r +
+                                            0.7152f * widget.style.bg_g +
+                                            0.0722f * widget.style.bg_b);
+                int delta = (luma > 150) ? -18 : 22;
+                SDL_Color focus_overlay{
+                    adjust(widget.style.bg_r, delta),
+                    adjust(widget.style.bg_g, delta),
+                    adjust(widget.style.bg_b, delta),
+                    55};
+                SDL_SetRenderDrawColor(renderer, focus_overlay.r, focus_overlay.g, focus_overlay.b, focus_overlay.a);
+                SDL_RenderFillRectF(renderer, &rect);
+
                 SDL_FRect outline = rect;
                 outline.x -= 2.0f;
                 outline.y -= 2.0f;
@@ -389,6 +404,19 @@ void menu_system_render(SDL_Renderer* renderer) {
                 outline.h += 4.0f;
                 SDL_SetRenderDrawColor(renderer, focus.r, focus.g, focus.b, focus.a);
                 SDL_RenderDrawRectF(renderer, &outline);
+
+                SDL_FRect inner = rect;
+                inner.x += 1.0f;
+                inner.y += 1.0f;
+                inner.w -= 2.0f;
+                inner.h -= 2.0f;
+                SDL_Color inner_col{
+                    adjust(focus.r, (delta > 0) ? 10 : -10),
+                    adjust(focus.g, (delta > 0) ? 10 : -10),
+                    adjust(focus.b, (delta > 0) ? 10 : -10),
+                    focus.a};
+                SDL_SetRenderDrawColor(renderer, inner_col.r, inner_col.g, inner_col.b, inner_col.a);
+                SDL_RenderDrawRectF(renderer, &inner);
             }
         }
 

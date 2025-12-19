@@ -137,56 +137,56 @@ MenuStyle style_for_entry(const ModCatalogEntry& entry,
                           bool locked,
                           bool interactive) {
     MenuStyle style;
-    style.bg_r = 28;
-    style.bg_g = 28;
-    style.bg_b = 36;
-    style.fg_r = 220;
-    style.fg_g = 220;
-    style.fg_b = 230;
-    style.focus_r = 90;
-    style.focus_g = 140;
+    style.bg_r = 26;
+    style.bg_g = 26;
+    style.bg_b = 34;
+    style.fg_r = 230;
+    style.fg_g = 230;
+    style.fg_b = 240;
+    style.focus_r = 140;
+    style.focus_g = 200;
     style.focus_b = 255;
 
     if (!version_ok) {
-        style.bg_r = 44;
-        style.bg_g = 30;
-        style.bg_b = 30;
-        style.focus_r = 200;
-        style.focus_g = 120;
+        style.bg_r = 90;
+        style.bg_g = 32;
+        style.bg_b = 32;
+        style.focus_r = 255;
+        style.focus_g = 160;
         style.focus_b = 120;
     } else if (entry.required) {
-        style.bg_r = 42;
-        style.bg_g = 34;
-        style.bg_b = 20;
-        style.focus_r = 220;
-        style.focus_g = 180;
-        style.focus_b = 100;
+        style.bg_r = 88;
+        style.bg_g = 70;
+        style.bg_b = 28;
+        style.focus_r = 255;
+        style.focus_g = 210;
+        style.focus_b = 120;
     } else if (entry.installed) {
-        style.bg_r = 28;
-        style.bg_g = 42;
-        style.bg_b = 32;
-        style.focus_r = 110;
-        style.focus_g = 200;
-        style.focus_b = 160;
-    } else {
-        style.bg_r = 26;
-        style.bg_g = 30;
+        style.bg_r = 30;
+        style.bg_g = 60;
         style.bg_b = 42;
+        style.focus_r = 120;
+        style.focus_g = 230;
+        style.focus_b = 170;
+    } else {
+        style.bg_r = 28;
+        style.bg_g = 36;
+        style.bg_b = 68;
     }
 
     if (locked) {
-        style.bg_r = static_cast<std::uint8_t>((style.bg_r + 80) / 2);
-        style.bg_g = static_cast<std::uint8_t>((style.bg_g + 80) / 2);
-        style.bg_b = static_cast<std::uint8_t>((style.bg_b + 80) / 2);
+        style.bg_r = static_cast<std::uint8_t>((style.bg_r + 60) / 2);
+        style.bg_g = static_cast<std::uint8_t>((style.bg_g + 60) / 2);
+        style.bg_b = static_cast<std::uint8_t>((style.bg_b + 60) / 2);
     }
 
     if (!interactive) {
-        style.fg_r = 150;
-        style.fg_g = 150;
-        style.fg_b = 160;
-        style.focus_r = 110;
-        style.focus_g = 110;
-        style.focus_b = 120;
+        style.fg_r = 170;
+        style.fg_g = 170;
+        style.fg_b = 180;
+        style.focus_r = 140;
+        style.focus_g = 140;
+        style.focus_b = 150;
     }
     return style;
 }
