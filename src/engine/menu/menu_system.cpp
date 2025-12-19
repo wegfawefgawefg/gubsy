@@ -35,6 +35,9 @@ SDL_FRect g_focus_rect{};
 bool g_has_focus_rect{false};
 SDL_Color g_focus_outline_color{120, 170, 255, 255};
 bool g_has_focus_color{false};
+bool g_text_edit_active{false};
+WidgetId g_text_edit_widget{kMenuIdInvalid};
+float g_caret_time{0.0f};
 
 struct FocusArrowState {
     SDL_FPoint left_pos{0.0f, 0.0f};
@@ -208,6 +211,32 @@ void draw_focus_arrows(SDL_Renderer* renderer) {
     draw_arrow(renderer, right_tip, -1.0f, g_focus_outline_color);
 }
 
+void begin_text_edit(MenuWidget& widget) {
+    if (widget.type != WidgetType::TextInput || !widget.text_buffer)
+        return;
+    g_text_edit_active = true;
+    g_text_edit_widget = widget.id;
+    g_active_text_buffer = widget.text_buffer;
+    g_active_text_max = widget.text_max_len;
+    g_caret_time = 0.0f;
+    if (!g_text_input_enabled) {
+        SDL_StartTextInput();
+        g_text_input_enabled = true;
+    }
+}
+
+void end_text_edit() {
+    if (!g_text_edit_active)
+        return;
+    g_text_edit_active = false;
+    g_text_edit_widget = kMenuIdInvalid;
+    g_active_text_buffer = nullptr;
+    if (g_text_input_enabled) {
+        SDL_StopTextInput();
+        g_text_input_enabled = false;
+    }
+}
+
 } // namespace
 
 void menu_system_set_input(const MenuInputState& input) {
@@ -224,6 +253,10 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         return;
 
     g_active = true;
+    if (g_text_edit_active)
+        g_caret_time += dt;
+    else
+        g_caret_time = 0.0f;
 
     bool stack_changed = false;
     bool needs_rebuild = true;
@@ -289,7 +322,28 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         bool page_prev_pressed = g_current_input.page_prev && !prev.page_prev;
         bool page_next_pressed = g_current_input.page_next && !prev.page_next;
 
-        if (focus) {
+        bool editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
+
+        if (focus && focus->type == WidgetType::TextInput && select_pressed) {
+            if (!editing_focus)
+                begin_text_edit(*focus);
+            else
+                end_text_edit();
+            select_pressed = false;
+            editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
+        }
+
+        if (focus && editing_focus) {
+            up_pressed = down_pressed = left_pressed = right_pressed = false;
+            page_prev_pressed = page_next_pressed = false;
+            if (back_pressed) {
+                end_text_edit();
+                back_pressed = false;
+                editing_focus = false;
+            }
+        }
+
+        if (focus && !editing_focus) {
             if (up_pressed) {
                 if (focus->nav_up != kMenuIdInvalid)
                     g_focus = resolve_focus(focus->nav_up);
@@ -324,10 +378,12 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                     if (focus->on_back.type != MenuActionType::None) {
                         execute_action(focus->on_back, ctx, stack_changed);
                         needs_rebuild = true;
-                    } else {
+                    } else if (manager.stack().size() > 1) {
                         MenuAction pop = MenuAction::pop();
                         execute_action(pop, ctx, stack_changed);
                         needs_rebuild = true;
+                    } else {
+                        back_pressed = false;
                     }
                 }
             }
@@ -340,7 +396,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 execute_action(focus->on_right, ctx, stack_changed);
                 needs_rebuild = true;
             }
-        } else {
+        }
+
+        focus = find_widget(g_focus);
+        editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
+        if (g_text_edit_active && !editing_focus)
+            end_text_edit();
+
+        if (!focus) {
             g_focus = (!g_cache.widgets.empty()) ? g_cache.widgets.front().id : kMenuIdInvalid;
             focus = find_widget(g_focus);
         }
@@ -368,41 +431,27 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         if (hovered != kMenuIdInvalid && mouse_clicked) {
             g_focus = hovered;
             focus = find_widget(g_focus);
+            if (focus && focus->type == WidgetType::TextInput)
+                begin_text_edit(*focus);
+            else
+                end_text_edit();
             if (focus && focus->on_select.type != MenuActionType::None) {
                 execute_action(focus->on_select, ctx, stack_changed);
                 needs_rebuild = true;
             }
         }
 
-        bool wants_text_input = focus && focus->type == WidgetType::TextInput && focus->text_buffer;
-        if (wants_text_input) {
-            g_active_text_buffer = focus->text_buffer;
-            g_active_text_max = focus->text_max_len;
-            if (!g_text_input_enabled) {
-                SDL_StartTextInput();
-                g_text_input_enabled = true;
-            }
-        } else {
-            g_active_text_buffer = nullptr;
-            if (g_text_input_enabled) {
-                SDL_StopTextInput();
-                g_text_input_enabled = false;
-            }
-        }
     }
 
     update_arrows(dt);
 
     if (manager.stack().empty()) {
+        end_text_edit();
         g_cache.widgets.clear();
         g_cache.layout = kMenuIdInvalid;
         g_focus = kMenuIdInvalid;
         g_cache.rects.clear();
         g_active_text_buffer = nullptr;
-        if (g_text_input_enabled) {
-            SDL_StopTextInput();
-            g_text_input_enabled = false;
-        }
         g_arrows.initialized = false;
         g_has_focus_rect = false;
         g_has_focus_color = false;
@@ -410,7 +459,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 }
 
 void menu_system_handle_text_input(const char* text) {
-    if (!g_active_text_buffer || !text)
+    if (!g_text_edit_active || !g_active_text_buffer || !text)
         return;
     while (*text) {
         if (g_active_text_max <= 0 || static_cast<int>(g_active_text_buffer->size()) < g_active_text_max)
@@ -420,7 +469,7 @@ void menu_system_handle_text_input(const char* text) {
 }
 
 void menu_system_handle_backspace() {
-    if (!g_active_text_buffer)
+    if (!g_text_edit_active || !g_active_text_buffer)
         return;
     if (!g_active_text_buffer->empty())
         g_active_text_buffer->pop_back();
@@ -544,6 +593,16 @@ void menu_system_render(SDL_Renderer* renderer) {
                                  255};
             draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
         }
+        if (widget.type == WidgetType::TextInput &&
+            g_text_edit_active && widget.id == g_text_edit_widget && widget.text_buffer) {
+            if (std::fmod(g_caret_time, 1.0f) < 0.5f) {
+                int caret_x = line_x + measure_text_width(widget.text_buffer->c_str());
+                int caret_top = line_y - 2;
+                int caret_bottom = caret_top + 18;
+                SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
+                SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
+            }
+        }
         if (widget.badge) {
             int badge_w = measure_text_width(widget.badge);
             int badge_x = static_cast<int>(rect.x + rect.w) - badge_w - 12;
@@ -563,6 +622,7 @@ void menu_system_render(SDL_Renderer* renderer) {
 }
 
 void menu_system_reset() {
+    end_text_edit();
     g_cache.widgets.clear();
     g_cache.layout = kMenuIdInvalid;
     g_cache.rects.clear();
