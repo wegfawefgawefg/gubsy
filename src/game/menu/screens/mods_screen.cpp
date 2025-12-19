@@ -426,9 +426,8 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     prev_btn.label = "<";
     prev_btn.on_select = has_prev_page ? MenuAction::run_command(g_cmd_prev_page)
                                        : MenuAction::none();
-    prev_btn.on_left = prev_btn.on_select;
-    prev_btn.on_right = has_next_page ? MenuAction::run_command(g_cmd_next_page)
-                                      : MenuAction::none();
+    prev_btn.on_left = MenuAction::none();
+    prev_btn.on_right = MenuAction::none();
     widgets.push_back(prev_btn);
     const std::size_t prev_idx = widgets.size() - 1;
 
@@ -439,9 +438,8 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     next_btn.label = ">";
     next_btn.on_select = has_next_page ? MenuAction::run_command(g_cmd_next_page)
                                        : MenuAction::none();
-    next_btn.on_left = has_prev_page ? MenuAction::run_command(g_cmd_prev_page)
-                                     : MenuAction::none();
-    next_btn.on_right = next_btn.on_select;
+    next_btn.on_left = MenuAction::none();
+    next_btn.on_right = MenuAction::none();
     widgets.push_back(next_btn);
     const std::size_t next_idx = widgets.size() - 1;
 
