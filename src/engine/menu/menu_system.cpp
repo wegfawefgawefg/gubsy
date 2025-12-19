@@ -1,5 +1,6 @@
 #include "engine/menu/menu_system.hpp"
 
+#include "engine/audio.hpp"
 #include "engine/globals.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
@@ -54,6 +55,17 @@ struct FocusArrowState {
     bool initialized{false};
     float time{0.0f};
 } g_arrows;
+void play_menu_sound(const char* key) {
+    if (!key || !*key)
+        return;
+    play_sound(key);
+}
+
+void play_focus_sound() { play_menu_sound("base:ui_cursor_move"); }
+void play_confirm_sound() { play_menu_sound("base:ui_confirm"); }
+void play_cant_sound() { play_menu_sound("base:ui_cant"); }
+void play_left_sound() { play_menu_sound("base:ui_left"); }
+void play_right_sound() { play_menu_sound("base:ui_right"); }
 
 void lock_mouse_focus_at(int x, int y);
 void unlock_mouse_focus_now();
@@ -317,6 +329,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
     bool stack_changed = false;
     bool needs_rebuild = true;
+    WidgetId prev_focus_frame = g_focus;
+    bool focus_changed_by_mouse = false;
 
     g_has_focus_rect = false;
     g_has_focus_color = false;
@@ -332,6 +346,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         MenuWidget* focus = find_widget(g_focus);
         MenuInputState prev = g_prev_input;
         g_prev_input = g_current_input;
+        bool select_handled = false;
 
         int mouse_x = 0;
         int mouse_y = 0;
@@ -394,6 +409,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 begin_text_edit(*focus);
             else
                 end_text_edit();
+            play_confirm_sound();
+            select_handled = true;
             select_pressed = false;
             editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
         }
@@ -411,19 +428,28 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         if (focus && !editing_focus) {
             if (up_pressed) {
                 lock_mouse_focus_at(mouse_x, mouse_y);
-                if (focus->nav_up != kMenuIdInvalid)
-                    g_focus = resolve_focus(focus->nav_up);
+                if (focus->nav_up != kMenuIdInvalid) {
+                    WidgetId target = resolve_focus(focus->nav_up);
+                    if (target != kMenuIdInvalid)
+                        g_focus = target;
+                }
             } else if (down_pressed) {
                 lock_mouse_focus_at(mouse_x, mouse_y);
-                if (focus->nav_down != kMenuIdInvalid)
-                    g_focus = resolve_focus(focus->nav_down);
+                if (focus->nav_down != kMenuIdInvalid) {
+                    WidgetId target = resolve_focus(focus->nav_down);
+                    if (target != kMenuIdInvalid)
+                        g_focus = target;
+                }
             }
 
             if (!needs_rebuild && left_pressed) {
                 lock_mouse_focus_at(mouse_x, mouse_y);
                 if (focus->nav_left != kMenuIdInvalid) {
-                    g_focus = resolve_focus(focus->nav_left);
+                    WidgetId target = resolve_focus(focus->nav_left);
+                    if (target != kMenuIdInvalid)
+                        g_focus = target;
                 } else if (focus->on_left.type != MenuActionType::None) {
+                    play_left_sound();
                     execute_action(focus->on_left, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
@@ -433,8 +459,11 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!needs_rebuild && right_pressed) {
                 lock_mouse_focus_at(mouse_x, mouse_y);
                 if (focus->nav_right != kMenuIdInvalid) {
-                    g_focus = resolve_focus(focus->nav_right);
+                    WidgetId target = resolve_focus(focus->nav_right);
+                    if (target != kMenuIdInvalid)
+                        g_focus = target;
                 } else if (focus->on_right.type != MenuActionType::None) {
+                    play_right_sound();
                     execute_action(focus->on_right, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
@@ -444,9 +473,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!needs_rebuild) {
                 if (select_pressed && focus->on_select.type != MenuActionType::None) {
                     lock_mouse_focus_at(mouse_x, mouse_y);
+                    play_confirm_sound();
+                    select_handled = true;
                     execute_action(focus->on_select, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
+                } else if (select_pressed && !select_handled) {
+                    play_cant_sound();
+                    select_pressed = false;
                 } else if (back_pressed) {
                     if (focus->on_back.type != MenuActionType::None) {
                         lock_mouse_focus_at(mouse_x, mouse_y);
@@ -465,18 +499,20 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 }
             }
 
-            if (!needs_rebuild && page_prev_pressed && focus->on_left.type != MenuActionType::None) {
-                lock_mouse_focus_at(mouse_x, mouse_y);
-                execute_action(focus->on_left, ctx, stack_changed);
-                needs_rebuild = true;
-                continue;
-            }
-            if (!needs_rebuild && page_next_pressed && focus->on_right.type != MenuActionType::None) {
-                lock_mouse_focus_at(mouse_x, mouse_y);
-                execute_action(focus->on_right, ctx, stack_changed);
-                needs_rebuild = true;
-                continue;
-            }
+        if (!needs_rebuild && page_prev_pressed && focus->on_left.type != MenuActionType::None) {
+            lock_mouse_focus_at(mouse_x, mouse_y);
+            play_left_sound();
+            execute_action(focus->on_left, ctx, stack_changed);
+            needs_rebuild = true;
+            continue;
+        }
+        if (!needs_rebuild && page_next_pressed && focus->on_right.type != MenuActionType::None) {
+            lock_mouse_focus_at(mouse_x, mouse_y);
+            play_right_sound();
+            execute_action(focus->on_right, ctx, stack_changed);
+            needs_rebuild = true;
+            continue;
+        }
         }
 
         focus = find_widget(g_focus);
@@ -512,20 +548,31 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         bool hover_changed = hovered != g_focus;
         if (g_allow_mouse_focus && hover_changed &&
             hovered != kMenuIdInvalid && !mouse_down) {
+            focus_changed_by_mouse = true;
             g_focus = hovered;
             focus = find_widget(g_focus);
         }
         if (hovered != kMenuIdInvalid && mouse_clicked) {
+            if (hovered != g_focus)
+                focus_changed_by_mouse = true;
             g_focus = hovered;
             focus = find_widget(g_focus);
-            if (focus && focus->type == WidgetType::TextInput)
+            bool click_handled = false;
+            if (focus && focus->type == WidgetType::TextInput) {
                 begin_text_edit(*focus);
-            else
+                play_confirm_sound();
+                click_handled = true;
+            } else {
                 end_text_edit();
+            }
             if (focus && focus->on_select.type != MenuActionType::None) {
+                play_confirm_sound();
+                click_handled = true;
                 execute_action(focus->on_select, ctx, stack_changed);
                 needs_rebuild = true;
                 continue;
+            } else if (!click_handled) {
+                play_cant_sound();
             }
         }
 
@@ -535,6 +582,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
     }
 
     update_arrows(dt);
+
+    if (g_focus != prev_focus_frame && !focus_changed_by_mouse && g_focus != kMenuIdInvalid)
+        play_focus_sound();
 
     if (manager.stack().empty()) {
         g_current_screen = kMenuIdInvalid;
