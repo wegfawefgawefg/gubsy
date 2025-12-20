@@ -3,6 +3,7 @@
 #include "engine/mode_registry.hpp"
 #include "engine/graphics.hpp"
 #include "engine/imgui_layer.hpp"
+#include "engine/imgui_debug/imgui_debug.hpp"
 #include "engine/input_sources.hpp"
 
 #include <SDL2/SDL.h>
@@ -100,7 +101,7 @@ void render() {
         draw_input_devices_overlay(renderer);
     }
 
+    imgui_debug_render();
     imgui_render_layer();
     SDL_RenderPresent(renderer);
 }
-

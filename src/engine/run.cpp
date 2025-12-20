@@ -26,6 +26,7 @@
 #include "engine/input_system.hpp"
 #include "engine/mode_registry.hpp"
 #include "engine/imgui_layer.hpp"
+#include "engine/imgui_debug/imgui_debug.hpp"
 
 namespace {
 constexpr const char* kModsRuntimeRoot = "mods_runtime";
@@ -117,6 +118,7 @@ bool do_the_gubsy(){
         update_gubsy_device_inputs_system_from_sdl_events();
         update_device_state_from_sdl();
         imgui_new_frame();
+        imgui_debug_begin_frame(dt);
 
         if (const ModeDesc* mode = find_mode(es->mode)) {
             if (mode->process_inputs_fn)
@@ -146,6 +148,7 @@ bool do_the_gubsy(){
 }
 
 bool stop_doing_the_gubsy(){
+    imgui_debug_shutdown();
     shutdown_imgui_layer();
     unload_all_mods_via_host();
     cleanup_audio();
