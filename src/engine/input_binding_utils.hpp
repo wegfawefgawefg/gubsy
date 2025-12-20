@@ -26,3 +26,8 @@ float sample_analog_1d(const DeviceState& state, int encoded_axis);
 glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis);
 glm::vec2 normalized_mouse_coords(const DeviceState& state);
 glm::vec2 normalized_mouse_coords_in_render(const DeviceState& state);
+bool mouse_render_position(const DeviceState& state,
+                           float render_width,
+                           float render_height,
+                           float& out_x,
+                           float& out_y);

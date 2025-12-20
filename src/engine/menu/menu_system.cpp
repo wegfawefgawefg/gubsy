@@ -5,6 +5,7 @@
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/state.hpp"
+#include "engine/input_binding_utils.hpp"
 
 #include <vector>
 #include <unordered_map>
@@ -350,6 +351,18 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         int mouse_x = es->device_state.mouse_x;
         int mouse_y = es->device_state.mouse_y;
         Uint32 mouse_buttons = es->device_state.mouse_buttons;
+        float render_mouse_x = static_cast<float>(mouse_x);
+        float render_mouse_y = static_cast<float>(mouse_y);
+        bool has_render_mouse = false;
+        if (g_cache.width > 0 && g_cache.height > 0) {
+            if (mouse_render_position(es->device_state,
+                                      static_cast<float>(g_cache.width),
+                                      static_cast<float>(g_cache.height),
+                                      render_mouse_x,
+                                      render_mouse_y)) {
+                has_render_mouse = true;
+            }
+        }
         bool mouse_down = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
         bool mouse_clicked = mouse_down && !g_prev_mouse_down;
         g_prev_mouse_down = mouse_down;
@@ -551,8 +564,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (widget.type == WidgetType::Label)
                 continue;
             const SDL_FRect& rect = g_cache.rects[i];
-            float fx = static_cast<float>(mouse_x);
-            float fy = static_cast<float>(mouse_y);
+            float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+            float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
             bool inside = fx >= rect.x && fx <= rect.x + rect.w &&
                           fy >= rect.y && fy <= rect.y + rect.h;
             if (inside) {
