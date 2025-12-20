@@ -1,4 +1,5 @@
 #include "engine/layout_editor/layout_editor.hpp"
+#include "engine/layout_editor/layout_editor_interaction.hpp"
 
 #include "engine/globals.hpp"
 #include "engine/render.hpp"
@@ -24,17 +25,22 @@ bool g_snap_enabled = true;
 std::string g_status_text;
 float g_status_timer = 0.0f;
 bool g_follow_render_resolution = true;
+bool g_mouse_was_down = false;
 
 bool has_layouts() {
     return es && !es->ui_layouts_pool.empty();
 }
 
-const UILayout* selected_layout() {
+UILayout* selected_layout_mutable() {
     if (!has_layouts())
         return nullptr;
     g_selected_layout = std::clamp(g_selected_layout, 0,
                                     static_cast<int>(es->ui_layouts_pool.size()) - 1);
     return &es->ui_layouts_pool[static_cast<std::size_t>(g_selected_layout)];
+}
+
+const UILayout* selected_layout() {
+    return selected_layout_mutable();
 }
 
 void append_status(const std::string& text) {
@@ -114,11 +120,14 @@ void draw_layout_overlay(SDL_Renderer* renderer,
                          int width,
                          int height,
                          float origin_x,
-                         float origin_y) {
+                         float origin_y,
+                         int selected_index,
+                         int dragging_index) {
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    for (const auto& obj : layout.objects) {
+    for (std::size_t idx = 0; idx < layout.objects.size(); ++idx) {
+        const auto& obj = layout.objects[idx];
         SDL_FRect rect;
         rect.x = origin_x + obj.x * static_cast<float>(width);
         rect.y = origin_y + obj.y * static_cast<float>(height);
@@ -127,6 +136,14 @@ void draw_layout_overlay(SDL_Renderer* renderer,
 
         SDL_Color fill{60, 170, 255, 40};
         SDL_Color border{60, 170, 255, 200};
+        if (static_cast<int>(idx) == selected_index) {
+            fill = SDL_Color{120, 210, 120, 70};
+            border = SDL_Color{140, 240, 140, 230};
+        }
+        if (static_cast<int>(idx) == dragging_index) {
+            fill = SDL_Color{220, 200, 90, 70};
+            border = SDL_Color{250, 230, 110, 230};
+        }
         fill_and_outline(renderer, rect, fill, border);
 
         std::string text = obj.label.empty()
@@ -213,6 +230,38 @@ void render_panel(float dt) {
     ImGui::End();
 }
 
+void handle_mouse_input() {
+    if (!g_active || !es)
+        return;
+    LayoutEditorViewport viewport = layout_editor_get_viewport();
+    if (viewport.width <= 0.0f || viewport.height <= 0.0f)
+        return;
+    UILayout* layout = selected_layout_mutable();
+    if (!layout)
+        return;
+
+    float mouse_x = static_cast<float>(es->device_state.mouse_x);
+    float mouse_y = static_cast<float>(es->device_state.mouse_y);
+    bool mouse_down = (es->device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+
+    if (mouse_down && !g_mouse_was_down) {
+        int hit_index = -1;
+        if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit_index)) {
+            layout_editor_select(hit_index);
+            layout_editor_begin_drag(*layout, hit_index, mouse_x, mouse_y, viewport);
+        } else {
+            layout_editor_clear_selection();
+            layout_editor_end_drag();
+        }
+    } else if (mouse_down && layout_editor_is_dragging()) {
+        layout_editor_update_drag(*layout, mouse_x, mouse_y, g_snap_enabled, g_grid_step);
+    } else if (!mouse_down && g_mouse_was_down) {
+        layout_editor_end_drag();
+    }
+
+    g_mouse_was_down = mouse_down;
+}
+
 void handle_hotkeys() {
     if (!ImGui::GetCurrentContext())
         return;
@@ -240,6 +289,8 @@ void handle_hotkeys() {
         g_grid_step = std::max(0.01f, g_grid_step - 0.01f);
     if (ImGui::IsKeyPressed(ImGuiKey_Minus))
         g_grid_step = std::min(0.5f, g_grid_step + 0.01f);
+
+    handle_mouse_input();
 }
 
 void update_selection_from_render() {
@@ -294,9 +345,17 @@ void layout_editor_render(SDL_Renderer* renderer,
         return;
     if (!has_layouts())
         return;
+    layout_editor_set_viewport(LayoutEditorViewport{origin_x,
+                                                    origin_y,
+                                                    static_cast<float>(screen_width),
+                                                    static_cast<float>(screen_height)});
     draw_grid(renderer, screen_width, screen_height, origin_x, origin_y);
-    if (const UILayout* layout = selected_layout())
-        draw_layout_overlay(renderer, *layout, screen_width, screen_height, origin_x, origin_y);
+    if (const UILayout* layout = selected_layout()) {
+        int selected_idx = layout_editor_selected_index();
+        int dragging_idx = layout_editor_dragging_index();
+        draw_layout_overlay(renderer, *layout, screen_width, screen_height,
+                            origin_x, origin_y, selected_idx, dragging_idx);
+    }
 }
 
 void layout_editor_shutdown() {
