@@ -1,5 +1,6 @@
 #include "engine/layout_editor/layout_editor.hpp"
 #include "engine/layout_editor/layout_editor_hooks.hpp"
+#include "engine/layout_editor/layout_editor_history.hpp"
 #include "engine/layout_editor/layout_editor_interaction.hpp"
 
 #include "engine/globals.hpp"
@@ -31,6 +32,11 @@ bool g_follow_active_layout = true;
 bool g_mouse_was_down = false;
 char g_object_label_buffer[128]{};
 int g_object_label_index = -1;
+bool g_drag_dirty = false;
+bool g_history_initialized = false;
+int g_history_layout_id = -1;
+int g_history_layout_width = 0;
+int g_history_layout_height = 0;
 
 struct PendingLayoutRequest {
     bool valid{false};
@@ -126,6 +132,29 @@ const UILayout* selected_layout() {
 void append_status(const std::string& text) {
     g_status_text = text;
     g_status_timer = 3.0f;
+}
+
+void ensure_history_for_selection() {
+    UILayout* layout = selected_layout_mutable();
+    if (!layout) {
+        g_history_initialized = false;
+        g_history_layout_id = -1;
+        g_history_layout_width = 0;
+        g_history_layout_height = 0;
+        return;
+    }
+    if (!g_history_initialized ||
+        layout->id != g_history_layout_id ||
+        layout->resolution_width != g_history_layout_width ||
+        layout->resolution_height != g_history_layout_height) {
+        layout_editor_history_reset(*layout);
+        g_history_initialized = true;
+        g_history_layout_id = layout->id;
+        g_history_layout_width = layout->resolution_width;
+        g_history_layout_height = layout->resolution_height;
+        g_object_label_index = -1;
+        g_object_label_buffer[0] = '\0';
+    }
 }
 
 void sync_object_label_buffer(const UILayout& layout, int selected_index) {
@@ -404,20 +433,29 @@ void render_panel(float dt) {
             ImGui::SeparatorText("Selected object");
             auto& obj = layout_mut->objects[static_cast<std::size_t>(selected_obj)];
             bool changed = false;
+            bool commit_needed = false;
+            bool id_changed = false;
             int obj_id = obj.id;
             ImGui::SetNextItemWidth(list_width);
             if (ImGui::InputInt("Object ID", &obj_id)) {
                 obj.id = obj_id;
                 changed = true;
+                id_changed = true;
             }
+            if (id_changed && ImGui::IsItemDeactivatedAfterEdit())
+                commit_needed = true;
             ImGui::SetNextItemWidth(list_width);
+            bool label_changed = false;
             if (ImGui::InputText("Label",
                                  g_object_label_buffer,
                                  sizeof(g_object_label_buffer))) {
                 obj.label = g_object_label_buffer;
                 g_object_label_index = selected_obj;
                 changed = true;
+                label_changed = true;
             }
+            if (label_changed && ImGui::IsItemDeactivatedAfterEdit())
+                commit_needed = true;
             ImGui::Text("Pos: x %.3f y %.3f",
                         static_cast<double>(obj.x),
                         static_cast<double>(obj.y));
@@ -426,6 +464,8 @@ void render_panel(float dt) {
                         static_cast<double>(obj.h));
             if (changed)
                 g_layout_dirty = true;
+            if (commit_needed)
+                layout_editor_history_commit(*layout_mut);
         }
     }
 
@@ -460,6 +500,7 @@ void handle_mouse_input() {
     bool mouse_down = (es->device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
 
     if (mouse_down && !g_mouse_was_down) {
+        g_drag_dirty = false;
         HitResult hit{};
         if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit)) {
             layout_editor_select(hit.object_index);
@@ -469,9 +510,15 @@ void handle_mouse_input() {
             layout_editor_end_drag();
         }
     } else if (mouse_down && layout_editor_is_dragging()) {
-        if (layout_editor_update_drag(*layout, mouse_x, mouse_y, g_snap_enabled, g_grid_step))
+        if (layout_editor_update_drag(*layout, mouse_x, mouse_y, g_snap_enabled, g_grid_step)) {
             g_layout_dirty = true;
+            g_drag_dirty = true;
+        }
     } else if (!mouse_down && g_mouse_was_down) {
+        if (g_drag_dirty) {
+            layout_editor_history_commit(*layout);
+            g_drag_dirty = false;
+        }
         layout_editor_end_drag();
     }
 
@@ -507,6 +554,24 @@ void handle_hotkeys() {
         g_grid_step = std::min(0.5f, g_grid_step + 0.01f);
 
     handle_mouse_input();
+
+    UILayout* layout = selected_layout_mutable();
+    if (!layout)
+        return;
+    bool ctrl = io.KeyCtrl;
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+        if (layout_editor_history_undo(*layout)) {
+            g_layout_dirty = true;
+            g_object_label_index = -1;
+            append_status("Undo");
+        }
+    } else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+        if (layout_editor_history_redo(*layout)) {
+            g_layout_dirty = true;
+            g_object_label_index = -1;
+            append_status("Redo");
+        }
+    }
 }
 
 } // namespace
@@ -531,6 +596,7 @@ bool layout_editor_consume_dirty_flag() {
 void layout_editor_begin_frame(float dt) {
     if (g_follow_active_layout)
         auto_follow_selection();
+    ensure_history_for_selection();
     handle_hotkeys();
     if (g_active)
         render_panel(dt);
@@ -572,4 +638,6 @@ void layout_editor_shutdown() {
     g_active = false;
     g_status_text.clear();
     g_status_timer = 0.0f;
+    layout_editor_history_shutdown();
+    g_history_initialized = false;
 }
