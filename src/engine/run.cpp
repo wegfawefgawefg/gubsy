@@ -122,11 +122,9 @@ bool do_the_gubsy(){
         layout_editor_begin_frame(dt);
         imgui_debug_begin_frame(dt);
 
-        if (!layout_editor_wants_input()) {
-            if (const ModeDesc* mode = find_mode(es->mode)) {
-                if (mode->process_inputs_fn)
-                    mode->process_inputs_fn();
-            }
+        if (const ModeDesc* mode = find_mode(es->mode)) {
+            if (mode->process_inputs_fn)
+                mode->process_inputs_fn();
         }
 
         bool mods_changed = poll_fs_mods_hot_reload();

@@ -6,6 +6,8 @@
 #include "engine/ui_layouts.hpp"
 #include "game/state.hpp"
 #include "engine/input_binding_utils.hpp"
+#include "engine/layout_editor/layout_editor_hooks.hpp"
+#include "engine/layout_editor/layout_editor.hpp"
 #include "engine/imgui_layer.hpp"
 
 #include <vector>
@@ -349,7 +351,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_prev_input = g_current_input;
         bool select_handled = false;
 
-        const bool allow_mouse_input = !imgui_want_capture_mouse();
+        const bool allow_mouse_input = !imgui_want_capture_mouse() && !layout_editor_is_active();
         int mouse_x = es->device_state.mouse_x;
         int mouse_y = es->device_state.mouse_y;
         Uint32 mouse_buttons = allow_mouse_input ? es->device_state.mouse_buttons : 0u;

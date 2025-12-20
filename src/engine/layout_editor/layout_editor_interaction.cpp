@@ -95,20 +95,20 @@ void layout_editor_begin_drag(const UILayout& layout,
     g_drag.offset_y = local_y - obj.y;
 }
 
-void layout_editor_update_drag(UILayout& layout,
+bool layout_editor_update_drag(UILayout& layout,
                                float mouse_x,
                                float mouse_y,
                                bool snap_enabled,
                                float grid_step) {
     if (!g_drag.active)
-        return;
+        return false;
     if (g_drag.object_index < 0 ||
         g_drag.object_index >= static_cast<int>(layout.objects.size())) {
         layout_editor_end_drag();
-        return;
+        return false;
     }
     if (g_viewport.width <= 0.0f || g_viewport.height <= 0.0f)
-        return;
+        return false;
     float local_x = (mouse_x - g_viewport.origin_x) / g_viewport.width;
     float local_y = (mouse_y - g_viewport.origin_y) / g_viewport.height;
     auto& obj = layout.objects[static_cast<std::size_t>(g_drag.object_index)];
@@ -122,8 +122,11 @@ void layout_editor_update_drag(UILayout& layout,
     new_y = clamp01(new_y);
     new_x = std::clamp(new_x, 0.0f, 1.0f - obj.w);
     new_y = std::clamp(new_y, 0.0f, 1.0f - obj.h);
+    bool changed = (std::fabs(obj.x - new_x) > 1e-5f) ||
+                   (std::fabs(obj.y - new_y) > 1e-5f);
     obj.x = new_x;
     obj.y = new_y;
+    return changed;
 }
 
 void layout_editor_end_drag() {

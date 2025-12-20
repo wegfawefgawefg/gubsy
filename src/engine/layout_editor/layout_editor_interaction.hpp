@@ -30,7 +30,7 @@ void layout_editor_begin_drag(const UILayout& layout,
                               float mouse_y,
                               const LayoutEditorViewport& viewport);
 
-void layout_editor_update_drag(UILayout& layout,
+bool layout_editor_update_drag(UILayout& layout,
                                float mouse_x,
                                float mouse_y,
                                bool snap_enabled,

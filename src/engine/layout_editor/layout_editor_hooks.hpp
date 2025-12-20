@@ -5,3 +5,6 @@
 void layout_editor_notify_active_layout(int layout_id,
                                         int resolution_width,
                                         int resolution_height);
+
+// Returns true if the user modified any layout since the last call.
+bool layout_editor_consume_dirty_flag();

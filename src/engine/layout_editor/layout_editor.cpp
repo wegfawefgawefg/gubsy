@@ -36,6 +36,7 @@ struct PendingLayoutRequest {
 };
 
 PendingLayoutRequest g_last_request{};
+bool g_layout_dirty = false;
 
 bool has_layouts() {
     return es && !es->ui_layouts_pool.empty();
@@ -309,7 +310,8 @@ void handle_mouse_input() {
             layout_editor_end_drag();
         }
     } else if (mouse_down && layout_editor_is_dragging()) {
-        layout_editor_update_drag(*layout, mouse_x, mouse_y, g_snap_enabled, g_grid_step);
+        if (layout_editor_update_drag(*layout, mouse_x, mouse_y, g_snap_enabled, g_grid_step))
+            g_layout_dirty = true;
     } else if (!mouse_down && g_mouse_was_down) {
         layout_editor_end_drag();
     }
@@ -359,6 +361,12 @@ void layout_editor_notify_active_layout(int layout_id,
     g_last_request.height = resolution_height;
     if (g_follow_active_layout)
         auto_follow_selection();
+}
+
+bool layout_editor_consume_dirty_flag() {
+    bool dirty = g_layout_dirty;
+    g_layout_dirty = false;
+    return dirty;
 }
 
 void layout_editor_begin_frame(float dt) {
