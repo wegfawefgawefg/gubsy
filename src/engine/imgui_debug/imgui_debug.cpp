@@ -42,6 +42,7 @@ const char* form_factor_short_tag(UILayoutFormFactor factor) {
 }
 
 constexpr ResolutionPreset kRenderPresets[] = {
+    {"1280x720 (720p)", 1280, 720, UILayoutFormFactor::Desktop},
     {"1366x768 (16:9)", 1366, 768, UILayoutFormFactor::Desktop},
     {"1920x1080 (1080p)", 1920, 1080, UILayoutFormFactor::Desktop},
     {"2560x1440 (1440p)", 2560, 1440, UILayoutFormFactor::Desktop},
@@ -80,13 +81,13 @@ constexpr ResolutionPreset kRenderPresets[] = {
 };
 
 constexpr PresetGroup kRenderPresetGroups[] = {
-    {"16:9 Desktop / TV", 0, 5},
-    {"16:10 Laptops", 5, 6},
-    {"Ultrawide 21:9", 11, 3},
-    {"Super Ultrawide 32:9", 14, 2},
-    {"Console & Retro Landscape", 16, 7},
-    {"Phone Portrait", 23, 8},
-    {"Tablet Portrait", 31, 4},
+    {"16:9 Desktop / TV", 0, 6},
+    {"16:10 Laptops", 6, 6},
+    {"Ultrawide 21:9", 12, 3},
+    {"Super Ultrawide 32:9", 15, 2},
+    {"Console & Retro Landscape", 17, 7},
+    {"Phone Portrait", 24, 8},
+    {"Tablet Portrait", 32, 4},
 };
 
 constexpr auto& kWindowPresets = kRenderPresets;
