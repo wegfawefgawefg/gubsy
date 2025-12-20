@@ -110,3 +110,21 @@ void imgui_adjust_scale(float delta) {
 float imgui_get_scale() {
     return g_imgui_scale;
 }
+
+bool imgui_want_capture_mouse() {
+    if (!g_imgui_init)
+        return false;
+    return ImGui::GetIO().WantCaptureMouse;
+}
+
+bool imgui_want_capture_keyboard() {
+    if (!g_imgui_init)
+        return false;
+    return ImGui::GetIO().WantCaptureKeyboard;
+}
+
+bool imgui_want_text_input() {
+    if (!g_imgui_init)
+        return false;
+    return ImGui::GetIO().WantTextInput;
+}

@@ -14,7 +14,8 @@ void update_gubsy_device_inputs_system_from_sdl_events(){
                 es->running = false;
                 break;
             case SDL_KEYDOWN:
-                if (ev.key.keysym.sym == SDLK_BACKSPACE)
+                if (ev.key.keysym.sym == SDLK_BACKSPACE &&
+                    !imgui_want_capture_keyboard())
                     menu_system_handle_backspace();
                 break;
             case SDL_KEYUP:
@@ -22,10 +23,12 @@ void update_gubsy_device_inputs_system_from_sdl_events(){
             case SDL_MOUSEMOTION:
                 break;
             case SDL_MOUSEWHEEL:
-                accumulate_mouse_wheel_delta(ev.wheel.y);
+                if (!imgui_want_capture_mouse())
+                    accumulate_mouse_wheel_delta(ev.wheel.y);
                 break;
             case SDL_TEXTINPUT:
-                menu_system_handle_text_input(ev.text.text);
+                if (!imgui_want_capture_keyboard() && !imgui_want_text_input())
+                    menu_system_handle_text_input(ev.text.text);
                 break;
             case SDL_CONTROLLERDEVICEADDED:
                 on_device_added(ev.cdevice.which);

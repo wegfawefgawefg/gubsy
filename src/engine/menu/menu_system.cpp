@@ -6,6 +6,7 @@
 #include "engine/ui_layouts.hpp"
 #include "game/state.hpp"
 #include "engine/input_binding_utils.hpp"
+#include "engine/imgui_layer.hpp"
 
 #include <vector>
 #include <unordered_map>
@@ -348,13 +349,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_prev_input = g_current_input;
         bool select_handled = false;
 
+        const bool allow_mouse_input = !imgui_want_capture_mouse();
         int mouse_x = es->device_state.mouse_x;
         int mouse_y = es->device_state.mouse_y;
-        Uint32 mouse_buttons = es->device_state.mouse_buttons;
+        Uint32 mouse_buttons = allow_mouse_input ? es->device_state.mouse_buttons : 0u;
         float render_mouse_x = static_cast<float>(mouse_x);
         float render_mouse_y = static_cast<float>(mouse_y);
         bool has_render_mouse = false;
-        if (g_cache.width > 0 && g_cache.height > 0) {
+        if (allow_mouse_input && g_cache.width > 0 && g_cache.height > 0) {
             if (mouse_render_position(es->device_state,
                                       static_cast<float>(g_cache.width),
                                       static_cast<float>(g_cache.height),
@@ -363,13 +365,19 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 has_render_mouse = true;
             }
         }
-        bool mouse_down = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
-        bool mouse_clicked = mouse_down && !g_prev_mouse_down;
-        g_prev_mouse_down = mouse_down;
-        ensure_mouse_lock(mouse_x, mouse_y);
-        unlock_mouse_focus_if_moved(mouse_x, mouse_y);
-        if (mouse_clicked)
-            unlock_mouse_focus_now();
+        bool mouse_down = allow_mouse_input &&
+                          (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+        bool mouse_clicked = allow_mouse_input && mouse_down && !g_prev_mouse_down;
+        if (allow_mouse_input) {
+            g_prev_mouse_down = mouse_down;
+            ensure_mouse_lock(mouse_x, mouse_y);
+            unlock_mouse_focus_if_moved(mouse_x, mouse_y);
+            if (mouse_clicked)
+                unlock_mouse_focus_now();
+        } else {
+            g_prev_mouse_down = false;
+            has_render_mouse = false;
+        }
 
         const UILayout* layout_rects = get_ui_layout_for_resolution(static_cast<int>(g_cache.layout),
                                                                    g_cache.width,
@@ -557,46 +565,47 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             focus = find_widget(g_focus);
         }
 
-        // Mouse hover and click
-        WidgetId hovered = kMenuIdInvalid;
-        for (std::size_t i = 0; i < g_cache.widgets.size() && i < g_cache.rects.size(); ++i) {
-            const MenuWidget& widget = g_cache.widgets[i];
-            if (widget.type == WidgetType::Label)
-                continue;
-            const SDL_FRect& rect = g_cache.rects[i];
-            float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
-            float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
-            bool inside = fx >= rect.x && fx <= rect.x + rect.w &&
-                          fy >= rect.y && fy <= rect.y + rect.h;
-            if (inside) {
-                hovered = widget.id;
-                break;
+        if (allow_mouse_input) {
+            WidgetId hovered = kMenuIdInvalid;
+            for (std::size_t i = 0; i < g_cache.widgets.size() && i < g_cache.rects.size(); ++i) {
+                const MenuWidget& widget = g_cache.widgets[i];
+                if (widget.type == WidgetType::Label)
+                    continue;
+                const SDL_FRect& rect = g_cache.rects[i];
+                float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+                float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
+                bool inside = fx >= rect.x && fx <= rect.x + rect.w &&
+                              fy >= rect.y && fy <= rect.y + rect.h;
+                if (inside) {
+                    hovered = widget.id;
+                    break;
+                }
             }
-        }
-        bool hover_changed = hovered != g_focus;
-        if (g_allow_mouse_focus && hover_changed &&
-            hovered != kMenuIdInvalid && !mouse_down) {
-            g_focus = hovered;
-            focus = find_widget(g_focus);
-        }
-        if (hovered != kMenuIdInvalid && mouse_clicked) {
-            g_focus = hovered;
-            focus = find_widget(g_focus);
-            bool click_handled = false;
-            if (focus && focus->type == WidgetType::TextInput) {
-                begin_text_edit(*focus);
-                click_handled = true;
-            } else {
-                end_text_edit();
+            bool hover_changed = hovered != g_focus;
+            if (g_allow_mouse_focus && hover_changed &&
+                hovered != kMenuIdInvalid && !mouse_down) {
+                g_focus = hovered;
+                focus = find_widget(g_focus);
             }
-            if (focus && focus->on_select.type != MenuActionType::None) {
-                play_confirm_sound();
-                click_handled = true;
-                execute_action(focus->on_select, ctx, stack_changed);
-                needs_rebuild = true;
-                continue;
-            } else if (!click_handled) {
-                play_cant_sound();
+            if (hovered != kMenuIdInvalid && mouse_clicked) {
+                g_focus = hovered;
+                focus = find_widget(g_focus);
+                bool click_handled = false;
+                if (focus && focus->type == WidgetType::TextInput) {
+                    begin_text_edit(*focus);
+                    click_handled = true;
+                } else {
+                    end_text_edit();
+                }
+                if (focus && focus->on_select.type != MenuActionType::None) {
+                    play_confirm_sound();
+                    click_handled = true;
+                    execute_action(focus->on_select, ctx, stack_changed);
+                    needs_rebuild = true;
+                    continue;
+                } else if (!click_handled) {
+                    play_cant_sound();
+                }
             }
         }
 
