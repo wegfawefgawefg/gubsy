@@ -4,6 +4,7 @@
 #include "engine/binds_profiles.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/menu/menu_system.hpp"
+#include "engine/graphics.hpp"
 #include "game/modes.hpp"
 #include "game/actions.hpp"
 #include "game/menu/menu_ids.hpp"
@@ -55,10 +56,9 @@ void title_process_inputs() {
     ensure_menu_ready();
     if (!gg || !gg->renderer)
         return;
-    SDL_Renderer* renderer = gg->renderer;
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(renderer, &width, &height);
+    glm::ivec2 dims = get_render_dimensions();
+    int width = std::max(dims.x, 1);
+    int height = std::max(dims.y, 1);
     MenuInputState input = gather_menu_input();
     menu_system_set_input(input);
     menu_system_update(es ? es->dt : 0.0f, width, height);
@@ -68,9 +68,6 @@ void title_draw() {
     if (!gg || !gg->renderer)
         return;
     SDL_Renderer* renderer = gg->renderer;
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(renderer, &width, &height);
     SDL_SetRenderDrawColor(renderer, 14, 12, 26, 255);
     SDL_RenderClear(renderer);
     menu_system_render(renderer);

@@ -15,7 +15,34 @@
 #include <glm/glm.hpp>
 #include <engine/globals.hpp>
 
+namespace {
 
+SDL_FRect compute_letterbox_rect(const glm::uvec2& render_dims,
+                                 const glm::uvec2& window_dims) {
+    SDL_FRect rect{};
+    if (window_dims.x == 0 || window_dims.y == 0 ||
+        render_dims.x == 0 || render_dims.y == 0) {
+        rect.w = static_cast<float>(window_dims.x);
+        rect.h = static_cast<float>(window_dims.y);
+        return rect;
+    }
+    float src_aspect = static_cast<float>(render_dims.x) / static_cast<float>(render_dims.y);
+    float dst_aspect = static_cast<float>(window_dims.x) / static_cast<float>(window_dims.y);
+    if (dst_aspect >= src_aspect) {
+        rect.h = static_cast<float>(window_dims.y);
+        rect.w = rect.h * src_aspect;
+        rect.x = (static_cast<float>(window_dims.x) - rect.w) * 0.5f;
+        rect.y = 0.0f;
+    } else {
+        rect.w = static_cast<float>(window_dims.x);
+        rect.h = rect.w / src_aspect;
+        rect.x = 0.0f;
+        rect.y = (static_cast<float>(window_dims.y) - rect.h) * 0.5f;
+    }
+    return rect;
+}
+
+} // namespace
 
 ScreenSpace make_space(int width, int height) {
     ScreenSpace space{};
@@ -92,9 +119,34 @@ void render() {
     if (!renderer)
         return;
 
+    SDL_Texture* target = (gg ? gg->render_target : nullptr);
+    if (target)
+        SDL_SetRenderTarget(renderer, target);
+
     if (const ModeDesc* mode = find_mode(es->mode)) {
         if (mode->render_fn) {
             mode->render_fn();
+        }
+    }
+
+    if (target)
+        SDL_SetRenderTarget(renderer, nullptr);
+
+    int window_w = 0;
+    int window_h = 0;
+    SDL_GetRendererOutputSize(renderer, &window_w, &window_h);
+    if (gg)
+        gg->window_dims = {static_cast<unsigned int>(window_w),
+                           static_cast<unsigned int>(window_h)};
+
+    if (target) {
+        SDL_SetRenderDrawColor(renderer, 5, 5, 10, 255);
+        SDL_RenderClear(renderer);
+        if (gg->render_scale_mode == RenderScaleMode::Stretch) {
+            SDL_RenderCopy(renderer, target, nullptr, nullptr);
+        } else {
+            SDL_FRect dst = compute_letterbox_rect(gg->render_dims, gg->window_dims);
+            SDL_RenderCopyF(renderer, target, nullptr, &dst);
         }
     }
 
@@ -102,10 +154,7 @@ void render() {
         draw_input_devices_overlay(renderer);
     }
 
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(renderer, &width, &height);
-    layout_editor_render(renderer, width, height);
+    layout_editor_render(renderer, window_w, window_h);
 
     imgui_debug_render();
     imgui_render_layer();

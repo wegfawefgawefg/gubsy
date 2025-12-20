@@ -9,6 +9,7 @@
 #include <glm/geometric.hpp>
 
 #include "engine/globals.hpp"
+#include "engine/graphics.hpp"
 
 namespace {
 
@@ -392,9 +393,9 @@ glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis) {
 glm::vec2 normalized_mouse_coords(const DeviceState& state) {
     if (!gg || !gg->renderer)
         return glm::vec2(0.0f);
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(gg->renderer, &width, &height);
+    glm::ivec2 dims = get_window_dimensions();
+    int width = std::max(dims.x, 2);
+    int height = std::max(dims.y, 2);
     if (width <= 1)
         width = 2;
     if (height <= 1)

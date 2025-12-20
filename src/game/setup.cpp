@@ -3,6 +3,7 @@
 #include "engine/globals.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/render.hpp"
+#include "engine/graphics.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mods.hpp"
 #include "game/modes.hpp"
@@ -148,9 +149,8 @@ void setup_draw() {
     if (!gg || !gg->renderer)
         return;
     SDL_Renderer* renderer = gg->renderer;
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(renderer, &width, &height);
+    glm::ivec2 dims = get_render_dimensions();
+    int height = std::max(dims.y, 1);
     SDL_SetRenderDrawColor(renderer, 10, 8, 16, 255);
     SDL_RenderClear(renderer);
 

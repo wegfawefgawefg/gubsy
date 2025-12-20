@@ -24,6 +24,17 @@ struct PlayCam {
     float zoom{2.0f};
 };
 
+enum class RenderScaleMode {
+    Fit,
+    Stretch,
+};
+
+enum class WindowDisplayMode {
+    Windowed,
+    Borderless,
+    Fullscreen,
+};
+
 struct Graphics {
     // Windowing
     SDL_Window* window{nullptr};
@@ -31,8 +42,11 @@ struct Graphics {
     TTF_Font* ui_font{nullptr};
 
     glm::uvec2 window_dims{1280, 720};
-    glm::uvec2 dims{1280, 720};
+    glm::uvec2 render_dims{1280, 720};
     bool fullscreen{false};
+    RenderScaleMode render_scale_mode{RenderScaleMode::Fit};
+    WindowDisplayMode window_mode{WindowDisplayMode::Windowed};
+    SDL_Texture* render_target{nullptr};
 
     Camera2D camera{};
     PlayCam play_cam{};
@@ -58,6 +72,14 @@ bool init_font(const char* fonts_dir = "fonts", int pt_size = 20);
 
 // Try initializing SDL video with a specific driver; logs on failure.
 bool try_init_video_with_driver(const char* driver);
+
+// Runtime controls
+bool set_window_dimensions(int width, int height);
+bool set_window_display_mode(WindowDisplayMode mode);
+bool set_render_resolution(int width, int height);
+void set_render_scale_mode(RenderScaleMode mode);
+glm::ivec2 get_render_dimensions();
+glm::ivec2 get_window_dimensions();
 
 // ---- Asset Management ----
 

@@ -56,6 +56,36 @@ bool try_init_video_with_driver(const char* driver) {
     return false;
 }
 
+namespace {
+
+int clamp_dimension(int value) {
+    if (value < 16)
+        return 16;
+    return value;
+}
+
+bool recreate_render_target(int width, int height) {
+    if (!gg || !gg->renderer)
+        return false;
+    width = clamp_dimension(width);
+    height = clamp_dimension(height);
+    SDL_Texture* tex = SDL_CreateTexture(gg->renderer, SDL_PIXELFORMAT_RGBA8888,
+                                         SDL_TEXTUREACCESS_TARGET, width, height);
+    if (!tex) {
+        std::fprintf(stderr, "Failed to create render target %dx%d: %s\n",
+                     width, height, SDL_GetError());
+        return false;
+    }
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
+    if (gg->render_target)
+        SDL_DestroyTexture(gg->render_target);
+    gg->render_target = tex;
+    gg->render_dims = {static_cast<unsigned int>(width), static_cast<unsigned int>(height)};
+    return true;
+}
+
+} // namespace
+
 bool init_graphics() {
     gg = new Graphics{};
 
@@ -65,7 +95,6 @@ bool init_graphics() {
     gg->window = nullptr;
     gg->renderer = nullptr;
     gg->window_dims = {static_cast<unsigned int>(window_dims.x), static_cast<unsigned int>(window_dims.y)};
-    gg->dims = gg->window_dims;
 
     // Initialize SDL video with driver selection
     const char* env_display = std::getenv("DISPLAY");
@@ -109,6 +138,7 @@ bool init_graphics() {
 
     // Initialize default UI font (optional)
     (void)init_font();
+    recreate_render_target(window_dims.x, window_dims.y);
     return true;
 }
 
@@ -117,6 +147,10 @@ void cleanup_graphics() {
     if (gg->ui_font) { TTF_CloseFont(gg->ui_font); gg->ui_font = nullptr; }
     // Destroy textures before renderer
     clear_textures();
+    if (gg->render_target) {
+        SDL_DestroyTexture(gg->render_target);
+        gg->render_target = nullptr;
+    }
     if (gg->renderer) {
         SDL_DestroyRenderer(gg->renderer);
         gg->renderer = nullptr;
@@ -128,6 +162,72 @@ void cleanup_graphics() {
     if (TTF_WasInit()) TTF_Quit();
     delete gg;
     gg = nullptr;
+}
+
+bool set_window_dimensions(int width, int height) {
+    if (!gg || !gg->window)
+        return false;
+    width = clamp_dimension(width);
+    height = clamp_dimension(height);
+    SDL_SetWindowSize(gg->window, width, height);
+    int actual_w = width;
+    int actual_h = height;
+    SDL_GetWindowSize(gg->window, &actual_w, &actual_h);
+    gg->window_dims = {static_cast<unsigned int>(actual_w),
+                       static_cast<unsigned int>(actual_h)};
+    return true;
+}
+
+bool set_window_display_mode(WindowDisplayMode mode) {
+    if (!gg || !gg->window)
+        return false;
+    Uint32 flag = 0;
+    switch (mode) {
+        case WindowDisplayMode::Windowed:
+            flag = 0;
+            break;
+        case WindowDisplayMode::Borderless:
+            flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
+            break;
+        case WindowDisplayMode::Fullscreen:
+            flag = SDL_WINDOW_FULLSCREEN;
+            break;
+    }
+    if (SDL_SetWindowFullscreen(gg->window, flag) != 0) {
+        std::fprintf(stderr, "Failed to change window mode: %s\n", SDL_GetError());
+        return false;
+    }
+    gg->window_mode = mode;
+    int actual_w = 0;
+    int actual_h = 0;
+    SDL_GetWindowSize(gg->window, &actual_w, &actual_h);
+    gg->window_dims = {static_cast<unsigned int>(actual_w),
+                       static_cast<unsigned int>(actual_h)};
+    return true;
+}
+
+bool set_render_resolution(int width, int height) {
+    return recreate_render_target(width, height);
+}
+
+void set_render_scale_mode(RenderScaleMode mode) {
+    if (!gg)
+        return;
+    gg->render_scale_mode = mode;
+}
+
+glm::ivec2 get_render_dimensions() {
+    if (!gg)
+        return glm::ivec2(0, 0);
+    return glm::ivec2(static_cast<int>(gg->render_dims.x),
+                      static_cast<int>(gg->render_dims.y));
+}
+
+glm::ivec2 get_window_dimensions() {
+    if (!gg)
+        return glm::ivec2(0, 0);
+    return glm::ivec2(static_cast<int>(gg->window_dims.x),
+                      static_cast<int>(gg->window_dims.y));
 }
 
 
@@ -261,3 +361,4 @@ SDL_Texture* get_texture(int sprite_id) {
     auto it = gg->textures_by_id.find(sprite_id);
     return (it == gg->textures_by_id.end()) ? nullptr : it->second;
 }
+#include <limits>

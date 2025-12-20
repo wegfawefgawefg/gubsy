@@ -5,6 +5,7 @@
 #include "engine/input_queries.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/render.hpp"
+#include "engine/graphics.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
 #include "settings.hpp"
@@ -139,9 +140,9 @@ void playing_draw() {
     }
 
     SDL_Renderer* renderer = gg->renderer;
-    int width = 0;
-    int height = 0;
-    SDL_GetRendererOutputSize(renderer, &width, &height);
+    glm::ivec2 dims = get_render_dimensions();
+    int width = std::max(dims.x, 1);
+    int height = std::max(dims.y, 1);
     const float width_f = static_cast<float>(width);
     const float height_f = static_cast<float>(height);
     const float width_span = static_cast<float>(std::max(1, width - 1));

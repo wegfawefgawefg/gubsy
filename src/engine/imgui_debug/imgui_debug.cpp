@@ -17,6 +17,7 @@ bool g_bar_visible = true;
 bool g_show_players = false;
 bool g_show_binds = false;
 bool g_show_layouts = false;
+bool g_show_video = false;
 
 struct WindowToggle {
     const char* label;
@@ -29,6 +30,7 @@ constexpr WindowToggle kWindowToggles[] = {
     {"Players", &g_show_players, ImGuiKey_F1, "F1"},
     {"Binds", &g_show_binds, ImGuiKey_F2, "F2"},
     {"UI Layouts", &g_show_layouts, ImGuiKey_F3, "F3"},
+    {"Video/Resolution", &g_show_video, ImGuiKey_F4, "F4"},
 };
 
 struct ActionLabel {
@@ -262,6 +264,107 @@ void render_layout_window() {
     ImGui::End();
 }
 
+void render_video_window() {
+    if (!g_show_video)
+        return;
+    if (!ImGui::Begin("Debug: Video & Resolution", &g_show_video)) {
+        ImGui::End();
+        return;
+    }
+    if (!gg || !gg->renderer) {
+        ImGui::TextUnformatted("Graphics subsystem unavailable.");
+        ImGui::End();
+        return;
+    }
+    glm::ivec2 window_dims = get_window_dimensions();
+    glm::ivec2 render_dims = get_render_dimensions();
+    ImGui::Text("Window: %d x %d", window_dims.x, window_dims.y);
+    ImGui::Text("Render: %d x %d", render_dims.x, render_dims.y);
+
+    static int pending_window_w = 1280;
+    static int pending_window_h = 720;
+    static int pending_render_w = 1280;
+    static int pending_render_h = 720;
+    static bool initialized = false;
+    if (!initialized) {
+        pending_window_w = window_dims.x;
+        pending_window_h = window_dims.y;
+        pending_render_w = render_dims.x;
+        pending_render_h = render_dims.y;
+        initialized = true;
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Render Resolution");
+    ImGui::InputInt("Render Width", &pending_render_w);
+    ImGui::InputInt("Render Height", &pending_render_h);
+    if (ImGui::Button("Apply Render Resolution")) {
+        if (set_render_resolution(pending_render_w, pending_render_h)) {
+            glm::ivec2 updated = get_render_dimensions();
+            pending_render_w = updated.x;
+            pending_render_h = updated.y;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Match Window Size##render")) {
+        pending_render_w = window_dims.x;
+        pending_render_h = window_dims.y;
+        set_render_resolution(pending_render_w, pending_render_h);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Render##render")) {
+        pending_render_w = 1280;
+        pending_render_h = 720;
+        set_render_resolution(pending_render_w, pending_render_h);
+    }
+    if (ImGui::Button("1080p Render")) {
+        pending_render_w = 1920;
+        pending_render_h = 1080;
+        set_render_resolution(pending_render_w, pending_render_h);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("1440p Render")) {
+        pending_render_w = 2560;
+        pending_render_h = 1440;
+        set_render_resolution(pending_render_w, pending_render_h);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("2560x1080 Render")) {
+        pending_render_w = 2560;
+        pending_render_h = 1080;
+        set_render_resolution(pending_render_w, pending_render_h);
+    }
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Window");
+    ImGui::InputInt("Window Width", &pending_window_w);
+    ImGui::InputInt("Window Height", &pending_window_h);
+    if (ImGui::Button("Apply Window Size")) {
+        set_window_dimensions(pending_window_w, pending_window_h);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Match Render Size##window")) {
+        pending_window_w = render_dims.x;
+        pending_window_h = render_dims.y;
+        set_window_dimensions(pending_window_w, pending_window_h);
+    }
+
+    const char* window_mode_labels[] = {"Windowed", "Borderless", "Fullscreen"};
+    int window_mode = static_cast<int>(gg->window_mode);
+    if (ImGui::Combo("Window Mode", &window_mode,
+                     window_mode_labels, IM_ARRAYSIZE(window_mode_labels))) {
+        set_window_display_mode(static_cast<WindowDisplayMode>(window_mode));
+    }
+
+    const char* scale_labels[] = {"Fit (letterbox)", "Stretch"};
+    int scale_mode = static_cast<int>(gg->render_scale_mode);
+    if (ImGui::Combo("Render Scale", &scale_mode, scale_labels, IM_ARRAYSIZE(scale_labels))) {
+        set_render_scale_mode(static_cast<RenderScaleMode>(scale_mode));
+    }
+
+    ImGui::End();
+}
+
 } // namespace
 
 void imgui_debug_begin_frame(float /*dt*/) {
@@ -293,6 +396,7 @@ void imgui_debug_render() {
         render_players_window();
         render_binds_window();
         render_layout_window();
+        render_video_window();
     }
 }
 
@@ -302,4 +406,5 @@ void imgui_debug_shutdown() {
     g_show_players = false;
     g_show_binds = false;
     g_show_layouts = false;
+    g_show_video = false;
 }
