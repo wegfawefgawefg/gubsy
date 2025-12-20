@@ -9,6 +9,7 @@
 namespace {
 constexpr float kMinSize = 0.01f;
 constexpr float kSnapTolBase = 0.01f;
+constexpr float kSnapTolFactor = 0.15f;
 
 struct DragState {
     bool active{false};
@@ -86,14 +87,14 @@ float snap_single_edge(float value, float step) {
     if (step <= 0.0f)
         return value;
     float snapped = snap_value(value, step);
-    float tolerance = std::max(step * 0.3f, kSnapTolBase);
+    float tolerance = std::max(step * kSnapTolFactor, kSnapTolBase);
     return (std::fabs(snapped - value) <= tolerance) ? snapped : value;
 }
 
 float snap_pair(float start, float size, float step) {
     if (step <= 0.0f)
         return start;
-    float tolerance = std::max(step * 0.3f, kSnapTolBase);
+    float tolerance = std::max(step * kSnapTolFactor, kSnapTolBase);
     float left_candidate = snap_value(start, step);
     float right_candidate = snap_value(start + size, step) - size;
     left_candidate = std::clamp(left_candidate, 0.0f, 1.0f - size);
