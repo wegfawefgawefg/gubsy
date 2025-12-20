@@ -19,7 +19,7 @@ namespace {
 
 bool g_active = false;
 int g_selected_layout = 0;
-float g_grid_step = 0.1f;
+float g_grid_step = 0.2f;
 bool g_snap_enabled = true;
 std::string g_status_text;
 float g_status_timer = 0.0f;
@@ -53,6 +53,7 @@ void draw_grid(SDL_Renderer* renderer, int width, int height) {
 
     SDL_Color label_color{150, 160, 190, 210};
 
+    const float epsilon = 1e-4f;
     const int steps_x = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
     for (int i = 0; i <= steps_x; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
@@ -63,7 +64,8 @@ void draw_grid(SDL_Renderer* renderer, int width, int height) {
         int text_x = static_cast<int>(x) - 14;
         text_x = std::clamp(text_x, 0, std::max(0, width - 28));
         draw_text(renderer, label, text_x, 2, label_color);
-        draw_text(renderer, label, text_x, std::max(height - 18, 0), label_color);
+        if (norm > epsilon && norm < 1.0f - epsilon)
+            draw_text(renderer, label, text_x, std::max(height - 18, 0), label_color);
     }
     const int steps_y = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
     for (int i = 0; i <= steps_y; ++i) {
@@ -74,8 +76,10 @@ void draw_grid(SDL_Renderer* renderer, int width, int height) {
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
         int text_y = static_cast<int>(y) - 8;
         text_y = std::clamp(text_y, 0, std::max(0, height - 16));
-        draw_text(renderer, label, 2, text_y, label_color);
-        draw_text(renderer, label, std::max(width - 60, 2), text_y, label_color);
+        if (norm > epsilon && norm < 1.0f - epsilon) {
+            draw_text(renderer, label, 2, text_y, label_color);
+            draw_text(renderer, label, std::max(width - 60, 2), text_y, label_color);
+        }
     }
 
     SDL_SetRenderDrawBlendMode(renderer, old_mode);
