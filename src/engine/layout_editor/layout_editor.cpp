@@ -1,4 +1,5 @@
 #include "engine/layout_editor/layout_editor.hpp"
+#include "engine/layout_editor/layout_editor_hooks.hpp"
 #include "engine/layout_editor/layout_editor_interaction.hpp"
 
 #include "engine/globals.hpp"
@@ -24,8 +25,17 @@ float g_grid_step = 0.2f;
 bool g_snap_enabled = true;
 std::string g_status_text;
 float g_status_timer = 0.0f;
-bool g_follow_render_resolution = true;
+bool g_follow_active_layout = true;
 bool g_mouse_was_down = false;
+
+struct PendingLayoutRequest {
+    bool valid{false};
+    int id{-1};
+    int width{0};
+    int height{0};
+};
+
+PendingLayoutRequest g_last_request{};
 
 bool has_layouts() {
     return es && !es->ui_layouts_pool.empty();
@@ -46,6 +56,51 @@ const UILayout* selected_layout() {
 void append_status(const std::string& text) {
     g_status_text = text;
     g_status_timer = 3.0f;
+}
+
+bool select_layout_exact(int id, int width, int height) {
+    if (!es)
+        return false;
+    for (std::size_t i = 0; i < es->ui_layouts_pool.size(); ++i) {
+        const auto& layout = es->ui_layouts_pool[i];
+        if (layout.id == id &&
+            layout.resolution_width == width &&
+            layout.resolution_height == height) {
+            g_selected_layout = static_cast<int>(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+void auto_follow_selection() {
+    if (!g_follow_active_layout)
+        return;
+    if (g_last_request.valid) {
+        if (select_layout_exact(g_last_request.id,
+                                g_last_request.width,
+                                g_last_request.height))
+            return;
+    }
+    if (!gg || !has_layouts())
+        return;
+    int target_w = static_cast<int>(gg->render_dims.x);
+    int target_h = static_cast<int>(gg->render_dims.y);
+    if (target_w <= 0 || target_h <= 0)
+        return;
+    int best_idx = g_selected_layout;
+    int best_score = INT_MAX;
+    for (std::size_t i = 0; i < es->ui_layouts_pool.size(); ++i) {
+        const auto& layout = es->ui_layouts_pool[i];
+        int dw = layout.resolution_width - target_w;
+        int dh = layout.resolution_height - target_h;
+        int score = dw * dw + dh * dh;
+        if (score < best_score) {
+            best_score = score;
+            best_idx = static_cast<int>(i);
+        }
+    }
+    g_selected_layout = best_idx;
 }
 
 void draw_grid(SDL_Renderer* renderer,
@@ -204,10 +259,10 @@ void render_panel(float dt) {
     for (const auto& s : label_storage)
         labels.push_back(s.c_str());
 
-    ImGui::Checkbox("Follow render resolution", &g_follow_render_resolution);
+    ImGui::Checkbox("Follow active layout", &g_follow_active_layout);
     if (ImGui::ListBox("Layouts", &g_selected_layout, labels.data(),
                        static_cast<int>(labels.size()), 6)) {
-        g_follow_render_resolution = false;
+        g_follow_active_layout = false;
     }
 
     if (const UILayout* layout = selected_layout()) {
@@ -293,34 +348,22 @@ void handle_hotkeys() {
     handle_mouse_input();
 }
 
-void update_selection_from_render() {
-    if (!g_follow_render_resolution)
-        return;
-    if (!gg || !has_layouts())
-        return;
-    int target_w = static_cast<int>(gg->render_dims.x);
-    int target_h = static_cast<int>(gg->render_dims.y);
-    if (target_w <= 0 || target_h <= 0)
-        return;
-    int best_idx = g_selected_layout;
-    int best_score = INT_MAX;
-    for (std::size_t i = 0; i < es->ui_layouts_pool.size(); ++i) {
-        const auto& layout = es->ui_layouts_pool[i];
-        int dw = layout.resolution_width - target_w;
-        int dh = layout.resolution_height - target_h;
-        int score = dw * dw + dh * dh;
-        if (score < best_score) {
-            best_score = score;
-            best_idx = static_cast<int>(i);
-        }
-    }
-    g_selected_layout = best_idx;
-}
-
 } // namespace
 
+void layout_editor_notify_active_layout(int layout_id,
+                                        int resolution_width,
+                                        int resolution_height) {
+    g_last_request.valid = true;
+    g_last_request.id = layout_id;
+    g_last_request.width = resolution_width;
+    g_last_request.height = resolution_height;
+    if (g_follow_active_layout)
+        auto_follow_selection();
+}
+
 void layout_editor_begin_frame(float dt) {
-    update_selection_from_render();
+    if (g_follow_active_layout)
+        auto_follow_selection();
     handle_hotkeys();
     if (g_active)
         render_panel(dt);

@@ -3,6 +3,7 @@
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
 #include "engine/utils.hpp"
+#include "engine/layout_editor/layout_editor_hooks.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -287,9 +288,15 @@ const UILayout* get_ui_layout_for_resolution(int layout_id, int width, int heigh
     };
 
     UILayoutFormFactor desired = g_current_form_factor;
-    if (const UILayout* match = pick_best(desired, true))
-        return match;
-    return pick_best(desired, false);
+    const UILayout* chosen = pick_best(desired, true);
+    if (!chosen)
+        chosen = pick_best(desired, false);
+    if (chosen) {
+        layout_editor_notify_active_layout(layout_id,
+                                           chosen->resolution_width,
+                                           chosen->resolution_height);
+    }
+    return chosen;
 }
 
 const UIObject* get_ui_object(const UILayout& layout, int obj_id) {
