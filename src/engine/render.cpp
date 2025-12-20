@@ -4,6 +4,7 @@
 #include "engine/graphics.hpp"
 #include "engine/imgui_layer.hpp"
 #include "engine/imgui_debug/imgui_debug.hpp"
+#include "engine/layout_editor/layout_editor.hpp"
 #include "engine/input_sources.hpp"
 
 #include <SDL2/SDL.h>
@@ -100,6 +101,11 @@ void render() {
     if (es->draw_input_device_overlay) {
         draw_input_devices_overlay(renderer);
     }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetRendererOutputSize(renderer, &width, &height);
+    layout_editor_render(renderer, width, height);
 
     imgui_debug_render();
     imgui_render_layer();

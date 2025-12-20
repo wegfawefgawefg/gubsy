@@ -27,6 +27,7 @@
 #include "engine/mode_registry.hpp"
 #include "engine/imgui_layer.hpp"
 #include "engine/imgui_debug/imgui_debug.hpp"
+#include "engine/layout_editor/layout_editor.hpp"
 
 namespace {
 constexpr const char* kModsRuntimeRoot = "mods_runtime";
@@ -118,11 +119,14 @@ bool do_the_gubsy(){
         update_gubsy_device_inputs_system_from_sdl_events();
         update_device_state_from_sdl();
         imgui_new_frame();
+        layout_editor_begin_frame(dt);
         imgui_debug_begin_frame(dt);
 
-        if (const ModeDesc* mode = find_mode(es->mode)) {
-            if (mode->process_inputs_fn)
-                mode->process_inputs_fn();
+        if (!layout_editor_wants_input()) {
+            if (const ModeDesc* mode = find_mode(es->mode)) {
+                if (mode->process_inputs_fn)
+                    mode->process_inputs_fn();
+            }
         }
 
         bool mods_changed = poll_fs_mods_hot_reload();
@@ -148,6 +152,7 @@ bool do_the_gubsy(){
 }
 
 bool stop_doing_the_gubsy(){
+    layout_editor_shutdown();
     imgui_debug_shutdown();
     shutdown_imgui_layer();
     unload_all_mods_via_host();
