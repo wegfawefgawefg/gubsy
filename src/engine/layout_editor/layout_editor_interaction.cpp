@@ -9,7 +9,7 @@
 namespace {
 constexpr float kMinSize = 0.01f;
 constexpr float kSnapTolBase = 0.01f;
-constexpr float kSnapTolFactor = 0.15f;
+constexpr float kSnapTolFactor = 0.075f;
 
 struct DragState {
     bool active{false};

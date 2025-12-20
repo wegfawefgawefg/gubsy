@@ -2,6 +2,9 @@
 #include "engine/layout_editor/layout_editor_hooks.hpp"
 #include "engine/layout_editor/layout_editor_history.hpp"
 #include "engine/layout_editor/layout_editor_interaction.hpp"
+#include "engine/layout_editor/layout_editor_internal.hpp"
+#include "engine/layout_editor/layout_editor_panel.hpp"
+#include "engine/layout_editor/layout_editor_overlay.hpp"
 
 #include "engine/globals.hpp"
 #include "engine/render.hpp"
@@ -20,7 +23,7 @@
 #include <string>
 #include <vector>
 
-namespace {
+namespace layout_editor_internal {
 
 bool g_active = false;
 int g_selected_layout = 0;
@@ -37,81 +40,13 @@ bool g_history_initialized = false;
 int g_history_layout_id = -1;
 int g_history_layout_width = 0;
 int g_history_layout_height = 0;
-
-struct PendingLayoutRequest {
-    bool valid{false};
-    int id{-1};
-    int width{0};
-    int height{0};
-};
-
-PendingLayoutRequest g_last_request{};
 bool g_layout_dirty = false;
 
-struct HandleDrawInfo {
-    HandleType type;
-    SDL_FRect rect;
-};
+} // namespace layout_editor_internal
 
-std::array<HandleDrawInfo, 8> build_handle_rects(const SDL_FRect& rect) {
-    std::array<HandleDrawInfo, 8> handles{};
-    float half_corner = kHandleSize * 0.5f;
-    float edge_len_v = std::min(rect.h, kEdgeHandleLength);
-    float edge_len_h = std::min(rect.w, kEdgeHandleLength);
+using namespace layout_editor_internal;
 
-    handles[0] = {HandleType::CornerTopLeft,
-                  SDL_FRect{rect.x - half_corner, rect.y - half_corner,
-                            kHandleSize, kHandleSize}};
-    handles[1] = {HandleType::CornerTopRight,
-                  SDL_FRect{rect.x + rect.w - half_corner, rect.y - half_corner,
-                            kHandleSize, kHandleSize}};
-    handles[2] = {HandleType::CornerBottomLeft,
-                  SDL_FRect{rect.x - half_corner, rect.y + rect.h - half_corner,
-                            kHandleSize, kHandleSize}};
-    handles[3] = {HandleType::CornerBottomRight,
-                  SDL_FRect{rect.x + rect.w - half_corner,
-                            rect.y + rect.h - half_corner,
-                            kHandleSize, kHandleSize}};
-
-    handles[4] = {HandleType::EdgeTop,
-                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
-                            rect.y - kEdgeHandleThickness * 0.5f,
-                            edge_len_h,
-                            kEdgeHandleThickness}};
-    handles[5] = {HandleType::EdgeBottom,
-                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
-                            rect.y + rect.h - kEdgeHandleThickness * 0.5f,
-                            edge_len_h,
-                            kEdgeHandleThickness}};
-    handles[6] = {HandleType::EdgeLeft,
-                  SDL_FRect{rect.x - kEdgeHandleThickness * 0.5f,
-                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
-                            kEdgeHandleThickness,
-                            edge_len_v}};
-    handles[7] = {HandleType::EdgeRight,
-                  SDL_FRect{rect.x + rect.w - kEdgeHandleThickness * 0.5f,
-                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
-                            kEdgeHandleThickness,
-                            edge_len_v}};
-    return handles;
-}
-
-void draw_handles(SDL_Renderer* renderer,
-                  const SDL_FRect& rect,
-                  HandleType highlight) {
-    auto handles = build_handle_rects(rect);
-    SDL_Color base_fill{110, 170, 255, 140};
-    SDL_Color base_border{40, 120, 230, 220};
-    SDL_Color highlight_fill{250, 230, 120, 170};
-    SDL_Color highlight_border{255, 250, 140, 240};
-    for (const auto& handle : handles) {
-        bool active = (handle.type == highlight);
-        fill_and_outline(renderer,
-                         handle.rect,
-                         active ? highlight_fill : base_fill,
-                         active ? highlight_border : base_border);
-    }
-}
+namespace layout_editor_internal {
 
 bool has_layouts() {
     return es && !es->ui_layouts_pool.empty();
@@ -121,7 +56,7 @@ UILayout* selected_layout_mutable() {
     if (!has_layouts())
         return nullptr;
     g_selected_layout = std::clamp(g_selected_layout, 0,
-                                    static_cast<int>(es->ui_layouts_pool.size()) - 1);
+                                   static_cast<int>(es->ui_layouts_pool.size()) - 1);
     return &es->ui_layouts_pool[static_cast<std::size_t>(g_selected_layout)];
 }
 
@@ -133,6 +68,19 @@ void append_status(const std::string& text) {
     g_status_text = text;
     g_status_timer = 3.0f;
 }
+
+} // namespace layout_editor_internal
+
+namespace {
+
+struct PendingLayoutRequest {
+    bool valid{false};
+    int id{-1};
+    int width{0};
+    int height{0};
+};
+
+PendingLayoutRequest g_last_request{};
 
 void ensure_history_for_selection() {
     UILayout* layout = selected_layout_mutable();
@@ -155,23 +103,6 @@ void ensure_history_for_selection() {
         g_object_label_index = -1;
         g_object_label_buffer[0] = '\0';
     }
-}
-
-void sync_object_label_buffer(const UILayout& layout, int selected_index) {
-    if (selected_index < 0 ||
-        selected_index >= static_cast<int>(layout.objects.size())) {
-        if (g_object_label_index != -1) {
-            g_object_label_buffer[0] = '\0';
-            g_object_label_index = -1;
-        }
-        return;
-    }
-    if (g_object_label_index == selected_index)
-        return;
-    const auto& obj = layout.objects[static_cast<std::size_t>(selected_index)];
-    std::snprintf(g_object_label_buffer, sizeof(g_object_label_buffer), "%s",
-                  obj.label.c_str());
-    g_object_label_index = selected_index;
 }
 
 bool select_layout_exact(int id, int width, int height) {
@@ -217,265 +148,6 @@ void auto_follow_selection() {
         }
     }
     g_selected_layout = best_idx;
-}
-
-void draw_grid(SDL_Renderer* renderer,
-               int width,
-               int height,
-               float origin_x,
-               float origin_y) {
-    if (width <= 0 || height <= 0)
-        return;
-    const float step = std::clamp(g_grid_step, 0.01f, 0.5f);
-    SDL_BlendMode old_mode;
-    SDL_GetRenderDrawBlendMode(renderer, &old_mode);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 40, 40, 50, 120);
-
-    SDL_Color label_color{150, 160, 190, 210};
-
-    const float epsilon = 1e-4f;
-    const int steps_x = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
-    for (int i = 0; i <= steps_x; ++i) {
-        float norm = std::min(step * static_cast<float>(i), 1.0f);
-        float x = norm * static_cast<float>(width);
-        SDL_RenderDrawLineF(renderer,
-                            origin_x + x,
-                            origin_y,
-                            origin_x + x,
-                            origin_y + static_cast<float>(height));
-        char label[16];
-        std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
-        int text_x = static_cast<int>(x) - 14;
-        text_x = std::clamp(text_x, 0, std::max(0, width - 28));
-        draw_text(renderer, label,
-                  static_cast<int>(origin_x) + text_x,
-                  static_cast<int>(origin_y) + 2,
-                  label_color);
-        if (norm > epsilon && norm < 1.0f - epsilon)
-            draw_text(renderer, label,
-                      static_cast<int>(origin_x) + text_x,
-                      static_cast<int>(origin_y) + std::max(height - 18, 0),
-                      label_color);
-    }
-    const int steps_y = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
-    for (int i = 0; i <= steps_y; ++i) {
-        float norm = std::min(step * static_cast<float>(i), 1.0f);
-        float y = norm * static_cast<float>(height);
-        SDL_RenderDrawLineF(renderer,
-                            origin_x,
-                            origin_y + y,
-                            origin_x + static_cast<float>(width),
-                            origin_y + y);
-        char label[16];
-        std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
-        int text_y = static_cast<int>(y) - 8;
-        text_y = std::clamp(text_y, 0, std::max(0, height - 16));
-        if (norm > epsilon && norm < 1.0f - epsilon) {
-            draw_text(renderer, label,
-                      static_cast<int>(origin_x) + 2,
-                      static_cast<int>(origin_y) + text_y,
-                      label_color);
-            draw_text(renderer, label,
-                      static_cast<int>(origin_x) + std::max(width - 60, 2),
-                      static_cast<int>(origin_y) + text_y,
-                      label_color);
-        }
-    }
-
-    SDL_SetRenderDrawBlendMode(renderer, old_mode);
-}
-
-void draw_layout_overlay(SDL_Renderer* renderer,
-                         const UILayout& layout,
-                         int width,
-                         int height,
-                         float origin_x,
-                         float origin_y,
-                         int selected_index,
-                         int dragging_index) {
-    SDL_BlendMode old_mode;
-    SDL_GetRenderDrawBlendMode(renderer, &old_mode);
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    for (std::size_t idx = 0; idx < layout.objects.size(); ++idx) {
-        const auto& obj = layout.objects[idx];
-        SDL_FRect rect;
-        rect.x = origin_x + obj.x * static_cast<float>(width);
-        rect.y = origin_y + obj.y * static_cast<float>(height);
-        rect.w = obj.w * static_cast<float>(width);
-        rect.h = obj.h * static_cast<float>(height);
-
-        SDL_Color fill{60, 170, 255, 40};
-        SDL_Color border{60, 170, 255, 200};
-        const bool is_selected = static_cast<int>(idx) == selected_index;
-        const bool is_dragging = static_cast<int>(idx) == dragging_index;
-        if (is_selected) {
-            fill = SDL_Color{120, 210, 120, 70};
-            border = SDL_Color{140, 240, 140, 230};
-        }
-        if (is_dragging) {
-            fill = SDL_Color{220, 200, 90, 70};
-            border = SDL_Color{250, 230, 110, 230};
-        }
-        fill_and_outline(renderer, rect, fill, border);
-
-        std::string text = obj.label.empty()
-                               ? std::to_string(obj.id)
-                               : obj.label + " (" + std::to_string(obj.id) + ")";
-        draw_text(renderer, text, static_cast<int>(rect.x) + 6,
-                  static_cast<int>(rect.y) + 6,
-                  SDL_Color{255, 255, 255, 200});
-
-        char coords[64];
-        std::snprintf(coords, sizeof(coords), "x%.3f y%.3f w%.3f h%.3f",
-                      static_cast<double>(obj.x),
-                      static_cast<double>(obj.y),
-                      static_cast<double>(obj.w),
-                      static_cast<double>(obj.h));
-        draw_text(renderer, coords, static_cast<int>(rect.x) + 6,
-                  static_cast<int>(rect.y) + 24,
-                  SDL_Color{210, 220, 240, 200});
-
-        if (is_selected) {
-            HandleType handle = is_dragging ? layout_editor_drag_handle()
-                                            : HandleType::Center;
-            draw_handles(renderer, rect, handle);
-        }
-    }
-    SDL_SetRenderDrawBlendMode(renderer, old_mode);
-}
-
-void render_panel(float dt) {
-    if (!g_active)
-        return;
-    if (!ImGui::GetCurrentContext())
-        return;
-    ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize |
-                             ImGuiWindowFlags_NoSavedSettings;
-    ImGui::SetNextWindowPos(ImVec2(18.0f, 18.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowBgAlpha(0.93f);
-    if (!ImGui::Begin("Layout Editor", &g_active, flags)) {
-        ImGui::End();
-        return;
-    }
-    ImGui::TextUnformatted("Ctrl+L toggle | Ctrl+S save | G snap");
-    ImGui::Text("Grid %.3f (%s)",
-                static_cast<double>(g_grid_step),
-                g_snap_enabled ? "snap ON" : "snap OFF");
-    if (!has_layouts()) {
-        ImGui::TextUnformatted("No layouts loaded.");
-        ImGui::End();
-        return;
-    }
-
-    const char* factor_labels[] = {"Desktop", "Tablet", "Phone"};
-    std::vector<const char*> labels;
-    labels.reserve(es->ui_layouts_pool.size());
-    static std::vector<std::string> label_storage;
-    label_storage.clear();
-    for (const auto& layout : es->ui_layouts_pool) {
-        std::string label = layout.label + " (ID " + std::to_string(layout.id) + ") " +
-                            std::to_string(layout.resolution_width) + "x" +
-                            std::to_string(layout.resolution_height) + " [" +
-                            factor_labels[static_cast<int>(layout.form_factor)] + "]";
-        label_storage.push_back(label);
-    }
-    for (const auto& s : label_storage)
-        labels.push_back(s.c_str());
-
-    ImGui::Checkbox("Follow active layout", &g_follow_active_layout);
-    if (ImGui::ListBox("Layouts", &g_selected_layout, labels.data(),
-                       static_cast<int>(labels.size()), 6)) {
-        g_follow_active_layout = false;
-    }
-
-    UILayout* layout_mut = selected_layout_mutable();
-    const UILayout* layout = layout_mut;
-    if (layout) {
-        ImGui::Separator();
-        ImGui::Text("Objects: %zu", layout->objects.size());
-        ImGui::Text("Layout: %dx%d",
-                    layout->resolution_width, layout->resolution_height);
-    }
-    if (gg) {
-        glm::ivec2 dims = get_render_dimensions();
-        ImGui::Text("Render target: %dx%d", dims.x, dims.y);
-    }
-
-    if (layout_mut) {
-        int selected_obj = layout_editor_selected_index();
-        const float list_width = 320.0f;
-        if (ImGui::BeginListBox("Layout objects",
-                                ImVec2(list_width, 6.0f * ImGui::GetTextLineHeightWithSpacing()))) {
-            for (int i = 0; i < static_cast<int>(layout_mut->objects.size()); ++i) {
-                const auto& obj = layout_mut->objects[static_cast<std::size_t>(i)];
-                std::string entry = obj.label.empty()
-                                        ? ("#" + std::to_string(obj.id))
-                                        : (obj.label + " (#" + std::to_string(obj.id) + ")");
-                bool selected = (i == selected_obj);
-                if (ImGui::Selectable(entry.c_str(), selected))
-                    layout_editor_select(i);
-            }
-            ImGui::EndListBox();
-        }
-
-        selected_obj = layout_editor_selected_index();
-        if (!layout_mut->objects.empty()) {
-            if (selected_obj >= static_cast<int>(layout_mut->objects.size()))
-                selected_obj = -1;
-        } else {
-            selected_obj = -1;
-        }
-
-        sync_object_label_buffer(*layout_mut, selected_obj);
-        if (selected_obj >= 0 &&
-            selected_obj < static_cast<int>(layout_mut->objects.size())) {
-            ImGui::SeparatorText("Selected object");
-            auto& obj = layout_mut->objects[static_cast<std::size_t>(selected_obj)];
-            bool changed = false;
-            bool commit_needed = false;
-            bool id_changed = false;
-            int obj_id = obj.id;
-            ImGui::SetNextItemWidth(list_width);
-            if (ImGui::InputInt("Object ID", &obj_id)) {
-                obj.id = obj_id;
-                changed = true;
-                id_changed = true;
-            }
-            if (id_changed && ImGui::IsItemDeactivatedAfterEdit())
-                commit_needed = true;
-            ImGui::SetNextItemWidth(list_width);
-            bool label_changed = false;
-            if (ImGui::InputText("Label",
-                                 g_object_label_buffer,
-                                 sizeof(g_object_label_buffer))) {
-                obj.label = g_object_label_buffer;
-                g_object_label_index = selected_obj;
-                changed = true;
-                label_changed = true;
-            }
-            if (label_changed && ImGui::IsItemDeactivatedAfterEdit())
-                commit_needed = true;
-            ImGui::Text("Pos: x %.3f y %.3f",
-                        static_cast<double>(obj.x),
-                        static_cast<double>(obj.y));
-            ImGui::Text("Size: w %.3f h %.3f",
-                        static_cast<double>(obj.w),
-                        static_cast<double>(obj.h));
-            if (changed)
-                g_layout_dirty = true;
-            if (commit_needed)
-                layout_editor_history_commit(*layout_mut);
-        }
-    }
-
-    if (!g_status_text.empty() && g_status_timer > 0.0f) {
-        g_status_timer = std::max(0.0f, g_status_timer - dt);
-        ImGui::Separator();
-        ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.7f, 1.0f), "%s", g_status_text.c_str());
-    }
-
-    ImGui::End();
 }
 
 void handle_mouse_input() {
@@ -599,7 +271,7 @@ void layout_editor_begin_frame(float dt) {
     ensure_history_for_selection();
     handle_hotkeys();
     if (g_active)
-        render_panel(dt);
+        layout_editor_render_panel(dt);
     else
         g_status_timer = std::max(0.0f, g_status_timer - dt);
 }
@@ -625,12 +297,13 @@ void layout_editor_render(SDL_Renderer* renderer,
                                                     origin_y,
                                                     static_cast<float>(screen_width),
                                                     static_cast<float>(screen_height)});
-    draw_grid(renderer, screen_width, screen_height, origin_x, origin_y);
+    layout_editor_draw_grid(renderer, screen_width, screen_height,
+                            origin_x, origin_y, g_grid_step);
     if (const UILayout* layout = selected_layout()) {
         int selected_idx = layout_editor_selected_index();
         int dragging_idx = layout_editor_dragging_index();
-        draw_layout_overlay(renderer, *layout, screen_width, screen_height,
-                            origin_x, origin_y, selected_idx, dragging_idx);
+        layout_editor_draw_layout(renderer, *layout, screen_width, screen_height,
+                                  origin_x, origin_y, selected_idx, dragging_idx);
     }
 }
 
