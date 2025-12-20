@@ -129,11 +129,6 @@ void render() {
         }
     }
 
-    int target_w = (gg ? static_cast<int>(gg->render_dims.x) : 0);
-    int target_h = (gg ? static_cast<int>(gg->render_dims.y) : 0);
-    if (target_w > 0 && target_h > 0)
-        layout_editor_render(renderer, target_w, target_h);
-
     if (target)
         SDL_SetRenderTarget(renderer, nullptr);
 
@@ -144,11 +139,15 @@ void render() {
         gg->window_dims = {static_cast<unsigned int>(window_w),
                            static_cast<unsigned int>(window_h)};
 
+    SDL_FRect drawn_rect{0.0f, 0.0f, static_cast<float>(window_w), static_cast<float>(window_h)};
     if (target) {
         SDL_SetRenderDrawColor(renderer, 5, 5, 10, 255);
         SDL_RenderClear(renderer);
         if (gg->render_scale_mode == RenderScaleMode::Stretch) {
             SDL_RenderCopy(renderer, target, nullptr, nullptr);
+            drawn_rect = SDL_FRect{0.0f, 0.0f,
+                                   static_cast<float>(window_w),
+                                   static_cast<float>(window_h)};
         } else {
             SDL_FRect dst = compute_letterbox_rect(gg->render_dims, gg->window_dims);
             if (gg) {
@@ -172,7 +171,18 @@ void render() {
                 dst.h = new_h;
             }
             SDL_RenderCopyF(renderer, target, nullptr, &dst);
+            drawn_rect = dst;
         }
+    }
+
+    if (layout_editor_is_active()) {
+        int overlay_w = std::max(0, static_cast<int>(std::round(drawn_rect.w)));
+        int overlay_h = std::max(0, static_cast<int>(std::round(drawn_rect.h)));
+        layout_editor_render(renderer,
+                             overlay_w,
+                             overlay_h,
+                             drawn_rect.x,
+                             drawn_rect.y);
     }
 
     if (es->draw_input_device_overlay) {

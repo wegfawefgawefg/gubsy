@@ -42,7 +42,11 @@ void append_status(const std::string& text) {
     g_status_timer = 3.0f;
 }
 
-void draw_grid(SDL_Renderer* renderer, int width, int height) {
+void draw_grid(SDL_Renderer* renderer,
+               int width,
+               int height,
+               float origin_x,
+               float origin_y) {
     if (width <= 0 || height <= 0)
         return;
     const float step = std::clamp(g_grid_step, 0.01f, 0.5f);
@@ -58,27 +62,47 @@ void draw_grid(SDL_Renderer* renderer, int width, int height) {
     for (int i = 0; i <= steps_x; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
         float x = norm * static_cast<float>(width);
-        SDL_RenderDrawLineF(renderer, x, 0.0f, x, static_cast<float>(height));
+        SDL_RenderDrawLineF(renderer,
+                            origin_x + x,
+                            origin_y,
+                            origin_x + x,
+                            origin_y + static_cast<float>(height));
         char label[16];
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
         int text_x = static_cast<int>(x) - 14;
         text_x = std::clamp(text_x, 0, std::max(0, width - 28));
-        draw_text(renderer, label, text_x, 2, label_color);
+        draw_text(renderer, label,
+                  static_cast<int>(origin_x) + text_x,
+                  static_cast<int>(origin_y) + 2,
+                  label_color);
         if (norm > epsilon && norm < 1.0f - epsilon)
-            draw_text(renderer, label, text_x, std::max(height - 18, 0), label_color);
+            draw_text(renderer, label,
+                      static_cast<int>(origin_x) + text_x,
+                      static_cast<int>(origin_y) + std::max(height - 18, 0),
+                      label_color);
     }
     const int steps_y = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
     for (int i = 0; i <= steps_y; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
         float y = norm * static_cast<float>(height);
-        SDL_RenderDrawLineF(renderer, 0.0f, y, static_cast<float>(width), y);
+        SDL_RenderDrawLineF(renderer,
+                            origin_x,
+                            origin_y + y,
+                            origin_x + static_cast<float>(width),
+                            origin_y + y);
         char label[16];
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
         int text_y = static_cast<int>(y) - 8;
         text_y = std::clamp(text_y, 0, std::max(0, height - 16));
         if (norm > epsilon && norm < 1.0f - epsilon) {
-            draw_text(renderer, label, 2, text_y, label_color);
-            draw_text(renderer, label, std::max(width - 60, 2), text_y, label_color);
+            draw_text(renderer, label,
+                      static_cast<int>(origin_x) + 2,
+                      static_cast<int>(origin_y) + text_y,
+                      label_color);
+            draw_text(renderer, label,
+                      static_cast<int>(origin_x) + std::max(width - 60, 2),
+                      static_cast<int>(origin_y) + text_y,
+                      label_color);
         }
     }
 
@@ -88,14 +112,16 @@ void draw_grid(SDL_Renderer* renderer, int width, int height) {
 void draw_layout_overlay(SDL_Renderer* renderer,
                          const UILayout& layout,
                          int width,
-                         int height) {
+                         int height,
+                         float origin_x,
+                         float origin_y) {
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     for (const auto& obj : layout.objects) {
         SDL_FRect rect;
-        rect.x = obj.x * static_cast<float>(width);
-        rect.y = obj.y * static_cast<float>(height);
+        rect.x = origin_x + obj.x * static_cast<float>(width);
+        rect.y = origin_y + obj.y * static_cast<float>(height);
         rect.w = obj.w * static_cast<float>(width);
         rect.h = obj.h * static_cast<float>(height);
 
@@ -259,14 +285,18 @@ bool layout_editor_wants_input() {
     return g_active;
 }
 
-void layout_editor_render(SDL_Renderer* renderer, int screen_width, int screen_height) {
+void layout_editor_render(SDL_Renderer* renderer,
+                          int screen_width,
+                          int screen_height,
+                          float origin_x,
+                          float origin_y) {
     if (!g_active || !renderer)
         return;
     if (!has_layouts())
         return;
-    draw_grid(renderer, screen_width, screen_height);
+    draw_grid(renderer, screen_width, screen_height, origin_x, origin_y);
     if (const UILayout* layout = selected_layout())
-        draw_layout_overlay(renderer, *layout, screen_width, screen_height);
+        draw_layout_overlay(renderer, *layout, screen_width, screen_height, origin_x, origin_y);
 }
 
 void layout_editor_shutdown() {
