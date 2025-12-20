@@ -19,6 +19,29 @@ bool g_show_binds = false;
 bool g_show_layouts = false;
 bool g_show_video = false;
 
+struct ResolutionPreset {
+    const char* label;
+    int w;
+    int h;
+};
+
+constexpr ResolutionPreset kRenderPresets[] = {
+    {"720p (1280x720)", 1280, 720},
+    {"900p (1600x900)", 1600, 900},
+    {"1080p (1920x1080)", 1920, 1080},
+    {"1440p (2560x1440)", 2560, 1440},
+    {"Ultrawide (2560x1080)", 2560, 1080},
+    {"4K (3840x2160)", 3840, 2160},
+};
+
+constexpr ResolutionPreset kWindowPresets[] = {
+    {"720p Window", 1280, 720},
+    {"900p Window", 1600, 900},
+    {"1080p Window", 1920, 1080},
+    {"Ultrawide Window", 2560, 1080},
+    {"1440p Window", 2560, 1440},
+};
+
 struct WindowToggle {
     const char* label;
     bool* flag;
@@ -298,11 +321,22 @@ void render_video_window() {
     ImGui::TextUnformatted("Render Resolution");
     ImGui::InputInt("Render Width", &pending_render_w);
     ImGui::InputInt("Render Height", &pending_render_h);
+    static int render_preset_idx = -1;
+    auto find_render_preset = [&](int w, int h) -> int {
+        for (int i = 0; i < IM_ARRAYSIZE(kRenderPresets); ++i) {
+            if (kRenderPresets[i].w == w && kRenderPresets[i].h == h)
+                return i;
+        }
+        return -1;
+    };
+
+    // Apply render resolution button
     if (ImGui::Button("Apply Render Resolution")) {
         if (set_render_resolution(pending_render_w, pending_render_h)) {
             glm::ivec2 updated = get_render_dimensions();
             pending_render_w = updated.x;
             pending_render_h = updated.y;
+            render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
         }
     }
     ImGui::SameLine();
@@ -310,43 +344,76 @@ void render_video_window() {
         pending_render_w = window_dims.x;
         pending_render_h = window_dims.y;
         set_render_resolution(pending_render_w, pending_render_h);
+        render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset Render##render")) {
         pending_render_w = 1280;
         pending_render_h = 720;
         set_render_resolution(pending_render_w, pending_render_h);
+        render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
     }
-    if (ImGui::Button("1080p Render")) {
-        pending_render_w = 1920;
-        pending_render_h = 1080;
-        set_render_resolution(pending_render_w, pending_render_h);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("1440p Render")) {
-        pending_render_w = 2560;
-        pending_render_h = 1440;
-        set_render_resolution(pending_render_w, pending_render_h);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("2560x1080 Render")) {
-        pending_render_w = 2560;
-        pending_render_h = 1080;
-        set_render_resolution(pending_render_w, pending_render_h);
+    const char* render_preset_label =
+        (render_preset_idx >= 0) ? kRenderPresets[render_preset_idx].label : "Custom";
+    if (ImGui::BeginCombo("Render Preset", render_preset_label)) {
+        for (int i = 0; i < IM_ARRAYSIZE(kRenderPresets); ++i) {
+            bool selected = (render_preset_idx == i);
+            if (ImGui::Selectable(kRenderPresets[i].label, selected)) {
+                render_preset_idx = i;
+                pending_render_w = kRenderPresets[i].w;
+                pending_render_h = kRenderPresets[i].h;
+                set_render_resolution(pending_render_w, pending_render_h);
+            }
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        if (ImGui::Selectable("Custom", render_preset_idx == -1)) {
+            render_preset_idx = -1;
+        }
+        ImGui::EndCombo();
     }
 
     ImGui::Separator();
     ImGui::TextUnformatted("Window");
     ImGui::InputInt("Window Width", &pending_window_w);
     ImGui::InputInt("Window Height", &pending_window_h);
+    static int window_preset_idx = -1;
+    auto find_window_preset = [&](int w, int h) -> int {
+        for (int i = 0; i < IM_ARRAYSIZE(kWindowPresets); ++i) {
+            if (kWindowPresets[i].w == w && kWindowPresets[i].h == h)
+                return i;
+        }
+        return -1;
+    };
     if (ImGui::Button("Apply Window Size")) {
         set_window_dimensions(pending_window_w, pending_window_h);
+        window_preset_idx = find_window_preset(pending_window_w, pending_window_h);
     }
     ImGui::SameLine();
     if (ImGui::Button("Match Render Size##window")) {
         pending_window_w = render_dims.x;
         pending_window_h = render_dims.y;
         set_window_dimensions(pending_window_w, pending_window_h);
+        window_preset_idx = find_window_preset(pending_window_w, pending_window_h);
+    }
+    const char* window_preset_label =
+        (window_preset_idx >= 0) ? kWindowPresets[window_preset_idx].label : "Custom";
+    if (ImGui::BeginCombo("Window Preset", window_preset_label)) {
+        for (int i = 0; i < IM_ARRAYSIZE(kWindowPresets); ++i) {
+            bool selected = (window_preset_idx == i);
+            if (ImGui::Selectable(kWindowPresets[i].label, selected)) {
+                window_preset_idx = i;
+                pending_window_w = kWindowPresets[i].w;
+                pending_window_h = kWindowPresets[i].h;
+                set_window_dimensions(pending_window_w, pending_window_h);
+            }
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        if (ImGui::Selectable("Custom##window", window_preset_idx == -1)) {
+            window_preset_idx = -1;
+        }
+        ImGui::EndCombo();
     }
 
     const char* window_mode_labels[] = {"Windowed", "Borderless", "Fullscreen"};
