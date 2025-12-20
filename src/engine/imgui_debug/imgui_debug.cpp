@@ -362,6 +362,26 @@ void render_video_window() {
         set_render_scale_mode(static_cast<RenderScaleMode>(scale_mode));
     }
 
+    ImGui::Separator();
+    ImGui::TextUnformatted("Preview adjustments (debug)");
+    float zoom = gg->preview_zoom;
+    if (ImGui::SliderFloat("Zoom", &zoom, 0.5f, 3.0f, "%.2fx")) {
+        gg->preview_zoom = zoom;
+    }
+    float pan[2] = {gg->preview_pan.x, gg->preview_pan.y};
+    if (ImGui::DragFloat2("Pan (pixels)", pan, 1.0f, -1000.0f, 1000.0f)) {
+        gg->preview_pan = glm::vec2(pan[0], pan[1]);
+    }
+    float safe_vals[4] = {gg->safe_area.x, gg->safe_area.y, gg->safe_area.z, gg->safe_area.w};
+    if (ImGui::SliderFloat4("Safe area (pct of window)", safe_vals, 0.0f, 0.25f, "%.3f")) {
+        gg->safe_area = glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
+    }
+    if (ImGui::Button("Reset Preview Adjustments")) {
+        gg->preview_zoom = 1.0f;
+        gg->preview_pan = glm::vec2(0.0f);
+        gg->safe_area = glm::vec4(0.0f);
+    }
+
     ImGui::End();
 }
 

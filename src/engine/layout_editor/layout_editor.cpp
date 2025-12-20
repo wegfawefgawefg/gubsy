@@ -3,11 +3,13 @@
 #include "engine/globals.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
+#include "engine/graphics.hpp"
 
 #include <imgui.h>
 #include <SDL2/SDL.h>
 
 #include <algorithm>
+#include <climits>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -20,11 +22,7 @@ float g_grid_step = 0.1f;
 bool g_snap_enabled = true;
 std::string g_status_text;
 float g_status_timer = 0.0f;
-bool g_use_virtual_resolution = false;
-int g_virtual_width = 1920;
-int g_virtual_height = 1080;
-int g_pending_width = 1920;
-int g_pending_height = 1080;
+bool g_follow_render_resolution = true;
 
 bool has_layouts() {
     return es && !es->ui_layouts_pool.empty();
@@ -43,70 +41,20 @@ void append_status(const std::string& text) {
     g_status_timer = 3.0f;
 }
 
-struct ViewportInfo {
-    SDL_FRect rect;
-    float source_w;
-    float source_h;
-};
-
-ViewportInfo compute_viewport(int screen_w, int screen_h, const UILayout& layout) {
-    float src_w = g_use_virtual_resolution && g_virtual_width > 0
-                      ? static_cast<float>(g_virtual_width)
-                      : static_cast<float>(layout.resolution_width);
-    float src_h = g_use_virtual_resolution && g_virtual_height > 0
-                      ? static_cast<float>(g_virtual_height)
-                      : static_cast<float>(layout.resolution_height);
-    if (src_w <= 0.0f) src_w = 1.0f;
-    if (src_h <= 0.0f) src_h = 1.0f;
-    float src_aspect = src_w / src_h;
-    float dst_aspect = static_cast<float>(screen_w) / static_cast<float>(screen_h);
-    SDL_FRect rect{};
-    if (dst_aspect >= src_aspect) {
-        rect.h = static_cast<float>(screen_h);
-        rect.w = rect.h * src_aspect;
-        rect.x = (static_cast<float>(screen_w) - rect.w) * 0.5f;
-        rect.y = 0.0f;
-    } else {
-        rect.w = static_cast<float>(screen_w);
-        rect.h = rect.w / src_aspect;
-        rect.x = 0.0f;
-        rect.y = (static_cast<float>(screen_h) - rect.h) * 0.5f;
-    }
-    return {rect, src_w, src_h};
-}
-
-void shade_letterbox(SDL_Renderer* renderer, const SDL_FRect& rect, int width, int height) {
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 5, 5, 10, 150);
-    auto fill_rect = [&](float x, float y, float w, float h) {
-        SDL_FRect r{x, y, w, h};
-        SDL_RenderFillRectF(renderer, &r);
-    };
-    fill_rect(0.0f, 0.0f, rect.x, static_cast<float>(height));
-    fill_rect(rect.x + rect.w, 0.0f,
-              static_cast<float>(width) - (rect.x + rect.w),
-              static_cast<float>(height));
-    fill_rect(0.0f, 0.0f, static_cast<float>(width), rect.y);
-    fill_rect(0.0f, rect.y + rect.h, static_cast<float>(width),
-              static_cast<float>(height) - (rect.y + rect.h));
-    SDL_SetRenderDrawColor(renderer, 90, 90, 120, 200);
-    SDL_RenderDrawRectF(renderer, &rect);
-}
-
-void draw_grid(SDL_Renderer* renderer, const SDL_FRect& view_rect) {
+void draw_grid(SDL_Renderer* renderer, int width, int height) {
     const float step = std::clamp(g_grid_step, 0.01f, 0.5f);
-    const float px_step_x = step * view_rect.w;
-    const float px_step_y = step * view_rect.h;
+    const float px_step_x = step * static_cast<float>(width);
+    const float px_step_y = step * static_cast<float>(height);
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 40, 40, 50, 120);
 
-    for (float x = view_rect.x; x <= view_rect.x + view_rect.w + 0.5f; x += px_step_x) {
-        SDL_RenderDrawLineF(renderer, x, view_rect.y, x, view_rect.y + view_rect.h);
+    for (float x = 0.0f; x <= static_cast<float>(width) + 0.5f; x += px_step_x) {
+        SDL_RenderDrawLineF(renderer, x, 0.0f, x, static_cast<float>(height));
     }
-    for (float y = view_rect.y; y <= view_rect.y + view_rect.h + 0.5f; y += px_step_y) {
-        SDL_RenderDrawLineF(renderer, view_rect.x, y, view_rect.x + view_rect.w, y);
+    for (float y = 0.0f; y <= static_cast<float>(height) + 0.5f; y += px_step_y) {
+        SDL_RenderDrawLineF(renderer, 0.0f, y, static_cast<float>(width), y);
     }
 
     SDL_SetRenderDrawBlendMode(renderer, old_mode);
@@ -114,16 +62,17 @@ void draw_grid(SDL_Renderer* renderer, const SDL_FRect& view_rect) {
 
 void draw_layout_overlay(SDL_Renderer* renderer,
                          const UILayout& layout,
-                         const SDL_FRect& view_rect) {
+                         int width,
+                         int height) {
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     for (const auto& obj : layout.objects) {
         SDL_FRect rect;
-        rect.x = view_rect.x + obj.x * view_rect.w;
-        rect.y = view_rect.y + obj.y * view_rect.h;
-        rect.w = obj.w * view_rect.w;
-        rect.h = obj.h * view_rect.h;
+        rect.x = obj.x * static_cast<float>(width);
+        rect.y = obj.y * static_cast<float>(height);
+        rect.w = obj.w * static_cast<float>(width);
+        rect.h = obj.h * static_cast<float>(height);
 
         SDL_Color fill{60, 170, 255, 40};
         SDL_Color border{60, 170, 255, 200};
@@ -183,6 +132,7 @@ void render_panel(float dt) {
     for (const auto& s : label_storage)
         labels.push_back(s.c_str());
 
+    ImGui::Checkbox("Follow render resolution", &g_follow_render_resolution);
     ImGui::ListBox("Layouts", &g_selected_layout, labels.data(),
                    static_cast<int>(labels.size()), 6);
 
@@ -191,57 +141,10 @@ void render_panel(float dt) {
         ImGui::Text("Objects: %zu", layout->objects.size());
         ImGui::Text("Layout: %dx%d",
                     layout->resolution_width, layout->resolution_height);
-        ImGui::Text("Preview: %dx%d",
-                    g_use_virtual_resolution ? g_virtual_width : layout->resolution_width,
-                    g_use_virtual_resolution ? g_virtual_height : layout->resolution_height);
     }
-
-    ImGui::Separator();
-    ImGui::Checkbox("Override resolution", &g_use_virtual_resolution);
-    if (g_use_virtual_resolution) {
-        ImGui::InputInt("Width", &g_pending_width);
-        ImGui::InputInt("Height", &g_pending_height);
-        if (ImGui::Button("Apply")) {
-            g_virtual_width = std::max(16, g_pending_width);
-            g_virtual_height = std::max(16, g_pending_height);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Match layout")) {
-            if (const UILayout* layout = selected_layout()) {
-                g_virtual_width = layout->resolution_width;
-                g_virtual_height = layout->resolution_height;
-                g_pending_width = g_virtual_width;
-                g_pending_height = g_virtual_height;
-            }
-        }
-        ImGui::TextUnformatted("Presets:");
-        if (ImGui::Button("1080p")) {
-            g_virtual_width = 1920;
-            g_virtual_height = 1080;
-            g_pending_width = g_virtual_width;
-            g_pending_height = g_virtual_height;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("1440p")) {
-            g_virtual_width = 2560;
-            g_virtual_height = 1440;
-            g_pending_width = g_virtual_width;
-            g_pending_height = g_virtual_height;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("2560x1080")) {
-            g_virtual_width = 2560;
-            g_virtual_height = 1080;
-            g_pending_width = g_virtual_width;
-            g_pending_height = g_virtual_height;
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("1600x1200")) {
-            g_virtual_width = 1600;
-            g_virtual_height = 1200;
-            g_pending_width = g_virtual_width;
-            g_pending_height = g_virtual_height;
-        }
+    if (gg) {
+        glm::ivec2 dims = get_render_dimensions();
+        ImGui::Text("Render target: %dx%d", dims.x, dims.y);
     }
 
     if (!g_status_text.empty() && g_status_timer > 0.0f) {
@@ -282,9 +185,34 @@ void handle_hotkeys() {
         g_grid_step = std::min(0.5f, g_grid_step + 0.01f);
 }
 
+void update_selection_from_render() {
+    if (!g_follow_render_resolution)
+        return;
+    if (!gg || !has_layouts())
+        return;
+    int target_w = static_cast<int>(gg->render_dims.x);
+    int target_h = static_cast<int>(gg->render_dims.y);
+    if (target_w <= 0 || target_h <= 0)
+        return;
+    int best_idx = g_selected_layout;
+    int best_score = INT_MAX;
+    for (std::size_t i = 0; i < es->ui_layouts_pool.size(); ++i) {
+        const auto& layout = es->ui_layouts_pool[i];
+        int dw = layout.resolution_width - target_w;
+        int dh = layout.resolution_height - target_h;
+        int score = dw * dw + dh * dh;
+        if (score < best_score) {
+            best_score = score;
+            best_idx = static_cast<int>(i);
+        }
+    }
+    g_selected_layout = best_idx;
+}
+
 } // namespace
 
 void layout_editor_begin_frame(float dt) {
+    update_selection_from_render();
     handle_hotkeys();
     if (g_active)
         render_panel(dt);
@@ -305,12 +233,9 @@ void layout_editor_render(SDL_Renderer* renderer, int screen_width, int screen_h
         return;
     if (!has_layouts())
         return;
-    if (const UILayout* layout = selected_layout()) {
-        ViewportInfo view = compute_viewport(screen_width, screen_height, *layout);
-        shade_letterbox(renderer, view.rect, screen_width, screen_height);
-        draw_grid(renderer, view.rect);
-        draw_layout_overlay(renderer, *layout, view.rect);
-    }
+    draw_grid(renderer, screen_width, screen_height);
+    if (const UILayout* layout = selected_layout())
+        draw_layout_overlay(renderer, *layout, screen_width, screen_height);
 }
 
 void layout_editor_shutdown() {

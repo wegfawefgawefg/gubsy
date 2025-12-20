@@ -129,6 +129,11 @@ void render() {
         }
     }
 
+    int target_w = (gg ? static_cast<int>(gg->render_dims.x) : 0);
+    int target_h = (gg ? static_cast<int>(gg->render_dims.y) : 0);
+    if (target_w > 0 && target_h > 0)
+        layout_editor_render(renderer, target_w, target_h);
+
     if (target)
         SDL_SetRenderTarget(renderer, nullptr);
 
@@ -146,6 +151,26 @@ void render() {
             SDL_RenderCopy(renderer, target, nullptr, nullptr);
         } else {
             SDL_FRect dst = compute_letterbox_rect(gg->render_dims, gg->window_dims);
+            if (gg) {
+                auto safe = gg->safe_area;
+                float pad_left = std::clamp(safe.x, 0.0f, 0.45f) * static_cast<float>(window_w);
+                float pad_right = std::clamp(safe.y, 0.0f, 0.45f) * static_cast<float>(window_w);
+                float pad_top = std::clamp(safe.z, 0.0f, 0.45f) * static_cast<float>(window_h);
+                float pad_bottom = std::clamp(safe.w, 0.0f, 0.45f) * static_cast<float>(window_h);
+                dst.x += pad_left;
+                dst.y += pad_top;
+                dst.w = std::max(4.0f, dst.w - (pad_left + pad_right));
+                dst.h = std::max(4.0f, dst.h - (pad_top + pad_bottom));
+                float zoom = std::max(0.1f, gg->preview_zoom);
+                float cx = dst.x + dst.w * 0.5f;
+                float cy = dst.y + dst.h * 0.5f;
+                float new_w = dst.w * zoom;
+                float new_h = dst.h * zoom;
+                dst.x = cx - new_w * 0.5f + gg->preview_pan.x;
+                dst.y = cy - new_h * 0.5f + gg->preview_pan.y;
+                dst.w = new_w;
+                dst.h = new_h;
+            }
             SDL_RenderCopyF(renderer, target, nullptr, &dst);
         }
     }
@@ -153,8 +178,6 @@ void render() {
     if (es->draw_input_device_overlay) {
         draw_input_devices_overlay(renderer);
     }
-
-    layout_editor_render(renderer, window_w, window_h);
 
     imgui_debug_render();
     imgui_render_layer();

@@ -47,6 +47,9 @@ struct Graphics {
     RenderScaleMode render_scale_mode{RenderScaleMode::Fit};
     WindowDisplayMode window_mode{WindowDisplayMode::Windowed};
     SDL_Texture* render_target{nullptr};
+    float preview_zoom{1.0f};
+    glm::vec2 preview_pan{0.0f, 0.0f};
+    glm::vec4 safe_area{0.0f, 0.0f, 0.0f, 0.0f}; // left, right, top, bottom (normalized)
 
     Camera2D camera{};
     PlayCam play_cam{};
