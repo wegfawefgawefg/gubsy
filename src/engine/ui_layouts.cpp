@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <random>
 #include <sstream>
 #include <unordered_set>
@@ -16,6 +17,23 @@
 namespace {
 
 constexpr const char* kUILayoutsPath = "data/ui_layouts/layouts.sxp";
+
+const char* form_factor_to_string(UILayoutFormFactor factor) {
+    switch (factor) {
+        case UILayoutFormFactor::Desktop: return "desktop";
+        case UILayoutFormFactor::Tablet: return "tablet";
+        case UILayoutFormFactor::Phone: return "phone";
+    }
+    return "desktop";
+}
+
+UILayoutFormFactor form_factor_from_string(const std::string& value) {
+    if (value == "tablet") return UILayoutFormFactor::Tablet;
+    if (value == "phone") return UILayoutFormFactor::Phone;
+    return UILayoutFormFactor::Desktop;
+}
+
+UILayoutFormFactor g_current_form_factor = UILayoutFormFactor::Desktop;
 
 std::vector<UILayout> parse_ui_layouts_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;
@@ -55,6 +73,16 @@ std::vector<UILayout> parse_ui_layouts_tree(const std::vector<sexp::SValue>& roo
             if (width && height) {
                 layout.resolution_width = *width;
                 layout.resolution_height = *height;
+            }
+        }
+
+        // Parse form factor
+        if (const sexp::SValue* ff_node = sexp::find_child(entry, "form_factor")) {
+            if (ff_node->type == sexp::SValue::Type::List && ff_node->list.size() >= 2) {
+                const sexp::SValue& token = ff_node->list[1];
+                if (token.type == sexp::SValue::Type::Symbol || token.type == sexp::SValue::Type::String) {
+                    layout.form_factor = form_factor_from_string(token.text);
+                }
             }
         }
 
@@ -124,6 +152,7 @@ bool write_ui_layouts_file(const std::vector<UILayout>& layouts) {
         out << "    (id " << layout.id << ")\n";
         out << "    (label " << sexp::quote_string(layout.label) << ")\n";
         out << "    (resolution (width " << layout.resolution_width << ") (height " << layout.resolution_height << "))\n";
+        out << "    (form_factor " << form_factor_to_string(layout.form_factor) << ")\n";
         out << "    (objects\n";
         for (const auto& obj : layout.objects) {
             out << "      (object (id " << obj.id << ") (label " << sexp::quote_string(obj.label) << ") ";
@@ -198,7 +227,8 @@ bool save_ui_layout(const UILayout& layout) {
     for (auto& existing : layouts) {
         if (existing.id == layout.id &&
             existing.resolution_width == layout.resolution_width &&
-            existing.resolution_height == layout.resolution_height) {
+            existing.resolution_height == layout.resolution_height &&
+            existing.form_factor == layout.form_factor) {
             existing = layout;
             updated = true;
             break;
@@ -231,32 +261,35 @@ const UILayout* get_ui_layout_for_resolution(int layout_id, int width, int heigh
     if (candidates.size() == 1)
         return candidates[0];
 
-    // Find best match based on aspect ratio and resolution distance
-    const UILayout* best = candidates[0];
-    float target_aspect = static_cast<float>(width) / static_cast<float>(height);
-    float best_score = std::numeric_limits<float>::max();
-
-    for (const auto* layout : candidates) {
+    auto score_layout = [&](const UILayout* layout) {
+        float target_aspect = static_cast<float>(width) / static_cast<float>(height);
         float layout_aspect = static_cast<float>(layout->resolution_width) / static_cast<float>(layout->resolution_height);
-
-        // Calculate aspect ratio distance
         float aspect_distance = std::abs(target_aspect - layout_aspect);
-
-        // Calculate resolution distance (euclidean)
         float res_dx = static_cast<float>(width - layout->resolution_width);
         float res_dy = static_cast<float>(height - layout->resolution_height);
         float res_distance = std::sqrt(res_dx * res_dx + res_dy * res_dy);
+        return aspect_distance * 1000.0f + res_distance;
+    };
 
-        // Combined score (weight aspect ratio more heavily)
-        float score = aspect_distance * 1000.0f + res_distance;
-
-        if (score < best_score) {
-            best_score = score;
-            best = layout;
+    auto pick_best = [&](UILayoutFormFactor factor, bool require_match) -> const UILayout* {
+        const UILayout* best = nullptr;
+        float best_score = std::numeric_limits<float>::max();
+        for (const auto* layout : candidates) {
+            if (require_match && layout->form_factor != factor)
+                continue;
+            float score = score_layout(layout);
+            if (score < best_score) {
+                best = layout;
+                best_score = score;
+            }
         }
-    }
+        return best;
+    };
 
-    return best;
+    UILayoutFormFactor desired = g_current_form_factor;
+    if (const UILayout* match = pick_best(desired, true))
+        return match;
+    return pick_best(desired, false);
 }
 
 const UIObject* get_ui_object(const UILayout& layout, int obj_id) {
@@ -288,6 +321,14 @@ void reload_ui_layouts_pool() {
 
 std::vector<UILayout>& get_ui_layouts_pool() {
     return es->ui_layouts_pool;
+}
+
+void set_ui_layout_form_factor(UILayoutFormFactor factor) {
+    g_current_form_factor = factor;
+}
+
+UILayoutFormFactor current_ui_layout_form_factor() {
+    return g_current_form_factor;
 }
 
 int generate_ui_layout_id() {

@@ -10,12 +10,19 @@ struct UIObject {
     float x, y, w, h;
 };
 
+enum class UILayoutFormFactor {
+    Desktop = 0,
+    Tablet = 1,
+    Phone = 2,
+};
+
 // UI layout for a specific resolution
 struct UILayout {
     int id;                          // Layout identifier (shared across resolutions)
     std::string label;               // e.g., "PlayScreen", "MenuScreen"
     int resolution_width;
     int resolution_height;
+    UILayoutFormFactor form_factor{UILayoutFormFactor::Desktop};
     std::vector<UIObject> objects;
 
     // Idempotent - overwrites if object with same id exists
@@ -62,6 +69,9 @@ void reload_ui_layouts_pool();
  Get reference to UI layouts pool
 */
 std::vector<UILayout>& get_ui_layouts_pool();
+
+void set_ui_layout_form_factor(UILayoutFormFactor factor);
+UILayoutFormFactor current_ui_layout_form_factor();
 
 /*
  Generate random 8-digit IDs for runtime-created layouts/objects

@@ -416,6 +416,13 @@ void render_video_window() {
         ImGui::EndCombo();
     }
 
+    const char* form_labels[] = {"Desktop / TV", "Tablet / Handheld", "Phone / Portrait"};
+    int form_factor = static_cast<int>(current_ui_layout_form_factor());
+    if (ImGui::Combo("Layout Form Factor", &form_factor, form_labels, IM_ARRAYSIZE(form_labels))) {
+        form_factor = std::clamp(form_factor, 0, 2);
+        set_ui_layout_form_factor(static_cast<UILayoutFormFactor>(form_factor));
+    }
+
     const char* window_mode_labels[] = {"Windowed", "Borderless", "Fullscreen"};
     int window_mode = static_cast<int>(gg->window_mode);
     if (ImGui::Combo("Window Mode", &window_mode,
