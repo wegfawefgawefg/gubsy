@@ -9,6 +9,7 @@
 #include <SDL2/SDL.h>
 
 #include <algorithm>
+#include <cmath>
 #include <climits>
 #include <cstdio>
 #include <string>
@@ -42,19 +43,39 @@ void append_status(const std::string& text) {
 }
 
 void draw_grid(SDL_Renderer* renderer, int width, int height) {
+    if (width <= 0 || height <= 0)
+        return;
     const float step = std::clamp(g_grid_step, 0.01f, 0.5f);
-    const float px_step_x = step * static_cast<float>(width);
-    const float px_step_y = step * static_cast<float>(height);
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 40, 40, 50, 120);
 
-    for (float x = 0.0f; x <= static_cast<float>(width) + 0.5f; x += px_step_x) {
+    SDL_Color label_color{150, 160, 190, 210};
+
+    const int steps_x = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
+    for (int i = 0; i <= steps_x; ++i) {
+        float norm = std::min(step * static_cast<float>(i), 1.0f);
+        float x = norm * static_cast<float>(width);
         SDL_RenderDrawLineF(renderer, x, 0.0f, x, static_cast<float>(height));
+        char label[16];
+        std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
+        int text_x = static_cast<int>(x) - 14;
+        text_x = std::clamp(text_x, 0, std::max(0, width - 28));
+        draw_text(renderer, label, text_x, 2, label_color);
+        draw_text(renderer, label, text_x, std::max(height - 18, 0), label_color);
     }
-    for (float y = 0.0f; y <= static_cast<float>(height) + 0.5f; y += px_step_y) {
+    const int steps_y = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
+    for (int i = 0; i <= steps_y; ++i) {
+        float norm = std::min(step * static_cast<float>(i), 1.0f);
+        float y = norm * static_cast<float>(height);
         SDL_RenderDrawLineF(renderer, 0.0f, y, static_cast<float>(width), y);
+        char label[16];
+        std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
+        int text_y = static_cast<int>(y) - 8;
+        text_y = std::clamp(text_y, 0, std::max(0, height - 16));
+        draw_text(renderer, label, 2, text_y, label_color);
+        draw_text(renderer, label, std::max(width - 60, 2), text_y, label_color);
     }
 
     SDL_SetRenderDrawBlendMode(renderer, old_mode);
@@ -112,7 +133,9 @@ void render_panel(float dt) {
         return;
     }
     ImGui::TextUnformatted("Ctrl+L toggle | Ctrl+S save | G snap");
-    ImGui::Text("Grid %.3f", static_cast<double>(g_grid_step));
+    ImGui::Text("Grid %.3f (%s)",
+                static_cast<double>(g_grid_step),
+                g_snap_enabled ? "snap ON" : "snap OFF");
     if (!has_layouts()) {
         ImGui::TextUnformatted("No layouts loaded.");
         ImGui::End();
