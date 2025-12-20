@@ -7,6 +7,7 @@
 - Persist edits back to `data/ui_layouts/layouts.sxp` (or a temp file) with `Ctrl+S`.
 - Support multi-selection (drag box, Ctrl+click) with group move/scale and copy/paste.
 - Provide undo/redo (snapshot-based) so experiments are reversible.
+- Allow virtual-resolution preview: render the UI/layout into an offscreen target with any width/height/aspect and scale it to the actual window so designers can inspect 2560×1080, 4:3, etc. without resizing the monitor.
 
 ## Toggle & Lifecycle
 - Hotkey: `Ctrl+L` toggles layout edit mode (engine-wide). Future: hook into the ImGui debug HUD with a checkbox.
