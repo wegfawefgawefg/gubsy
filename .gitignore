@@ -51,3 +51,4 @@ compile_commands.json
 config/*
 audio.ini
 mods_runtime/
+imgui.ini
