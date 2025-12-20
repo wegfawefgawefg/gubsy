@@ -11,6 +11,7 @@
 #include <SDL2/SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <climits>
 #include <cstdio>
@@ -37,6 +38,71 @@ struct PendingLayoutRequest {
 
 PendingLayoutRequest g_last_request{};
 bool g_layout_dirty = false;
+
+struct HandleDrawInfo {
+    HandleType type;
+    SDL_FRect rect;
+};
+
+std::array<HandleDrawInfo, 8> build_handle_rects(const SDL_FRect& rect) {
+    std::array<HandleDrawInfo, 8> handles{};
+    float half_corner = kHandleSize * 0.5f;
+    float edge_len_v = std::min(rect.h, kEdgeHandleLength);
+    float edge_len_h = std::min(rect.w, kEdgeHandleLength);
+
+    handles[0] = {HandleType::CornerTopLeft,
+                  SDL_FRect{rect.x - half_corner, rect.y - half_corner,
+                            kHandleSize, kHandleSize}};
+    handles[1] = {HandleType::CornerTopRight,
+                  SDL_FRect{rect.x + rect.w - half_corner, rect.y - half_corner,
+                            kHandleSize, kHandleSize}};
+    handles[2] = {HandleType::CornerBottomLeft,
+                  SDL_FRect{rect.x - half_corner, rect.y + rect.h - half_corner,
+                            kHandleSize, kHandleSize}};
+    handles[3] = {HandleType::CornerBottomRight,
+                  SDL_FRect{rect.x + rect.w - half_corner,
+                            rect.y + rect.h - half_corner,
+                            kHandleSize, kHandleSize}};
+
+    handles[4] = {HandleType::EdgeTop,
+                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
+                            rect.y - kEdgeHandleThickness * 0.5f,
+                            edge_len_h,
+                            kEdgeHandleThickness}};
+    handles[5] = {HandleType::EdgeBottom,
+                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
+                            rect.y + rect.h - kEdgeHandleThickness * 0.5f,
+                            edge_len_h,
+                            kEdgeHandleThickness}};
+    handles[6] = {HandleType::EdgeLeft,
+                  SDL_FRect{rect.x - kEdgeHandleThickness * 0.5f,
+                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
+                            kEdgeHandleThickness,
+                            edge_len_v}};
+    handles[7] = {HandleType::EdgeRight,
+                  SDL_FRect{rect.x + rect.w - kEdgeHandleThickness * 0.5f,
+                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
+                            kEdgeHandleThickness,
+                            edge_len_v}};
+    return handles;
+}
+
+void draw_handles(SDL_Renderer* renderer,
+                  const SDL_FRect& rect,
+                  HandleType highlight) {
+    auto handles = build_handle_rects(rect);
+    SDL_Color base_fill{110, 170, 255, 140};
+    SDL_Color base_border{40, 120, 230, 220};
+    SDL_Color highlight_fill{250, 230, 120, 170};
+    SDL_Color highlight_border{255, 250, 140, 240};
+    for (const auto& handle : handles) {
+        bool active = (handle.type == highlight);
+        fill_and_outline(renderer,
+                         handle.rect,
+                         active ? highlight_fill : base_fill,
+                         active ? highlight_border : base_border);
+    }
+}
 
 bool has_layouts() {
     return es && !es->ui_layouts_pool.empty();
@@ -192,11 +258,13 @@ void draw_layout_overlay(SDL_Renderer* renderer,
 
         SDL_Color fill{60, 170, 255, 40};
         SDL_Color border{60, 170, 255, 200};
-        if (static_cast<int>(idx) == selected_index) {
+        const bool is_selected = static_cast<int>(idx) == selected_index;
+        const bool is_dragging = static_cast<int>(idx) == dragging_index;
+        if (is_selected) {
             fill = SDL_Color{120, 210, 120, 70};
             border = SDL_Color{140, 240, 140, 230};
         }
-        if (static_cast<int>(idx) == dragging_index) {
+        if (is_dragging) {
             fill = SDL_Color{220, 200, 90, 70};
             border = SDL_Color{250, 230, 110, 230};
         }
@@ -218,6 +286,12 @@ void draw_layout_overlay(SDL_Renderer* renderer,
         draw_text(renderer, coords, static_cast<int>(rect.x) + 6,
                   static_cast<int>(rect.y) + 24,
                   SDL_Color{210, 220, 240, 200});
+
+        if (is_selected) {
+            HandleType handle = is_dragging ? layout_editor_drag_handle()
+                                            : HandleType::Center;
+            draw_handles(renderer, rect, handle);
+        }
     }
     SDL_SetRenderDrawBlendMode(renderer, old_mode);
 }
@@ -301,10 +375,10 @@ void handle_mouse_input() {
     bool mouse_down = (es->device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
 
     if (mouse_down && !g_mouse_was_down) {
-        int hit_index = -1;
-        if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit_index)) {
-            layout_editor_select(hit_index);
-            layout_editor_begin_drag(*layout, hit_index, mouse_x, mouse_y, viewport);
+        HitResult hit{};
+        if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit)) {
+            layout_editor_select(hit.object_index);
+            layout_editor_begin_drag(*layout, hit, mouse_x, mouse_y, viewport);
         } else {
             layout_editor_clear_selection();
             layout_editor_end_drag();
