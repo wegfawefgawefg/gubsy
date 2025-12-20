@@ -32,6 +32,8 @@ constexpr ResolutionPreset kRenderPresets[] = {
     {"1440p (2560x1440)", 2560, 1440},
     {"Ultrawide (2560x1080)", 2560, 1080},
     {"4K (3840x2160)", 3840, 2160},
+    {"Mobile Portrait (720x1280)", 720, 1280},
+    {"Mobile Portrait (1080x1920)", 1080, 1920},
 };
 
 constexpr ResolutionPreset kWindowPresets[] = {
@@ -40,6 +42,8 @@ constexpr ResolutionPreset kWindowPresets[] = {
     {"1080p Window", 1920, 1080},
     {"Ultrawide Window", 2560, 1080},
     {"1440p Window", 2560, 1440},
+    {"Mobile Portrait (720x1280)", 720, 1280},
+    {"Mobile Portrait (1080x1920)", 1080, 1920},
 };
 
 struct WindowToggle {
@@ -60,6 +64,23 @@ struct ActionLabel {
     int id;
     const char* label;
 };
+
+void auto_adjust_form_factor_for_resolution(int width, int height) {
+    if (width <= 0 || height <= 0)
+        return;
+    UILayoutFormFactor current = current_ui_layout_form_factor();
+    if (height > width) {
+        if (current != UILayoutFormFactor::Phone)
+            set_ui_layout_form_factor(UILayoutFormFactor::Phone);
+        return;
+    }
+    if (current == UILayoutFormFactor::Phone) {
+        UILayoutFormFactor fallback = (width <= 1500)
+                                          ? UILayoutFormFactor::Tablet
+                                          : UILayoutFormFactor::Desktop;
+        set_ui_layout_form_factor(fallback);
+    }
+}
 
 constexpr ActionLabel kTrackedActions[] = {
     {GameAction::MENU_UP, "MENU_UP"},
@@ -329,29 +350,34 @@ void render_video_window() {
         }
         return -1;
     };
-
-    // Apply render resolution button
-    if (ImGui::Button("Apply Render Resolution")) {
-        if (set_render_resolution(pending_render_w, pending_render_h)) {
+    auto apply_render_resolution = [&](int w, int h) {
+        if (set_render_resolution(w, h)) {
             glm::ivec2 updated = get_render_dimensions();
             pending_render_w = updated.x;
             pending_render_h = updated.y;
-            render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
+        } else {
+            pending_render_w = w;
+            pending_render_h = h;
         }
+        render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
+        auto_adjust_form_factor_for_resolution(pending_render_w, pending_render_h);
+    };
+
+    // Apply render resolution button
+    if (ImGui::Button("Apply Render Resolution")) {
+        apply_render_resolution(pending_render_w, pending_render_h);
     }
     ImGui::SameLine();
     if (ImGui::Button("Match Window Size##render")) {
         pending_render_w = window_dims.x;
         pending_render_h = window_dims.y;
-        set_render_resolution(pending_render_w, pending_render_h);
-        render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
+        apply_render_resolution(pending_render_w, pending_render_h);
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset Render##render")) {
         pending_render_w = 1280;
         pending_render_h = 720;
-        set_render_resolution(pending_render_w, pending_render_h);
-        render_preset_idx = find_render_preset(pending_render_w, pending_render_h);
+        apply_render_resolution(pending_render_w, pending_render_h);
     }
     const char* render_preset_label =
         (render_preset_idx >= 0) ? kRenderPresets[render_preset_idx].label : "Custom";
@@ -362,7 +388,7 @@ void render_video_window() {
                 render_preset_idx = i;
                 pending_render_w = kRenderPresets[i].w;
                 pending_render_h = kRenderPresets[i].h;
-                set_render_resolution(pending_render_w, pending_render_h);
+                apply_render_resolution(pending_render_w, pending_render_h);
             }
             if (selected)
                 ImGui::SetItemDefaultFocus();
@@ -385,16 +411,22 @@ void render_video_window() {
         }
         return -1;
     };
-    if (ImGui::Button("Apply Window Size")) {
-        set_window_dimensions(pending_window_w, pending_window_h);
+    auto apply_window_size = [&](int w, int h) {
+        set_window_dimensions(w, h);
+        glm::ivec2 dims_now = get_window_dimensions();
+        pending_window_w = dims_now.x;
+        pending_window_h = dims_now.y;
         window_preset_idx = find_window_preset(pending_window_w, pending_window_h);
+        auto_adjust_form_factor_for_resolution(pending_window_w, pending_window_h);
+    };
+    if (ImGui::Button("Apply Window Size")) {
+        apply_window_size(pending_window_w, pending_window_h);
     }
     ImGui::SameLine();
     if (ImGui::Button("Match Render Size##window")) {
         pending_window_w = render_dims.x;
         pending_window_h = render_dims.y;
-        set_window_dimensions(pending_window_w, pending_window_h);
-        window_preset_idx = find_window_preset(pending_window_w, pending_window_h);
+        apply_window_size(pending_window_w, pending_window_h);
     }
     const char* window_preset_label =
         (window_preset_idx >= 0) ? kWindowPresets[window_preset_idx].label : "Custom";
@@ -405,7 +437,7 @@ void render_video_window() {
                 window_preset_idx = i;
                 pending_window_w = kWindowPresets[i].w;
                 pending_window_h = kWindowPresets[i].h;
-                set_window_dimensions(pending_window_w, pending_window_h);
+                apply_window_size(pending_window_w, pending_window_h);
             }
             if (selected)
                 ImGui::SetItemDefaultFocus();

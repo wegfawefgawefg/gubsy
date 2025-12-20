@@ -119,6 +119,7 @@ void render_panel(float dt) {
         return;
     }
 
+    const char* factor_labels[] = {"Desktop", "Tablet", "Phone"};
     std::vector<const char*> labels;
     labels.reserve(es->ui_layouts_pool.size());
     static std::vector<std::string> label_storage;
@@ -126,15 +127,18 @@ void render_panel(float dt) {
     for (const auto& layout : es->ui_layouts_pool) {
         std::string label = layout.label + " (ID " + std::to_string(layout.id) + ") " +
                             std::to_string(layout.resolution_width) + "x" +
-                            std::to_string(layout.resolution_height);
+                            std::to_string(layout.resolution_height) + " [" +
+                            factor_labels[static_cast<int>(layout.form_factor)] + "]";
         label_storage.push_back(label);
     }
     for (const auto& s : label_storage)
         labels.push_back(s.c_str());
 
     ImGui::Checkbox("Follow render resolution", &g_follow_render_resolution);
-    ImGui::ListBox("Layouts", &g_selected_layout, labels.data(),
-                   static_cast<int>(labels.size()), 6);
+    if (ImGui::ListBox("Layouts", &g_selected_layout, labels.data(),
+                       static_cast<int>(labels.size()), 6)) {
+        g_follow_render_resolution = false;
+    }
 
     if (const UILayout* layout = selected_layout()) {
         ImGui::Separator();
