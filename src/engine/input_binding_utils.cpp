@@ -405,3 +405,75 @@ glm::vec2 normalized_mouse_coords(const DeviceState& state) {
     return glm::vec2(std::clamp(norm_x, -1.0f, 1.0f),
                      std::clamp(norm_y, -1.0f, 1.0f));
 }
+
+glm::vec2 normalized_mouse_coords_in_render(const DeviceState& state) {
+    if (!gg || !gg->renderer)
+        return glm::vec2(0.0f);
+    if (gg->render_scale_mode == RenderScaleMode::Stretch) {
+        glm::ivec2 dims = get_window_dimensions();
+        int width = std::max(dims.x, 2);
+        int height = std::max(dims.y, 2);
+        float norm_x = (static_cast<float>(state.mouse_x) / static_cast<float>(width - 1)) * 2.0f - 1.0f;
+        float norm_y = (static_cast<float>(state.mouse_y) / static_cast<float>(height - 1)) * 2.0f - 1.0f;
+        return glm::vec2(std::clamp(norm_x, -1.0f, 1.0f),
+                         std::clamp(norm_y, -1.0f, 1.0f));
+    }
+
+    int window_w = static_cast<int>(gg->window_dims.x);
+    int window_h = static_cast<int>(gg->window_dims.y);
+    if (window_w <= 1 || window_h <= 1)
+        return glm::vec2(0.0f);
+
+    float src_w = static_cast<float>(gg->render_dims.x);
+    float src_h = static_cast<float>(gg->render_dims.y);
+    float src_aspect = src_w / src_h;
+    float dst_aspect = static_cast<float>(window_w) / static_cast<float>(window_h);
+
+    float draw_x = 0.0f;
+    float draw_y = 0.0f;
+    float draw_w = static_cast<float>(window_w);
+    float draw_h = static_cast<float>(window_h);
+
+    if (dst_aspect >= src_aspect) {
+        draw_h = static_cast<float>(window_h);
+        draw_w = draw_h * src_aspect;
+        draw_x = (static_cast<float>(window_w) - draw_w) * 0.5f;
+    } else {
+        draw_w = static_cast<float>(window_w);
+        draw_h = draw_w / src_aspect;
+        draw_y = (static_cast<float>(window_h) - draw_h) * 0.5f;
+    }
+
+    float pad_left = std::clamp(gg->safe_area.x, 0.0f, 0.45f) * static_cast<float>(window_w);
+    float pad_right = std::clamp(gg->safe_area.y, 0.0f, 0.45f) * static_cast<float>(window_w);
+    float pad_top = std::clamp(gg->safe_area.z, 0.0f, 0.45f) * static_cast<float>(window_h);
+    float pad_bottom = std::clamp(gg->safe_area.w, 0.0f, 0.45f) * static_cast<float>(window_h);
+
+    draw_x += pad_left;
+    draw_y += pad_top;
+    draw_w = std::max(4.0f, draw_w - (pad_left + pad_right));
+    draw_h = std::max(4.0f, draw_h - (pad_top + pad_bottom));
+
+    float zoom = std::max(0.1f, gg->preview_zoom);
+    float center_x = draw_x + draw_w * 0.5f;
+    float center_y = draw_y + draw_h * 0.5f;
+    draw_w *= zoom;
+    draw_h *= zoom;
+    draw_x = center_x - draw_w * 0.5f + gg->preview_pan.x;
+    draw_y = center_y - draw_h * 0.5f + gg->preview_pan.y;
+
+    float mouse_x = static_cast<float>(state.mouse_x);
+    float mouse_y = static_cast<float>(state.mouse_y);
+
+    if (mouse_x < draw_x || mouse_y < draw_y ||
+        mouse_x > draw_x + draw_w || mouse_y > draw_y + draw_h)
+        return glm::vec2(0.0f);
+
+    float local_x = (mouse_x - draw_x) / draw_w;
+    float local_y = (mouse_y - draw_y) / draw_h;
+
+    float norm_x = local_x * 2.0f - 1.0f;
+    float norm_y = local_y * 2.0f - 1.0f;
+    return glm::vec2(std::clamp(norm_x, -1.0f, 1.0f),
+                     std::clamp(norm_y, -1.0f, 1.0f));
+}

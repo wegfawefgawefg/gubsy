@@ -347,12 +347,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_prev_input = g_current_input;
         bool select_handled = false;
 
-        int mouse_x = 0;
-        int mouse_y = 0;
-        Uint32 mouse_buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
-        es->device_state.mouse_x = mouse_x;
-        es->device_state.mouse_y = mouse_y;
-        es->device_state.mouse_buttons = mouse_buttons;
+        int mouse_x = es->device_state.mouse_x;
+        int mouse_y = es->device_state.mouse_y;
+        Uint32 mouse_buttons = es->device_state.mouse_buttons;
         bool mouse_down = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
         bool mouse_clicked = mouse_down && !g_prev_mouse_down;
         g_prev_mouse_down = mouse_down;

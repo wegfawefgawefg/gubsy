@@ -25,3 +25,4 @@ bool device_button_is_down(const DeviceState& state, int encoded_button);
 float sample_analog_1d(const DeviceState& state, int encoded_axis);
 glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis);
 glm::vec2 normalized_mouse_coords(const DeviceState& state);
+glm::vec2 normalized_mouse_coords_in_render(const DeviceState& state);
