@@ -17,7 +17,7 @@ struct MenuInputState {
 
 void menu_system_set_input(const MenuInputState& input);
 void menu_system_update(float dt, int screen_width, int screen_height);
-void menu_system_render(SDL_Renderer* renderer);
+void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_height);
 void menu_system_reset();
 bool menu_system_active();
 void menu_system_handle_text_input(const char* text);

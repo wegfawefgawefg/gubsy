@@ -641,7 +641,14 @@ void menu_system_handle_backspace() {
         g_active_text_buffer->pop_back();
 }
 
-void menu_system_render(SDL_Renderer* renderer) {
+void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_height) {
+    if ((g_cache.width != screen_width || g_cache.height != screen_height) && screen_width > 0 &&
+        screen_height > 0) {
+        MenuInputState zero_input{};
+        g_prev_input = g_current_input;
+        g_current_input = zero_input;
+        menu_system_update(0.0f, screen_width, screen_height);
+    }
     if (!renderer || g_cache.widgets.empty())
         return;
 

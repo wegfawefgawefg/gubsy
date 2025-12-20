@@ -68,7 +68,10 @@ void title_draw() {
     if (!gg || !gg->renderer)
         return;
     SDL_Renderer* renderer = gg->renderer;
+    glm::ivec2 dims = get_render_dimensions();
+    int width = std::max(dims.x, 1);
+    int height = std::max(dims.y, 1);
     SDL_SetRenderDrawColor(renderer, 14, 12, 26, 255);
     SDL_RenderClear(renderer);
-    menu_system_render(renderer);
+    menu_system_render(renderer, width, height);
 }
