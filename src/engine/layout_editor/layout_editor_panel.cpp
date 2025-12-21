@@ -162,8 +162,39 @@ void layout_editor_render_panel(float dt) {
             if (commit_needed)
                 layout_editor_history_commit(*layout_mut);
         } else if (layout_editor_selection_count() > 1) {
-            ImGui::SeparatorText("Multiple objects");
+            ImGui::SeparatorText("Selected objects");
             ImGui::Text("%d objects selected.", layout_editor_selection_count());
+            if (ImGui::BeginTable("multi_objects", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                ImGui::TableSetupColumn("Label");
+                ImGui::TableSetupColumn("ID");
+                ImGui::TableSetupColumn("Pos");
+                ImGui::TableSetupColumn("Size");
+                ImGui::TableSetupColumn("");
+                ImGui::TableHeadersRow();
+                for (int index : layout_editor_selection_indices()) {
+                    if (index < 0 || index >= static_cast<int>(layout_mut->objects.size()))
+                        continue;
+                    const auto& obj = layout_mut->objects[static_cast<std::size_t>(index)];
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(obj.label.empty() ? "<unnamed>" : obj.label.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("#%d", obj.id);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("x%.3f y%.3f",
+                                static_cast<double>(obj.x),
+                                static_cast<double>(obj.y));
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("w%.3f h%.3f",
+                                static_cast<double>(obj.w),
+                                static_cast<double>(obj.h));
+                    ImGui::TableSetColumnIndex(4);
+                    std::string btn_label = "Solo##" + std::to_string(index);
+                    if (ImGui::SmallButton(btn_label.c_str()))
+                        layout_editor_select_single(index);
+                }
+                ImGui::EndTable();
+            }
         }
     }
 

@@ -186,6 +186,7 @@ void handle_mouse_input() {
         if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit)) {
             if (hit.target == HitTarget::Object && hit.object_index >= 0) {
                 bool was_selected = layout_editor_is_selected(hit.object_index);
+                int selection_count = layout_editor_selection_count();
                 if (ctrl) {
                     if (was_selected)
                         layout_editor_remove_from_selection(hit.object_index);
@@ -193,9 +194,10 @@ void handle_mouse_input() {
                         layout_editor_add_to_selection(hit.object_index);
                 } else if (shift) {
                     layout_editor_add_to_selection(hit.object_index);
-                } else {
+                } else if (!was_selected || selection_count <= 1) {
                     layout_editor_select_single(hit.object_index);
                 }
+                selection_count = layout_editor_selection_count();
 
                 if (layout_editor_selection_count() > 0) {
                     bool use_group = (!ctrl && !shift &&
