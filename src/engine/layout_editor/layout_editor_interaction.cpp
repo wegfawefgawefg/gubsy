@@ -40,6 +40,8 @@ struct DragState {
     float group_start_w{0.0f};
     float group_start_h{0.0f};
     std::vector<GroupMember> members;
+    std::vector<float> snap_edges_x;
+    std::vector<float> snap_edges_y;
 };
 
 struct HandleRect {
@@ -139,6 +141,24 @@ void sync_primary() {
     }
     if (std::find(g_selection.begin(), g_selection.end(), g_primary) == g_selection.end())
         g_primary = g_selection.back();
+}
+
+float snap_value_to_edges(float value,
+                          const std::vector<float>& edges,
+                          float tolerance,
+                          bool& snapped) {
+    float best = value;
+    float best_diff = tolerance + 1.0f;
+    snapped = false;
+    for (float edge : edges) {
+        float diff = std::fabs(edge - value);
+        if (diff <= tolerance && diff < best_diff) {
+            best = edge;
+            best_diff = diff;
+            snapped = true;
+        }
+    }
+    return best;
 }
 
 } // namespace
@@ -315,6 +335,17 @@ void layout_editor_begin_drag(const UILayout& layout,
         g_drag.offset_x = local_x - g_drag.group_start_x;
         g_drag.offset_y = local_y - g_drag.group_start_y;
         g_drag.members.clear();
+        g_drag.snap_edges_x.clear();
+        g_drag.snap_edges_y.clear();
+        for (int i = 0; i < static_cast<int>(layout.objects.size()); ++i) {
+            if (layout_editor_is_selected(i))
+                continue;
+            const auto& other = layout.objects[static_cast<std::size_t>(i)];
+            g_drag.snap_edges_x.push_back(other.x);
+            g_drag.snap_edges_x.push_back(other.x + other.w);
+            g_drag.snap_edges_y.push_back(other.y);
+            g_drag.snap_edges_y.push_back(other.y + other.h);
+        }
         const float inv_width = (g_drag.group_start_w > 1e-6f) ? 1.0f / g_drag.group_start_w : 0.0f;
         const float inv_height = (g_drag.group_start_h > 1e-6f) ? 1.0f / g_drag.group_start_h : 0.0f;
         for (int index : layout_editor_selection_indices()) {
@@ -349,6 +380,17 @@ void layout_editor_begin_drag(const UILayout& layout,
     g_drag.start_h = obj.h;
     g_drag.offset_x = local_x - obj.x;
     g_drag.offset_y = local_y - obj.y;
+    g_drag.snap_edges_x.clear();
+    g_drag.snap_edges_y.clear();
+    for (int i = 0; i < static_cast<int>(layout.objects.size()); ++i) {
+        if (i == hit.object_index)
+            continue;
+        const auto& other = layout.objects[static_cast<std::size_t>(i)];
+        g_drag.snap_edges_x.push_back(other.x);
+        g_drag.snap_edges_x.push_back(other.x + other.w);
+        g_drag.snap_edges_y.push_back(other.y);
+        g_drag.snap_edges_y.push_back(other.y + other.h);
+    }
 }
 
 bool layout_editor_update_drag(UILayout& layout,
@@ -369,6 +411,28 @@ bool layout_editor_update_drag(UILayout& layout,
     };
     auto snap_single = [&](float coord) {
         return snap_enabled ? snap_single_edge(coord, grid_step) : coord;
+    };
+    float edge_tolerance = std::max(grid_step * kSnapTolFactor, kSnapTolBase);
+    auto snap_axis = [&](float& start, float size, const std::vector<float>& edges) {
+        if (!snap_enabled || edges.empty())
+            return;
+        bool snapped_left = false;
+        float new_start = snap_value_to_edges(start, edges, edge_tolerance, snapped_left);
+        if (snapped_left)
+            start = new_start;
+        bool snapped_right = false;
+        float end = start + size;
+        float snapped_end = snap_value_to_edges(end, edges, edge_tolerance, snapped_right);
+        if (snapped_right)
+            start = snapped_end - size;
+    };
+    auto snap_edge_value = [&](float& coord, const std::vector<float>& edges) {
+        if (!snap_enabled || edges.empty())
+            return;
+        bool snapped = false;
+        float new_coord = snap_value_to_edges(coord, edges, edge_tolerance, snapped);
+        if (snapped)
+            coord = new_coord;
     };
 
     if (g_drag.group) {
@@ -426,6 +490,8 @@ bool layout_editor_update_drag(UILayout& layout,
                     new_left = apply_snap_pos(new_left, new_width);
                     new_top = apply_snap_pos(new_top, new_height);
                 }
+                snap_axis(new_left, new_width, g_drag.snap_edges_x);
+                snap_axis(new_top, new_height, g_drag.snap_edges_y);
                 float delta_x = new_left - g_drag.group_start_x;
                 float delta_y = new_top - g_drag.group_start_y;
                 const float epsilon = 1e-5f;
@@ -449,6 +515,7 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_left = std::clamp(local_x, 0.0f, anchor - kMinSize);
                 if (snap_enabled)
                     new_left = snap_single(new_left);
+                snap_edge_value(new_left, g_drag.snap_edges_x);
                 new_width = std::max(kMinSize, anchor - new_left);
                 apply_member_changes(new_left, g_drag.group_start_y, new_width, new_height);
                 return changed;
@@ -458,6 +525,7 @@ bool layout_editor_update_drag(UILayout& layout,
                 float new_right = std::clamp(local_x, anchor + kMinSize, 1.0f);
                 if (snap_enabled)
                     new_right = snap_single(new_right);
+                snap_edge_value(new_right, g_drag.snap_edges_x);
                 new_width = std::max(kMinSize, new_right - anchor);
                 apply_member_changes(anchor, g_drag.group_start_y, new_width, new_height);
                 return changed;
@@ -467,6 +535,7 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_top = std::clamp(local_y, 0.0f, anchor - kMinSize);
                 if (snap_enabled)
                     new_top = snap_single(new_top);
+                snap_edge_value(new_top, g_drag.snap_edges_y);
                 new_height = std::max(kMinSize, anchor - new_top);
                 apply_member_changes(g_drag.group_start_x, new_top, new_width, new_height);
                 return changed;
@@ -476,6 +545,7 @@ bool layout_editor_update_drag(UILayout& layout,
                 float new_bottom = std::clamp(local_y, anchor + kMinSize, 1.0f);
                 if (snap_enabled)
                     new_bottom = snap_single(new_bottom);
+                snap_edge_value(new_bottom, g_drag.snap_edges_y);
                 new_height = std::max(kMinSize, new_bottom - anchor);
                 apply_member_changes(g_drag.group_start_x, anchor, new_width, new_height);
                 return changed;
@@ -489,6 +559,8 @@ bool layout_editor_update_drag(UILayout& layout,
                     new_left = snap_single(new_left);
                     new_top = snap_single(new_top);
                 }
+                snap_edge_value(new_left, g_drag.snap_edges_x);
+                snap_edge_value(new_top, g_drag.snap_edges_y);
                 new_width = std::max(kMinSize, anchor_right - new_left);
                 new_height = std::max(kMinSize, anchor_bottom - new_top);
                 apply_member_changes(new_left, new_top, new_width, new_height);
@@ -503,6 +575,8 @@ bool layout_editor_update_drag(UILayout& layout,
                     new_right = snap_single(new_right);
                     new_top = snap_single(new_top);
                 }
+                snap_edge_value(new_right, g_drag.snap_edges_x);
+                snap_edge_value(new_top, g_drag.snap_edges_y);
                 new_width = std::max(kMinSize, new_right - anchor_left);
                 new_height = std::max(kMinSize, anchor_bottom - new_top);
                 apply_member_changes(anchor_left, new_top, new_width, new_height);
@@ -517,6 +591,8 @@ bool layout_editor_update_drag(UILayout& layout,
                     new_left = snap_single(new_left);
                     new_bottom = snap_single(new_bottom);
                 }
+                snap_edge_value(new_left, g_drag.snap_edges_x);
+                snap_edge_value(new_bottom, g_drag.snap_edges_y);
                 new_width = std::max(kMinSize, anchor_right - new_left);
                 new_height = std::max(kMinSize, new_bottom - anchor_top);
                 apply_member_changes(new_left, anchor_top, new_width, new_height);
@@ -531,6 +607,8 @@ bool layout_editor_update_drag(UILayout& layout,
                     new_right = snap_single(new_right);
                     new_bottom = snap_single(new_bottom);
                 }
+                snap_edge_value(new_right, g_drag.snap_edges_x);
+                snap_edge_value(new_bottom, g_drag.snap_edges_y);
                 new_width = std::max(kMinSize, new_right - anchor_left);
                 new_height = std::max(kMinSize, new_bottom - anchor_top);
                 apply_member_changes(anchor_left, anchor_top, new_width, new_height);
@@ -570,6 +648,7 @@ bool layout_editor_update_drag(UILayout& layout,
             float new_left = std::clamp(local_x, 0.0f, anchor - kMinSize);
             if (snap_enabled)
                 new_left = snap_single(new_left);
+            snap_edge_value(new_left, g_drag.snap_edges_x);
             float new_width = anchor - new_left;
             changed = (std::fabs(obj.x - new_left) > 1e-5f) ||
                       (std::fabs(obj.w - new_width) > 1e-5f);
@@ -582,6 +661,7 @@ bool layout_editor_update_drag(UILayout& layout,
             float new_right = std::clamp(local_x, anchor + kMinSize, 1.0f);
             if (snap_enabled)
                 new_right = snap_single(new_right);
+            snap_edge_value(new_right, g_drag.snap_edges_x);
             float new_width = new_right - anchor;
             changed = (std::fabs(obj.w - new_width) > 1e-5f);
             obj.x = anchor;
@@ -593,6 +673,7 @@ bool layout_editor_update_drag(UILayout& layout,
             float new_top = std::clamp(local_y, 0.0f, anchor - kMinSize);
             if (snap_enabled)
                 new_top = snap_single(new_top);
+            snap_edge_value(new_top, g_drag.snap_edges_y);
             float new_height = anchor - new_top;
             changed = (std::fabs(obj.y - new_top) > 1e-5f) ||
                       (std::fabs(obj.h - new_height) > 1e-5f);
@@ -605,6 +686,7 @@ bool layout_editor_update_drag(UILayout& layout,
             float new_bottom = std::clamp(local_y, anchor + kMinSize, 1.0f);
             if (snap_enabled)
                 new_bottom = snap_single(new_bottom);
+            snap_edge_value(new_bottom, g_drag.snap_edges_y);
             float new_height = new_bottom - anchor;
             changed = (std::fabs(obj.h - new_height) > 1e-5f);
             obj.y = anchor;
@@ -620,6 +702,8 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_left = snap_single(new_left);
                 new_top = snap_single(new_top);
             }
+            snap_edge_value(new_left, g_drag.snap_edges_x);
+            snap_edge_value(new_top, g_drag.snap_edges_y);
             float new_width = anchor_right - new_left;
             float new_height = anchor_bottom - new_top;
             changed = (std::fabs(obj.x - new_left) > 1e-5f) ||
@@ -641,6 +725,8 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_right = snap_single(new_right);
                 new_top = snap_single(new_top);
             }
+            snap_edge_value(new_right, g_drag.snap_edges_x);
+            snap_edge_value(new_top, g_drag.snap_edges_y);
             float new_width = new_right - anchor_left;
             float new_height = anchor_bottom - new_top;
             changed = (std::fabs(obj.w - new_width) > 1e-5f) ||
@@ -661,6 +747,8 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_left = snap_single(new_left);
                 new_bottom = snap_single(new_bottom);
             }
+            snap_edge_value(new_left, g_drag.snap_edges_x);
+            snap_edge_value(new_bottom, g_drag.snap_edges_y);
             float new_width = anchor_right - new_left;
             float new_height = new_bottom - anchor_top;
             changed = (std::fabs(obj.x - new_left) > 1e-5f) ||
@@ -681,6 +769,8 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_right = snap_single(new_right);
                 new_bottom = snap_single(new_bottom);
             }
+            snap_edge_value(new_right, g_drag.snap_edges_x);
+            snap_edge_value(new_bottom, g_drag.snap_edges_y);
             float new_width = new_right - anchor_left;
             float new_height = new_bottom - anchor_top;
             changed = (std::fabs(obj.w - new_width) > 1e-5f) ||

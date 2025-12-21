@@ -19,6 +19,7 @@
 #include <cmath>
 #include <climits>
 #include <cfloat>
+#include <limits>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -82,6 +83,13 @@ struct PendingLayoutRequest {
 
 PendingLayoutRequest g_last_request{};
 
+struct Clipboard {
+    std::vector<UIObject> objects;
+};
+
+Clipboard g_clipboard;
+constexpr float kClipboardNudge = 0.02f;
+
 void ensure_history_for_selection() {
     UILayout* layout = selected_layout_mutable();
     if (!layout) {
@@ -104,6 +112,90 @@ void ensure_history_for_selection() {
         g_object_label_index = -1;
         g_object_label_buffer[0] = '\0';
     }
+}
+
+bool copy_selection_to_clipboard(const UILayout& layout) {
+    const auto& sel = layout_editor_selection_indices();
+    if (sel.empty())
+        return false;
+    g_clipboard.objects.clear();
+    for (int index : sel) {
+        if (index < 0 || index >= static_cast<int>(layout.objects.size()))
+            continue;
+        g_clipboard.objects.push_back(layout.objects[static_cast<std::size_t>(index)]);
+    }
+    return !g_clipboard.objects.empty();
+}
+
+bool paste_clipboard(UILayout& layout) {
+    if (g_clipboard.objects.empty())
+        return false;
+    std::vector<int> new_indices;
+    new_indices.reserve(g_clipboard.objects.size());
+    for (const auto& obj : g_clipboard.objects) {
+        UIObject copy = obj;
+        copy.id = generate_ui_object_id();
+        copy.x = std::clamp(copy.x + kClipboardNudge, 0.0f, 1.0f - copy.w);
+        copy.y = std::clamp(copy.y + kClipboardNudge, 0.0f, 1.0f - copy.h);
+        layout.objects.push_back(copy);
+        new_indices.push_back(static_cast<int>(layout.objects.size()) - 1);
+    }
+    layout_editor_clear_selection();
+    for (int idx : new_indices)
+        layout_editor_add_to_selection(idx);
+    return true;
+}
+
+bool delete_selection(UILayout& layout) {
+    const auto& sel = layout_editor_selection_indices();
+    if (sel.empty())
+        return false;
+    std::vector<int> to_remove = sel;
+    std::sort(to_remove.begin(), to_remove.end());
+    for (auto it = to_remove.rbegin(); it != to_remove.rend(); ++it) {
+        if (*it < 0 || *it >= static_cast<int>(layout.objects.size()))
+            continue;
+        layout.objects.erase(layout.objects.begin() + *it);
+    }
+    layout_editor_clear_selection();
+    return true;
+}
+
+bool translate_selection(UILayout& layout, float dx, float dy) {
+    const auto& sel = layout_editor_selection_indices();
+    if (sel.empty())
+        return false;
+    float max_dx_positive = std::numeric_limits<float>::max();
+    float max_dx_negative = std::numeric_limits<float>::max();
+    float max_dy_positive = std::numeric_limits<float>::max();
+    float max_dy_negative = std::numeric_limits<float>::max();
+    for (int index : sel) {
+        if (index < 0 || index >= static_cast<int>(layout.objects.size()))
+            continue;
+        const auto& obj = layout.objects[static_cast<std::size_t>(index)];
+        max_dx_positive = std::min(max_dx_positive, 1.0f - (obj.x + obj.w));
+        max_dx_negative = std::min(max_dx_negative, obj.x);
+        max_dy_positive = std::min(max_dy_positive, 1.0f - (obj.y + obj.h));
+        max_dy_negative = std::min(max_dy_negative, obj.y);
+    }
+    if (dx > 0.0f)
+        dx = std::min(dx, max_dx_positive);
+    else if (dx < 0.0f)
+        dx = std::max(dx, -max_dx_negative);
+    if (dy > 0.0f)
+        dy = std::min(dy, max_dy_positive);
+    else if (dy < 0.0f)
+        dy = std::max(dy, -max_dy_negative);
+    if (std::fabs(dx) < 1e-6f && std::fabs(dy) < 1e-6f)
+        return false;
+    for (int index : sel) {
+        if (index < 0 || index >= static_cast<int>(layout.objects.size()))
+            continue;
+        auto& obj = layout.objects[static_cast<std::size_t>(index)];
+        obj.x = std::clamp(obj.x + dx, 0.0f, 1.0f - obj.w);
+        obj.y = std::clamp(obj.y + dy, 0.0f, 1.0f - obj.h);
+    }
+    return true;
 }
 
 bool select_layout_exact(int id, int width, int height) {
@@ -281,6 +373,42 @@ void handle_hotkeys() {
             g_layout_dirty = true;
             g_object_label_index = -1;
             append_status("Redo");
+        }
+    } else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+        copy_selection_to_clipboard(*layout);
+    } else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+        if (paste_clipboard(*layout)) {
+            g_layout_dirty = true;
+            layout_editor_history_commit(*layout);
+        }
+    }
+
+    float nudge = io.KeyShift ? 0.05f : 0.01f;
+    bool nudged = false;
+    if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false)) {
+        if (translate_selection(*layout, -nudge, 0.0f))
+            nudged = true;
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false)) {
+        if (translate_selection(*layout, nudge, 0.0f))
+            nudged = true;
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, false)) {
+        if (translate_selection(*layout, 0.0f, -nudge))
+            nudged = true;
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, false)) {
+        if (translate_selection(*layout, 0.0f, nudge))
+            nudged = true;
+    }
+    if (nudged) {
+        g_layout_dirty = true;
+        layout_editor_history_commit(*layout);
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+        if (delete_selection(*layout)) {
+            g_layout_dirty = true;
+            layout_editor_history_commit(*layout);
         }
     }
 }
