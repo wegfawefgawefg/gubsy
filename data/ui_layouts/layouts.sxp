@@ -58,7 +58,6 @@
       (object (id 103) (label "mods") (x 0.34) (y 0.42) (w 0.32) (h 0.08))
       (object (id 104) (label "settings") (x 0.34) (y 0.54) (w 0.32) (h 0.08))
       (object (id 105) (label "quit") (x 0.34) (y 0.66) (w 0.32) (h 0.08))
-      (object (id 72762048) (label "POTATO") (x 0.580312) (y 0.244444) (w 0.32) (h 0.08))
     )
   )
   (layout

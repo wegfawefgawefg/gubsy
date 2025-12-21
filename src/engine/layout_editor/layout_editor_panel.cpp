@@ -88,8 +88,59 @@ void layout_editor_render_panel(float dt) {
     if (layout) {
         ImGui::Separator();
         ImGui::Text("Objects: %zu", layout->objects.size());
-        ImGui::Text("Layout: %dx%d",
-                    layout->resolution_width, layout->resolution_height);
+        static const char* kFactorLabels[] = {"Desktop", "Tablet", "Phone"};
+        int form_factor = static_cast<int>(layout->form_factor);
+        int width = layout->resolution_width;
+        int height = layout->resolution_height;
+        ImGui::Text("Layout: %dx%d", width, height);
+        ImGui::SetNextItemWidth(160.0f);
+        bool meta_commit = false;
+        if (ImGui::InputInt("Width", &width)) {
+            layout_mut->resolution_width = std::max(1, width);
+            g_layout_dirty = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            meta_commit = true;
+        ImGui::SetNextItemWidth(160.0f);
+        if (ImGui::InputInt("Height", &height)) {
+            layout_mut->resolution_height = std::max(1, height);
+            g_layout_dirty = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            meta_commit = true;
+        ImGui::SetNextItemWidth(160.0f);
+        if (ImGui::Combo("Form factor", &form_factor, kFactorLabels, IM_ARRAYSIZE(kFactorLabels))) {
+            layout_mut->form_factor = static_cast<UILayoutFormFactor>(std::clamp(form_factor, 0, 2));
+            g_layout_dirty = true;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            meta_commit = true;
+        if (meta_commit)
+            layout_editor_history_commit(*layout_mut);
+        if (ImGui::Button("Duplicate layout")) {
+            UILayout copy = *layout_mut;
+            copy.id = generate_ui_layout_id();
+            copy.label += "_copy";
+            es->ui_layouts_pool.push_back(copy);
+            layout_editor_select_single(-1);
+            layout_editor_history_reset(es->ui_layouts_pool.back());
+            g_selected_layout = static_cast<int>(es->ui_layouts_pool.size()) - 1;
+            append_status("Layout duplicated");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("New layout")) {
+            UILayout fresh;
+            fresh.id = generate_ui_layout_id();
+            fresh.label = "Layout_" + std::to_string(fresh.id);
+            fresh.resolution_width = gg ? static_cast<int>(gg->render_dims.x) : 1920;
+            fresh.resolution_height = gg ? static_cast<int>(gg->render_dims.y) : 1080;
+            fresh.form_factor = UILayoutFormFactor::Desktop;
+            es->ui_layouts_pool.push_back(fresh);
+            g_selected_layout = static_cast<int>(es->ui_layouts_pool.size()) - 1;
+            layout_editor_clear_selection();
+            layout_editor_history_reset(es->ui_layouts_pool.back());
+            append_status("Layout created");
+        }
     }
     if (gg) {
         glm::ivec2 dims = get_render_dimensions();
@@ -110,6 +161,19 @@ void layout_editor_render_panel(float dt) {
                     layout_editor_select_single(i);
             }
             ImGui::EndListBox();
+        }
+        if (ImGui::Button("Add object")) {
+            UIObject obj;
+            obj.id = generate_ui_object_id();
+            obj.label = "object_" + std::to_string(obj.id);
+            obj.x = 0.4f;
+            obj.y = 0.4f;
+            obj.w = 0.2f;
+            obj.h = 0.1f;
+            layout_mut->objects.push_back(obj);
+            layout_editor_select_single(static_cast<int>(layout_mut->objects.size()) - 1);
+            g_layout_dirty = true;
+            layout_editor_history_commit(*layout_mut);
         }
 
         int selected_obj = layout_editor_selection_count() == 1
@@ -157,6 +221,28 @@ void layout_editor_render_panel(float dt) {
             ImGui::Text("Size: w %.3f h %.3f",
                         static_cast<double>(obj.w),
                         static_cast<double>(obj.h));
+            ImGui::SetNextItemWidth(list_width);
+            if (ImGui::InputFloat("X", &obj.x, 0.01f, 0.1f, "%.3f")) {
+                obj.x = std::clamp(obj.x, 0.0f, 1.0f - obj.w);
+                changed = true;
+            }
+            ImGui::SetNextItemWidth(list_width);
+            if (ImGui::InputFloat("Y", &obj.y, 0.01f, 0.1f, "%.3f")) {
+                obj.y = std::clamp(obj.y, 0.0f, 1.0f - obj.h);
+                changed = true;
+            }
+            ImGui::SetNextItemWidth(list_width);
+            if (ImGui::InputFloat("Width", &obj.w, 0.01f, 0.1f, "%.3f")) {
+                obj.w = std::clamp(obj.w, 0.01f, 1.0f);
+                obj.x = std::clamp(obj.x, 0.0f, 1.0f - obj.w);
+                changed = true;
+            }
+            ImGui::SetNextItemWidth(list_width);
+            if (ImGui::InputFloat("Height", &obj.h, 0.01f, 0.1f, "%.3f")) {
+                obj.h = std::clamp(obj.h, 0.01f, 1.0f);
+                obj.y = std::clamp(obj.y, 0.0f, 1.0f - obj.h);
+                changed = true;
+            }
             if (changed)
                 g_layout_dirty = true;
             if (commit_needed)
