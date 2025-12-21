@@ -150,20 +150,20 @@ void layout_editor_draw_layout(SDL_Renderer* renderer,
                                int height,
                                float origin_x,
                                float origin_y,
-                               int selected_index,
                                int dragging_index) {
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    int selection_count = layout_editor_selection_count();
     for (std::size_t idx = 0; idx < layout.objects.size(); ++idx) {
         const auto& obj = layout.objects[idx];
+        const bool is_selected = layout_editor_is_selected(static_cast<int>(idx));
         SDL_FRect rect;
         rect.x = origin_x + obj.x * static_cast<float>(width);
         rect.y = origin_y + obj.y * static_cast<float>(height);
         rect.w = obj.w * static_cast<float>(width);
         rect.h = obj.h * static_cast<float>(height);
 
-        const bool is_selected = static_cast<int>(idx) == selected_index;
         const bool is_dragging = static_cast<int>(idx) == dragging_index;
 
         SDL_Color fill{60, 170, 255, 40};
@@ -195,10 +195,24 @@ void layout_editor_draw_layout(SDL_Renderer* renderer,
                   static_cast<int>(rect.y) + 24,
                   SDL_Color{210, 220, 240, 200});
 
-        if (is_selected) {
+        if (is_selected && selection_count <= 1) {
             HandleType handle = is_dragging ? layout_editor_drag_handle()
                                             : HandleType::Center;
             draw_handles(renderer, rect, handle);
+        }
+    }
+    if (selection_count > 1) {
+        float min_x = 0.0f, min_y = 0.0f, max_x = 0.0f, max_y = 0.0f;
+        if (layout_editor_selection_bounds(layout, min_x, min_y, max_x, max_y)) {
+            SDL_FRect bounds{
+                origin_x + min_x * static_cast<float>(width),
+                origin_y + min_y * static_cast<float>(height),
+                std::max(0.0f, (max_x - min_x) * static_cast<float>(width)),
+                std::max(0.0f, (max_y - min_y) * static_cast<float>(height))};
+            SDL_Color outline{180, 210, 255, 200};
+            SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
+            SDL_RenderDrawRectF(renderer, &bounds);
+            draw_handles(renderer, bounds, layout_editor_drag_handle());
         }
     }
     SDL_SetRenderDrawBlendMode(renderer, old_mode);

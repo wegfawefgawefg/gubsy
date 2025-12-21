@@ -96,6 +96,7 @@ void ensure_history_for_selection() {
         layout->resolution_width != g_history_layout_width ||
         layout->resolution_height != g_history_layout_height) {
         layout_editor_history_reset(*layout);
+        layout_editor_clear_selection();
         g_history_initialized = true;
         g_history_layout_id = layout->id;
         g_history_layout_width = layout->resolution_width;
@@ -171,14 +172,50 @@ void handle_mouse_input() {
     float mouse_y = static_cast<float>(es->device_state.mouse_y);
     bool mouse_down = (es->device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
 
+    bool shift = false;
+    bool ctrl = false;
+    if (ImGui::GetCurrentContext()) {
+        const ImGuiIO& io = ImGui::GetIO();
+        shift = io.KeyShift;
+        ctrl = io.KeyCtrl;
+    }
+
     if (mouse_down && !g_mouse_was_down) {
         g_drag_dirty = false;
         HitResult hit{};
         if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit)) {
-            layout_editor_select(hit.object_index);
-            layout_editor_begin_drag(*layout, hit, mouse_x, mouse_y, viewport);
+            if (hit.target == HitTarget::Object && hit.object_index >= 0) {
+                bool was_selected = layout_editor_is_selected(hit.object_index);
+                if (ctrl) {
+                    if (was_selected)
+                        layout_editor_remove_from_selection(hit.object_index);
+                    else
+                        layout_editor_add_to_selection(hit.object_index);
+                } else if (shift) {
+                    layout_editor_add_to_selection(hit.object_index);
+                } else {
+                    layout_editor_select_single(hit.object_index);
+                }
+
+                if (layout_editor_selection_count() > 0) {
+                    bool use_group = (!ctrl && !shift &&
+                                      layout_editor_selection_count() > 1 &&
+                                      layout_editor_is_selected(hit.object_index) &&
+                                      hit.handle == HandleType::Center);
+                    HitResult dispatch_hit = hit;
+                    if (use_group) {
+                        dispatch_hit.target = HitTarget::Group;
+                        dispatch_hit.object_index = -1;
+                    }
+                    layout_editor_begin_drag(*layout, dispatch_hit, mouse_x, mouse_y, viewport);
+                }
+            } else if (hit.target == HitTarget::Group) {
+                if (layout_editor_selection_count() > 1)
+                    layout_editor_begin_drag(*layout, hit, mouse_x, mouse_y, viewport);
+            }
         } else {
-            layout_editor_clear_selection();
+            if (!shift && !ctrl)
+                layout_editor_clear_selection();
             layout_editor_end_drag();
         }
     } else if (mouse_down && layout_editor_is_dragging()) {
@@ -300,10 +337,9 @@ void layout_editor_render(SDL_Renderer* renderer,
     layout_editor_draw_grid(renderer, screen_width, screen_height,
                             origin_x, origin_y, g_grid_step);
     if (const UILayout* layout = selected_layout()) {
-        int selected_idx = layout_editor_selected_index();
         int dragging_idx = layout_editor_dragging_index();
         layout_editor_draw_layout(renderer, *layout, screen_width, screen_height,
-                                  origin_x, origin_y, selected_idx, dragging_idx);
+                                  origin_x, origin_y, dragging_idx);
     }
 }
 

@@ -97,7 +97,6 @@ void layout_editor_render_panel(float dt) {
     }
 
     if (layout_mut) {
-        int selected_obj = layout_editor_selected_index();
         const float list_width = 320.0f;
         if (ImGui::BeginListBox("Layout objects",
                                 ImVec2(list_width, 6.0f * ImGui::GetTextLineHeightWithSpacing()))) {
@@ -106,14 +105,16 @@ void layout_editor_render_panel(float dt) {
                 std::string entry = obj.label.empty()
                                         ? ("#" + std::to_string(obj.id))
                                         : (obj.label + " (#" + std::to_string(obj.id) + ")");
-                bool selected = (i == selected_obj);
+                bool selected = layout_editor_is_selected(i);
                 if (ImGui::Selectable(entry.c_str(), selected))
-                    layout_editor_select(i);
+                    layout_editor_select_single(i);
             }
             ImGui::EndListBox();
         }
 
-        selected_obj = layout_editor_selected_index();
+        int selected_obj = layout_editor_selection_count() == 1
+                               ? layout_editor_primary_selection()
+                               : -1;
         if (!layout_mut->objects.empty()) {
             if (selected_obj >= static_cast<int>(layout_mut->objects.size()))
                 selected_obj = -1;
@@ -160,6 +161,9 @@ void layout_editor_render_panel(float dt) {
                 g_layout_dirty = true;
             if (commit_needed)
                 layout_editor_history_commit(*layout_mut);
+        } else if (layout_editor_selection_count() > 1) {
+            ImGui::SeparatorText("Multiple objects");
+            ImGui::Text("%d objects selected.", layout_editor_selection_count());
         }
     }
 

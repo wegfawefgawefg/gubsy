@@ -17,5 +17,4 @@ void layout_editor_draw_layout(SDL_Renderer* renderer,
                                int height,
                                float origin_x,
                                float origin_y,
-                               int selected_index,
                                int dragging_index);
