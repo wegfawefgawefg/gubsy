@@ -637,6 +637,8 @@ bool layout_editor_update_drag(UILayout& layout,
                 new_x = apply_snap_pos(new_x, obj.w);
                 new_y = apply_snap_pos(new_y, obj.h);
             }
+            snap_axis(new_x, obj.w, g_drag.snap_edges_x);
+            snap_axis(new_y, obj.h, g_drag.snap_edges_y);
             changed = (std::fabs(obj.x - new_x) > 1e-5f) ||
                       (std::fabs(obj.y - new_y) > 1e-5f);
             obj.x = new_x;

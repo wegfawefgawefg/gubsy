@@ -54,7 +54,7 @@ void playing_step() {
         glm::vec2 raw_gamepad =
             sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
         ss->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
-        ss->reticle_pos_mouse = normalized_mouse_coords_in_render(es->device_state);
+        ss->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
     } else {
         ss->reticle_pos_gamepad = glm::vec2(0.0f);
         ss->reticle_pos_mouse = glm::vec2(0.0f);
