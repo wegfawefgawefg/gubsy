@@ -207,11 +207,12 @@ bool decode_extended_analog_2d(int encoded, DeviceInputKind& kind, int& device_i
 float controller_axis(const DeviceState& state, SDL_GameControllerAxis axis, int device_id) {
     if (axis < 0 || axis >= SDL_CONTROLLER_AXIS_MAX)
         return 0.0f;
+    auto axis_index = static_cast<size_t>(axis);
     float best = 0.0f;
     for (const auto& controller : state.controllers) {
         if (device_id != kAnyDeviceId && controller.device_id != device_id)
             continue;
-        float value = controller.axes[axis];
+        float value = controller.axes[axis_index];
         if (std::fabs(value) > std::fabs(best))
             best = value;
     }
@@ -231,7 +232,9 @@ glm::vec2 controller_stick(const DeviceState& state,
             continue;
         if (axis_y < 0 || axis_y >= SDL_CONTROLLER_AXIS_MAX)
             continue;
-        glm::vec2 value(controller.axes[axis_x], controller.axes[axis_y]);
+        auto axis_x_index = static_cast<size_t>(axis_x);
+        auto axis_y_index = static_cast<size_t>(axis_y);
+        glm::vec2 value(controller.axes[axis_x_index], controller.axes[axis_y_index]);
         float len = glm::length(value);
         if (len > best_length) {
             best_length = len;

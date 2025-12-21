@@ -2,7 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run gubsy (Debug)",
+      "name": "Run gubsy (Debug, macOS)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/gubsy",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cmake: build (dev)"
+    },
+    {
+      "name": "Run gubsy (Debug, Linux)",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/gubsy",
