@@ -4,6 +4,7 @@
 #include "engine/globals.hpp"
 #include "engine/top_level_game_settings.hpp"
 
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -110,7 +111,16 @@ const SettingsSchema& get_settings_schema() {
 }
 
 void register_settings_schema(const SettingsSchema& schema) {
-    g_settings_schema = schema;
+    auto& dest = g_settings_schema.entries();
+    for (const auto& entry : schema.entries()) {
+        auto it = std::find_if(dest.begin(), dest.end(),
+                               [&](const SettingMetadata& existing) { return existing.key == entry.key; });
+        if (it != dest.end()) {
+            *it = entry;
+        } else {
+            g_settings_schema.add_setting(entry);
+        }
+    }
     reconcile_top_level_settings(g_settings_schema);
     reconcile_profile_settings(g_settings_schema);
 }
