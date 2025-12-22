@@ -1,67 +1,30 @@
-# Layout Editor Plan
+# Layout Editor
 
-## Goals
-- Ship an **engine-side** layout editor (similar to the debug overlays) so every game can author/adjust `UILayout` data at runtime.
-- Make the editor modal: when it is active, all keyboard/mouse/gamepad input is captured by the editor so menus/gameplay logic are paused.
-- Provide intuitive mouse-driven manipulation plus discoverable hotkeys for selection, duplication, copy/paste, rename, undo (later), and saving.
-- Persist edits back to `data/ui_layouts/layouts.sxp` (or a temp file) with `Ctrl+S`.
-- Support multi-selection (drag box, Ctrl+click) with group move/scale and copy/paste.
-- Provide undo/redo (snapshot-based) so experiments are reversible.
-- Allow virtual-resolution preview: render the UI/layout into an offscreen target with any width/height/aspect and scale it to the actual window so designers can inspect 2560×1080, 4:3, etc. without resizing the monitor.
+The runtime layout editor now ships with the engine and is the canonical way to author and tweak `UILayout` data. This document describes its behaviour and the current “nice to have” backlog.
 
-## Toggle & Lifecycle
-- Hotkey: `Ctrl+L` toggles layout edit mode (engine-wide). Future: hook into the ImGui debug HUD with a checkbox.
-- When active:
-  - Display an overlay banner: current layout ID, resolution, snap state, instructions (`Ctrl+S Save`, `Ctrl+Z Undo`, `Esc Exit`, etc.).
-  - Consume all input until the user presses `Esc` (or toggles `Ctrl+L` again). `Esc` steps through sub-modes (dragging → neutral → exit).
-  - Pause menu navigation/game use actions.
-- When inactive: editor state persists (selected object, snap setting) but no overlays are rendered.
+## Overview
+- Modal editor toggled with `Ctrl+L`. While active, all mouse/keyboard/gamepad input is captured and gameplay/menu logic pauses.
+- Overlay shows the active layout (ID, resolution, form factor) plus instructions (`Ctrl+S` save, `Ctrl+Z/Y` undo/redo, etc.).
+- Working copy is the `UILayout` instance from `es->ui_layouts_pool`. Edits mutate it in place and can be persisted with `save_ui_layout`.
+- Resolution preview can be overridden via the debug “Video & Resolution” window so layouts are authored at arbitrary aspect ratios without resizing the OS window.
+- Undo/redo is snapshot-based (layout + object list) so every drag/rename/copy/paste is reversible.
 
-## Interaction Basics
-- **Viewport Overlay**
-  - Draw the current `UILayout` objects as translucent rectangles with labels, IDs, and normalized rect text.
-  - Each object shows drag handles: corners (resize both axes), edges (resize one axis), center (move). Active handle highlights.
-  - Show pixel coordinates while dragging; hold `Shift` for coarse snap, `Ctrl` for fine increments (configurable grid).
-  - Multi-select: click-drag marquee, `Ctrl`+click toggles selection, all transforms apply to the selection set.
-- **Selection**
-  - Click to select. `Tab` cycles through objects. Selected object shows bounding box + info panel (label, ID, normalized xywh, pixel xywh).
-  - `Enter` / double-click opens inline label rename.
-- **Manipulation**
-  - Drag handles as described. While dragging, clamp to [0,1] normalized range and optionally snap to other objects (magnetic guides).
-  - Keyboard nudging (`Arrow keys`) moves the selected object; add `Shift` modifiers for 10x steps.
-  - `Ctrl+C` / `Ctrl+V` copy/paste the selected object within the same layout/res (new object gets a unique ID).
-  - `Delete` removes the object (with undo once implemented).
-- **Saving**
-  - `Ctrl+S` writes the edited layout back to `data/ui_layouts/layouts.sxp` by calling `save_ui_layout`. For safety, also mirror to `data/ui_layouts/layouts.sxp.bak`.
-  - Show toast in overlay (“PlayScreen 1920x1080 saved @ 12:34:56”).
-  - Future: auto-save checkpoint + undo stack.
-- **Grid & Rulers**
-  - Always draw a faint normalized grid with numeric tick labels along X/Y (0.00–1.00). Provide `-`/`=` hotkeys to shrink/grow spacing (step 0.01, with key-repeat).
-  - Snap-to-grid toggle (`G` or toolbar button). Modifier keys override snap temporarily (`Shift` = coarse, `Ctrl` = fine/no snap).
+## Interaction
+- Grid + rulers are always visible with numeric normalized ticks. `=` / `-` change spacing, `G` toggles snap-to-grid (holding `Shift` / `Ctrl` temporarily overrides).
+- Objects draw translucent rectangles with labels/IDs and `x/y/w/h` readouts. Handles appear on corners/edges/center.
+- Mouse drag handles move or resize, clamping to 0–1 normalized space. Both single objects and multi-selection bounding boxes snap to grid lines and to neighbouring object edges.
+- Multi-selection: click (or `Ctrl`/`Shift`-click) toggles members, and dragging any selected object moves/scales the whole set. Bounding box shows shared handles, and the ImGui panel lists each selected entry with a “Solo” button.
+- Keyboard nudges (`arrow keys`) move the selection (`Shift` = bigger steps). `Ctrl+C/V` copy/paste (group-aware, new IDs), `Delete` removes selection, `Ctrl+S` saves.
+- ImGui panel exposes numeric editing for IDs, labels, positions, sizes (with clamping). Layout metadata (resolution + form factor) is editable, and buttons exist to add objects, duplicate layouts, or create fresh ones.
+- Clipboard contents and snap/grid state persist until the editor deactivates.
 
-## Architecture
-- New module `src/engine/layout_editor/` containing:
-  - `layout_editor.hpp/cpp`: entry points (`begin_frame`, `handle_input`, `render_overlay`, `shutdown`), activation state, and per-layout editing state.
-  - `layout_editor_gizmos.cpp`: hit-testing, dragging, snapping logic.
-  - `layout_editor_ui.cpp`: ImGui panels for label editing, property inspector, instructions.
-  - Keep each file ≤ ~400 lines. Shared structs (SelectedObject, DragState) go into `layout_editor_state.hpp`.
-- Integration points (engine-owned):
-  1. After `imgui_new_frame`, call `layout_editor_begin_frame`.
-  2. If editor is active, skip `mode->process_inputs_fn`/menu input (or have the editor tell the main loop to early-out).
-  3. During render, draw the layout overlay before ImGui debug/render calls.
-  4. On shutdown, clear editor state.
-- Editor uses current `UILayout` from `get_ui_layout_for_resolution` (the one used by the active mode). Later we can add a picker to swap layouts/res without changing the main view.
+## Persistence
+- `Ctrl+S` rewrites the matching `(layout_id, width, height)` entry in `data/ui_layouts/layouts.sxp`. The in-memory pool already reflects edits, so gameplay picks them up immediately after a save or hot reload.
+- Undo/redo data is per-layout; switching layouts resets the stack.
 
-## Data Flow
-- Editor operates on the `UILayout` instance currently in `es->ui_layouts_pool`. Mutations edit this in-place.
-- Saving rewrites the corresponding `(id, width, height)` entry in `data/ui_layouts/layouts.sxp`.
-- Clipboard stores one or multiple `UIObject` structs (IDs remapped via `generate_ui_object_id()` when pasted).
-- Snap settings, per-res preferences stored in `config/layout_editor.ini` (per layout ID + resolution).
-- Undo/redo: keep a rolling buffer (e.g., 20 entries) of serialized layout snapshots (JSON or direct structs). Each edit commits a new snapshot; undo restores the previous one.
-
-## Future Enhancements
-- Undo/redo stack (timeline of edits with `Ctrl+Z` / `Ctrl+Y`).
-- Multi-selection with align/distribute tools.
-- Visual grid toggle (configurable spacing).
-- Highlight object when hovered during gameplay even outside editor (helpful for debugging).
-- Integration with navigation editor (`n` mode) from `docs/gui_editor_plan.md` to provide a unified workflow.
+## Future Ideas
+These are optional niceties we’ve discussed but not scheduled:
+- Designer-defined guidelines (persistent vertical/horizontal guides that objects can snap to without needing “dummy” objects).
+- Alignment helpers (align/distribute buttons for current selection, spacing adjustments, etc.).
+- Richer search/filter for the object list, especially on large layouts.
+- Integration hooks for a future navigation/menu state editor so selection states can drive menu focus graphs.
