@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr const char* kInputSettingsProfilesPath = "config/input_settings_profiles.sxp";
+constexpr const char* kInputSettingsProfilesPath = "data/settings_profiles/input_settings_profiles.sxp";
 
 // Helper to extract bool (treat non-zero int as true)
 std::optional<bool> extract_bool(const sexp::SValue& list, const std::string& symbol) {

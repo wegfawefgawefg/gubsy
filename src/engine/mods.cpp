@@ -18,7 +18,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char* kModsEnabledConfig = "config/mods_enabled.json";
+constexpr const char* kModsEnabledConfig = "data/mods_enabled.json";
 
 struct ModsConfig {
     bool has_enabled_list{false};

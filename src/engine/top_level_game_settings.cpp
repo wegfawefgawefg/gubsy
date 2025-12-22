@@ -11,7 +11,7 @@
 
 namespace {
 
-constexpr const char* kTopLevelSettingsPath = "config/top_level_game_settings.sxp";
+constexpr const char* kTopLevelSettingsPath = "data/settings_profiles/top_level_game_settings.sxp";
 
 TopLevelGameSettings parse_top_level_settings_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;

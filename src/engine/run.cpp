@@ -55,7 +55,7 @@ bool do_the_gubsy(){
         std::fprintf(stderr, "[imgui] init failed\n");
     }
 
-    load_audio_settings("config/audio.ini");
+    load_audio_settings(kAudioSettingsPath);
 
 
     if (!init_audio())

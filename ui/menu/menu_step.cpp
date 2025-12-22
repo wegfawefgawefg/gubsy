@@ -134,7 +134,7 @@ static void play_audio_slider_preview(int slider_id, float prev_value, float new
 
 static void flush_audio_settings_if_dirty() {
     if (ss && ss->menu.audio_settings_dirty) {
-        save_audio_settings_to_ini("config/audio.ini");
+        save_audio_settings_to_ini(kAudioSettingsPath);
         ss->menu.audio_settings_dirty = false;
     }
 }
