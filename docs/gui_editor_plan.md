@@ -51,7 +51,7 @@
   - `Delete`: remove selected placeholder.
   - `d`: duplicate selected placeholder.
   - `f`/`Enter`: rename the placeholder (same 32-char inline editor).
-- Stored in a new INI section (e.g., `config/menu_objects.ini`) keyed by screen name + resolution.
+- Stored alongside other UI layout data in `data/ui_layouts/layouts.lisp`, keyed by screen name + resolution.
 
 ## Label Editing
 - Neutral screen view: hover widget, press `f` or `Enter` to edit its label.
@@ -114,8 +114,6 @@
 - Existing screens that haven’t been migrated continue using hardcoded rectangles/nav graphs until their turn.
 
 ## Persistence
-- Layout rectangles: continue using `config/menu_layouts.ini`.
-- Nav graph edges (including warps): `config/menu_nav.ini`.
-- Objects + labels: new `config/menu_objects.ini`.
-- Screens/back targets: `config/menu_screens.ini`.
+- Layout rectangles, nav graphs, and object metadata all live in `data/ui_layouts/layouts.lisp`.
+- Screens/back targets and per-resolution overrides share the same S-expression structure.
 - All files scoped by `screen_name WIDTHxHEIGHT` sections to keep per-resolution variants.

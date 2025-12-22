@@ -132,7 +132,7 @@ struct MenuAction {
 RectPixels rect = get_layout_rect(screen.layout, widget.slot, width, height);
 ```
 - If the layout lacks the object, fallback to a default normalized rect (with a logged warning).
-- Layouts live in `data/ui_layouts/*.sxp` and are created with the same tool as other UI surfaces.
+- Layouts live in `data/ui_layouts/*.lisp` and are created with the same tool as other UI surfaces.
 
 ## 4. Rendering
 - `engine/menu/render.cpp`:
@@ -238,4 +238,3 @@ uint32_t register_menu_command(MenuCommandFn fn);
 - Text capture must respect existing input system (menu actions + normalized keyboard text events).
 - Engine code never includes game headers; game registers screens + commands via engine-facing headers.
 - All IDs (screen, widget, layout, command) are `uint32_t` typedefs to avoid accidental mixing.
-

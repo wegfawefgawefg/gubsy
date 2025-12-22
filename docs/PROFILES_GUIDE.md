@@ -54,7 +54,7 @@ UserProfile create_default_user_profile();
 
 ### Storage Format
 
-User profiles are stored in `config/user_profiles.sxp` as s-expressions:
+User profiles are stored in `data/player_profiles/user_profiles.lisp` as s-expressions:
 
 ```lisp
 (user_profiles
@@ -180,7 +180,7 @@ void bind_2d_analog(BindsProfile& profile, int device_stick, int gubsy_2d_analog
 
 ### Storage Format
 
-Stored in `config/binds_profiles.sxp`:
+Stored in `data/binds_profiles/*.lisp`:
 
 ```lisp
 (binds_profiles
@@ -274,7 +274,7 @@ InputSettingsProfile create_default_input_settings_profile();
 
 ### Storage Format
 
-Stored in `config/input_settings_profiles.sxp`:
+Stored in `data/settings_profiles/input_settings_profiles.lisp`:
 
 ```lisp
 (input_settings_profiles
@@ -383,7 +383,7 @@ GameSettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::
 
 ### Storage Format
 
-Stored in `config/game_settings.sxp`:
+Stored in `data/settings_profiles/game_settings.lisp`:
 
 ```lisp
 (game_settings_list
@@ -479,7 +479,7 @@ std::string get_top_level_setting_string(const TopLevelGameSettings& settings, c
 
 ### Storage Format
 
-Stored in `config/top_level_game_settings.sxp`:
+Stored in `data/settings_profiles/top_level_game_settings.lisp`:
 
 ```lisp
 (top_level_game_settings
@@ -705,13 +705,13 @@ es->players[0].has_active_profile = true;
 
 ## File Locations
 
-All configuration files are stored in the `config/` directory:
+All configuration files are stored in the `data/` directory:
 
-- `config/user_profiles.sxp` - User profiles
-- `config/binds_profiles.sxp` - Binds profiles
-- `config/input_settings_profiles.sxp` - Input settings profiles
-- `config/game_settings.sxp` - Game settings
-- `config/top_level_game_settings.sxp` - Top-level settings
+- `data/player_profiles/user_profiles.lisp` - User profiles
+- `data/binds_profiles/*.lisp` - Binds profiles
+- `data/settings_profiles/input_settings_profiles.lisp` - Input settings profiles
+- `data/settings_profiles/game_settings.lisp` - Game settings
+- `data/settings_profiles/top_level_game_settings.lisp` - Top-level settings
 
 The engine automatically creates these directories if they don't exist.
 

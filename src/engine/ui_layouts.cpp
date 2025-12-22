@@ -17,7 +17,7 @@
 
 namespace {
 
-constexpr const char* kUILayoutsPath = "data/ui_layouts/layouts.sxp";
+constexpr const char* kUILayoutsPath = "data/ui_layouts/layouts.lisp";
 
 const char* form_factor_to_string(UILayoutFormFactor factor) {
     switch (factor) {

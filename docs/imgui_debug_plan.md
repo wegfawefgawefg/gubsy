@@ -9,7 +9,7 @@
 - Render engine-owned overlay controls (no game deps) from a new `engine/imgui_debug` module.
 - Add a slim “Debug HUD” bar that can be hidden entirely (master toggle + hotkey).
 - Provide hotkeys (default: `F1–F4`) to toggle individual windows even when the bar is hidden.
-- Persist visibility flags and “bar hidden” state in `config/debug_overlays.sxp` (ImGui still handles window positions).
+- Persist visibility flags and “bar hidden” state in `data/debug_overlays.lisp` (ImGui still handles window positions).
 
 ## Windows
 

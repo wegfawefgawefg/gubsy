@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr const char* kBindsProfilesPath = "data/binds_profiles/default.sxp";
+constexpr const char* kBindsProfilesPath = "data/binds_profiles/default.lisp";
 
 std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;

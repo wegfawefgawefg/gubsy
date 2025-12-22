@@ -8,7 +8,7 @@ This layer centralizes how HUD elements are authored, saved, and consumed at run
 - **Layout Pool** – `es->ui_layouts_pool`: all layouts loaded from disk. Query helpers search this pool at runtime.
 
 ## File Format
-Layouts live in `data/ui_layouts/layouts.sxp` as an S-expression tree:
+Layouts live in `data/ui_layouts/layouts.lisp` as an S-expression tree:
 
 ```
 (ui_layouts

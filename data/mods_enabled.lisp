@@ -1,0 +1,3 @@
+(mods_config
+  (disabled)
+)

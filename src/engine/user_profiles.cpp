@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr const char* kUserProfilesPath = "data/player_profiles/user_profiles.sxp";
+constexpr const char* kUserProfilesPath = "data/player_profiles/user_profiles.lisp";
 
 std::vector<UserProfile> parse_profiles_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;

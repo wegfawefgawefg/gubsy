@@ -116,7 +116,7 @@ Settings Catalog
 
 Application & Persistence
 -------------------------
-- Settings live in an engine `Settings` struct and serialize to `config/input.ini` (bindings) and `config/video.ini`/`config/audio.ini` or a unified `.ini` (TBD).
+- Settings live in an engine `Settings` struct and serialize to S-expressions under `data/settings_profiles/` (audio/video/user settings) and `data/binds_profiles/` for control bindings.
 - Audio changes apply immediately to SDL_mixer channels (master/music/sfx volumes).
 - Video changes:
   - Resolution/window mode: reconfigure SDL window and renderer; may require recreate.
@@ -127,7 +127,7 @@ Application & Persistence
   - Sensitivities affect camera/mouse/controller aim math; applied immediately.
   - Invert axes flips input signs; vibration toggles SDL haptics usage.
 - Binds:
-  - Writes to `config/input.ini` using the same token format the current `.ini` parser supports (SDL scancode names, etc.).
+  - Writes to `data/binds_profiles/*.lisp` using the same token format our S-expression encoder supports (SDL scancode names, etc.).
   - Gamepad binds stored with a distinct prefix (e.g., `PAD_A`, `PAD_LB`) to avoid collisions with keyboard tokens.
 
 Navigation Graph Specification
@@ -192,7 +192,7 @@ Decoupling Rendering and Logic
 
 Integration with Existing Config & Input
 ----------------------------------------
-- Reuse `config/input.ini` token scheme for keyboard binds; extend for gamepad tokens.
+- Reuse the S-expression binds profile format (currently in `data/binds_profiles/*.lisp`) for keyboard/gamepad tokens.
 - Respect existing input polling and debouncing; menu uses the same input layer.
 - Pickup key default F remains; binds page will edit that mapping directly.
 
@@ -220,4 +220,3 @@ Future Extensions (Non-blocking)
 - Presets/profiles for video and controls.
 - Multi-bind per action or secondary binds.
 - Navigation auto-graph based on spatial layout as a fallback.
-

@@ -18,9 +18,9 @@ This document summarizes the current in-game menu pages, their behavior, and the
   * Slider drags preview audio via `play_audio_slider_preview`.
   * Movement between focus targets plays `base:ui_cursor_move` (and directional sounds on slider adjustments).
 * Persistence:
-  * Audio sliders flush to `config/audio.ini` using `save_audio_settings_to_ini`.
+  * Audio sliders flush to `data/settings_profiles/audio.lisp` using `save_audio_settings`.
   * Video state stored in `ss->menu` until `Apply` is pressed.
-  * Input profiles live under `config/input_profiles/*.ini`.
+  * Input profiles live under `data/binds_profiles/*.lisp`.
   * Lobby settings persisted in state only (mods filtered via `set_demo_item_mod_filter` when session starts).
 
 ## Page Overview
@@ -64,7 +64,7 @@ Each section below details specific behaviors.
 
 ### Audio (`AUDIO`)
 * Sliders for master/music/SFX volumes (IDs 300-302).
-* Dragging previews audio pips; releasing triggers `SliderPreviewEvent::Release` and writes to `config/audio.ini`.
+* Dragging previews audio pips; releasing triggers `SliderPreviewEvent::Release` and writes to `data/settings_profiles/audio.lisp`.
 * Back (399) returns to `SETTINGS`.
 
 ### Video (`VIDEO`)
@@ -96,7 +96,7 @@ Each section below details specific behaviors.
   * Back (799)
   * Reset to Defaults (791) → `apply_default_bindings_to_active()`
   * Load Preset (792) → `BINDS_LOAD`
-  * Save As New (793) → opens text input, sanitized via `sanitize_profile_name`, writes to `config/input_profiles`.
+  * Save As New (793) → opens text input, sanitized via `sanitize_profile_name`, writes to `data/binds_profiles`.
   * Undo Changes (794) → restores snapshot captured when entering page.
 * Additional features:
   * Duplicate name prevention when saving.
@@ -104,7 +104,7 @@ Each section below details specific behaviors.
   * `kMaxBindsProfiles` (50) enforced in `menu_binds.cpp`.
 
 ### Binds – Load Preset (`BINDS_LOAD`)
-* Shows existing `.ini` files under `config/input_profiles`.
+* Shows existing profiles stored under `data/binds_profiles`.
 * Rows 720-724 show preset names, 730-734 rename, 740-744 delete (disabled for read-only `Default`).
 * Back (799) returns to binds grid.
 * Paging (5 per page) controlled by `ss->menu.binds_list_page`.
@@ -165,7 +165,7 @@ Each section below details specific behaviors.
   * `apply_default_bindings_to_active`, `undo_active_bind_changes`, `delete_binds_profile`, `set_active_binds_profile`.
   * Dirty tracking via `ss->menu.binds_snapshot`.
   * Text input validations: disallow spaces, sanitize to `[A-Za-z0-9_-]`, enforce length ≤ 24.
-  * Profiles stored under `config/input_profiles`, with `Default.ini` treated as read-only baseline.
+  * Profiles stored under `data/binds_profiles`, with `Default` treated as read-only baseline.
 * `input_active_profile.txt` stores the last used preset name.
 
 ---

@@ -46,7 +46,7 @@ Current Behavior
 - Stage: blocking border + sprinkled obstacles; spawn safety nudges spawns to nearest walkable tile; ground items gently repel.
 - Entities: ~25 NPCs spawn and wander; player + NPC sprites if found under mods/base/graphics/.
 - Projectiles: Left click fires toward mouse; per‑object physics_steps=2; NPCs can die and drop powerups/items/guns via Lua‑defined weighted tables.
-- Input remap: Reads config/input.ini (key=value). Pickup key default is F.
+- Input remap: Reads `data/binds_profiles/*.lisp` (S-expression binds profiles). Pickup key default is F.
 - UI: Pickup prompt when overlapping; inventory panel with hotkeys 1–0 and drag‑and‑drop reordering; basic gun equip/use logic.
 - Ammo system: Guns declare `compatible_ammo` (weighted). Ammo is chosen at gun spawn (or set via API). Ammo provides projectile sprite/size/speed and damage behavior: damage_mult, armor_pen (entities only), shield_mult, range + linear falloff, and entity pierce_count. Ammo hooks fire on hit events.
 - Right gun panel (toggle with V): full gun + ammo stats and sprite.
@@ -77,11 +77,11 @@ IDs, Data, and Moddability Philosophy
   - Ammo swap: api.set_equipped_ammo(type), api.set_equipped_ammo_force(type)
 - Load order: base mod first; simple directory scan today.
 
-Input Remapping (.ini)
-----------------------
-- File: config/input.ini; lines like: left=A, use_center=SPACE, pick_up=F, drop=Q
-- Supported tokens: A–Z, 0–9, KP_0–KP_9, LEFT/RIGHT/UP/DOWN, SPACE, RETURN, ESCAPE, COMMA, PERIOD (.), MINUS (-), EQUALS (=).
-- Parser ignores comments (# …) and whitespace. Unknown tokens are skipped.
+Input Remapping
+---------------
+- Files: `data/binds_profiles/*.lisp`; each profile stores button/analog mappings as device+action ids.
+- The default profile lives at `data/binds_profiles/default.lisp`; editing or cloning the file creates new presets.
+- Use the in-game binds UI (or edit the S-expression directly) to change mappings.
 
 Rendering Notes / Sprites
 -------------------------
@@ -120,7 +120,7 @@ Open Work
 - on_damage trigger wiring through damage paths (player/enemy) with plates + armor/AP.
 - Gun polish: reload/eject timing, heat/cool dynamics, reload key, UI bars.
 - Camera polish: zoom/pan UX; tidy transforms.
-- Settings persistence: write .ini changes from in‑game menu.
+- Settings persistence: write S-expression settings (audio/video/binds) from the in-game menu.
 - Clean up legacy C API path once sol2 is standard.
 - See docs/todo_high_level.md and docs/todo_low_level.md for details.
 - Pages/Rooms: Stage Review and Next Area pages (no HUD/world in background), metrics display, next-room details; 3-room loop and decorations (see stages_and_decorations.md).
@@ -131,7 +131,7 @@ Local Run Book (quick)
 1) Install deps: sudo apt-get install liblua5.4-dev libsdl2-image-dev libsdl2-ttf-dev
 2) Build+run: bash scripts/run.sh (or VSCode F5)
 3) Place PNGs under mods/base/graphics/ (filenames match sprite keys)
-4) Remap keys: edit config/input.ini and rerun.
+4) Remap keys: edit `data/binds_profiles/default.lisp` (or create a new profile) and rerun.
 
 Design Rationale / Thoughts
 ---------------------------

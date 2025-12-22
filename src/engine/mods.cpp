@@ -9,16 +9,16 @@
 #include <fstream>
 #include <optional>
 #include <queue>
+#include <sstream>
 #include <system_error>
 #include <unordered_set>
 
-#include <nlohmann/json.hpp>
-
 namespace fs = std::filesystem;
 
+#include "engine/parser.hpp"
 namespace {
 
-constexpr const char* kModsEnabledConfig = "data/mods_enabled.json";
+constexpr const char* kModsEnabledConfig = "data/mods_enabled.lisp";
 
 struct ModsConfig {
     bool has_enabled_list{false};
@@ -31,30 +31,41 @@ std::optional<ModsConfig> read_mods_config() {
     std::ifstream f(path);
     if (!f.good())
         return std::nullopt;
-    try {
-        nlohmann::json j;
-        f >> j;
-        if (!j.is_object())
-            return ModsConfig{};
-        ModsConfig cfg;
-        if (auto it = j.find("enabled"); it != j.end() && it->is_array()) {
-            cfg.has_enabled_list = true;
-            for (auto& val : *it) {
-                if (val.is_string())
-                    cfg.enabled.insert(val.get<std::string>());
-            }
-        }
-        if (auto it = j.find("disabled"); it != j.end() && it->is_array()) {
-            for (auto& val : *it) {
-                if (val.is_string())
-                    cfg.disabled.insert(val.get<std::string>());
-            }
-        }
-        return cfg;
-    } catch (const std::exception& e) {
-        std::printf("[mods] Failed to parse %s: %s\n", path.string().c_str(), e.what());
+    std::stringstream buffer;
+    buffer << f.rdbuf();
+    auto parsed = sexp::parse_s_expressions(buffer.str());
+    if (!parsed)
         return std::nullopt;
+    const sexp::SValue* root = nullptr;
+    for (const auto& node : *parsed) {
+        if (node.type != sexp::SValue::Type::List || node.list.empty())
+            continue;
+        if (sexp::is_symbol(node.list.front(), "mods_config")) {
+            root = &node;
+            break;
+        }
     }
+    if (!root)
+        return ModsConfig{};
+
+    ModsConfig cfg;
+    if (const sexp::SValue* enabled = sexp::find_child(*root, "enabled")) {
+        if (enabled->list.size() > 1)
+            cfg.has_enabled_list = true;
+        for (size_t i = 1; i < enabled->list.size(); ++i) {
+            const auto& val = enabled->list[i];
+            if (val.type == sexp::SValue::Type::String || val.type == sexp::SValue::Type::Symbol)
+                cfg.enabled.insert(val.text);
+        }
+    }
+    if (const sexp::SValue* disabled = sexp::find_child(*root, "disabled")) {
+        for (size_t i = 1; i < disabled->list.size(); ++i) {
+            const auto& val = disabled->list[i];
+            if (val.type == sexp::SValue::Type::String || val.type == sexp::SValue::Type::Symbol)
+                cfg.disabled.insert(val.text);
+        }
+    }
+    return cfg;
 }
 
 void ensure_mods_config_exists() {
@@ -64,14 +75,14 @@ void ensure_mods_config_exists() {
         return;
     if (!path.parent_path().empty())
         fs::create_directories(path.parent_path(), ec);
-    nlohmann::json j;
-    j["disabled"] = nlohmann::json::array();
     std::ofstream out(path);
     if (!out.good()) {
         std::printf("[mods] Failed to write %s\n", path.string().c_str());
         return;
     }
-    out << j.dump(2) << "\n";
+    out << "(mods_config\n";
+    out << "  (disabled)\n";
+    out << ")\n";
 }
 
 std::vector<ModInfo> resolve_mod_order(std::vector<ModInfo> mods) {

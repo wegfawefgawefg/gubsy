@@ -3,7 +3,7 @@
 ## Goals
 - Replace the dual `GameSettingsSchema` / `TopLevelGameSettingsSchema` APIs with a single declarative schema that describes **all** settings.
 - Store metadata (scope, widget type, categories, defaults) once and reuse it for persistence, reconciliation, and menu generation.
-- Stop using ad-hoc `.ini` files (e.g., audio.ini); all authored + runtime settings should live in `data/settings_profiles/*.sxp`.
+- Stop using ad-hoc `.ini` files (e.g., audio.ini); all authored + runtime settings should live in `data/settings_profiles/*.lisp`.
 - Provide built-in fallbacks when reading settings so callers never need to pass explicit default values.
 
 ## Data Model
@@ -48,8 +48,8 @@ struct SettingMetadata {
 A single global `SettingsSchema` holds `std::vector<SettingMetadata> entries`. Games call `global_settings_schema().add_setting(meta)` to register everything.
 
 ## Storage
-- Install-wide (`SettingScope::Install`) entries map to `TopLevelGameSettings` stored in `data/settings_profiles/top_level_game_settings.sxp`.
-- Profile-scoped entries map to each `GameSettings` instance stored in `data/settings_profiles/game_settings.sxp`.
+- Install-wide (`SettingScope::Install`) entries map to `TopLevelGameSettings` stored in `data/settings_profiles/top_level_game_settings.lisp`.
+- Profile-scoped entries map to each `GameSettings` instance stored in `data/settings_profiles/game_settings.lisp`.
 - Audio, mods-enabled flags, etc. migrate from `config/*.ini` / JSON into the same `data` hierarchy (all S-expression).
 
 ## Reconciliation Flow
@@ -111,8 +111,8 @@ MenuWidget make_slider_from_schema(const SettingMetadata& meta, float* value_ptr
 
 ## Migration Tasks
 1. **File locations:** move everything from `config/` into `data/...` folders; delete old references in docs and code.
-2. **Audio settings:** replace the INI reader/writer with S-expression storage under `data/settings_profiles/audio.sxp`.
-3. **Mods config:** switch `mods_enabled.json` to `data/mods_enabled.sxp` (or embed inside the settings schema if appropriate).
+2. **Audio settings:** replace the INI reader/writer with S-expression storage under `data/settings_profiles/audio.lisp`.
+3. **Mods config:** switch `mods_enabled.json` to `data/mods_enabled.lisp` (or embed inside the settings schema if appropriate).
 4. **Docs:** update `docs/PROFILES_GUIDE.md`, `docs/menu_reference.md`, etc., to describe the new paths + S-expression formats instead of INI.
 5. **Menu builder:** consume the schema entries rather than handwritten navigation tables once the Audio/Video pages pivot to the new system.
 

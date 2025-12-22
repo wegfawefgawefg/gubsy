@@ -19,7 +19,7 @@ The runtime layout editor now ships with the engine and is the canonical way to 
 - Clipboard contents and snap/grid state persist until the editor deactivates.
 
 ## Persistence
-- `Ctrl+S` rewrites the matching `(layout_id, width, height)` entry in `data/ui_layouts/layouts.sxp`. The in-memory pool already reflects edits, so gameplay picks them up immediately after a save or hot reload.
+- `Ctrl+S` rewrites the matching `(layout_id, width, height)` entry in `data/ui_layouts/layouts.lisp`. The in-memory pool already reflects edits, so gameplay picks them up immediately after a save or hot reload.
 - Undo/redo data is per-layout; switching layouts resets the stack.
 
 ## Future Ideas

@@ -70,7 +70,7 @@ please go read that file. this one may still be nice for context
    - `menu_render.cpp` renders widgets based on layout.
 
 ## Layout Integration
-- Each screen declares a `UILayoutId`. Designers edit `data/ui_layouts/*.sxp` to position UI objects (buttons, text blocks, cards).
+- Each screen declares a `UILayoutId`. Designers edit `data/ui_layouts/*.lisp` to position UI objects (buttons, text blocks, cards).
 - Widgets reference layout objects by name/ID. Helper:
   ```cpp
   RectPixels menu_widget_rect(const MenuContext&, UILayoutObjectId slot, int width, int height);
@@ -180,4 +180,3 @@ MenuWidget make_text_input(WidgetId id, UILayoutObjectId slot,
 - Screens and widgets stay <500 LOC by splitting each screen into its own file under `engine/menu/screens/`.
 - `ss->menu` legacy struct will be replaced by per-screen states + small shared structs (e.g., audio slider preview). During migration, we can wrap legacy state inside new state structs.
 - Mods browser continues to rely on existing mod install helpers; we only swap out the UI layer.
-

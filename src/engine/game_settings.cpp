@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr const char* kGameSettingsPath = "data/settings_profiles/game_settings.sxp";
+constexpr const char* kGameSettingsPath = "data/settings_profiles/game_settings.lisp";
 
 // Global schema storage
 GameSettingsSchema g_game_settings_schema;

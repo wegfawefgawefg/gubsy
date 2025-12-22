@@ -41,7 +41,7 @@ Known issues (to fix next)
   - We currently use a small preset list only.
 - Binds:
   - Currently keyboard-only capture; no presets UI or save/load profiles yet.
-  - Persistence writes remain basic (single `config/input.ini`).
+  - Persistence writes remain basic (single `data/binds_profiles/default.lisp`).
 
 What I’m working on now
 ------------------------
@@ -71,7 +71,7 @@ What’s next
 4) Binds enhancements:
    - Add gamepad binding capture and display (controller buttons/axes with tokens like PAD_A, PAD_LB, etc.).
    - Presets UI: list built-in mappings and allow user-defined profiles.
-   - Save/Load profiles: `config/input_<name>.ini`, with “Save As…” to name the preset; make the saved one current default.
+   - Save/Load profiles: `data/binds_profiles/<name>.lisp`, with “Save As…” to name the preset; make the saved one current default.
    - Cancel capture on Back/Esc or loss of focus; debounce to avoid accidental overwrites.
 
 5) UX polish:
