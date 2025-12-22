@@ -16,6 +16,7 @@ namespace {
 MenuCommandId g_cmd_play = kMenuIdInvalid;
 MenuCommandId g_cmd_quit = kMenuIdInvalid;
 MenuCommandId g_cmd_open_mods = kMenuIdInvalid;
+MenuCommandId g_cmd_open_settings = kMenuIdInvalid;
 
 void command_play(MenuContext& ctx, std::int32_t) {
     ctx.engine.mode = modes::SETUP;
@@ -27,6 +28,10 @@ void command_quit(MenuContext& ctx, std::int32_t) {
 
 void command_open_mods(MenuContext& ctx, std::int32_t) {
     ctx.manager.push_screen(MenuScreenID::MODS);
+}
+
+void command_open_settings(MenuContext& ctx, std::int32_t) {
+    ctx.manager.push_screen(MenuScreenID::SETTINGS);
 }
 
 MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction on_select) {
@@ -54,7 +59,7 @@ BuiltScreen build_main_menu(MenuContext&) {
 
     MenuWidget play = make_button(101, MenuObjectID::PLAY, "Play", MenuAction::run_command(g_cmd_play));
     MenuWidget mods = make_button(102, MenuObjectID::MODS, "Mods", MenuAction::run_command(g_cmd_open_mods));
-    MenuWidget settings = make_button(103, MenuObjectID::SETTINGS, "Settings (coming soon)", MenuAction::none());
+    MenuWidget settings = make_button(103, MenuObjectID::SETTINGS, "Settings", MenuAction::run_command(g_cmd_open_settings));
     MenuWidget quit = make_button(104, MenuObjectID::QUIT, "Quit", MenuAction::run_command(g_cmd_quit));
 
     play.nav_down = mods.id;
@@ -86,6 +91,7 @@ void register_main_menu_screen() {
     g_cmd_play = es->menu_commands.register_command(command_play);
     g_cmd_quit = es->menu_commands.register_command(command_quit);
     g_cmd_open_mods = es->menu_commands.register_command(command_open_mods);
+    g_cmd_open_settings = es->menu_commands.register_command(command_open_settings);
 
     MenuScreenDef def;
     def.id = MenuScreenID::MAIN;
