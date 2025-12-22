@@ -482,7 +482,7 @@ Stored in `data/settings_profiles/top_level_game_settings.lisp`:
 ```lisp
 (top_level_game_settings
   (values
-    (key "language" "en")
+    (key "gubsy.localization.language" "en")
     (key "graphics_quality" 2)
     (key "audio_device" "Default")
     (key "gubsy.audio.master_volume" 0.8)
@@ -498,12 +498,12 @@ Stored in `data/settings_profiles/top_level_game_settings.lisp`:
 load_top_level_game_settings_into_state();
 
 // Access global settings
-std::string lang = get_top_level_setting_string(es->top_level_game_settings, "language", "en");
+std::string lang = get_top_level_setting_string(es->top_level_game_settings, "gubsy.localization.language", "en");
 int gfx_quality = get_top_level_setting_int(es->top_level_game_settings, "graphics_quality", 1);
 float master_vol = get_top_level_setting_float(es->top_level_game_settings, "gubsy.audio.master_volume", 1.0f);
 
 // Update settings
-set_top_level_setting_string(es->top_level_game_settings, "language", "fr");
+set_top_level_setting_string(es->top_level_game_settings, "gubsy.localization.language", "fr");
 set_top_level_setting_int(es->top_level_game_settings, "graphics_quality", 3);
 save_top_level_game_settings(es->top_level_game_settings);
 ```
