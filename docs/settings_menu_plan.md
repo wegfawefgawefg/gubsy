@@ -35,7 +35,7 @@ struct SettingMetadata {
     int order;             // ordering inside category
 };
 ```
-`GameSettingsSchema` and `TopLevelGameSettingsSchema` get helpers like `add_slider(key, label, min, max, default)`.
+The unified `SettingsSchema` gets helpers like `add_slider(key, label, min, max, default)`.
 
 ## Catalog Build Pipeline
 1. **Registration**

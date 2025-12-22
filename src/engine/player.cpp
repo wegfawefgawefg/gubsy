@@ -39,11 +39,12 @@ int add_player(int player_index) {
         }
     }
 
-    // If no valid binds profile was found, create one.
+    // If no valid binds profile was found, reuse or create the default.
     if (!assigned_binds_profile) {
-        BindsProfile new_binds = create_default_binds_profile();
-        es->binds_profiles.push_back(new_binds);
-        assigned_binds_profile = &es->binds_profiles.back();
+        if (es->binds_profiles.empty()) {
+            es->binds_profiles.push_back(create_default_binds_profile());
+        }
+        assigned_binds_profile = &es->binds_profiles.front();
         
         // Link it to the user profile and save the user profile.
         // We need to update both the player's copy of the profile

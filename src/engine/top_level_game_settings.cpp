@@ -53,6 +53,23 @@ TopLevelGameSettings parse_top_level_settings_tree(const std::vector<sexp::SValu
                 settings.settings[key] = static_cast<float>(value.float_value);
             } else if (value.type == sexp::SValue::Type::String) {
                 settings.settings[key] = value.text;
+            } else if (value.type == sexp::SValue::Type::List && value.list.size() >= 3 &&
+                       sexp::is_symbol(value.list[0], "vec2")) {
+                float x = 0.0f, y = 0.0f;
+                const sexp::SValue& x_val = value.list[1];
+                const sexp::SValue& y_val = value.list[2];
+
+                if (x_val.type == sexp::SValue::Type::Float)
+                    x = static_cast<float>(x_val.float_value);
+                else if (x_val.type == sexp::SValue::Type::Int)
+                    x = static_cast<float>(x_val.int_value);
+
+                if (y_val.type == sexp::SValue::Type::Float)
+                    y = static_cast<float>(y_val.float_value);
+                else if (y_val.type == sexp::SValue::Type::Int)
+                    y = static_cast<float>(y_val.int_value);
+
+                settings.settings[key] = SettingsVec2{x, y};
             }
         }
     }
@@ -99,6 +116,8 @@ bool write_top_level_settings_file(const TopLevelGameSettings& settings) {
                 out << arg;
             } else if constexpr (std::is_same_v<T, std::string>) {
                 out << sexp::quote_string(arg);
+            } else if constexpr (std::is_same_v<T, SettingsVec2>) {
+                out << "(vec2 " << arg.x << " " << arg.y << ")";
             }
         }, value);
 
@@ -164,48 +183,4 @@ std::string get_top_level_setting_string(const TopLevelGameSettings& settings, c
     if (const std::string* p = std::get_if<std::string>(&it->second))
         return *p;
     return default_value;
-}
-
-void TopLevelGameSettingsSchema::add_int(const std::string& key, int default_value) {
-    entries.push_back({key, default_value});
-}
-
-void TopLevelGameSettingsSchema::add_float(const std::string& key, float default_value) {
-    entries.push_back({key, default_value});
-}
-
-void TopLevelGameSettingsSchema::add_string(const std::string& key, const std::string& default_value) {
-    entries.push_back({key, default_value});
-}
-
-void register_global_settings_schema(const TopLevelGameSettingsSchema& schema) {
-    // Load existing settings from disk (if any)
-    TopLevelGameSettings existing = load_top_level_game_settings();
-
-    // Build new settings from schema
-    TopLevelGameSettings reconciled;
-
-    for (const auto& entry : schema.entries) {
-        // Check if this key exists in the existing settings
-        auto it = existing.settings.find(entry.key);
-        if (it != existing.settings.end()) {
-            // Key exists - check if types match
-            if (it->second.index() == entry.default_value.index()) {
-                // Types match - keep the existing value
-                reconciled.settings[entry.key] = it->second;
-            } else {
-                // Type mismatch - use default value from schema
-                reconciled.settings[entry.key] = entry.default_value;
-            }
-        } else {
-            // Key doesn't exist - use default value from schema
-            reconciled.settings[entry.key] = entry.default_value;
-        }
-    }
-
-    // Save reconciled settings to disk
-    save_top_level_game_settings(reconciled);
-
-    // Load into engine state
-    load_top_level_game_settings_into_state();
 }

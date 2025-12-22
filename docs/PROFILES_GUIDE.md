@@ -333,17 +333,17 @@ Game settings store per-user, non-input-related preferences. Developers define c
 ### Structure
 
 ```cpp
-struct GameSettingsVec2 {
+struct SettingsVec2 {
     float x;
     float y;
 };
 
-using GameSettingsValue = std::variant<int, float, std::string, GameSettingsVec2>;
+using SettingsValue = std::variant<int, float, std::string, SettingsVec2>;
 
 struct GameSettings {
     int id;
     std::string name;
-    std::unordered_map<std::string, GameSettingsValue> settings;
+    std::unordered_map<std::string, SettingsValue> settings;
 };
 ```
 
@@ -378,7 +378,7 @@ void set_game_setting_vec2(GameSettings& settings, const std::string& key, float
 int get_game_setting_int(const GameSettings& settings, const std::string& key, int default_value = 0);
 float get_game_setting_float(const GameSettings& settings, const std::string& key, float default_value = 0.0f);
 std::string get_game_setting_string(const GameSettings& settings, const std::string& key, const std::string& default_value = "");
-GameSettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::string& key, float default_x = 0.0f, float default_y = 0.0f);
+SettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::string& key, float default_x = 0.0f, float default_y = 0.0f);
 ```
 
 ### Storage Format
@@ -425,7 +425,7 @@ GameSettings active_settings = load_game_settings(user_profile.last_game_setting
 float hud_scale = get_game_setting_float(active_settings, "hud_scale", 1.0f);
 int subtitle_size = get_game_setting_int(active_settings, "subtitle_size", 16);
 std::string fav_char = get_game_setting_string(active_settings, "favorite_character", "Default");
-GameSettingsVec2 cam_offset = get_game_setting_vec2(active_settings, "camera_offset", 0.0f, 0.0f);
+SettingsVec2 cam_offset = get_game_setting_vec2(active_settings, "camera_offset", 0.0f, 0.0f);
 ```
 
 ### Design Flexibility
@@ -445,10 +445,8 @@ Top-level settings are installation-wide and not tied to any user profile. There
 ### Structure
 
 ```cpp
-using TopLevelSettingsValue = std::variant<int, float, std::string>;
-
 struct TopLevelGameSettings {
-    std::unordered_map<std::string, TopLevelSettingsValue> settings;
+    std::unordered_map<std::string, SettingsValue> settings;
 };
 ```
 

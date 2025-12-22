@@ -38,14 +38,14 @@ struct SettingMetadata {
     std::string key;
     std::string label;
     std::string description;
-    std::vector<SettingCategory> categories;   // multi-category support
+    std::vector<std::string> categories;   // multi-category support
     int order = 0;
     SettingWidgetDesc widget;
-    GameSettingsValue default_value;            // int, float, string, vec2
+    SettingsValue default_value;            // int, float, string, vec2
 };
 ```
 
-A single global `SettingsSchema` holds `std::vector<SettingMetadata> entries`. Games call `global_settings_schema().add_setting(meta)` to register everything.
+A single global `SettingsSchema` holds `std::vector<SettingMetadata> entries`. Games construct a schema, call `add_setting(meta)` for each entry, and pass the result to `register_settings_schema(schema)` during startup.
 
 ## Storage
 - Install-wide (`SettingScope::Install`) entries map to `TopLevelGameSettings` stored in `data/settings_profiles/top_level_game_settings.lisp`.
@@ -76,7 +76,7 @@ GameSettings active = load_game_settings(user_profile.last_game_settings);
 float hud_scale = get_game_setting_float(active, "hud.scale"); // defaults to 1.0f if missing
 int difficulty = get_game_setting_int(active, "gameplay.difficulty"); // default 0 = Normal
 std::string subtitle_font = get_game_setting_string(active, "ui.subtitle_font");
-GameSettingsVec2 camera_offset = get_game_setting_vec2(active, "camera.offset");
+SettingsVec2 camera_offset = get_game_setting_vec2(active, "camera.offset");
 
 // Install-wide value (same for all profiles)
 const TopLevelGameSettings& global = es->top_level_game_settings;
