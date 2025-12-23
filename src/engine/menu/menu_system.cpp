@@ -5,6 +5,7 @@
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/state.hpp"
+#include "game/ui_layout_ids.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/layout_editor/layout_editor_hooks.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
@@ -79,6 +80,16 @@ MenuWidget* find_widget(WidgetId id) {
         return nullptr;
     for (auto& widget : g_cache.widgets) {
         if (widget.id == id)
+            return &widget;
+    }
+    return nullptr;
+}
+
+MenuWidget* find_widget_by_slot(UILayoutObjectId slot) {
+    if (slot == kMenuIdInvalid)
+        return nullptr;
+    for (auto& widget : g_cache.widgets) {
+        if (widget.slot == slot)
             return &widget;
     }
     return nullptr;
@@ -228,8 +239,12 @@ void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
         else
             g_focus = first_selectable_widget();
     }
-    if (!find_widget(g_focus))
-        g_focus = first_selectable_widget();
+    if (!find_widget(g_focus)) {
+        if (built.default_focus != kMenuIdInvalid)
+            g_focus = built.default_focus;
+        if (!find_widget(g_focus))
+            g_focus = first_selectable_widget();
+    }
     for (const MenuAction& act : built.frame_actions.items) {
         bool unused = false;
         execute_action(act, ctx, unused);
@@ -536,28 +551,36 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 }
             }
 
-            if (!needs_rebuild && page_prev_pressed) {
-                lock_mouse_focus_at(mouse_x, mouse_y);
-                if (focus->on_left.type != MenuActionType::None) {
-                    play_left_sound();
-                    execute_action(focus->on_left, ctx, stack_changed);
-                    needs_rebuild = true;
-                    continue;
-                } else {
-                    play_cant_sound();
-                }
+        if (!needs_rebuild && page_prev_pressed) {
+            lock_mouse_focus_at(mouse_x, mouse_y);
+            MenuAction action = (focus) ? focus->on_left : MenuAction::none();
+            if (action.type == MenuActionType::None) {
+                if (MenuWidget* prev_widget = find_widget_by_slot(SettingsObjectID::PREV))
+                    action = prev_widget->on_select;
             }
-            if (!needs_rebuild && page_next_pressed) {
-                lock_mouse_focus_at(mouse_x, mouse_y);
-                if (focus->on_right.type != MenuActionType::None) {
-                    play_right_sound();
-                    execute_action(focus->on_right, ctx, stack_changed);
-                    needs_rebuild = true;
-                    continue;
-                } else {
-                    play_cant_sound();
-                }
+            if (action.type != MenuActionType::None) {
+                play_left_sound();
+                execute_action(action, ctx, stack_changed);
+                needs_rebuild = true;
+                continue;
             }
+            play_cant_sound();
+        }
+        if (!needs_rebuild && page_next_pressed) {
+            lock_mouse_focus_at(mouse_x, mouse_y);
+            MenuAction action = (focus) ? focus->on_right : MenuAction::none();
+            if (action.type == MenuActionType::None) {
+                if (MenuWidget* next_widget = find_widget_by_slot(SettingsObjectID::NEXT))
+                    action = next_widget->on_select;
+            }
+            if (action.type != MenuActionType::None) {
+                play_right_sound();
+                execute_action(action, ctx, stack_changed);
+                needs_rebuild = true;
+                continue;
+            }
+            play_cant_sound();
+        }
         }
 
         focus = find_widget(g_focus);

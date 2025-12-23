@@ -225,8 +225,8 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
             card_widget.secondary = text_cache.back().c_str();
             card_widget.on_select = (card.screen_id != kMenuIdInvalid) ? MenuAction::push(card.screen_id)
                                                                        : MenuAction::none();
-            card_widget.on_left = prev_action;
-            card_widget.on_right = next_action;
+            card_widget.on_left = MenuAction::none();
+            card_widget.on_right = MenuAction::none();
             widgets.push_back(card_widget);
             card_ids.push_back(widget_id);
         } else {
@@ -264,8 +264,8 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
 
     for (std::size_t i = 0; i < card_ids.size(); ++i) {
         MenuWidget& card_widget = widgets[cards_offset + i];
-        card_widget.nav_left = prev_ref.id;
-        card_widget.nav_right = next_ref.id;
+        card_widget.nav_left = card_widget.id;
+        card_widget.nav_right = card_widget.id;
         card_widget.nav_up = (i == 0) ? prev_ref.id : card_ids[i - 1];
         card_widget.nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
     }
