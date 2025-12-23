@@ -169,6 +169,17 @@ std::string format_value(const SettingsValue& value) {
     return {};
 }
 
+std::string format_slider_display(const SettingWidgetDesc& desc, float value) {
+    float shown = value * desc.display_scale + desc.display_offset;
+    int precision = std::max(0, desc.display_precision);
+    char buffer[64];
+    if (precision == 0)
+        std::snprintf(buffer, sizeof(buffer), "%.0f", static_cast<double>(shown));
+    else
+        std::snprintf(buffer, sizeof(buffer), "%.*f", precision, static_cast<double>(shown));
+    return buffer;
+}
+
 void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) {
     st.entries.clear();
     auto it = catalog.categories.find(st.tag);
@@ -189,7 +200,10 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
         const SettingMetadata* meta = st.entries[i].entry.metadata;
         if (meta && meta->widget.kind == SettingWidgetKind::Slider && meta->widget.max_text_len > 0 &&
             st.entries[i].entry.value) {
-            st.value_buffers[i] = format_value(*st.entries[i].entry.value);
+            if (const float* fv = std::get_if<float>(st.entries[i].entry.value))
+                st.value_buffers[i] = format_slider_display(meta->widget, *fv);
+            else
+                st.value_buffers[i].clear();
         } else {
             st.value_buffers[i].clear();
         }
@@ -234,7 +248,15 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             w.max = desc.max;
             if (float* fv = std::get_if<float>(binding.entry.value))
                 w.bind_ptr = fv;
-            label_cache.push_back(format_value(*binding.entry.value));
+            float range = w.max - w.min;
+            w.step = desc.step > 0.0f ? desc.step : (range > 0.0f ? range * 0.01f : 0.01f);
+            w.display_scale = desc.display_scale;
+            w.display_offset = desc.display_offset;
+            w.display_precision = desc.display_precision;
+            if (const float* fv = std::get_if<float>(binding.entry.value))
+                label_cache.push_back(format_slider_display(desc, *fv));
+            else
+                label_cache.push_back(format_value(*binding.entry.value));
             w.badge = label_cache.back().c_str();
             if (value_buffer && desc.max_text_len > 0) {
                 *value_buffer = label_cache.back();

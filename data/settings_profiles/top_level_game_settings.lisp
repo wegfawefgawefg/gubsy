@@ -7,7 +7,7 @@
     (key "gubsy.audio.dynamic_range" "tv")
     (key "gubsy.audio.ui_volume" 0.56)
     (key "gubsy.video.render_scale" 1)
-    (key "gubsy.audio.music_volume" 1)
+    (key "gubsy.audio.music_volume" 0.84)
     (key "gubsy.audio.output_device" "default")
     (key "gubsy.video.frame_cap" "60")
     (key "gubsy.video.dynamic_resolution" 0)

@@ -30,6 +30,9 @@ struct SettingWidgetDesc {
     float max = 1.0f;
     float step = 0.0f;
     int max_text_len = 0;
+    float display_scale = 1.0f;
+    float display_offset = 0.0f;
+    int display_precision = 2;
     std::vector<SettingOption> options;
     std::string custom_id;
 };
@@ -57,4 +60,3 @@ private:
 
 const SettingsSchema& get_settings_schema();
 void register_settings_schema(const SettingsSchema& schema);
-

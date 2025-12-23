@@ -122,4 +122,9 @@ struct MenuWidget {
     WidgetId nav_down{kMenuIdInvalid};
     WidgetId nav_left{kMenuIdInvalid};
     WidgetId nav_right{kMenuIdInvalid};
+
+    float step{0.0f};
+    float display_scale{1.0f};
+    float display_offset{0.0f};
+    int display_precision{2};
 };
