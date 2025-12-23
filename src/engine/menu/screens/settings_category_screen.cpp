@@ -19,6 +19,14 @@ namespace {
 
 constexpr std::size_t kMaxCategoryScreens = 48;
 constexpr int kSettingsPerPage = 4;
+constexpr WidgetId kTitleWidgetId = 400;
+constexpr WidgetId kStatusWidgetId = 401;
+constexpr WidgetId kSearchWidgetId = 402;
+constexpr WidgetId kPageLabelWidgetId = 403;
+constexpr WidgetId kPrevButtonId = 404;
+constexpr WidgetId kNextButtonId = 405;
+constexpr WidgetId kBackButtonId = 430;
+constexpr WidgetId kFirstRowWidgetId = 500;
 
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
@@ -260,16 +268,16 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
 
     widgets.reserve(kSettingsPerPage + 8);
-    widgets.push_back(make_label_widget(400, SettingsObjectID::TITLE, st.tag.c_str()));
+    widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, st.tag.c_str()));
 
     st.status_text = std::to_string(total_entries) + " items";
-    MenuWidget status_label = make_label_widget(401, SettingsObjectID::STATUS, st.status_text.c_str());
+    MenuWidget status_label = make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
     status_label.label = st.status_text.c_str();
     widgets.push_back(status_label);
-    widgets.push_back(make_label_widget(402, SettingsObjectID::SEARCH, "Search coming soon"));
+    widgets.push_back(make_label_widget(kSearchWidgetId, SettingsObjectID::SEARCH, "Search coming soon"));
 
     st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
-    MenuWidget page_label = make_label_widget(403, SettingsObjectID::PAGE, st.page_text.c_str());
+    MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     page_label.label = st.page_text.c_str();
     widgets.push_back(page_label);
 
@@ -280,11 +288,11 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
-    MenuWidget prev_btn = make_button_widget(404, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     prev_btn.on_left = MenuAction::none();
-    prev_btn.on_right = MenuAction::request_focus(405);
-    MenuWidget next_btn = make_button_widget(405, SettingsObjectID::NEXT, ">", next_action);
-    next_btn.on_left = MenuAction::request_focus(404);
+    prev_btn.on_right = MenuAction::request_focus(kNextButtonId);
+    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    next_btn.on_left = MenuAction::request_focus(kPrevButtonId);
     next_btn.on_right = MenuAction::none();
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
@@ -297,7 +305,7 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     for (int i = 0; i < kSettingsPerPage; ++i) {
         int entry_index = st.page * kSettingsPerPage + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
-        WidgetId widget_id = static_cast<WidgetId>(500 + i);
+        WidgetId widget_id = static_cast<WidgetId>(kFirstRowWidgetId + i);
         if (entry_index < total_entries) {
             MenuWidget row =
                 make_setting_widget(st.entries[static_cast<std::size_t>(entry_index)], widget_id, slot, entry_index, label_cache);
@@ -310,7 +318,7 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
         }
     }
 
-    MenuWidget back_btn = make_button_widget(430, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     back_btn.on_left = prev_action;
     back_btn.on_right = next_action;
     widgets.push_back(back_btn);

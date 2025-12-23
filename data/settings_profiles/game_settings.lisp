@@ -15,7 +15,7 @@
       (key "gubsy.input.invert_y_axis" 0)
       (key "demo.accessibility.high_contrast_ui" 0)
       (key "gubsy.accessibility.subtitle_background" 0.5)
-      (key "gubsy.input.controller_deadzone" 0.4)
+      (key "gubsy.input.controller_deadzone" 0.37)
       (key "demo.hud.opacity" 0.85)
       (key "demo.cheats.god_mode" 0)
       (key "demo.gameplay.character_name" "Player")
