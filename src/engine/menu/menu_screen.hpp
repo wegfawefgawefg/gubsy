@@ -56,6 +56,8 @@ struct MenuContext {
     MenuManager& manager;
     int screen_width{0};
     int screen_height{0};
+    int player_index{0};
+    MenuScreenId screen_id{kMenuIdInvalid};
     void* screen_state{nullptr};
 
     template <typename T>

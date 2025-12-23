@@ -129,6 +129,7 @@ SettingsCatalog build_settings_catalog(int player_index) {
         return catalog;
 
     GameSettings& active_profile_settings = ensure_active_game_settings_for_player(player_index);
+    catalog.profile_settings = &active_profile_settings;
     const SettingsSchema& schema = get_settings_schema();
 
     for (const auto& meta : schema.entries()) {
@@ -136,9 +137,9 @@ SettingsCatalog build_settings_catalog(int player_index) {
         if (!value_ptr)
             continue;
 
-        SettingsCatalogEntry entry{&meta, value_ptr};
+        SettingsCatalogEntry entry{&meta, value_ptr, meta.scope == SettingScope::Install};
 
-        if (meta.scope == SettingScope::Install)
+        if (entry.install_scope)
             catalog.install_entries.push_back(entry);
         else
             catalog.profile_entries.push_back(entry);

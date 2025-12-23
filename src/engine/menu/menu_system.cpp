@@ -176,7 +176,7 @@ bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_chan
         case MenuActionType::None:
             return false;
         case MenuActionType::PushScreen: {
-            if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a)))
+            if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a), ctx.player_index))
                 return false;
             stack_changed = true;
             g_focus = kMenuIdInvalid;
@@ -344,7 +344,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         g_current_screen = inst.def ? inst.def->id : kMenuIdInvalid;
         if (!inst.def || !inst.def->build)
             break;
-        MenuContext ctx{*es, *ss, manager, screen_width, screen_height, inst.state_ptr};
+        MenuContext ctx{*es,
+                        *ss,
+                        manager,
+                        screen_width,
+                        screen_height,
+                        inst.player_index,
+                        inst.def ? inst.def->id : kMenuIdInvalid,
+                        inst.state_ptr};
         rebuild_cache(inst, ctx);
         MenuWidget* focus = find_widget(g_focus);
         MenuInputState prev = g_prev_input;

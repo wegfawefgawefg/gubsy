@@ -1,13 +1,13 @@
-#include "game/menu/screens/mods_screen.hpp"
+#include "engine/menu/screens/mods_screen.hpp"
 
 #include "engine/globals.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
+#include "engine/menu/menu_ids.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mods.hpp"
-#include "game/menu/menu_ids.hpp"
 #include "game/ui_layout_ids.hpp"
 
 #include <algorithm>
@@ -588,3 +588,4 @@ void register_mods_menu_screen() {
     def.build = build_mods_screen;
     es->menu_manager.register_screen(def);
 }
+
