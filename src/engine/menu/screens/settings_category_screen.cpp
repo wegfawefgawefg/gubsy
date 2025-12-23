@@ -1,7 +1,9 @@
 #include "engine/menu/settings_category_registry.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -30,6 +32,7 @@ constexpr WidgetId kNextButtonId = 405;
 constexpr WidgetId kBackButtonId = 430;
 constexpr WidgetId kFirstRowWidgetId = 500;
 constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
+constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
 
 const char* window_mode_to_value(WindowDisplayMode mode);
 bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
@@ -320,9 +323,13 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             w.display_scale = desc.display_scale;
             w.display_offset = desc.display_offset;
             w.display_precision = desc.display_precision;
-            if (const float* fv = std::get_if<float>(binding.entry.value))
+            bool is_frame_cap = binding.entry.metadata &&
+                                binding.entry.metadata->key == kFrameCapSettingKey;
+            if (const float* fv = std::get_if<float>(binding.entry.value)) {
                 label_cache.push_back(format_slider_display(desc, *fv));
-            else
+                if (is_frame_cap && *fv <= 0.0f)
+                    label_cache.back() = "Unlimited";
+            } else
                 label_cache.push_back(format_value(*binding.entry.value));
             w.badge = label_cache.back().c_str();
             if (value_buffer && desc.max_text_len > 0) {
@@ -330,13 +337,50 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                     *value_buffer = label_cache.back();
                 w.text_buffer = value_buffer;
                 w.text_max_len = desc.max_text_len;
-                w.placeholder = "value";
+                w.placeholder = is_frame_cap ? "fps" : "value";
                 w.badge = nullptr;
                 if (menu_system_internal::is_text_edit_widget(id))
                     menu_system_internal::set_active_text_buffer(value_buffer, desc.max_text_len);
             }
             w.on_left = MenuAction::run_command(g_cmd_slider_dec, entry_index);
             w.on_right = MenuAction::run_command(g_cmd_slider_inc, entry_index);
+            if (is_frame_cap) {
+                auto parse_preset = [](const std::string& text, float& out) -> bool {
+                    char* end_ptr = nullptr;
+                    float parsed = std::strtof(text.c_str(), &end_ptr);
+                    if (end_ptr != text.c_str()) {
+                        out = parsed;
+                        return true;
+                    }
+                    std::string lower = text;
+                    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                        return static_cast<char>(std::tolower(c));
+                    });
+                    if (lower == "unlimited") {
+                        out = 0.0f;
+                        return true;
+                    }
+                    return false;
+                };
+                std::vector<std::pair<float, std::string>> presets;
+                for (const auto& opt : desc.options) {
+                    float value = 0.0f;
+                    if (!parse_preset(opt.value, value))
+                        continue;
+                    std::string label = !opt.label.empty() ? opt.label : opt.value;
+                    presets.emplace_back(value, label);
+                }
+                if (presets.empty()) {
+                    presets = {{30.0f, "30"}, {60.0f, "60"}, {120.0f, "120"}, {144.0f, "144"},
+                               {240.0f, "240"}, {0.0f, "Unlimited"}};
+                }
+                w.quick_value_count = std::min(static_cast<int>(presets.size()), kMenuMaxQuickValues);
+                for (int i = 0; i < w.quick_value_count; ++i) {
+                    w.quick_values[i] = presets[static_cast<std::size_t>(i)].first;
+                    label_cache.push_back(presets[static_cast<std::size_t>(i)].second);
+                    w.quick_labels[i] = label_cache.back().c_str();
+                }
+            }
             break;
         }
         case SettingWidgetKind::Option: {

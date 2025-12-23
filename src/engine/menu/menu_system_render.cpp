@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace msi = menu_system_internal;
 
@@ -206,6 +207,46 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                     int caret_bottom = caret_top + static_cast<int>(slider_visual.input_rect.h) - 8;
                     SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
                     SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
+                }
+            }
+            if (widget.quick_value_count > 0) {
+                SDL_FRect quick_rects[kMenuMaxQuickValues];
+                msi::compute_quick_value_rects(rect, widget.quick_value_count, quick_rects);
+                float current_val = widget.bind_ptr ? *reinterpret_cast<float*>(widget.bind_ptr) : 0.0f;
+                for (int qi = 0; qi < widget.quick_value_count; ++qi) {
+                    const SDL_FRect& qrect = quick_rects[qi];
+                    float target_val = widget.quick_values[qi];
+                    bool selected = (target_val <= 0.0f && current_val <= 0.0f) ||
+                                    (std::fabs(target_val - current_val) < std::max(0.5f, widget.step));
+                    SDL_Color bg = selected ? SDL_Color{60, 105, 150, 255}
+                                            : SDL_Color{35, 40, 55, 255};
+                    SDL_Color border = selected ? SDL_Color{140, 200, 255, 255}
+                                                : SDL_Color{90, 100, 125, 255};
+                    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
+                    SDL_RenderFillRectF(renderer, &qrect);
+                    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+                    SDL_RenderDrawRectF(renderer, &qrect);
+                    const char* label = widget.quick_labels[i];
+                    char buffer[32];
+                    if (!label || !*label) {
+                        if (target_val <= 0.0f)
+                            label = "Unlimited";
+                        else {
+                            std::snprintf(buffer, sizeof(buffer), "%.0f", static_cast<double>(target_val));
+                            label = buffer;
+                        }
+                    }
+                    SDL_Rect quick_clip{
+                        static_cast<int>(qrect.x) + 4,
+                        static_cast<int>(qrect.y) + 2,
+                        std::max(0, static_cast<int>(qrect.w) - 8),
+                        std::max(0, static_cast<int>(qrect.h) - 4)};
+                    msi::draw_text_with_clip(renderer,
+                                             label,
+                                             static_cast<int>(qrect.x) + 6,
+                                             static_cast<int>(qrect.y) + 3,
+                                             SDL_Color{225, 230, 240, 255},
+                                             &quick_clip);
                 }
             }
         }

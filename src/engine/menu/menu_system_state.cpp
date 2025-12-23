@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <string>
 
 namespace menu_system_internal {
 
@@ -162,6 +163,23 @@ bool point_in_rect(float x, float y, const SDL_FRect& rect) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
+void compute_quick_value_rects(const SDL_FRect& rect, int count, SDL_FRect* out_rects) {
+    if (!out_rects || count <= 0)
+        return;
+    float area_left = rect.x + rect.w * 0.05f;
+    float area_right = rect.x + rect.w - rect.w * 0.05f;
+    float area_width = std::max(40.0f, area_right - area_left);
+    float spacing = 6.0f;
+    float total_spacing = spacing * static_cast<float>(std::max(0, count - 1));
+    float btn_width = std::min(92.0f, (area_width - total_spacing) / static_cast<float>(count));
+    float btn_height = 22.0f;
+    float base_y = rect.y + rect.h * 0.18f;
+    for (int i = 0; i < count; ++i) {
+        float x = area_left + static_cast<float>(i) * (btn_width + spacing);
+        out_rects[i] = SDL_FRect{x, base_y, btn_width, btn_height};
+    }
+}
+
 bool apply_slider_target(MenuWidget& widget,
                          float target_value,
                          MenuContext& ctx,
@@ -300,7 +318,18 @@ bool commit_text_edit() {
     if (widget->type == WidgetType::Slider1D) {
         char* end_ptr = nullptr;
         float parsed = std::strtof(g_active_text_buffer->c_str(), &end_ptr);
-        if (end_ptr != g_active_text_buffer->c_str()) {
+        bool parsed_ok = (end_ptr != g_active_text_buffer->c_str());
+        if (!parsed_ok) {
+            std::string lower = *g_active_text_buffer;
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            if (lower == "unlimited") {
+                parsed = 0.0f;
+                parsed_ok = true;
+            }
+        }
+        if (parsed_ok) {
             parsed = std::clamp(parsed, widget->min, widget->max);
             float* target = reinterpret_cast<float*>(widget->bind_ptr);
             if (*target != parsed) {

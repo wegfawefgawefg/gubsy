@@ -124,6 +124,7 @@ void draw_text_with_clip(SDL_Renderer* renderer,
                          int y,
                          SDL_Color color,
                          const SDL_Rect* clip);
+void compute_quick_value_rects(const SDL_FRect& rect, int count, SDL_FRect* out_rects);
 
 void begin_text_edit(MenuWidget& widget);
 bool commit_text_edit();

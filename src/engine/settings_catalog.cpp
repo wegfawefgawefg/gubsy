@@ -6,6 +6,8 @@
 #include "engine/user_profiles.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 
 namespace {
 
@@ -121,6 +123,27 @@ SettingsValue* resolve_value(const SettingMetadata& meta, GameSettings& profile_
     return &it->second;
 }
 
+void coerce_value_type(const SettingMetadata& meta, SettingsValue& value) {
+    if (meta.widget.kind == SettingWidgetKind::Slider) {
+        if (std::string* sv = std::get_if<std::string>(&value)) {
+            char* end_ptr = nullptr;
+            float parsed = std::strtof(sv->c_str(), &end_ptr);
+            if (end_ptr != sv->c_str()) {
+                value = parsed;
+            } else {
+                std::string lower = *sv;
+                std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                    return static_cast<char>(std::tolower(c));
+                });
+                if (lower == "unlimited")
+                    value = 0.0f;
+            }
+        } else if (int* iv = std::get_if<int>(&value)) {
+            value = static_cast<float>(*iv);
+        }
+    }
+}
+
 } // namespace
 
 SettingsCatalog build_settings_catalog(int player_index) {
@@ -136,6 +159,7 @@ SettingsCatalog build_settings_catalog(int player_index) {
         SettingsValue* value_ptr = resolve_value(meta, active_profile_settings);
         if (!value_ptr)
             continue;
+        coerce_value_type(meta, *value_ptr);
 
         SettingsCatalogEntry entry{&meta, value_ptr, meta.scope == SettingScope::Install};
 

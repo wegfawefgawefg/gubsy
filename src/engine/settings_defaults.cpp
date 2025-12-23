@@ -168,15 +168,28 @@ void register_engine_settings_schema_entries() {
                                            "Synchronize frames with monitor refresh.",
                                            {"Video"},
                                            true));
-    schema.add_setting(make_option_setting(SettingScope::Install,
-                                           "gubsy.video.frame_cap",
-                                           "Frame Rate Cap",
-                                           "Limit rendering to a target framerate.",
-                                           {"Video"},
-                                           {SettingOption{"60", "60 FPS"},
-                                            SettingOption{"120", "120 FPS"},
-                                            SettingOption{"unlimited", "Unlimited"}},
-                                           "60"));
+    {
+        SettingMetadata meta = make_slider_setting(SettingScope::Install,
+                                                   "gubsy.video.frame_cap",
+                                                   "Frame Rate Cap",
+                                                   "Limit rendering to a target framerate.",
+                                                   {"Video"},
+                                                   0.0f,
+                                                   1024.0f,
+                                                   1.0f,
+                                                   60.0f);
+        meta.widget.display_precision = 0;
+        meta.widget.max_text_len = 4;
+        meta.widget.options = {
+            SettingOption{"30", "30"},
+            SettingOption{"60", "60"},
+            SettingOption{"120", "120"},
+            SettingOption{"144", "144"},
+            SettingOption{"240", "240"},
+            SettingOption{"0", "Unlimited"},
+        };
+        schema.add_setting(meta);
+    }
     schema.add_setting(make_slider_setting(SettingScope::Install,
                                            "gubsy.video.ui_scale",
                                            "UI Scale",
@@ -204,12 +217,6 @@ void register_engine_settings_schema_entries() {
                                            2.0f,
                                            0.05f,
                                            1.0f));
-    schema.add_setting(make_toggle_setting(SettingScope::Install,
-                                           "gubsy.video.dynamic_resolution",
-                                           "Dynamic Resolution",
-                                           "Enable adaptive resolution for stable framerate.",
-                                           {"Video"},
-                                           false));
     schema.add_setting(make_toggle_setting(SettingScope::Install,
                                            "gubsy.video.show_fps",
                                            "FPS Counter",

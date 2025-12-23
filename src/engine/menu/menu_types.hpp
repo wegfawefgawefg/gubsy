@@ -4,6 +4,7 @@
 #include <string>
 #include <SDL2/SDL.h>
 inline constexpr std::uint32_t kMenuIdInvalid = 0;
+inline constexpr int kMenuMaxQuickValues = 8;
 
 using MenuScreenId = std::uint32_t;
 using WidgetId = std::uint32_t;
@@ -110,6 +111,9 @@ struct MenuWidget {
     float min{0.0f};
     float max{1.0f};
     int option_count{0};
+    int quick_value_count{0};
+    float quick_values[kMenuMaxQuickValues]{};
+    const char* quick_labels[kMenuMaxQuickValues]{};
     std::string* text_buffer{nullptr};
     int text_max_len{0};
 
