@@ -43,6 +43,7 @@ bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
 bool parse_slider_option_value(const SettingOption& opt, float& out);
 bool parse_resolution_value(const std::string& text, int& out_w, int& out_h);
 std::string make_resolution_string(int w, int h);
+int parse_int_or(const std::string& text, int fallback);
 
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
@@ -176,6 +177,7 @@ void cycle_option(MenuContext& ctx, std::int32_t index, int direction) {
     EntryBinding* binding = get_entry_binding(ctx, index);
     if (!binding || !binding->entry.value || !binding->entry.metadata)
         return;
+    auto& st = ctx.state<SettingsCategoryState>();
     if (std::string* sv = std::get_if<std::string>(binding->entry.value)) {
         const auto& options = binding->entry.metadata->widget.options;
         if (options.empty())
@@ -189,7 +191,18 @@ void cycle_option(MenuContext& ctx, std::int32_t index, int direction) {
         }
         current = (current + direction + static_cast<int>(options.size())) % static_cast<int>(options.size());
         *sv = options[static_cast<std::size_t>(current)].value;
-        persist_binding(*binding, ctx.state<SettingsCategoryState>().profile_settings);
+        persist_binding(*binding, st.profile_settings);
+        if (binding->entry.metadata->key == kRenderResolutionSettingKey &&
+            st.resolution_entry_index == index) {
+            int rw = 0;
+            int rh = 0;
+            if (parse_resolution_value(*sv, rw, rh)) {
+                st.resolution_edit.width_text = std::to_string(rw);
+                st.resolution_edit.height_text = std::to_string(rh);
+                glm::ivec2 dims = get_render_dimensions();
+                st.resolution_edit.dirty = (rw != dims.x || rh != dims.y);
+            }
+        }
     }
 }
 
@@ -234,17 +247,8 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
         return;
     if (st.resolution_entry_index != index)
         return;
-    auto parse_component = [](const std::string& text, int fallback) -> int {
-        try {
-            if (text.empty())
-                return fallback;
-            return std::stoi(text);
-        } catch (...) {
-            return fallback;
-        }
-    };
-    int width = std::clamp(parse_component(st.resolution_edit.width_text, 0), 320, 16384);
-    int height = std::clamp(parse_component(st.resolution_edit.height_text, 0), 240, 9216);
+    int width = std::clamp(parse_int_or(st.resolution_edit.width_text, 0), 320, 16384);
+    int height = std::clamp(parse_int_or(st.resolution_edit.height_text, 0), 240, 9216);
     std::string value = make_resolution_string(width, height);
     EntryBinding& binding = st.entries[static_cast<std::size_t>(index)];
     if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
@@ -337,6 +341,16 @@ std::string make_resolution_string(int w, int h) {
     return std::to_string(w) + "x" + std::to_string(h);
 }
 
+int parse_int_or(const std::string& text, int fallback) {
+    try {
+        if (text.empty())
+            return fallback;
+        return std::stoi(text);
+    } catch (...) {
+        return fallback;
+    }
+}
+
 bool parse_slider_option_value(const SettingOption& opt, float& out) {
     if (opt.value.empty())
         return false;
@@ -401,18 +415,25 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
     }
     if (st.resolution_entry_index >= 0 && st.resolution_entry_index < static_cast<int>(st.entries.size())) {
         EntryBinding& binding = st.entries[static_cast<std::size_t>(st.resolution_entry_index)];
+        bool editing_resolution = (editing_entry_index == st.resolution_entry_index);
+        int desired_w = 0;
+        int desired_h = 0;
         if (const std::string* sv = std::get_if<std::string>(binding.entry.value)) {
-            if (!st.resolution_edit.dirty) {
-                int rw = 1920, rh = 1080;
-                if (parse_resolution_value(*sv, rw, rh)) {
-                    st.resolution_edit.width_text = std::to_string(rw);
-                    st.resolution_edit.height_text = std::to_string(rh);
-                }
+            if (!editing_resolution && parse_resolution_value(*sv, desired_w, desired_h)) {
+                st.resolution_edit.width_text = std::to_string(desired_w);
+                st.resolution_edit.height_text = std::to_string(desired_h);
+            } else if (!editing_resolution) {
+                glm::ivec2 dims = get_render_dimensions();
+                desired_w = dims.x;
+                desired_h = dims.y;
+                st.resolution_edit.width_text = std::to_string(desired_w);
+                st.resolution_edit.height_text = std::to_string(desired_h);
             }
-            std::string combined =
-                st.resolution_edit.width_text + "x" + st.resolution_edit.height_text;
-            st.resolution_edit.dirty = (combined != *sv);
         }
+        glm::ivec2 dims = get_render_dimensions();
+        int pending_w = std::clamp(parse_int_or(st.resolution_edit.width_text, dims.x), 320, 16384);
+        int pending_h = std::clamp(parse_int_or(st.resolution_edit.height_text, dims.y), 240, 9216);
+        st.resolution_edit.dirty = (pending_w != dims.x || pending_h != dims.y);
     }
 }
 
@@ -543,6 +564,7 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                     w.aux_text_buffer = &state.resolution_edit.height_text;
                     w.aux_text_max_len = 5;
                     w.aux_placeholder = "Height";
+                    w.select_enters_text = false;
                     w.has_discrete_options = true;
                     std::string badge_text = binding.entry.metadata->label;
                     if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {

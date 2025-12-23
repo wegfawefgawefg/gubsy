@@ -8,7 +8,7 @@
     (key "gubsy.video.safe_area_bottom" 7.45058e-09)
     (key "gubsy.video.safe_area_left" 0)
     (key "gubsy.audio.output_device" "default")
-    (key "gubsy.video.show_fps" 1)
+    (key "gubsy.video.show_fps" 0)
     (key "gubsy.audio.master_volume" 0.76)
     (key "gubsy.audio.music_volume" 0.8)
     (key "gubsy.localization.language" "en")

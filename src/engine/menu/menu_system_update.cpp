@@ -132,7 +132,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
         bool editing_focus = msi::g_text_edit_active && focus && focus->id == msi::g_text_edit_widget;
 
-        if (focus && focus->text_buffer && select_pressed) {
+        if (focus && focus->text_buffer && focus->select_enters_text && select_pressed) {
             if (!editing_focus)
                 msi::begin_text_edit(*focus);
             else {
@@ -380,7 +380,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         }
                     }
                 }
-                if (focus && focus->text_buffer) {
+                if (focus && focus->text_buffer && focus->select_enters_text) {
                     msi::begin_text_edit(*focus);
                     click_handled = true;
                 } else {
