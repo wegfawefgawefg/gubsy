@@ -243,8 +243,6 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     }
 
     MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
-    back_btn.on_left = prev_action;
-    back_btn.on_right = next_action;
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
@@ -278,8 +276,8 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         card_widget.nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
     }
 
-    back_ref.nav_left = prev_ref.id;
-    back_ref.nav_right = next_ref.id;
+    back_ref.nav_left = back_ref.id;
+    back_ref.nav_right = back_ref.id;
     back_ref.nav_up = (last_card_id != kMenuIdInvalid) ? last_card_id : prev_ref.id;
 
     BuiltScreen built;
