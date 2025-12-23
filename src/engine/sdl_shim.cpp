@@ -15,8 +15,10 @@ void update_gubsy_device_inputs_system_from_sdl_events(){
                 break;
             case SDL_KEYDOWN:
                 if (ev.key.keysym.sym == SDLK_BACKSPACE &&
-                    !imgui_want_capture_keyboard())
-                    menu_system_handle_backspace();
+                    !imgui_want_capture_keyboard()) {
+                    bool ctrl_held = (ev.key.keysym.mod & KMOD_CTRL) != 0;
+                    menu_system_handle_backspace(ctrl_held);
+                }
                 break;
             case SDL_KEYUP:
                 break;

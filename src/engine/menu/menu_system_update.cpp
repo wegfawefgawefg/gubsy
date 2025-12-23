@@ -531,7 +531,7 @@ void menu_system_handle_text_input(const char* text) {
     }
 }
 
-void menu_system_handle_backspace() {
+void menu_system_handle_backspace(bool clear_all) {
     if (!msi::g_active_text_buffer) {
         if (msi::g_focus != kMenuIdInvalid) {
             MenuWidget* focus_widget = msi::find_widget(msi::g_focus);
@@ -541,8 +541,12 @@ void menu_system_handle_backspace() {
     }
     if (!msi::g_text_edit_active || !msi::g_active_text_buffer)
         return;
-    if (!msi::g_active_text_buffer->empty())
+
+    if (clear_all) {
+        msi::g_active_text_buffer->clear();
+    } else if (!msi::g_active_text_buffer->empty()) {
         msi::g_active_text_buffer->pop_back();
+    }
 }
 
 void menu_system_reset() {

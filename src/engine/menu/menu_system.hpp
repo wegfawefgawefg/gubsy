@@ -21,4 +21,4 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
 void menu_system_reset();
 bool menu_system_active();
 void menu_system_handle_text_input(const char* text);
-void menu_system_handle_backspace();
+void menu_system_handle_backspace(bool clear_all = false);
