@@ -361,4 +361,48 @@ SDL_Texture* get_texture(int sprite_id) {
     auto it = gg->textures_by_id.find(sprite_id);
     return (it == gg->textures_by_id.end()) ? nullptr : it->second;
 }
+
+void sync_graphics_from_settings() {
+    if (!gg || !es)
+        return;
+
+    const auto& settings = es->top_level_game_settings.settings;
+
+    // Sync preview zoom
+    if (auto it = settings.find("gubsy.video.preview_zoom"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->preview_zoom = *fv;
+    }
+
+    // Sync preview pan X
+    if (auto it = settings.find("gubsy.video.preview_pan_x"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->preview_pan.x = *fv;
+    }
+
+    // Sync preview pan Y
+    if (auto it = settings.find("gubsy.video.preview_pan_y"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->preview_pan.y = *fv;
+    }
+
+    // Sync safe area (left, right, top, bottom -> x, y, z, w)
+    if (auto it = settings.find("gubsy.video.safe_area_left"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->safe_area.x = *fv;
+    }
+    if (auto it = settings.find("gubsy.video.safe_area_right"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->safe_area.y = *fv;
+    }
+    if (auto it = settings.find("gubsy.video.safe_area_top"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->safe_area.z = *fv;
+    }
+    if (auto it = settings.find("gubsy.video.safe_area_bottom"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            gg->safe_area.w = *fv;
+    }
+}
+
 #include <limits>

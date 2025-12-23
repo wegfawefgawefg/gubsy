@@ -84,6 +84,9 @@ void set_render_scale_mode(RenderScaleMode mode);
 glm::ivec2 get_render_dimensions();
 glm::ivec2 get_window_dimensions();
 
+// Sync graphics settings from top-level settings
+void sync_graphics_from_settings();
+
 // ---- Asset Management ----
 
 // Registry operations

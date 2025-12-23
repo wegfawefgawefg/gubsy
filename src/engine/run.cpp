@@ -94,6 +94,7 @@ bool do_the_gubsy(){
     load_input_settings_profiles_pool();
     load_game_settings_pool();
     load_top_level_game_settings_into_state();
+    sync_graphics_from_settings();
 
     discover_mods();
     scan_mods_for_sprite_defs();

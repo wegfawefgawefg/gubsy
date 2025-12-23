@@ -150,6 +150,7 @@ EntryBinding* get_entry_binding(MenuContext& ctx, std::int32_t index) {
 void persist_binding(const EntryBinding& binding, GameSettings* profile_settings) {
     if (binding.entry.install_scope) {
         save_top_level_game_settings(es->top_level_game_settings);
+        sync_graphics_from_settings();
     } else if (profile_settings) {
         save_game_settings(*profile_settings);
     }
