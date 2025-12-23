@@ -96,24 +96,32 @@ void register_engine_settings_schema_entries() {
                                            1.0f,
                                            0.01f,
                                            1.0f));
-    schema.add_setting(make_slider_setting(SettingScope::Install,
-                                           "gubsy.audio.music_volume",
-                                           "Music Volume",
-                                           "Controls the music mix level.",
-                                           {"Audio"},
-                                           0.0f,
-                                           1.0f,
-                                           0.01f,
-                                           0.8f));
-    schema.add_setting(make_slider_setting(SettingScope::Install,
-                                           "gubsy.audio.sfx_volume",
-                                           "SFX Volume",
-                                           "Controls the volume for sound effects.",
-                                           {"Audio"},
-                                           0.0f,
-                                           1.0f,
-                                           0.01f,
-                                           1.0f));
+    {
+        SettingMetadata meta = make_slider_setting(SettingScope::Install,
+                                                   "gubsy.audio.music_volume",
+                                                   "Music Volume",
+                                                   "Controls the music mix level.",
+                                                   {"Audio"},
+                                                   0.0f,
+                                                   1.0f,
+                                                   0.01f,
+                                                   0.8f);
+        meta.order = -100;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_slider_setting(SettingScope::Install,
+                                                   "gubsy.audio.sfx_volume",
+                                                   "SFX Volume",
+                                                   "Controls the volume for sound effects.",
+                                                   {"Audio"},
+                                                   0.0f,
+                                                   1.0f,
+                                                   0.01f,
+                                                   1.0f);
+        meta.order = -99;
+        schema.add_setting(meta);
+    }
     schema.add_setting(make_slider_setting(SettingScope::Install,
                                            "gubsy.audio.ui_volume",
                                            "UI Volume",
@@ -237,6 +245,33 @@ void register_engine_settings_schema_entries() {
                                            "Display the current frames-per-second.",
                                            {"Video", "Debug"},
                                            false));
+    schema.add_setting(make_slider_setting(SettingScope::Install,
+                                           "gubsy.video.preview_zoom",
+                                           "Zoom",
+                                           "Preview zoom adjustment for debugging.",
+                                           {"Video", "Debug"},
+                                           0.5f,
+                                           3.0f,
+                                           0.01f,
+                                           1.0f));
+    schema.add_setting(make_slider_setting(SettingScope::Install,
+                                           "gubsy.video.preview_pan_x",
+                                           "Pan X",
+                                           "Preview pan X offset in pixels for debugging.",
+                                           {"Video", "Debug"},
+                                           -1000.0f,
+                                           1000.0f,
+                                           1.0f,
+                                           0.0f));
+    schema.add_setting(make_slider_setting(SettingScope::Install,
+                                           "gubsy.video.preview_pan_y",
+                                           "Pan Y",
+                                           "Preview pan Y offset in pixels for debugging.",
+                                           {"Video", "Debug"},
+                                           -1000.0f,
+                                           1000.0f,
+                                           1.0f,
+                                           0.0f));
 
     // Input (profile-specific)
     {
@@ -253,15 +288,6 @@ void register_engine_settings_schema_entries() {
         schema.add_setting(meta);
     }
     schema.add_setting(make_slider_setting(SettingScope::Profile,
-                                           "gubsy.input.controller_deadzone",
-                                           "Controller Dead Zone",
-                                           "Adjust the inner dead zone for analog sticks.",
-                                           {"Controls"},
-                                           0.0f,
-                                           0.4f,
-                                           0.01f,
-                                           0.1f));
-    schema.add_setting(make_slider_setting(SettingScope::Profile,
                                            "gubsy.input.vibration_strength",
                                            "Vibration Strength",
                                            "Scale controller rumble output.",
@@ -277,41 +303,6 @@ void register_engine_settings_schema_entries() {
                                            {"Controls"},
                                            false));
 
-    // Accessibility
-    schema.add_setting(make_toggle_setting(SettingScope::Profile,
-                                           "gubsy.accessibility.subtitles_enabled",
-                                           "Subtitles",
-                                           "Enable in-game dialogue subtitles.",
-                                           {"Accessibility", "Audio"},
-                                           true));
-    schema.add_setting(make_slider_setting(SettingScope::Profile,
-                                           "gubsy.accessibility.subtitle_size",
-                                           "Subtitle Size",
-                                           "Adjusts subtitle text size.",
-                                           {"Accessibility"},
-                                           0.5f,
-                                           2.0f,
-                                           0.1f,
-                                           1.0f));
-    schema.add_setting(make_slider_setting(SettingScope::Profile,
-                                           "gubsy.accessibility.subtitle_background",
-                                           "Subtitle Background",
-                                           "Opacity of the subtitle backdrop.",
-                                           {"Accessibility"},
-                                           0.0f,
-                                           1.0f,
-                                           0.05f,
-                                           0.5f));
-    schema.add_setting(make_option_setting(SettingScope::Profile,
-                                           "gubsy.accessibility.colorblind_mode",
-                                           "Colorblind Mode",
-                                           "Applies color filters for improved readability.",
-                                           {"Accessibility"},
-                                           {SettingOption{"none", "None"},
-                                            SettingOption{"deuteranopia", "Deuteranopia"},
-                                            SettingOption{"protanopia", "Protanopia"},
-                                            SettingOption{"tritanopia", "Tritanopia"}},
-                                           "none"));
 
     register_settings_schema(schema);
 }
