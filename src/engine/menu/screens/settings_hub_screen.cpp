@@ -184,12 +184,15 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     next_btn.on_left = prev_action;
     next_btn.on_right = next_action;
     widgets.push_back(prev_btn);
+    std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next_btn);
+    std::size_t next_idx = widgets.size() - 1;
 
     std::vector<WidgetId> card_ids;
     card_ids.reserve(kCategoriesPerPage);
 
     int start_index = st.page * kCategoriesPerPage;
+    std::size_t cards_offset = widgets.size();
     for (int i = 0; i < kCategoriesPerPage; ++i) {
         int card_index = start_index + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
@@ -235,6 +238,41 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     back_btn.on_left = prev_action;
     back_btn.on_right = next_action;
     widgets.push_back(back_btn);
+    std::size_t back_idx = widgets.size() - 1;
+
+    MenuWidget& prev_ref = widgets[prev_idx];
+    MenuWidget& next_ref = widgets[next_idx];
+    MenuWidget& back_ref = widgets[back_idx];
+
+    WidgetId first_card_id = card_ids.empty() ? kMenuIdInvalid : card_ids.front();
+    WidgetId last_card_id = card_ids.empty() ? kMenuIdInvalid : card_ids.back();
+
+    prev_ref.nav_left = prev_ref.id;
+    prev_ref.nav_right = next_ref.id;
+    next_ref.nav_left = prev_ref.id;
+    next_ref.nav_right = next_ref.id;
+
+    if (first_card_id != kMenuIdInvalid) {
+        prev_ref.nav_down = first_card_id;
+        next_ref.nav_down = first_card_id;
+    } else {
+        prev_ref.nav_down = back_ref.id;
+        next_ref.nav_down = back_ref.id;
+    }
+    prev_ref.nav_up = prev_ref.id;
+    next_ref.nav_up = next_ref.id;
+
+    for (std::size_t i = 0; i < card_ids.size(); ++i) {
+        MenuWidget& card_widget = widgets[cards_offset + i];
+        card_widget.nav_left = prev_ref.id;
+        card_widget.nav_right = next_ref.id;
+        card_widget.nav_up = (i == 0) ? prev_ref.id : card_ids[i - 1];
+        card_widget.nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
+    }
+
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
+    back_ref.nav_up = (last_card_id != kMenuIdInvalid) ? last_card_id : prev_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
