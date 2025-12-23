@@ -31,6 +31,10 @@ const MenuScreenDef* MenuManager::find_screen(MenuScreenId id) const {
 }
 
 bool MenuManager::push_screen(MenuScreenId id) {
+    return push_screen(id, 0);
+}
+
+bool MenuManager::push_screen(MenuScreenId id, int player_index) {
     const MenuScreenDef* def = find_screen(id);
     if (!def)
         return false;
@@ -38,6 +42,7 @@ bool MenuManager::push_screen(MenuScreenId id) {
     inst.def = def;
     inst.state_size = def->state_ops.size;
     inst.state_align = def->state_ops.align;
+    inst.player_index = player_index;
     create_instance(inst);
     stack_.push_back(inst);
     return true;

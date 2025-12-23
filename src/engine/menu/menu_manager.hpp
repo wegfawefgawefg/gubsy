@@ -15,6 +15,7 @@ struct MenuManager {
         void* state_ptr{nullptr};
         std::uint32_t state_size{0};
         std::uint32_t state_align{0};
+        int player_index{0};
     };
 
     MenuManager();
@@ -26,6 +27,7 @@ struct MenuManager {
     const MenuScreenDef* find_screen(MenuScreenId id) const;
 
     bool push_screen(MenuScreenId id);
+    bool push_screen(MenuScreenId id, int player_index);
     void pop_screen();
     void clear();
 
