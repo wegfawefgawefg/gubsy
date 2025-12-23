@@ -321,6 +321,32 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 msi::g_focus = hovered;
                 focus = msi::find_widget(msi::g_focus);
                 bool click_handled = false;
+                if (focus && focus->type == WidgetType::OptionCycle) {
+                    SDL_FRect* rect_ptr = msi::find_widget_rect(focus->id);
+                    if (rect_ptr) {
+                        msi::OptionLayout opt_layout = msi::compute_option_layout(*rect_ptr);
+                        float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+                        float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
+                        auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
+                            if (action.type == MenuActionType::None)
+                                return false;
+                            sound_fn();
+                            msi::execute_action(action, ctx, stack_changed);
+                            needs_rebuild = true;
+                            return true;
+                        };
+                        if (msi::point_in_rect(fx, fy, opt_layout.left_btn)) {
+                            if (trigger_action(focus->on_left, []() { msi::play_left_sound(); }))
+                                continue;
+                        } else if (msi::point_in_rect(fx, fy, opt_layout.right_btn)) {
+                            if (trigger_action(focus->on_right, []() { msi::play_right_sound(); }))
+                                continue;
+                        } else if (msi::point_in_rect(fx, fy, opt_layout.value_rect)) {
+                            if (trigger_action(focus->on_select, []() { msi::play_confirm_sound(); }))
+                                continue;
+                        }
+                    }
+                }
                 if (focus && focus->text_buffer) {
                     msi::begin_text_edit(*focus);
                     click_handled = true;
@@ -418,4 +444,3 @@ void menu_system_reset() {
 bool menu_system_active() {
     return msi::g_active;
 }
-

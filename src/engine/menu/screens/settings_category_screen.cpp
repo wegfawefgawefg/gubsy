@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "engine/globals.hpp"
+#include "engine/graphics.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_system_state.hpp"
@@ -28,6 +29,10 @@ constexpr WidgetId kPrevButtonId = 404;
 constexpr WidgetId kNextButtonId = 405;
 constexpr WidgetId kBackButtonId = 430;
 constexpr WidgetId kFirstRowWidgetId = 500;
+constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
+
+const char* window_mode_to_value(WindowDisplayMode mode);
+bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
 
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
@@ -35,6 +40,7 @@ MenuCommandId g_cmd_slider_dec = kMenuIdInvalid;
 MenuCommandId g_cmd_option_prev = kMenuIdInvalid;
 MenuCommandId g_cmd_option_next = kMenuIdInvalid;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
 
 std::unordered_map<std::string, MenuScreenId> g_tag_to_screen;
 std::unordered_map<MenuScreenId, std::string> g_screen_to_tag;
@@ -157,6 +163,27 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     st.page = std::clamp(st.page + delta, 0, max_page);
 }
 
+void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.metadata || binding->entry.metadata->key != kWindowModeSettingKey)
+        return;
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (std::string* sv = std::get_if<std::string>(binding->entry.value)) {
+        WindowDisplayMode mode;
+        if (!value_to_window_mode(*sv, mode)) {
+            st.status_text = "Unknown display mode";
+            return;
+        }
+        if (set_window_display_mode(mode)) {
+            st.status_text = "Display mode applied";
+            if (gg)
+                gg->window_mode = mode;
+        } else {
+            st.status_text = "Failed to apply display mode";
+        }
+    }
+}
+
 std::string format_value(const SettingsValue& value) {
     if (const int* iv = std::get_if<int>(&value))
         return *iv != 0 ? "On" : "Off";
@@ -179,6 +206,35 @@ std::string format_slider_display(const SettingWidgetDesc& desc, float value) {
     else
         std::snprintf(buffer, sizeof(buffer), "%.*f", precision, static_cast<double>(shown));
     return buffer;
+}
+
+const char* window_mode_to_value(WindowDisplayMode mode) {
+    switch (mode) {
+        case WindowDisplayMode::Windowed:
+            return "windowed";
+        case WindowDisplayMode::Borderless:
+            return "borderless";
+        case WindowDisplayMode::Fullscreen:
+            return "fullscreen";
+        default:
+            return "windowed";
+    }
+}
+
+bool value_to_window_mode(const std::string& value, WindowDisplayMode& out) {
+    if (value == "windowed") {
+        out = WindowDisplayMode::Windowed;
+        return true;
+    }
+    if (value == "borderless") {
+        out = WindowDisplayMode::Borderless;
+        return true;
+    }
+    if (value == "fullscreen") {
+        out = WindowDisplayMode::Fullscreen;
+        return true;
+    }
+    return false;
 }
 
 void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) {
@@ -287,6 +343,32 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             w.type = WidgetType::OptionCycle;
             label_cache.push_back(format_value(*binding.entry.value));
             w.badge = label_cache.back().c_str();
+            if (std::string* sv = std::get_if<std::string>(binding.entry.value))
+                w.bind_ptr = sv;
+            if (binding.entry.metadata && binding.entry.metadata->key == kWindowModeSettingKey) {
+                const char* applied = gg ? window_mode_to_value(gg->window_mode) : nullptr;
+                bool matches = true;
+                if (applied && w.bind_ptr)
+                    matches = (*static_cast<std::string*>(w.bind_ptr) == applied);
+                if (matches) {
+                    w.style.bg_r = 22;
+                    w.style.bg_g = 36;
+                    w.style.bg_b = 26;
+                    w.style.focus_r = 100;
+                    w.style.focus_g = 210;
+                    w.style.focus_b = 150;
+                    w.badge_color = SDL_Color{140, 220, 150, 255};
+                } else {
+                    w.style.bg_r = 40;
+                    w.style.bg_g = 32;
+                    w.style.bg_b = 18;
+                    w.style.focus_r = 230;
+                    w.style.focus_g = 200;
+                    w.style.focus_b = 90;
+                    w.badge_color = SDL_Color{240, 205, 120, 255};
+                }
+                w.on_select = MenuAction::run_command(g_cmd_apply_window_mode, entry_index);
+            }
             w.on_left = MenuAction::run_command(g_cmd_option_prev, entry_index);
             w.on_right = MenuAction::run_command(g_cmd_option_next, entry_index);
             break;
@@ -478,4 +560,6 @@ void register_settings_category_screens() {
         g_cmd_option_next = es->menu_commands.register_command(command_option_next);
     if (g_cmd_page_delta == kMenuIdInvalid)
         g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+    if (g_cmd_apply_window_mode == kMenuIdInvalid)
+        g_cmd_apply_window_mode = es->menu_commands.register_command(command_apply_window_mode);
 }

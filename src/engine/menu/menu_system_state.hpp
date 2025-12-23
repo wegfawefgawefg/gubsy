@@ -94,8 +94,15 @@ struct SliderLayout {
     bool has_input{false};
     SDL_FRect input_rect{};
 };
+struct OptionLayout {
+    SDL_FRect left_btn{};
+    SDL_FRect right_btn{};
+    SDL_FRect value_rect{};
+};
 
 SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& rect);
+OptionLayout compute_option_layout(const SDL_FRect& rect);
+bool point_in_rect(float x, float y, const SDL_FRect& rect);
 bool apply_slider_target(MenuWidget& widget,
                          float target_value,
                          MenuContext& ctx,

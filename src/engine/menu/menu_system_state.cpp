@@ -140,6 +140,28 @@ SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& re
     return layout;
 }
 
+OptionLayout compute_option_layout(const SDL_FRect& rect) {
+    OptionLayout layout;
+    float btn_width = std::min(rect.w * 0.14f, 48.0f);
+    float btn_height = std::min(rect.h * 0.4f, 26.0f);
+    float base_y = rect.y + rect.h - btn_height - 8.0f;
+    layout.left_btn = SDL_FRect{rect.x + 12.0f, base_y, btn_width, btn_height};
+    layout.right_btn = SDL_FRect{rect.x + rect.w - btn_width - 12.0f, base_y, btn_width, btn_height};
+    float center_left = layout.left_btn.x + layout.left_btn.w + 8.0f;
+    float center_right = layout.right_btn.x - 8.0f;
+    if (center_right < center_left + 24.0f)
+        center_right = center_left + 24.0f;
+    layout.value_rect = SDL_FRect{center_left,
+                                  base_y,
+                                  center_right - center_left,
+                                  btn_height};
+    return layout;
+}
+
+bool point_in_rect(float x, float y, const SDL_FRect& rect) {
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
+}
+
 bool apply_slider_target(MenuWidget& widget,
                          float target_value,
                          MenuContext& ctx,
