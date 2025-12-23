@@ -174,11 +174,11 @@ OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& re
     float label_right = left_btn_x - spacing;
     float label_width = std::max(20.0f, label_right - label_left);
     float value_height = std::min(26.0f, rect.h * 0.35f);
-    float value_y = rect.y + rect.h * 0.55f;
-    float max_y = base_y - value_height - 6.0f;
+    float value_y = rect.y + rect.h * 0.8f;
+    float max_y = base_y - value_height - rect.h * 0.04f;
     if (value_y > max_y)
         value_y = max_y;
-    float min_y = rect.y + rect.h * 0.35f;
+    float min_y = rect.y + rect.h * 0.55f;
     if (value_y < min_y)
         value_y = min_y;
     layout.value_rect = SDL_FRect{label_left, value_y, label_width, value_height};
