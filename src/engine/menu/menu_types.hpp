@@ -77,6 +77,12 @@ struct MenuAction {
         act.b = payload;
         return act;
     }
+    static MenuAction request_focus(WidgetId id) {
+        MenuAction act;
+        act.type = MenuActionType::RequestFocus;
+        act.a = static_cast<std::int32_t>(id);
+        return act;
+    }
 };
 
 enum class WidgetType : std::uint8_t {

@@ -11,8 +11,8 @@ void register_binds_schema_entries() {
     schema.add_action(GameAction::MENU_RIGHT, "Move Right", "Menu");
     schema.add_action(GameAction::MENU_SELECT, "Select", "Menu");
     schema.add_action(GameAction::MENU_BACK, "Back", "Menu");
-    schema.add_action(GameAction::MENU_SCALE_UP, "Scale Up", "Menu");
-    schema.add_action(GameAction::MENU_SCALE_DOWN, "Scale Down", "Menu");
+    schema.add_action(GameAction::MENU_PAGE_NEXT, "Page Next", "Menu");
+    schema.add_action(GameAction::MENU_PAGE_PREV, "Page Previous", "Menu");
     schema.add_action(GameAction::UP, "Move Up", "Movement");
     schema.add_action(GameAction::DOWN, "Move Down", "Movement");
     schema.add_action(GameAction::LEFT, "Move Left", "Movement");
@@ -22,4 +22,3 @@ void register_binds_schema_entries() {
     schema.add_2d_analog(GameAnalog2D::RETICLE_POS, "Reticle Position", "Demo");
     register_binds_schema(schema);
 }
-

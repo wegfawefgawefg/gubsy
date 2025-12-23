@@ -199,6 +199,14 @@ bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_chan
             g_focus = kMenuIdInvalid;
             end_text_edit();
             return true;
+        case MenuActionType::RequestFocus: {
+            WidgetId target = resolve_focus(static_cast<WidgetId>(action.a));
+            if (target != kMenuIdInvalid) {
+                g_focus = target;
+                return true;
+            }
+            return false;
+        }
         case MenuActionType::ToggleBool:
             if (action.ptr)
                 *reinterpret_cast<bool*>(action.ptr) = !*reinterpret_cast<bool*>(action.ptr);
@@ -243,6 +251,14 @@ void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
         if (built.default_focus != kMenuIdInvalid)
             g_focus = built.default_focus;
         if (!find_widget(g_focus))
+            g_focus = first_selectable_widget();
+    }
+    MenuWidget* focus_widget = find_widget(g_focus);
+    if (!focus_widget || focus_widget->type == WidgetType::Label) {
+        if (built.default_focus != kMenuIdInvalid)
+            g_focus = built.default_focus;
+        focus_widget = find_widget(g_focus);
+        if (!focus_widget || focus_widget->type == WidgetType::Label)
             g_focus = first_selectable_widget();
     }
     for (const MenuAction& act : built.frame_actions.items) {
