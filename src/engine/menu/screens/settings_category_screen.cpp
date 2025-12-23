@@ -48,6 +48,7 @@ bool parse_slider_option_value(const SettingOption& opt, float& out);
 bool parse_resolution_value(const std::string& text, int& out_w, int& out_h);
 std::string make_resolution_string(int w, int h);
 int parse_int_or(const std::string& text, int fallback);
+float snap_slider_value(const SettingWidgetDesc& desc, float value);
 
 const SettingMetadata& profile_owner_name_metadata() {
     static SettingMetadata meta = [] {
@@ -90,6 +91,7 @@ MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_render_resolution = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_text_setting = kMenuIdInvalid;
+MenuCommandId g_cmd_slider_set = kMenuIdInvalid;
 
 std::unordered_map<std::string, MenuScreenId> g_tag_to_screen;
 std::unordered_map<MenuScreenId, std::string> g_screen_to_tag;
@@ -153,6 +155,25 @@ void persist_binding(const EntryBinding& binding, GameSettings* profile_settings
     }
 }
 
+bool apply_slider_value(SettingsCategoryState& st,
+                        EntryBinding& binding,
+                        float target_value,
+                        bool persist_change) {
+    if (!binding.entry.metadata)
+        return false;
+    const SettingWidgetDesc& desc = binding.entry.metadata->widget;
+    float snapped = snap_slider_value(desc, target_value);
+    if (float* fv = std::get_if<float>(binding.entry.value)) {
+        bool changed = std::fabs(*fv - snapped) > 1e-4f;
+        if (changed)
+            *fv = snapped;
+        if (persist_change && changed)
+            persist_binding(binding, st.profile_settings);
+        return changed;
+    }
+    return false;
+}
+
 void command_toggle_setting(MenuContext& ctx, std::int32_t index) {
     EntryBinding* binding = get_entry_binding(ctx, index);
     if (!binding || !binding->entry.value)
@@ -212,6 +233,30 @@ void command_slider_inc(MenuContext& ctx, std::int32_t index) {
 
 void command_slider_dec(MenuContext& ctx, std::int32_t index) {
     adjust_slider(ctx, index, -1.0f);
+}
+
+void command_slider_set(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value || !binding->entry.metadata)
+        return;
+    float target_value = 0.0f;
+    bool have_target = false;
+    if (menu_system_internal::g_slider_drag_value_valid) {
+        target_value = menu_system_internal::g_slider_drag_value;
+        have_target = true;
+    } else if (float* fv = std::get_if<float>(binding->entry.value)) {
+        target_value = *fv;
+        have_target = true;
+    }
+    if (!have_target)
+        return;
+    bool persist_change =
+        !menu_system_internal::g_slider_drag_value_valid || menu_system_internal::g_slider_commit_pending;
+    if (apply_slider_value(st, *binding, target_value, persist_change)) {
+        if (binding->entry.metadata)
+            st.status_text = "Updated " + binding->entry.metadata->label;
+    }
 }
 
 void cycle_option(MenuContext& ctx, std::int32_t index, int direction) {
@@ -452,6 +497,31 @@ bool parse_slider_option_value(const SettingOption& opt, float& out) {
     return false;
 }
 
+float snap_slider_value(const SettingWidgetDesc& desc, float value) {
+    float clamped = std::clamp(value, desc.min, desc.max);
+    if (desc.options.empty())
+        return clamped;
+    std::vector<float> discrete;
+    discrete.reserve(desc.options.size());
+    for (const auto& opt : desc.options) {
+        float parsed = 0.0f;
+        if (parse_slider_option_value(opt, parsed))
+            discrete.push_back(parsed);
+    }
+    if (discrete.empty())
+        return clamped;
+    int closest = 0;
+    float best_diff = std::numeric_limits<float>::max();
+    for (int i = 0; i < static_cast<int>(discrete.size()); ++i) {
+        float diff = std::fabs(discrete[static_cast<std::size_t>(i)] - clamped);
+        if (diff < best_diff) {
+            best_diff = diff;
+            closest = i;
+        }
+    }
+    return discrete[static_cast<std::size_t>(closest)];
+}
+
 void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) {
     st.entries.clear();
     bool profiles_section = (st.tag == "Profiles");
@@ -622,9 +692,11 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                 if (menu_system_internal::is_text_edit_widget(id))
                     menu_system_internal::set_active_text_buffer(value_buffer, desc.max_text_len);
             }
-            if (is_frame_cap)
-                w.show_slider_track = false;
-            break;
+        if (is_frame_cap)
+            w.show_slider_track = false;
+        if (g_cmd_slider_set != kMenuIdInvalid)
+            w.on_select = MenuAction::run_command(g_cmd_slider_set, entry_index);
+        break;
         }
         case SettingWidgetKind::Option: {
             w.type = WidgetType::OptionCycle;
@@ -914,6 +986,9 @@ void register_settings_category_screens() {
         g_cmd_apply_window_mode = es->menu_commands.register_command(command_apply_window_mode);
     if (g_cmd_apply_render_resolution == kMenuIdInvalid)
         g_cmd_apply_render_resolution = es->menu_commands.register_command(command_apply_render_resolution);
-    if (g_cmd_apply_text_setting == kMenuIdInvalid)
+    if (g_cmd_apply_text_setting == kMenuIdInvalid) {
         g_cmd_apply_text_setting = es->menu_commands.register_command(command_apply_text_setting);
+    }
+    if (g_cmd_slider_set == kMenuIdInvalid)
+        g_cmd_slider_set = es->menu_commands.register_command(command_slider_set);
 }

@@ -63,6 +63,11 @@ constexpr float kRepeatDelay = 0.32f;
 constexpr float kRepeatInterval = 0.08f;
 
 extern WidgetId g_slider_drag_id;
+extern bool g_slider_drag_value_valid;
+extern float g_slider_drag_value;
+extern bool g_slider_commit_pending;
+extern bool g_slider_drag_value_valid;
+extern float g_slider_drag_value;
 
 struct FocusArrowState {
     SDL_FPoint left_pos{0.0f, 0.0f};

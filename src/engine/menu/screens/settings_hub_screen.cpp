@@ -37,19 +37,18 @@ struct CategoryCard {
     std::size_t order_hint{std::numeric_limits<std::size_t>::max()};
 };
 
-constexpr std::array<const char*, 12> kPreferredCategoryOrder = {
+constexpr std::array<const char*, 11> kPreferredCategoryOrder = {
     "Display",
     "Video",
     "Graphics",
     "Audio",
     "Controls",
+    "Binds",
     "Gameplay",
-    "HUD",
     "Accessibility",
     "Profiles",
     "Players",
     "Saves",
-    "Cheats"
 };
 
 struct CategoryOverride {

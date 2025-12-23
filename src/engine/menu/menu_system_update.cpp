@@ -309,6 +309,40 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             focus = msi::find_widget(msi::g_focus);
         }
 
+        auto apply_slider_position = [&](MenuWidget& slider,
+                                        float fx,
+                                        bool begin_drag,
+                                        bool persist_now) -> bool {
+            SDL_FRect* rect_ptr = msi::find_widget_rect(slider.id);
+            if (!rect_ptr)
+                return false;
+            msi::SliderLayout slider_layout = msi::compute_slider_layout(slider, *rect_ptr);
+            float track_width = slider_layout.track_right - slider_layout.track_left;
+            if (track_width <= 1.0f)
+                return false;
+            float norm = (fx - slider_layout.track_left) / track_width;
+            norm = std::clamp(norm, 0.0f, 1.0f);
+            float target_value = slider.min + (slider.max - slider.min) * norm;
+            if (persist_now) {
+                if (slider.on_select.type == MenuActionType::None)
+                    return false;
+                menu_system_internal::g_slider_drag_value = target_value;
+                menu_system_internal::g_slider_drag_value_valid = true;
+                menu_system_internal::g_slider_commit_pending = true;
+                msi::execute_action(slider.on_select, ctx, stack_changed);
+                menu_system_internal::g_slider_commit_pending = false;
+                menu_system_internal::g_slider_drag_value_valid = false;
+            } else if (slider.bind_ptr) {
+                *reinterpret_cast<float*>(slider.bind_ptr) = target_value;
+            }
+            if (begin_drag) {
+                menu_system_internal::g_slider_drag_id = slider.id;
+            }
+            if (persist_now)
+                needs_rebuild = true;
+            return true;
+        };
+
         if (allow_mouse_input) {
             WidgetId hovered = kMenuIdInvalid;
             for (std::size_t i = 0; i < msi::g_cache.widgets.size() && i < msi::g_cache.rects.size(); ++i) {
@@ -369,21 +403,21 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         }
                     }
                 }
-                if (focus && focus->type == WidgetType::Slider1D && focus->has_discrete_options) {
+                if (focus && focus->type == WidgetType::Slider1D) {
                     SDL_FRect* rect_ptr = msi::find_widget_rect(focus->id);
                     if (rect_ptr) {
                         auto slider_layout = msi::compute_slider_layout(*focus, *rect_ptr);
-                        if (slider_layout.has_buttons) {
-                            float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
-                            float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
-                            auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
-                                if (action.type == MenuActionType::None)
-                                    return false;
-                                sound_fn();
-                                msi::execute_action(action, ctx, stack_changed);
-                                needs_rebuild = true;
-                                return true;
-                            };
+                        float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+                        float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
+                        auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
+                            if (action.type == MenuActionType::None)
+                                return false;
+                            sound_fn();
+                            msi::execute_action(action, ctx, stack_changed);
+                            needs_rebuild = true;
+                            return true;
+                        };
+                        if (focus->has_discrete_options && slider_layout.has_buttons) {
                             if (msi::point_in_rect(fx, fy, slider_layout.left_btn)) {
                                 if (trigger_action(focus->on_left, []() { msi::play_left_sound(); }))
                                     continue;
@@ -391,6 +425,15 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                                 if (trigger_action(focus->on_right, []() { msi::play_right_sound(); }))
                                     continue;
                             }
+                        }
+                        SDL_FRect track_rect{slider_layout.track_left,
+                                             slider_layout.track_y - 10.0f,
+                                             slider_layout.track_right - slider_layout.track_left,
+                                             20.0f};
+                        if (track_rect.w > 4.0f &&
+                            msi::point_in_rect(fx, fy, track_rect)) {
+                            apply_slider_position(*focus, fx, true, false);
+                            click_handled = true;
                         }
                     }
                 }
@@ -414,6 +457,24 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 } else if (!click_handled) {
                     msi::play_cant_sound();
                 }
+            }
+        }
+
+        if (!mouse_down && menu_system_internal::g_slider_drag_id != kMenuIdInvalid) {
+            MenuWidget* dragging = msi::find_widget(menu_system_internal::g_slider_drag_id);
+            if (dragging && dragging->type == WidgetType::Slider1D) {
+                float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+                if (apply_slider_position(*dragging, fx, false, true)) {
+                    menu_system_internal::g_slider_drag_id = kMenuIdInvalid;
+                    continue;
+                }
+            }
+            menu_system_internal::g_slider_drag_id = kMenuIdInvalid;
+        } else if (mouse_down && menu_system_internal::g_slider_drag_id != kMenuIdInvalid) {
+            MenuWidget* dragging = msi::find_widget(menu_system_internal::g_slider_drag_id);
+            if (dragging && dragging->type == WidgetType::Slider1D) {
+                float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+                apply_slider_position(*dragging, fx, false, false);
             }
         }
 

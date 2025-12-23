@@ -43,6 +43,9 @@ NavRepeatState g_repeat_left{};
 NavRepeatState g_repeat_right{};
 
 WidgetId g_slider_drag_id{kMenuIdInvalid};
+bool g_slider_drag_value_valid{false};
+float g_slider_drag_value{0.0f};
+bool g_slider_commit_pending{false};
 FocusArrowState g_arrows;
 
 namespace {
