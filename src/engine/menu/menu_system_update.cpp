@@ -146,25 +146,12 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
         bool editing_focus = msi::g_text_edit_active && focus && focus->id == msi::g_text_edit_widget;
 
-        if (focus && focus->text_buffer && focus->select_enters_text && select_pressed) {
-            if (!editing_focus)
-                msi::begin_text_edit(*focus);
-            else {
-                WidgetId editing_id = focus->id;
-                bool modified = msi::end_text_edit();
-                if (handle_text_commit(editing_id, modified) || modified) {
-                    needs_rebuild = true;
-                    continue;
-                }
-            }
-            select_handled = true;
-            select_pressed = false;
-            editing_focus = msi::g_text_edit_active && focus && focus->id == msi::g_text_edit_widget;
-        }
-
         if (focus && editing_focus) {
+            // When editing text, disable all directional/page inputs and select
             up_pressed = down_pressed = left_pressed = right_pressed = false;
             page_prev_pressed = page_next_pressed = false;
+            select_pressed = false;
+            select_handled = true;
             if (back_pressed) {
                 WidgetId editing_id = focus->id;
                 bool modified = msi::end_text_edit();
@@ -235,6 +222,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             }
 
             if (!needs_rebuild) {
+                // Handle TextInput widgets that enter edit mode on select
+                if (select_pressed && focus->text_buffer && focus->select_enters_text) {
+                    msi::begin_text_edit(*focus);
+                    select_handled = true;
+                    select_pressed = false;
+                    continue;
+                }
+
                 if (select_pressed && focus->on_select.type != MenuActionType::None) {
                     msi::lock_mouse_focus_at(mouse_x, mouse_y);
                     if (focus->play_select_sound)
