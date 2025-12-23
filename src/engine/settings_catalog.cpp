@@ -11,7 +11,7 @@
 
 namespace {
 
-GameSettings& ensure_active_game_settings_for_player(int player_index) {
+GameSettings& ensure_active_game_settings_for_player(int player_index, UserProfile** out_profile = nullptr) {
     static GameSettings dummy_settings{};
     if (!es)
         return dummy_settings;
@@ -63,6 +63,9 @@ GameSettings& ensure_active_game_settings_for_player(int player_index) {
         }
     }
 
+    if (out_profile)
+        *out_profile = target_profile;
+
     ensure_profile_has_settings(*target_profile);
 
     int target_settings_id = target_profile ? target_profile->last_game_settings_profile_id : -1;
@@ -99,6 +102,15 @@ GameSettings& ensure_active_game_settings_for_player(int player_index) {
                 if (player.has_active_profile && player.profile.id == target_profile->id) {
                     player.profile.last_game_settings_profile_id = profile_settings->id;
                 }
+            }
+        }
+    }
+
+    if (out_profile && !target_profile && profile_settings) {
+        for (auto& up : es->user_profiles_pool) {
+            if (up.last_game_settings_profile_id == profile_settings->id) {
+                *out_profile = &up;
+                break;
             }
         }
     }
@@ -151,8 +163,11 @@ SettingsCatalog build_settings_catalog(int player_index) {
     if (!es)
         return catalog;
 
-    GameSettings& active_profile_settings = ensure_active_game_settings_for_player(player_index);
+    UserProfile* active_profile = nullptr;
+    GameSettings& active_profile_settings =
+        ensure_active_game_settings_for_player(player_index, &active_profile);
     catalog.profile_settings = &active_profile_settings;
+    catalog.user_profile = active_profile;
     const SettingsSchema& schema = get_settings_schema();
 
     for (const auto& meta : schema.entries()) {

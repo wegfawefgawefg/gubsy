@@ -8,6 +8,7 @@
 #include "engine/settings_types.hpp"
 
 struct GameSettings;
+struct UserProfile;
 
 struct SettingsCatalogEntry {
     const SettingMetadata* metadata = nullptr;
@@ -20,6 +21,7 @@ struct SettingsCatalog {
     std::vector<SettingsCatalogEntry> install_entries;
     std::vector<SettingsCatalogEntry> profile_entries;
     GameSettings* profile_settings{nullptr};
+    UserProfile* user_profile{nullptr};
 };
 
 SettingsCatalog build_settings_catalog(int player_index = 0);

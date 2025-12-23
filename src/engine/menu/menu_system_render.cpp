@@ -216,7 +216,15 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                                  static_cast<Uint8>(widget.style.fg_g / 3 + 60),
                                  static_cast<Uint8>(widget.style.fg_b / 3 + 60),
                                  255};
-            msi::draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
+            if (widget.tertiary_overlay) {
+                int text_w = msi::measure_text_width(widget.tertiary);
+                int overlay_x =
+                    std::max(static_cast<int>(rect.x) + 16, static_cast<int>(rect.x + rect.w) - text_w - 12);
+                int overlay_y = static_cast<int>(rect.y) + 6;
+                msi::draw_text_with_clip(renderer, widget.tertiary, overlay_x, overlay_y, tert_color, nullptr);
+            } else {
+                msi::draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
+            }
         }
         if (widget.text_buffer &&
             msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&

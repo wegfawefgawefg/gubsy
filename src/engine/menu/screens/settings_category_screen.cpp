@@ -18,6 +18,7 @@
 #include "engine/menu/menu_screen.hpp"
 #include "engine/settings_catalog.hpp"
 #include "engine/graphics.hpp"
+#include "engine/user_profiles.hpp"
 #include "game/state.hpp"
 #include "engine/menu/menu_ids.hpp"
 #include "game/ui_layout_ids.hpp"
@@ -38,6 +39,8 @@ constexpr WidgetId kFirstRowWidgetId = 500;
 constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
 constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
 constexpr const char* kRenderResolutionSettingKey = "gubsy.video.render_resolution";
+constexpr const char* kProfileOwnerNameSettingKey = "__gubsy.profile.owner_name";
+constexpr const char* kSettingsProfileNameSettingKey = "__gubsy.settings_profile_name";
 
 const char* window_mode_to_value(WindowDisplayMode mode);
 bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
@@ -45,6 +48,38 @@ bool parse_slider_option_value(const SettingOption& opt, float& out);
 bool parse_resolution_value(const std::string& text, int& out_w, int& out_h);
 std::string make_resolution_string(int w, int h);
 int parse_int_or(const std::string& text, int fallback);
+
+const SettingMetadata& profile_owner_name_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kProfileOwnerNameSettingKey;
+        m.label = "Player Name";
+        m.description = "Name shown for this user profile.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Text;
+        m.widget.max_text_len = 24;
+        m.order = -200;
+        return m;
+    }();
+    return meta;
+}
+
+const SettingMetadata& settings_profile_name_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kSettingsProfileNameSettingKey;
+        m.label = "Settings Profile Name";
+        m.description = "Label for the active settings profile.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Text;
+        m.widget.max_text_len = 32;
+        m.order = -190;
+        return m;
+    }();
+    return meta;
+}
 
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
@@ -70,6 +105,10 @@ struct SettingsCategoryState {
     std::string status_text;
     std::vector<EntryBinding> entries;
     GameSettings* profile_settings = nullptr;
+    UserProfile* profile_owner = nullptr;
+    std::string profile_owner_name;
+    SettingsValue profile_owner_value;
+    SettingsValue settings_profile_value;
     std::string tag;
     std::vector<std::string> value_buffers;
     struct ResolutionEditState {
@@ -272,16 +311,38 @@ void command_apply_text_setting(MenuContext& ctx, std::int32_t index) {
     auto& st = ctx.state<SettingsCategoryState>();
     EntryBinding* binding = get_entry_binding(ctx, index);
     if (!binding || !binding->entry.value || index < 0 ||
-        index >= static_cast<int>(st.value_buffers.size()))
+        index >= static_cast<int>(st.value_buffers.size()) || !binding->entry.metadata)
         return;
     std::string new_value = st.value_buffers[static_cast<std::size_t>(index)];
-    if (std::string* sv = std::get_if<std::string>(binding->entry.value)) {
-        if (*sv != new_value) {
+    std::string* sv = std::get_if<std::string>(binding->entry.value);
+    if (!sv)
+        return;
+
+    if (binding->entry.metadata->key == kProfileOwnerNameSettingKey) {
+        if (st.profile_owner && !new_value.empty() && *sv != new_value) {
             *sv = new_value;
-            persist_binding(*binding, st.profile_settings);
-            if (binding->entry.metadata)
-                st.status_text = "Updated " + binding->entry.metadata->label;
+            st.profile_owner->name = new_value;
+            st.profile_owner_name = new_value;
+            st.status_text = "Updated player name";
+            save_user_profile(*st.profile_owner);
         }
+        return;
+    }
+
+    if (binding->entry.metadata->key == kSettingsProfileNameSettingKey) {
+        if (st.profile_settings && !new_value.empty() && *sv != new_value) {
+            *sv = new_value;
+            st.profile_settings->name = new_value;
+            st.status_text = "Updated settings profile name";
+            save_game_settings(*st.profile_settings);
+        }
+        return;
+    }
+
+    if (*sv != new_value) {
+        *sv = new_value;
+        persist_binding(*binding, st.profile_settings);
+        st.status_text = "Updated " + binding->entry.metadata->label;
     }
 }
 
@@ -393,13 +454,34 @@ bool parse_slider_option_value(const SettingOption& opt, float& out) {
 
 void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) {
     st.entries.clear();
+    bool profiles_section = (st.tag == "Profiles");
     auto it = catalog.categories.find(st.tag);
-    if (it == catalog.categories.end())
+    if (it != catalog.categories.end()) {
+        for (const auto& entry : it->second) {
+            if (entry.metadata)
+                st.entries.push_back({entry});
+        }
+    } else if (!profiles_section) {
         return;
-    for (const auto& entry : it->second) {
-        if (entry.metadata)
-            st.entries.push_back({entry});
     }
+
+    if (profiles_section) {
+        std::string owner_name = st.profile_owner_name.empty() ? "Player" : st.profile_owner_name;
+        st.profile_owner_value = owner_name;
+        std::string settings_name = (st.profile_settings && !st.profile_settings->name.empty())
+                                        ? st.profile_settings->name
+                                        : std::string("Settings");
+        st.settings_profile_value = settings_name;
+        EntryBinding owner_binding;
+        owner_binding.entry.metadata = &profile_owner_name_metadata();
+        owner_binding.entry.value = &st.profile_owner_value;
+        st.entries.push_back(owner_binding);
+        EntryBinding settings_binding;
+        settings_binding.entry.metadata = &settings_profile_name_metadata();
+        settings_binding.entry.value = &st.settings_profile_value;
+        st.entries.push_back(settings_binding);
+    }
+
     std::sort(st.entries.begin(), st.entries.end(), [](const EntryBinding& a, const EntryBinding& b) {
         if (a.entry.metadata->order != b.entry.metadata->order)
             return a.entry.metadata->order < b.entry.metadata->order;
@@ -479,8 +561,13 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
     if (binding.entry.metadata &&
         binding.entry.metadata->scope == SettingScope::Profile &&
         state.profile_settings) {
-        label_cache.emplace_back("Profile: " + state.profile_settings->name);
+        std::string owner = state.profile_owner_name.empty() ? "Player" : state.profile_owner_name;
+        std::string overlay = "For: " + owner;
+        if (!state.profile_settings->name.empty())
+            overlay += " | " + state.profile_settings->name;
+        label_cache.emplace_back(std::move(overlay));
         w.tertiary = label_cache.back().c_str();
+        w.tertiary_overlay = true;
     }
     if (!binding.entry.value || !binding.entry.metadata)
         return w;
@@ -652,6 +739,11 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     auto& st = ctx.state<SettingsCategoryState>();
     st.tag = tag_it->second;
     st.profile_settings = catalog.profile_settings;
+    st.profile_owner = catalog.user_profile;
+    st.profile_owner_name = st.profile_owner ? st.profile_owner->name : "Player";
+    st.profile_owner_value = st.profile_owner_name;
+    st.settings_profile_value =
+        (st.profile_settings && !st.profile_settings->name.empty()) ? st.profile_settings->name : std::string{};
 
     refresh_entries(st, catalog);
 

@@ -103,6 +103,7 @@ struct MenuWidget {
     const char* label{nullptr};
     const char* secondary{nullptr};
     const char* tertiary{nullptr};
+    bool tertiary_overlay{false};
     const char* badge{nullptr};
     SDL_Color badge_color{180, 180, 200, 255};
     void* bind_ptr{nullptr};
