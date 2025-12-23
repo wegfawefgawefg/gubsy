@@ -334,6 +334,16 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 menu_system_internal::g_slider_drag_value_valid = false;
             } else if (slider.bind_ptr) {
                 *reinterpret_cast<float*>(slider.bind_ptr) = target_value;
+                if (slider.text_buffer && !msi::g_text_edit_active) {
+                    float shown = target_value * slider.display_scale + slider.display_offset;
+                    int precision = std::max(0, slider.display_precision);
+                    char buffer[64];
+                    if (precision == 0)
+                        std::snprintf(buffer, sizeof(buffer), "%.0f", static_cast<double>(shown));
+                    else
+                        std::snprintf(buffer, sizeof(buffer), "%.*f", precision, static_cast<double>(shown));
+                    *slider.text_buffer = buffer;
+                }
             }
             if (begin_drag) {
                 menu_system_internal::g_slider_drag_id = slider.id;
@@ -426,6 +436,11 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                                     continue;
                             }
                         }
+                        if (slider_layout.has_input && msi::point_in_rect(fx, fy, slider_layout.input_rect)) {
+                            msi::begin_text_edit(*focus);
+                            click_handled = true;
+                            continue;
+                        }
                         SDL_FRect track_rect{slider_layout.track_left,
                                              slider_layout.track_y - 10.0f,
                                              slider_layout.track_right - slider_layout.track_left,
@@ -437,10 +452,11 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         }
                     }
                 }
-                if (focus && focus->text_buffer && focus->select_enters_text) {
+                if (focus && focus->text_buffer && focus->select_enters_text && !click_handled) {
                     msi::begin_text_edit(*focus);
                     click_handled = true;
-                } else {
+                }
+                if (!click_handled) {
                     WidgetId editing_id = msi::current_text_widget();
                     bool modified = msi::end_text_edit();
                     if (handle_text_commit(editing_id, modified) || modified) {
