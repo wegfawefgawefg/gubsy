@@ -3,7 +3,7 @@
     (key "gubsy.video.safe_area_top" 0)
     (key "gubsy.video.window_mode" "windowed")
     (key "gubsy.video.safe_area_right" 0)
-    (key "gubsy.input.raw_mouse_input" 1)
+    (key "gubsy.input.raw_mouse_input" 0)
     (key "gubsy.audio.ui_volume" 0.5)
     (key "gubsy.video.safe_area_bottom" 7.45058e-09)
     (key "gubsy.video.safe_area_left" 0)

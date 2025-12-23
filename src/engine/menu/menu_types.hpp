@@ -118,6 +118,7 @@ struct MenuWidget {
     const char* aux_placeholder{nullptr};
     bool show_slider_track{true};
     bool select_enters_text{true};
+    bool play_select_sound{true};
 
     MenuAction on_select{};
     MenuAction on_left{};

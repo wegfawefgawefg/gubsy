@@ -221,7 +221,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!needs_rebuild) {
                 if (select_pressed && focus->on_select.type != MenuActionType::None) {
                     msi::lock_mouse_focus_at(mouse_x, mouse_y);
-                    msi::play_confirm_sound();
+                    if (focus->play_select_sound)
+                        msi::play_confirm_sound();
                     select_handled = true;
                     msi::execute_action(focus->on_select, ctx, stack_changed);
                     needs_rebuild = true;

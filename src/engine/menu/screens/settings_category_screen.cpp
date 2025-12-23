@@ -23,6 +23,7 @@
 #include "game/ui_layout_ids.hpp"
 
 namespace {
+namespace msi = menu_system_internal;
 
 constexpr std::size_t kMaxCategoryScreens = 48;
 constexpr int kSettingsPerPage = 4;
@@ -255,6 +256,7 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
         *sv = value;
         persist_binding(binding, st.profile_settings);
         if (set_render_resolution(width, height)) {
+            msi::play_confirm_sound();
             st.status_text = "Render resolution set to " + value;
             st.resolution_edit.width_text = std::to_string(width);
             st.resolution_edit.height_text = std::to_string(height);
@@ -564,8 +566,9 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                     w.aux_text_buffer = &state.resolution_edit.height_text;
                     w.aux_text_max_len = 5;
                     w.aux_placeholder = "Height";
-                    w.select_enters_text = false;
-                    w.has_discrete_options = true;
+                w.select_enters_text = false;
+                w.play_select_sound = false;
+                w.has_discrete_options = true;
                     std::string badge_text = binding.entry.metadata->label;
                     if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
                         for (const auto& opt : binding.entry.metadata->widget.options) {
