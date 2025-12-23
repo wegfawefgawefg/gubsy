@@ -176,7 +176,8 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
         std::string text_storage;
         const char* text_ptr = widget.label;
         SDL_Color text_color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255};
-        if (widget.type == WidgetType::TextInput && widget.text_buffer) {
+        bool is_text_input_widget = widget.type == WidgetType::TextInput && widget.text_buffer;
+        if (is_text_input_widget) {
             if (widget.text_buffer->empty() && widget.placeholder) {
                 text_ptr = widget.placeholder;
                 text_color = SDL_Color{160, 160, 180, 255};
@@ -196,11 +197,16 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
         const SDL_Rect* clip_ptr = is_label ? nullptr : &clip;
         int line_x = static_cast<int>(rect.x) + (is_label ? 0 : 16);
         int line_y = static_cast<int>(rect.y) + (is_label ? 0 : 6);
+        int text_input_value_y = 0;
         auto next_line = [&]() {
             line_y += 22;
         };
+
         if (text_ptr) {
             msi::draw_text_with_clip(renderer, text_ptr, line_x, line_y, text_color, clip_ptr);
+            if (is_text_input_widget && !widget.label) {
+                text_input_value_y = line_y;
+            }
             next_line();
         }
         if (widget.secondary) {
@@ -226,12 +232,11 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                 msi::draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
             }
         }
-        if (widget.text_buffer &&
-            msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
-            widget.type == WidgetType::TextInput) {
+        if (is_text_input_widget && msi::g_text_edit_active && widget.id == msi::g_text_edit_widget) {
+            int input_y = text_input_value_y > 0 ? text_input_value_y : (static_cast<int>(rect.y) + 6);
             if (std::fmod(msi::g_caret_time, 1.0f) < 0.5f) {
                 int caret_x = line_x + msi::measure_text_width(widget.text_buffer->c_str());
-                int caret_top = line_y - 2;
+                int caret_top = input_y - 2;
                 int caret_bottom = caret_top + 18;
                 SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
                 SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
@@ -312,15 +317,17 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
 
         if (widget.badge && !drew_option_value) {
             int badge_w = msi::measure_text_width(widget.badge);
-            int badge_x = static_cast<int>(rect.x + rect.w) - badge_w - 12;
-            if (badge_x < static_cast<int>(rect.x) + 8)
-                badge_x = static_cast<int>(rect.x) + 8;
-            int badge_y = static_cast<int>(rect.y) + 6;
+            float right_margin = rect.w * 0.03f;
+            int badge_x = static_cast<int>(rect.x + rect.w - static_cast<float>(badge_w) - right_margin);
+            float left_margin = rect.w * 0.02f;
+            if (badge_x < static_cast<int>(rect.x + left_margin))
+                badge_x = static_cast<int>(rect.x + left_margin);
+            int badge_y = static_cast<int>(rect.y + rect.h * 0.1f);
             SDL_Rect badge_clip{
-                static_cast<int>(rect.x) + 8,
-                static_cast<int>(rect.y) + 4,
-                std::max(0, static_cast<int>(rect.w) - 16),
-                std::max(0, static_cast<int>(rect.h) - 8)};
+                static_cast<int>(rect.x + left_margin),
+                static_cast<int>(rect.y + rect.h * 0.05f),
+                std::max(0, static_cast<int>(rect.w - left_margin * 2.0f)),
+                std::max(0, static_cast<int>(rect.h * 0.9f))};
             msi::draw_text_with_clip(renderer, widget.badge, badge_x, badge_y, widget.badge_color, &badge_clip);
         }
     }

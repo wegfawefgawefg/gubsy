@@ -575,19 +575,22 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
         bool is_editing_entry = (editing_entry_index == static_cast<int>(i));
         if (meta && meta->key == kRenderResolutionSettingKey)
             st.resolution_entry_index = static_cast<int>(i);
+        if (is_editing_entry) {
+            continue;
+        }
         if (meta && meta->widget.kind == SettingWidgetKind::Slider && meta->widget.max_text_len > 0 &&
-            st.entries[i].entry.value && !is_editing_entry) {
+            st.entries[i].entry.value) {
             if (const float* fv = std::get_if<float>(st.entries[i].entry.value))
                 st.value_buffers[i] = format_slider_display(meta->widget, *fv);
             else
                 st.value_buffers[i].clear();
         } else if (meta && meta->widget.kind == SettingWidgetKind::Text &&
-                   st.entries[i].entry.value && !is_editing_entry) {
+                   st.entries[i].entry.value) {
             if (const std::string* sv = std::get_if<std::string>(st.entries[i].entry.value))
                 st.value_buffers[i] = *sv;
             else
                 st.value_buffers[i].clear();
-        } else if (!is_editing_entry) {
+        } else {
             st.value_buffers[i].clear();
         }
     }
@@ -652,7 +655,8 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             else if (const float* fv = std::get_if<float>(binding.entry.value))
                 on = (*fv >= 0.5f);
             label_cache.emplace_back(on ? "On" : "Off");
-            w.badge = label_cache.back().c_str();
+            w.tertiary = label_cache.back().c_str();
+            w.tertiary_overlay = false;
             MenuAction toggle = MenuAction::run_command(g_cmd_toggle_setting, entry_index);
             w.on_select = toggle;
             w.on_left = toggle;
@@ -779,7 +783,7 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
         case SettingWidgetKind::Text: {
             w.type = WidgetType::TextInput;
             if (value_buffer) {
-                if (value_buffer->empty()) {
+                if (value_buffer->empty() && !menu_system_internal::is_text_edit_widget(id)) {
                     if (const std::string* sv = std::get_if<std::string>(binding.entry.value))
                         *value_buffer = *sv;
                 }

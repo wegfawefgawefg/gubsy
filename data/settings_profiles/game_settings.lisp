@@ -1,7 +1,7 @@
 (game_settings_list
   (settings
     (id 49195645)
-    (name "Nogs")
+    (name "GMans Settings")
     (values
       (key "demo.controls.invert_x_axis" 0)
       (key "demo.gameplay.permadeath" 0)
@@ -26,7 +26,7 @@
       (key "demo.accessibility.high_contrast_ui" 0)
       (key "demo.hud.opacity" 0.85)
       (key "gubsy.input.controller_deadzone" 0.105061)
-      (key "gubsy.accessibility.subtitle_background" 0.5)
+      (key "gubsy.accessibility.subtitle_background" 0.42333)
     )
   )
 )
