@@ -30,6 +30,7 @@ SettingMetadata make_slider_setting(SettingScope scope,
     meta.widget.min = min;
     meta.widget.max = max;
     meta.widget.step = step;
+    meta.widget.max_text_len = 8;
     meta.default_value = default_value;
     return meta;
 }

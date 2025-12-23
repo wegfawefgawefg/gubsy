@@ -204,7 +204,7 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     for (int i = 0; i < kCategoriesPerPage; ++i) {
         int card_index = start_index + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
-        WidgetId widget_id = static_cast<WidgetId>(kFirstCardWidgetId + i);
+        WidgetId widget_id = static_cast<WidgetId>(kFirstCardWidgetId + static_cast<WidgetId>(i));
         if (card_index < static_cast<int>(st.cards.size())) {
             const CategoryCard& card = st.cards[static_cast<std::size_t>(card_index)];
             MenuWidget card_widget;

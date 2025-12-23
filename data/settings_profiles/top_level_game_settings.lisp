@@ -1,13 +1,13 @@
 (top_level_game_settings
   (values
     (key "gubsy.video.safe_area" 0)
-    (key "gubsy.video.window_mode" "borderless")
+    (key "gubsy.video.window_mode" "windowed")
     (key "gubsy.input.raw_mouse_input" 1)
     (key "gubsy.video.ui_scale" 1)
     (key "gubsy.audio.dynamic_range" "tv")
-    (key "gubsy.audio.ui_volume" 0.75)
+    (key "gubsy.audio.ui_volume" 0.56)
     (key "gubsy.video.render_scale" 1)
-    (key "gubsy.audio.music_volume" 0.79)
+    (key "gubsy.audio.music_volume" 1)
     (key "gubsy.audio.output_device" "default")
     (key "gubsy.video.frame_cap" "60")
     (key "gubsy.video.dynamic_resolution" 0)

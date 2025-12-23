@@ -14,6 +14,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cmath>
+#include <cstdlib>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
@@ -165,7 +166,7 @@ void draw_text_with_clip(SDL_Renderer* renderer,
 }
 
 void begin_text_edit(MenuWidget& widget) {
-    if (widget.type != WidgetType::TextInput || !widget.text_buffer)
+    if (!widget.text_buffer)
         return;
     g_text_edit_active = true;
     g_text_edit_widget = widget.id;
@@ -178,9 +179,32 @@ void begin_text_edit(MenuWidget& widget) {
     }
 }
 
-void end_text_edit() {
+bool commit_text_edit() {
+    if (!g_text_edit_active || !g_active_text_buffer)
+        return false;
+    MenuWidget* widget = find_widget(g_text_edit_widget);
+    if (!widget || !widget->bind_ptr)
+        return false;
+    bool modified = false;
+    if (widget->type == WidgetType::Slider1D) {
+        char* end_ptr = nullptr;
+        float parsed = std::strtof(g_active_text_buffer->c_str(), &end_ptr);
+        if (end_ptr != g_active_text_buffer->c_str()) {
+            parsed = std::clamp(parsed, widget->min, widget->max);
+            float* target = reinterpret_cast<float*>(widget->bind_ptr);
+            if (*target != parsed) {
+                *target = parsed;
+                modified = true;
+            }
+        }
+    }
+    return modified;
+}
+
+bool end_text_edit() {
     if (!g_text_edit_active)
-        return;
+        return false;
+    bool modified = commit_text_edit();
     g_text_edit_active = false;
     g_text_edit_widget = kMenuIdInvalid;
     g_active_text_buffer = nullptr;
@@ -190,6 +214,7 @@ void end_text_edit() {
     }
     if (es)
         lock_mouse_focus_at(es->device_state.mouse_x, es->device_state.mouse_y);
+    return modified;
 }
 
 
@@ -478,11 +503,16 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
         bool editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
 
-        if (focus && focus->type == WidgetType::TextInput && select_pressed) {
+        if (focus && focus->text_buffer && select_pressed) {
             if (!editing_focus)
                 begin_text_edit(*focus);
-            else
-                end_text_edit();
+            else {
+                bool modified = end_text_edit();
+                if (modified) {
+                    needs_rebuild = true;
+                    continue;
+                }
+            }
             select_handled = true;
             select_pressed = false;
             editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
@@ -492,7 +522,11 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             up_pressed = down_pressed = left_pressed = right_pressed = false;
             page_prev_pressed = page_next_pressed = false;
             if (back_pressed) {
-                end_text_edit();
+                bool modified = end_text_edit();
+                if (modified) {
+                    needs_rebuild = true;
+                    continue;
+                }
                 back_pressed = false;
                 editing_focus = false;
             }
@@ -618,8 +652,13 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             focus = find_widget(g_focus);
         }
         editing_focus = g_text_edit_active && focus && focus->id == g_text_edit_widget;
-        if (g_text_edit_active && !editing_focus)
-            end_text_edit();
+        if (g_text_edit_active && !editing_focus) {
+            bool modified = end_text_edit();
+            if (modified) {
+                needs_rebuild = true;
+                continue;
+            }
+        }
 
         if (!focus) {
             g_focus = (!g_cache.widgets.empty()) ? g_cache.widgets.front().id : kMenuIdInvalid;
@@ -652,11 +691,15 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 g_focus = hovered;
                 focus = find_widget(g_focus);
                 bool click_handled = false;
-                if (focus && focus->type == WidgetType::TextInput) {
+                if (focus && focus->text_buffer) {
                     begin_text_edit(*focus);
                     click_handled = true;
                 } else {
-                    end_text_edit();
+                    bool modified = end_text_edit();
+                    if (modified) {
+                        needs_rebuild = true;
+                        continue;
+                    }
                 }
                 if (focus && focus->on_select.type != MenuActionType::None) {
                     play_confirm_sound();
@@ -801,6 +844,71 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                 SDL_RenderDrawRectF(renderer, &inner);
             }
         }
+        if (widget.type == WidgetType::Slider1D && widget.bind_ptr) {
+            float value = *reinterpret_cast<float*>(widget.bind_ptr);
+            float range = widget.max - widget.min;
+            float norm = (range > 0.0f) ? (value - widget.min) / range : 0.0f;
+            norm = std::clamp(norm, 0.0f, 1.0f);
+            float track_left = rect.x + rect.w * 0.12f;
+            float track_right = rect.x + rect.w * 0.88f;
+            float track_width = track_right - track_left;
+            float track_y = rect.y + rect.h * 0.65f;
+            SDL_FRect track{track_left, track_y - 2.0f, track_width, 4.0f};
+            SDL_SetRenderDrawColor(renderer, 55, 60, 78, 255);
+            SDL_RenderFillRectF(renderer, &track);
+            SDL_FRect fill = track;
+            fill.w = track_width * norm;
+            SDL_SetRenderDrawColor(renderer, 130, 185, 255, 255);
+            SDL_RenderFillRectF(renderer, &fill);
+            float knob_x = track_left + track_width * norm;
+            SDL_FRect knob{knob_x - 6.0f, track_y - 9.0f, 12.0f, 18.0f};
+            SDL_SetRenderDrawColor(renderer, 235, 238, 245, 255);
+            SDL_RenderFillRectF(renderer, &knob);
+            SDL_SetRenderDrawColor(renderer, 30, 35, 46, 255);
+            SDL_RenderDrawRectF(renderer, &knob);
+
+            if (widget.text_buffer && widget.text_max_len > 0) {
+                float input_width = std::min(rect.w * 0.28f, 120.0f);
+                SDL_FRect input_rect{
+                    track_right - input_width,
+                    rect.y + rect.h * 0.2f,
+                    input_width,
+                    24.0f};
+                SDL_Color input_bg{24, 26, 36, 255};
+                SDL_Color input_border{80, 90, 110, 255};
+                bool editing = g_text_edit_active && widget.id == g_text_edit_widget;
+                if (editing)
+                    input_border = SDL_Color{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, 255};
+                SDL_SetRenderDrawColor(renderer, input_bg.r, input_bg.g, input_bg.b, input_bg.a);
+                SDL_RenderFillRectF(renderer, &input_rect);
+                SDL_SetRenderDrawColor(renderer, input_border.r, input_border.g, input_border.b, input_border.a);
+                SDL_RenderDrawRectF(renderer, &input_rect);
+
+                std::string display = *widget.text_buffer;
+                if (display.empty() && widget.placeholder)
+                    display = widget.placeholder;
+                SDL_Rect clip_rect{
+                    static_cast<int>(input_rect.x) + 4,
+                    static_cast<int>(input_rect.y) + 3,
+                    std::max(0, static_cast<int>(input_rect.w) - 8),
+                    std::max(0, static_cast<int>(input_rect.h) - 6)};
+                draw_text_with_clip(renderer,
+                                    display.c_str(),
+                                    static_cast<int>(input_rect.x) + 6,
+                                    static_cast<int>(input_rect.y) + 4,
+                                    SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
+                                    &clip_rect);
+                if (editing && std::fmod(g_caret_time, 1.0f) < 0.5f) {
+                    int caret_x = static_cast<int>(input_rect.x) + 6 + measure_text_width(widget.text_buffer->c_str());
+                    if (caret_x > static_cast<int>(input_rect.x + input_rect.w) - 6)
+                        caret_x = static_cast<int>(input_rect.x + input_rect.w) - 6;
+                    int caret_top = static_cast<int>(input_rect.y) + 4;
+                    int caret_bottom = caret_top + static_cast<int>(input_rect.h) - 8;
+                    SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
+                    SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
+                }
+            }
+        }
 
         std::string text_storage;
         const char* text_ptr = widget.label;
@@ -846,8 +954,9 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                                  255};
             draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
         }
-        if (widget.type == WidgetType::TextInput &&
-            g_text_edit_active && widget.id == g_text_edit_widget && widget.text_buffer) {
+        if (widget.text_buffer &&
+            g_text_edit_active && widget.id == g_text_edit_widget &&
+            widget.type == WidgetType::TextInput) {
             if (std::fmod(g_caret_time, 1.0f) < 0.5f) {
                 int caret_x = line_x + measure_text_width(widget.text_buffer->c_str());
                 int caret_top = line_y - 2;

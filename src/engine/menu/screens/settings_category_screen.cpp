@@ -50,6 +50,7 @@ struct SettingsCategoryState {
     std::vector<EntryBinding> entries;
     GameSettings* profile_settings = nullptr;
     std::string tag;
+    std::vector<std::string> value_buffers;
 };
 
 MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* label) {
@@ -182,13 +183,25 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
             return a.entry.metadata->order < b.entry.metadata->order;
         return a.entry.metadata->label < b.entry.metadata->label;
     });
+
+    st.value_buffers.resize(st.entries.size());
+    for (std::size_t i = 0; i < st.entries.size(); ++i) {
+        const SettingMetadata* meta = st.entries[i].entry.metadata;
+        if (meta && meta->widget.kind == SettingWidgetKind::Slider && meta->widget.max_text_len > 0 &&
+            st.entries[i].entry.value) {
+            st.value_buffers[i] = format_value(*st.entries[i].entry.value);
+        } else {
+            st.value_buffers[i].clear();
+        }
+    }
 }
 
 MenuWidget make_setting_widget(const EntryBinding& binding,
                                WidgetId id,
                                UILayoutObjectId slot,
                                int entry_index,
-                               std::vector<std::string>& label_cache) {
+                               std::vector<std::string>& label_cache,
+                               std::string* value_buffer) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -219,8 +232,17 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             w.type = WidgetType::Slider1D;
             w.min = desc.min;
             w.max = desc.max;
+            if (float* fv = std::get_if<float>(binding.entry.value))
+                w.bind_ptr = fv;
             label_cache.push_back(format_value(*binding.entry.value));
             w.badge = label_cache.back().c_str();
+            if (value_buffer && desc.max_text_len > 0) {
+                *value_buffer = label_cache.back();
+                w.text_buffer = value_buffer;
+                w.text_max_len = desc.max_text_len;
+                w.placeholder = "value";
+                w.badge = nullptr;
+            }
             w.on_left = MenuAction::run_command(g_cmd_slider_dec, entry_index);
             w.on_right = MenuAction::run_command(g_cmd_slider_inc, entry_index);
             break;
@@ -305,10 +327,17 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     for (int i = 0; i < kSettingsPerPage; ++i) {
         int entry_index = st.page * kSettingsPerPage + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
-        WidgetId widget_id = static_cast<WidgetId>(kFirstRowWidgetId + i);
+        WidgetId widget_id = static_cast<WidgetId>(kFirstRowWidgetId + static_cast<WidgetId>(i));
         if (entry_index < total_entries) {
             MenuWidget row =
-                make_setting_widget(st.entries[static_cast<std::size_t>(entry_index)], widget_id, slot, entry_index, label_cache);
+                make_setting_widget(st.entries[static_cast<std::size_t>(entry_index)],
+                                    widget_id,
+                                    slot,
+                                    entry_index,
+                                    label_cache,
+                                    (entry_index < static_cast<int>(st.value_buffers.size())
+                                         ? &st.value_buffers[static_cast<std::size_t>(entry_index)]
+                                         : nullptr));
             row.nav_left = row.id;
             row.nav_right = row.id;
             widgets.push_back(row);

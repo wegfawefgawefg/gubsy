@@ -3,7 +3,7 @@
     (id 49195645)
     (name "NewGameSettings")
     (values
-      (key "demo.gameplay.enemy_ai_aggression" 0.6)
+      (key "demo.gameplay.enemy_ai_aggression" 1)
       (key "demo.hud.scale" 1)
       (key "demo.gameplay.auto_save_interval" "5")
       (key "demo.gameplay.difficulty" "normal")
@@ -11,7 +11,7 @@
       (key "gubsy.input.vibration_strength" 0.8)
       (key "gubsy.accessibility.subtitle_size" 1)
       (key "gubsy.input.controller_layout" "standard")
-      (key "gubsy.accessibility.subtitles_enabled" 1)
+      (key "gubsy.accessibility.subtitles_enabled" 0)
       (key "gubsy.input.invert_y_axis" 0)
       (key "demo.accessibility.high_contrast_ui" 0)
       (key "gubsy.accessibility.subtitle_background" 0.5)
