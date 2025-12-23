@@ -107,6 +107,9 @@ struct SettingsHubState {
     std::string page_text;
     std::string status_text;
     std::vector<CategoryCard> cards;
+    std::vector<int> filtered_indices;
+    std::string search_query;
+    std::string prev_search;
 };
 
 MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* label) {
@@ -134,6 +137,35 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     st.page = std::clamp(st.page + delta, 0, max_page);
 }
 
+void rebuild_filter(SettingsHubState& st) {
+    st.filtered_indices.clear();
+    std::string needle = st.search_query;
+    std::transform(needle.begin(), needle.end(), needle.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (std::size_t i = 0; i < st.cards.size(); ++i) {
+        if (!needle.empty()) {
+            std::string hay = st.cards[i].tag;
+            std::transform(hay.begin(), hay.end(), hay.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (hay.find(needle) == std::string::npos)
+                continue;
+        }
+        st.filtered_indices.push_back(static_cast<int>(i));
+    }
+
+    int filtered = static_cast<int>(st.filtered_indices.size());
+    if (filtered == 0) {
+        st.page = 0;
+        st.total_pages = 1;
+        st.page_text = "Page 0 / 0";
+        return;
+    }
+    st.total_pages = std::max(1, (filtered + kCategoriesPerPage - 1) / kCategoriesPerPage);
+    st.page = std::clamp(st.page, 0, st.total_pages - 1);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+}
+
 BuiltScreen build_settings_hub(MenuContext& ctx) {
     SettingsCatalog catalog = build_settings_catalog(ctx.player_index);
     auto& st = ctx.state<SettingsHubState>();
@@ -154,11 +186,14 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         return a.tag < b.tag;
     });
 
-    st.total_pages = std::max(1, (static_cast<int>(st.cards.size()) + kCategoriesPerPage - 1) / kCategoriesPerPage);
-    st.page = std::clamp(st.page, 0, st.total_pages - 1);
+    if (st.search_query != st.prev_search) {
+        st.prev_search = st.search_query;
+        rebuild_filter(st);
+    } else if (st.filtered_indices.empty() || st.filtered_indices.size() != st.cards.size()) {
+        rebuild_filter(st);
+    }
 
-    st.status_text = std::to_string(st.cards.size()) + (st.cards.size() == 1 ? " category" : " categories");
-    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+    st.status_text = std::to_string(st.filtered_indices.size()) + (st.filtered_indices.size() == 1 ? " category" : " categories");
 
     MenuAction prev_action = MenuAction::none();
     MenuAction next_action = MenuAction::none();
@@ -178,7 +213,14 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     status_label.label = st.status_text.c_str();
     widgets.push_back(status_label);
 
-    widgets.push_back(make_label_widget(kSearchWidgetId, SettingsObjectID::SEARCH, "Search coming soon"));
+    MenuWidget search;
+    search.id = kSearchWidgetId;
+    search.slot = SettingsObjectID::SEARCH;
+    search.type = WidgetType::TextInput;
+    search.text_buffer = &st.search_query;
+    search.text_max_len = 48;
+    search.placeholder = "Search categories...";
+    widgets.push_back(search);
 
     MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     page_label.label = st.page_text.c_str();
@@ -201,10 +243,11 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     int start_index = st.page * kCategoriesPerPage;
     std::size_t cards_offset = widgets.size();
     for (int i = 0; i < kCategoriesPerPage; ++i) {
-        int card_index = start_index + i;
+        int filtered_idx = start_index + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
         WidgetId widget_id = static_cast<WidgetId>(kFirstCardWidgetId + static_cast<WidgetId>(i));
-        if (card_index < static_cast<int>(st.cards.size())) {
+        if (filtered_idx < static_cast<int>(st.filtered_indices.size())) {
+            int card_index = st.filtered_indices[static_cast<std::size_t>(filtered_idx)];
             const CategoryCard& card = st.cards[static_cast<std::size_t>(card_index)];
             MenuWidget card_widget;
             card_widget.id = widget_id;
