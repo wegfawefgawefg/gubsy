@@ -32,7 +32,7 @@ struct SettingWidgetDesc {
     int max_text_len = 0;
     float display_scale = 1.0f;
     float display_offset = 0.0f;
-    int display_precision = 2;
+    int display_precision = 3;
     std::vector<SettingOption> options;
     std::string custom_id;
 };
