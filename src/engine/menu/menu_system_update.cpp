@@ -140,6 +140,10 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         bool page_prev_pressed = msi::g_current_input.page_prev && !prev.page_prev;
         bool page_next_pressed = msi::g_current_input.page_next && !prev.page_next;
 
+        // Update repeat for left/right
+        msi::update_repeat(msi::g_current_input.left, msi::g_repeat_left, left_pressed, dt);
+        msi::update_repeat(msi::g_current_input.right, msi::g_repeat_right, right_pressed, dt);
+
         bool editing_focus = msi::g_text_edit_active && focus && focus->id == msi::g_text_edit_widget;
 
         if (focus && focus->text_buffer && focus->select_enters_text && select_pressed) {

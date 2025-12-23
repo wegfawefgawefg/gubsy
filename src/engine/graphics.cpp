@@ -403,6 +403,20 @@ void sync_graphics_from_settings() {
         if (const float* fv = std::get_if<float>(&it->second))
             gg->safe_area.w = *fv;
     }
+
+    // Sync audio volumes
+    if (auto it = settings.find("gubsy.audio.master_volume"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            es->audio_settings.vol_master = *fv;
+    }
+    if (auto it = settings.find("gubsy.audio.music_volume"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            es->audio_settings.vol_music = *fv;
+    }
+    if (auto it = settings.find("gubsy.audio.sfx_volume"); it != settings.end()) {
+        if (const float* fv = std::get_if<float>(&it->second))
+            es->audio_settings.vol_sfx = *fv;
+    }
 }
 
 #include <limits>

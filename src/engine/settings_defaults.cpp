@@ -87,15 +87,19 @@ void register_engine_settings_schema_entries() {
         "en"));
 
     // Audio
-    schema.add_setting(make_slider_setting(SettingScope::Install,
-                                           "gubsy.audio.master_volume",
-                                           "Master Volume",
-                                           "Controls the overall output volume for engine-managed audio.",
-                                           {"Audio"},
-                                           0.0f,
-                                           1.0f,
-                                           0.01f,
-                                           1.0f));
+    {
+        SettingMetadata meta = make_slider_setting(SettingScope::Install,
+                                                   "gubsy.audio.master_volume",
+                                                   "Master Volume",
+                                                   "Controls the overall output volume for engine-managed audio.",
+                                                   {"Audio"},
+                                                   0.0f,
+                                                   1.0f,
+                                                   0.01f,
+                                                   1.0f);
+        meta.order = -100;
+        schema.add_setting(meta);
+    }
     {
         SettingMetadata meta = make_slider_setting(SettingScope::Install,
                                                    "gubsy.audio.music_volume",
@@ -106,7 +110,7 @@ void register_engine_settings_schema_entries() {
                                                    1.0f,
                                                    0.01f,
                                                    0.8f);
-        meta.order = -100;
+        meta.order = -99;
         schema.add_setting(meta);
     }
     {
@@ -119,7 +123,7 @@ void register_engine_settings_schema_entries() {
                                                    1.0f,
                                                    0.01f,
                                                    1.0f);
-        meta.order = -99;
+        meta.order = -98;
         schema.add_setting(meta);
     }
     schema.add_setting(make_slider_setting(SettingScope::Install,
