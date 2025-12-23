@@ -553,11 +553,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
 
         if (!needs_rebuild && page_prev_pressed) {
             lock_mouse_focus_at(mouse_x, mouse_y);
-            MenuAction action = (focus) ? focus->on_left : MenuAction::none();
-            if (action.type == MenuActionType::None) {
-                if (MenuWidget* prev_widget = find_widget_by_slot(SettingsObjectID::PREV))
-                    action = prev_widget->on_select;
-            }
+            MenuAction action = MenuAction::none();
+            if (MenuWidget* prev_widget = find_widget_by_slot(SettingsObjectID::PREV))
+                action = prev_widget->on_select;
             if (action.type != MenuActionType::None) {
                 play_left_sound();
                 execute_action(action, ctx, stack_changed);
@@ -568,11 +566,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         }
         if (!needs_rebuild && page_next_pressed) {
             lock_mouse_focus_at(mouse_x, mouse_y);
-            MenuAction action = (focus) ? focus->on_right : MenuAction::none();
-            if (action.type == MenuActionType::None) {
-                if (MenuWidget* next_widget = find_widget_by_slot(SettingsObjectID::NEXT))
-                    action = next_widget->on_select;
-            }
+            MenuAction action = MenuAction::none();
+            if (MenuWidget* next_widget = find_widget_by_slot(SettingsObjectID::NEXT))
+                action = next_widget->on_select;
             if (action.type != MenuActionType::None) {
                 play_right_sound();
                 execute_action(action, ctx, stack_changed);

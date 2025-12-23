@@ -287,10 +287,13 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     next_btn.on_left = prev_action;
     next_btn.on_right = next_action;
     widgets.push_back(prev_btn);
+    std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next_btn);
+    std::size_t next_idx = widgets.size() - 1;
 
     std::vector<WidgetId> row_ids;
     row_ids.reserve(kSettingsPerPage);
+    std::size_t rows_offset = widgets.size();
     for (int i = 0; i < kSettingsPerPage; ++i) {
         int entry_index = st.page * kSettingsPerPage + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
@@ -298,8 +301,8 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
         if (entry_index < total_entries) {
             MenuWidget row =
                 make_setting_widget(st.entries[static_cast<std::size_t>(entry_index)], widget_id, slot, entry_index, label_cache);
-            row.on_left = prev_action.type != MenuActionType::None ? prev_action : row.on_left;
-            row.on_right = next_action.type != MenuActionType::None ? next_action : row.on_right;
+            row.nav_left = row.id;
+            row.nav_right = row.id;
             widgets.push_back(row);
             row_ids.push_back(widget_id);
         } else {
@@ -311,6 +314,35 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     back_btn.on_left = prev_action;
     back_btn.on_right = next_action;
     widgets.push_back(back_btn);
+    std::size_t back_idx = widgets.size() - 1;
+
+    MenuWidget& prev_ref = widgets[prev_idx];
+    MenuWidget& next_ref = widgets[next_idx];
+    MenuWidget& back_ref = widgets[back_idx];
+
+    WidgetId first_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.front();
+    WidgetId last_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.back();
+
+    prev_ref.nav_left = prev_ref.id;
+    prev_ref.nav_right = next_ref.id;
+    next_ref.nav_left = prev_ref.id;
+    next_ref.nav_right = next_ref.id;
+    prev_ref.nav_up = prev_ref.id;
+    next_ref.nav_up = next_ref.id;
+    prev_ref.nav_down = (first_row_id != kMenuIdInvalid) ? first_row_id : back_ref.id;
+    next_ref.nav_down = (first_row_id != kMenuIdInvalid) ? first_row_id : back_ref.id;
+
+    for (std::size_t i = 0; i < row_ids.size(); ++i) {
+        MenuWidget& row = widgets[rows_offset + i];
+        row.nav_left = row.id;
+        row.nav_right = row.id;
+        row.nav_up = (i == 0) ? prev_ref.id : row_ids[i - 1];
+        row.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
+    }
+
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
+    back_ref.nav_up = (last_row_id != kMenuIdInvalid) ? last_row_id : prev_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
