@@ -9,6 +9,7 @@
 #include "engine/globals.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
+#include "engine/menu/menu_system_state.hpp"
 #include "engine/menu/menu_screen.hpp"
 #include "engine/settings_catalog.hpp"
 #include "game/state.hpp"
@@ -196,15 +197,25 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
     });
 
     st.value_buffers.resize(st.entries.size());
+    int editing_entry_index = -1;
+    WidgetId editing_widget = menu_system_internal::current_text_widget();
+    if (editing_widget != kMenuIdInvalid) {
+        if (editing_widget >= kFirstRowWidgetId &&
+            editing_widget < kFirstRowWidgetId + kSettingsPerPage) {
+            int row = static_cast<int>(editing_widget - kFirstRowWidgetId);
+            editing_entry_index = st.page * kSettingsPerPage + row;
+        }
+    }
     for (std::size_t i = 0; i < st.entries.size(); ++i) {
         const SettingMetadata* meta = st.entries[i].entry.metadata;
+        bool is_editing_entry = (editing_entry_index == static_cast<int>(i));
         if (meta && meta->widget.kind == SettingWidgetKind::Slider && meta->widget.max_text_len > 0 &&
-            st.entries[i].entry.value) {
+            st.entries[i].entry.value && !is_editing_entry) {
             if (const float* fv = std::get_if<float>(st.entries[i].entry.value))
                 st.value_buffers[i] = format_slider_display(meta->widget, *fv);
             else
                 st.value_buffers[i].clear();
-        } else {
+        } else if (!is_editing_entry) {
             st.value_buffers[i].clear();
         }
     }
@@ -259,11 +270,14 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                 label_cache.push_back(format_value(*binding.entry.value));
             w.badge = label_cache.back().c_str();
             if (value_buffer && desc.max_text_len > 0) {
-                *value_buffer = label_cache.back();
+                if (!menu_system_internal::is_text_edit_widget(id))
+                    *value_buffer = label_cache.back();
                 w.text_buffer = value_buffer;
                 w.text_max_len = desc.max_text_len;
                 w.placeholder = "value";
                 w.badge = nullptr;
+                if (menu_system_internal::is_text_edit_widget(id))
+                    menu_system_internal::set_active_text_buffer(value_buffer, desc.max_text_len);
             }
             w.on_left = MenuAction::run_command(g_cmd_slider_dec, entry_index);
             w.on_right = MenuAction::run_command(g_cmd_slider_inc, entry_index);

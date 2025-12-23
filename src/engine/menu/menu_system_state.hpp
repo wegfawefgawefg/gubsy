@@ -121,6 +121,9 @@ void draw_text_with_clip(SDL_Renderer* renderer,
 void begin_text_edit(MenuWidget& widget);
 bool commit_text_edit();
 bool end_text_edit();
+bool is_text_edit_widget(WidgetId id);
+void set_active_text_buffer(std::string* buffer, int max_len);
+WidgetId current_text_widget();
 
 bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_changed);
 void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx);

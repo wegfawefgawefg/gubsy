@@ -306,6 +306,21 @@ bool end_text_edit() {
     return modified;
 }
 
+bool is_text_edit_widget(WidgetId id) {
+    return g_text_edit_active && g_text_edit_widget == id;
+}
+
+void set_active_text_buffer(std::string* buffer, int max_len) {
+    if (!g_text_edit_active)
+        return;
+    g_active_text_buffer = buffer;
+    g_active_text_max = max_len;
+}
+
+WidgetId current_text_widget() {
+    return g_text_edit_active ? g_text_edit_widget : kMenuIdInvalid;
+}
+
 bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_changed) {
     switch (action.type) {
         case MenuActionType::None:
@@ -450,4 +465,3 @@ void draw_focus_arrows(SDL_Renderer* renderer) {
 }
 
 } // namespace menu_system_internal
-
