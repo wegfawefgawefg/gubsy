@@ -13,7 +13,7 @@ please go read that file. this one may still be nice for context
 1. **MenuManager (engine/menu/manager.[hpp|cpp])**
    - Owned by `EngineState` (`es->menus`).
    - Tracks active `MenuScreenId`, focus widget id, stacked screens, repeat timers, and text-input mode.
-   - Consumes menu actions (`MENU_UP/DOWN/LEFT/RIGHT/SELECT/BACK`, `MENU_SCALE_*`, `MENU_PAGE_*`); distributes to active screen.
+   - Consumes menu actions (`MENU_UP/DOWN/LEFT/RIGHT/SELECT/BACK`, `MENU_PAGE_*`); distributes to active screen.
    - Provides helper APIs:
      - `push_screen(MenuScreenId id)`
      - `pop_screen()`

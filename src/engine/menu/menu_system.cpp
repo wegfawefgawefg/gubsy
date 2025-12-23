@@ -95,6 +95,17 @@ MenuWidget* find_widget_by_slot(UILayoutObjectId slot) {
     return nullptr;
 }
 
+bool is_transient_focus_slot(UILayoutObjectId slot) {
+    switch (slot) {
+        case SettingsObjectID::BACK:
+        case SettingsObjectID::PREV:
+        case SettingsObjectID::NEXT:
+            return true;
+        default:
+            return false;
+    }
+}
+
 WidgetId resolve_focus(WidgetId target) {
     if (target == kMenuIdInvalid)
         return kMenuIdInvalid;
@@ -239,6 +250,12 @@ void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
     auto remembered_it = g_last_focus.find(g_current_screen);
     if (remembered_it != g_last_focus.end())
         remembered = remembered_it->second;
+    if (remembered != kMenuIdInvalid) {
+        if (MenuWidget* remembered_widget = find_widget(remembered)) {
+            if (is_transient_focus_slot(remembered_widget->slot))
+                remembered = kMenuIdInvalid;
+        }
+    }
     if (g_focus == kMenuIdInvalid && remembered != kMenuIdInvalid)
         g_focus = remembered;
     if (g_focus == kMenuIdInvalid) {
