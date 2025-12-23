@@ -221,6 +221,7 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     search.text_max_len = 48;
     search.placeholder = "Search categories...";
     widgets.push_back(search);
+    std::size_t search_idx = widgets.size() - 1;
 
     MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     page_label.label = st.page_text.c_str();
@@ -288,39 +289,46 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
+    MenuWidget& search_ref = widgets[search_idx];
     MenuWidget& prev_ref = widgets[prev_idx];
     MenuWidget& next_ref = widgets[next_idx];
     MenuWidget& back_ref = widgets[back_idx];
 
     WidgetId first_card_id = card_ids.empty() ? kMenuIdInvalid : card_ids.front();
     WidgetId last_card_id = card_ids.empty() ? kMenuIdInvalid : card_ids.back();
+    WidgetId cards_start = first_card_id != kMenuIdInvalid ? first_card_id : back_ref.id;
 
-    prev_ref.nav_left = prev_ref.id;
+    // Search widget navigation
+    search_ref.nav_down = cards_start;
+    search_ref.nav_left = prev_ref.id;
+    search_ref.nav_right = next_ref.id;
+    search_ref.nav_up = search_ref.id;
+
+    // Page button navigation
+    prev_ref.nav_left = search_ref.id;
     prev_ref.nav_right = next_ref.id;
+    prev_ref.nav_up = search_ref.id;
+    prev_ref.nav_down = cards_start;
+
     next_ref.nav_left = prev_ref.id;
     next_ref.nav_right = next_ref.id;
+    next_ref.nav_up = search_ref.id;
+    next_ref.nav_down = cards_start;
 
-    if (first_card_id != kMenuIdInvalid) {
-        prev_ref.nav_down = first_card_id;
-        next_ref.nav_down = first_card_id;
-    } else {
-        prev_ref.nav_down = back_ref.id;
-        next_ref.nav_down = back_ref.id;
-    }
-    prev_ref.nav_up = prev_ref.id;
-    next_ref.nav_up = next_ref.id;
-
+    // Card navigation
     for (std::size_t i = 0; i < card_ids.size(); ++i) {
         MenuWidget& card_widget = widgets[cards_offset + i];
-        card_widget.nav_left = card_widget.id;
-        card_widget.nav_right = card_widget.id;
-        card_widget.nav_up = (i == 0) ? prev_ref.id : card_ids[i - 1];
+        card_widget.nav_left = prev_ref.id;
+        card_widget.nav_right = next_ref.id;
+        card_widget.nav_up = (i == 0) ? search_ref.id : card_ids[i - 1];
         card_widget.nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
     }
 
-    back_ref.nav_left = back_ref.id;
-    back_ref.nav_right = back_ref.id;
-    back_ref.nav_up = (last_card_id != kMenuIdInvalid) ? last_card_id : prev_ref.id;
+    // Back button navigation
+    back_ref.nav_up = (last_card_id != kMenuIdInvalid) ? last_card_id : search_ref.id;
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
+    back_ref.nav_down = back_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;

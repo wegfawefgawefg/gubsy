@@ -106,6 +106,9 @@ struct SettingsCategoryState {
     std::string page_text;
     std::string status_text;
     std::vector<EntryBinding> entries;
+    std::vector<int> filtered_indices;
+    std::string search_query;
+    std::string prev_search;
     GameSettings* profile_settings = nullptr;
     UserProfile* profile_owner = nullptr;
     std::string profile_owner_name;
@@ -138,6 +141,38 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     w.label = label;
     w.on_select = action;
     return w;
+}
+
+void rebuild_filter(SettingsCategoryState& st) {
+    st.filtered_indices.clear();
+    std::string needle = st.search_query;
+    std::transform(needle.begin(), needle.end(), needle.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (std::size_t i = 0; i < st.entries.size(); ++i) {
+        if (!needle.empty()) {
+            const auto& entry = st.entries[i].entry;
+            std::string hay;
+            if (entry.metadata)
+                hay = entry.metadata->label + " " + entry.metadata->description;
+            std::transform(hay.begin(), hay.end(), hay.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (hay.find(needle) == std::string::npos)
+                continue;
+        }
+        st.filtered_indices.push_back(static_cast<int>(i));
+    }
+
+    int filtered = static_cast<int>(st.filtered_indices.size());
+    if (filtered == 0) {
+        st.page = 0;
+        st.total_pages = 1;
+        st.page_text = "Page 0 / 0";
+        return;
+    }
+    st.total_pages = std::max(1, (filtered + kSettingsPerPage - 1) / kSettingsPerPage);
+    st.page = std::clamp(st.page, 0, st.total_pages - 1);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
 EntryBinding* get_entry_binding(MenuContext& ctx, std::int32_t index) {
@@ -824,6 +859,13 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
 
     refresh_entries(st, catalog);
 
+    if (st.search_query != st.prev_search) {
+        st.prev_search = st.search_query;
+        rebuild_filter(st);
+    } else if (st.filtered_indices.empty() || st.filtered_indices.size() != st.entries.size()) {
+        rebuild_filter(st);
+    }
+
     static std::vector<MenuWidget> widgets;
     static std::vector<MenuAction> frame_actions;
     static std::vector<std::string> label_cache;
@@ -831,20 +873,24 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     frame_actions.clear();
     label_cache.clear();
 
-    const int total_entries = static_cast<int>(st.entries.size());
-    st.total_pages = std::max(1, (total_entries + kSettingsPerPage - 1) / kSettingsPerPage);
-    st.page = std::clamp(st.page, 0, st.total_pages - 1);
-
     widgets.reserve(kSettingsPerPage + 8);
     widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, st.tag.c_str()));
 
-    st.status_text = std::to_string(total_entries) + " items";
+    st.status_text = std::to_string(st.filtered_indices.size()) + (st.filtered_indices.size() == 1 ? " item" : " items");
     MenuWidget status_label = make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
     status_label.label = st.status_text.c_str();
     widgets.push_back(status_label);
-    widgets.push_back(make_label_widget(kSearchWidgetId, SettingsObjectID::SEARCH, "Search coming soon"));
 
-    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+    MenuWidget search;
+    search.id = kSearchWidgetId;
+    search.slot = SettingsObjectID::SEARCH;
+    search.type = WidgetType::TextInput;
+    search.text_buffer = &st.search_query;
+    search.text_max_len = 48;
+    search.placeholder = "Search settings...";
+    widgets.push_back(search);
+    std::size_t search_idx = widgets.size() - 1;
+
     MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     page_label.label = st.page_text.c_str();
     widgets.push_back(page_label);
@@ -870,11 +916,13 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     std::vector<WidgetId> row_ids;
     row_ids.reserve(kSettingsPerPage);
     std::size_t rows_offset = widgets.size();
+    int start_index = st.page * kSettingsPerPage;
     for (int i = 0; i < kSettingsPerPage; ++i) {
-        int entry_index = st.page * kSettingsPerPage + i;
+        int filtered_idx = start_index + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
         WidgetId widget_id = static_cast<WidgetId>(kFirstRowWidgetId + static_cast<WidgetId>(i));
-        if (entry_index < total_entries) {
+        if (filtered_idx < static_cast<int>(st.filtered_indices.size())) {
+            int entry_index = st.filtered_indices[static_cast<std::size_t>(filtered_idx)];
             MenuWidget row =
                 make_setting_widget(st.entries[static_cast<std::size_t>(entry_index)],
                                     widget_id,
@@ -898,33 +946,46 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
+    MenuWidget& search_ref = widgets[search_idx];
     MenuWidget& prev_ref = widgets[prev_idx];
     MenuWidget& next_ref = widgets[next_idx];
     MenuWidget& back_ref = widgets[back_idx];
 
     WidgetId first_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.front();
     WidgetId last_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.back();
+    WidgetId rows_start = first_row_id != kMenuIdInvalid ? first_row_id : back_ref.id;
 
-    prev_ref.nav_left = prev_ref.id;
+    // Search widget navigation
+    search_ref.nav_down = rows_start;
+    search_ref.nav_left = prev_ref.id;
+    search_ref.nav_right = next_ref.id;
+    search_ref.nav_up = search_ref.id;
+
+    // Page button navigation
+    prev_ref.nav_left = search_ref.id;
     prev_ref.nav_right = next_ref.id;
+    prev_ref.nav_up = search_ref.id;
+    prev_ref.nav_down = rows_start;
+
     next_ref.nav_left = prev_ref.id;
     next_ref.nav_right = next_ref.id;
-    prev_ref.nav_up = prev_ref.id;
-    next_ref.nav_up = next_ref.id;
-    prev_ref.nav_down = (first_row_id != kMenuIdInvalid) ? first_row_id : back_ref.id;
-    next_ref.nav_down = (first_row_id != kMenuIdInvalid) ? first_row_id : back_ref.id;
+    next_ref.nav_up = search_ref.id;
+    next_ref.nav_down = rows_start;
 
+    // Row navigation
     for (std::size_t i = 0; i < row_ids.size(); ++i) {
         MenuWidget& row = widgets[rows_offset + i];
-        row.nav_left = row.id;
-        row.nav_right = row.id;
-        row.nav_up = (i == 0) ? prev_ref.id : row_ids[i - 1];
+        row.nav_left = prev_ref.id;
+        row.nav_right = next_ref.id;
+        row.nav_up = (i == 0) ? search_ref.id : row_ids[i - 1];
         row.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
     }
 
-    back_ref.nav_left = back_ref.id;
-    back_ref.nav_right = back_ref.id;
-    back_ref.nav_up = (last_row_id != kMenuIdInvalid) ? last_row_id : prev_ref.id;
+    // Back button navigation
+    back_ref.nav_up = (last_row_id != kMenuIdInvalid) ? last_row_id : search_ref.id;
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
+    back_ref.nav_down = back_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
