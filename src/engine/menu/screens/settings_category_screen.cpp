@@ -957,8 +957,8 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
 
     // Search widget navigation
     search_ref.nav_down = rows_start;
-    search_ref.nav_left = prev_ref.id;
-    search_ref.nav_right = next_ref.id;
+    search_ref.nav_left = search_ref.id;
+    search_ref.nav_right = prev_ref.id;
     search_ref.nav_up = search_ref.id;
 
     // Page button navigation
