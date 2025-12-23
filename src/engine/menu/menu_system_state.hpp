@@ -11,6 +11,9 @@
 #include "engine/ui_layouts.hpp"
 #include "game/ui_layout_ids.hpp"
 
+inline constexpr float kSliderOptionButtonWidth = 32.0f;
+inline constexpr float kSliderOptionButtonSpacing = 8.0f;
+
 namespace menu_system_internal {
 
 struct RuntimeCache {
@@ -93,6 +96,9 @@ struct SliderLayout {
     float track_y{0.0f};
     bool has_input{false};
     SDL_FRect input_rect{};
+    bool has_buttons{false};
+    SDL_FRect left_btn{};
+    SDL_FRect right_btn{};
 };
 struct OptionLayout {
     SDL_FRect left_btn{};
@@ -103,11 +109,6 @@ struct OptionLayout {
 SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& rect);
 OptionLayout compute_option_layout(const SDL_FRect& rect);
 bool point_in_rect(float x, float y, const SDL_FRect& rect);
-bool apply_slider_target(MenuWidget& widget,
-                         float target_value,
-                         MenuContext& ctx,
-                         bool& stack_changed,
-                         bool& needs_rebuild);
 
 WidgetId resolve_focus(WidgetId target);
 WidgetId first_selectable_widget();
@@ -124,8 +125,6 @@ void draw_text_with_clip(SDL_Renderer* renderer,
                          int y,
                          SDL_Color color,
                          const SDL_Rect* clip);
-void compute_quick_value_rects(const SDL_FRect& rect, int count, SDL_FRect* out_rects);
-
 void begin_text_edit(MenuWidget& widget);
 bool commit_text_edit();
 bool end_text_edit();

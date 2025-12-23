@@ -134,7 +134,25 @@ SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& re
         layout.input_rect.x = rect.x + rect.w - layout.input_rect.w - 12.0f;
         layout.input_rect.y = rect.y + rect.h * 0.2f;
     }
-    float reserved_right = layout.has_input ? (layout.input_rect.w + 18.0f) : rect.w * 0.1f;
+    float arrow_reserved = 0.0f;
+    if (widget.has_discrete_options) {
+        layout.has_buttons = true;
+        float btn_width = kSliderOptionButtonWidth;
+        float btn_height = std::min(rect.h * 0.35f, 24.0f);
+        float spacing = kSliderOptionButtonSpacing;
+        float base_y = rect.y + rect.h - btn_height - 8.0f;
+        float right_x = rect.x + rect.w - btn_width - 12.0f;
+        layout.right_btn = SDL_FRect{right_x, base_y, btn_width, btn_height};
+        layout.left_btn =
+            SDL_FRect{right_x - (btn_width + spacing), base_y, btn_width, btn_height};
+        arrow_reserved = (btn_width * 2.0f) + spacing + 8.0f;
+    }
+    if (layout.has_input) {
+        layout.input_rect.x -= arrow_reserved;
+        if (layout.input_rect.x < rect.x + 12.0f)
+            layout.input_rect.x = rect.x + 12.0f;
+    }
+    float reserved_right = (layout.has_input ? (layout.input_rect.w + 18.0f) : rect.w * 0.1f) + arrow_reserved;
     layout.track_left = rect.x + rect.w * 0.08f;
     layout.track_right = rect.x + rect.w - reserved_right;
     layout.track_y = rect.y + rect.h - 14.0f;
@@ -143,19 +161,18 @@ SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& re
 
 OptionLayout compute_option_layout(const SDL_FRect& rect) {
     OptionLayout layout;
-    float btn_width = std::min(rect.w * 0.14f, 48.0f);
-    float btn_height = std::min(rect.h * 0.4f, 26.0f);
+    float btn_width = std::min(rect.w * 0.12f, 44.0f);
+    float btn_height = std::min(rect.h * 0.4f, 24.0f);
+    float spacing = 6.0f;
     float base_y = rect.y + rect.h - btn_height - 8.0f;
-    layout.left_btn = SDL_FRect{rect.x + 12.0f, base_y, btn_width, btn_height};
-    layout.right_btn = SDL_FRect{rect.x + rect.w - btn_width - 12.0f, base_y, btn_width, btn_height};
-    float center_left = layout.left_btn.x + layout.left_btn.w + 8.0f;
-    float center_right = layout.right_btn.x - 8.0f;
-    if (center_right < center_left + 24.0f)
-        center_right = center_left + 24.0f;
-    layout.value_rect = SDL_FRect{center_left,
-                                  base_y,
-                                  center_right - center_left,
-                                  btn_height};
+    float right_btn_x = rect.x + rect.w - btn_width - 12.0f;
+    float left_btn_x = right_btn_x - btn_width - spacing;
+    layout.left_btn = SDL_FRect{left_btn_x, base_y, btn_width, btn_height};
+    layout.right_btn = SDL_FRect{right_btn_x, base_y, btn_width, btn_height};
+    float label_left = rect.x + 16.0f;
+    float label_right = left_btn_x - spacing;
+    float label_width = std::max(20.0f, label_right - label_left);
+    layout.value_rect = SDL_FRect{label_left, base_y, label_width, btn_height};
     return layout;
 }
 
@@ -163,52 +180,6 @@ bool point_in_rect(float x, float y, const SDL_FRect& rect) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
-void compute_quick_value_rects(const SDL_FRect& rect, int count, SDL_FRect* out_rects) {
-    if (!out_rects || count <= 0)
-        return;
-    float area_left = rect.x + rect.w * 0.05f;
-    float area_right = rect.x + rect.w - rect.w * 0.05f;
-    float area_width = std::max(40.0f, area_right - area_left);
-    float spacing = 6.0f;
-    float total_spacing = spacing * static_cast<float>(std::max(0, count - 1));
-    float btn_width = std::min(92.0f, (area_width - total_spacing) / static_cast<float>(count));
-    float btn_height = 22.0f;
-    float base_y = rect.y + rect.h * 0.18f;
-    for (int i = 0; i < count; ++i) {
-        float x = area_left + static_cast<float>(i) * (btn_width + spacing);
-        out_rects[i] = SDL_FRect{x, base_y, btn_width, btn_height};
-    }
-}
-
-bool apply_slider_target(MenuWidget& widget,
-                         float target_value,
-                         MenuContext& ctx,
-                         bool& stack_changed,
-                         bool& needs_rebuild) {
-    if (!widget.bind_ptr)
-        return false;
-    float* val = reinterpret_cast<float*>(widget.bind_ptr);
-    float range = widget.max - widget.min;
-    if (range <= 0.0f)
-        return false;
-    float step = widget.step > 0.0f ? widget.step : range * 0.01f;
-    target_value = std::clamp(target_value, widget.min, widget.max);
-    float delta = target_value - *val;
-    if (std::fabs(delta) < step * 0.4f)
-        return false;
-    int steps = static_cast<int>(std::round(delta / step));
-    if (steps == 0)
-        return false;
-    MenuAction action = (steps > 0) ? widget.on_right : widget.on_left;
-    if (action.type == MenuActionType::None)
-        return false;
-    int iterations = std::abs(steps);
-    for (int i = 0; i < iterations; ++i) {
-        execute_action(action, ctx, stack_changed);
-    }
-    needs_rebuild = true;
-    return true;
-}
 
 WidgetId resolve_focus(WidgetId target) {
     if (target == kMenuIdInvalid)

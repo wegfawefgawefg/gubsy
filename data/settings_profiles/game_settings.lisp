@@ -6,7 +6,7 @@
       (key "demo.gameplay.enemy_ai_aggression" 0.6)
       (key "demo.hud.scale" 1)
       (key "demo.gameplay.auto_save_interval" "5")
-      (key "demo.gameplay.difficulty" "easy")
+      (key "demo.gameplay.difficulty" "normal")
       (key "gubsy.accessibility.colorblind_mode" "none")
       (key "gubsy.input.vibration_strength" 0.8)
       (key "gubsy.accessibility.subtitle_size" 1)

@@ -8,6 +8,36 @@
 
 namespace msi = menu_system_internal;
 
+namespace {
+
+void draw_nav_button(SDL_Renderer* renderer,
+                     const SDL_FRect& btn_rect,
+                     bool left,
+                     const MenuWidget& widget) {
+    SDL_Color btn_bg{static_cast<Uint8>(widget.style.bg_r + 12),
+                     static_cast<Uint8>(widget.style.bg_g + 14),
+                     static_cast<Uint8>(widget.style.bg_b + 18),
+                     255};
+    SDL_Color btn_border{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255};
+    SDL_SetRenderDrawColor(renderer, btn_bg.r, btn_bg.g, btn_bg.b, btn_bg.a);
+    SDL_RenderFillRectF(renderer, &btn_rect);
+    SDL_SetRenderDrawColor(renderer, btn_border.r, btn_border.g, btn_border.b, btn_border.a);
+    SDL_RenderDrawRectF(renderer, &btn_rect);
+    float cx = btn_rect.x + btn_rect.w * 0.5f;
+    float cy = btn_rect.y + btn_rect.h * 0.5f;
+    float wing = btn_rect.h * 0.32f;
+    float head = btn_rect.w * 0.22f;
+    float dir = left ? -1.0f : 1.0f;
+    SDL_FPoint tip{cx + dir * head, cy};
+    SDL_FPoint wing_top{cx - dir * head * 0.4f, cy - wing};
+    SDL_FPoint wing_bottom{cx - dir * head * 0.4f, cy + wing};
+    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
+    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
+    SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
+}
+
+} // namespace
+
 void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_height) {
     if ((msi::g_cache.width != screen_width || msi::g_cache.height != screen_height) &&
         screen_width > 0 && screen_height > 0) {
@@ -153,7 +183,7 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
             }
         }
 
-        if (has_slider_visual && widget.bind_ptr) {
+        if (has_slider_visual && widget.bind_ptr && widget.show_slider_track) {
             float value = *reinterpret_cast<float*>(widget.bind_ptr);
             float range = widget.max - widget.min;
             float norm = (range > 0.0f) ? (value - widget.min) / range : 0.0f;
@@ -209,73 +239,15 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                     SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
                 }
             }
-            if (widget.quick_value_count > 0) {
-                SDL_FRect quick_rects[kMenuMaxQuickValues];
-                msi::compute_quick_value_rects(rect, widget.quick_value_count, quick_rects);
-                float current_val = widget.bind_ptr ? *reinterpret_cast<float*>(widget.bind_ptr) : 0.0f;
-                for (int qi = 0; qi < widget.quick_value_count; ++qi) {
-                    const SDL_FRect& qrect = quick_rects[qi];
-                    float target_val = widget.quick_values[qi];
-                    bool selected = (target_val <= 0.0f && current_val <= 0.0f) ||
-                                    (std::fabs(target_val - current_val) < std::max(0.5f, widget.step));
-                    SDL_Color bg = selected ? SDL_Color{60, 105, 150, 255}
-                                            : SDL_Color{35, 40, 55, 255};
-                    SDL_Color border = selected ? SDL_Color{140, 200, 255, 255}
-                                                : SDL_Color{90, 100, 125, 255};
-                    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-                    SDL_RenderFillRectF(renderer, &qrect);
-                    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-                    SDL_RenderDrawRectF(renderer, &qrect);
-                    const char* label = widget.quick_labels[i];
-                    char buffer[32];
-                    if (!label || !*label) {
-                        if (target_val <= 0.0f)
-                            label = "Unlimited";
-                        else {
-                            std::snprintf(buffer, sizeof(buffer), "%.0f", static_cast<double>(target_val));
-                            label = buffer;
-                        }
-                    }
-                    SDL_Rect quick_clip{
-                        static_cast<int>(qrect.x) + 4,
-                        static_cast<int>(qrect.y) + 2,
-                        std::max(0, static_cast<int>(qrect.w) - 8),
-                        std::max(0, static_cast<int>(qrect.h) - 4)};
-                    msi::draw_text_with_clip(renderer,
-                                             label,
-                                             static_cast<int>(qrect.x) + 6,
-                                             static_cast<int>(qrect.y) + 3,
-                                             SDL_Color{225, 230, 240, 255},
-                                             &quick_clip);
-                }
+            if (slider_visual.has_buttons) {
+                draw_nav_button(renderer, slider_visual.left_btn, true, widget);
+                draw_nav_button(renderer, slider_visual.right_btn, false, widget);
             }
         }
         if (widget.type == WidgetType::OptionCycle) {
             msi::OptionLayout opt_layout = msi::compute_option_layout(rect);
-            auto draw_option_button = [&](const SDL_FRect& btn_rect, bool left) {
-                SDL_Color btn_bg{static_cast<Uint8>(widget.style.bg_r + 6),
-                                 static_cast<Uint8>(widget.style.bg_g + 8),
-                                 static_cast<Uint8>(widget.style.bg_b + 12),
-                                 255};
-                SDL_Color btn_border{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255};
-                SDL_SetRenderDrawColor(renderer, btn_bg.r, btn_bg.g, btn_bg.b, btn_bg.a);
-                SDL_RenderFillRectF(renderer, &btn_rect);
-                SDL_SetRenderDrawColor(renderer, btn_border.r, btn_border.g, btn_border.b, btn_border.a);
-                SDL_RenderDrawRectF(renderer, &btn_rect);
-                float cx = btn_rect.x + btn_rect.w * 0.5f;
-                float cy = btn_rect.y + btn_rect.h * 0.5f;
-                float wing = btn_rect.h * 0.32f;
-                float head = btn_rect.w * 0.22f;
-                float dir = left ? -1.0f : 1.0f;
-                SDL_FPoint tip{cx + dir * head, cy};
-                SDL_FPoint wing_top{cx - dir * head * 0.4f, cy - wing};
-                SDL_FPoint wing_bottom{cx - dir * head * 0.4f, cy + wing};
-                SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
-                SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
-                SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
-            };
-            draw_option_button(opt_layout.left_btn, true);
-            draw_option_button(opt_layout.right_btn, false);
+            draw_nav_button(renderer, opt_layout.left_btn, true, widget);
+            draw_nav_button(renderer, opt_layout.right_btn, false, widget);
             if (widget.badge) {
                 SDL_Rect value_clip{
                     static_cast<int>(opt_layout.value_rect.x) + 6,

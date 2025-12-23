@@ -347,23 +347,27 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         }
                     }
                 }
-                if (focus && focus->type == WidgetType::Slider1D && focus->quick_value_count > 0) {
+                if (focus && focus->type == WidgetType::Slider1D && focus->has_discrete_options) {
                     SDL_FRect* rect_ptr = msi::find_widget_rect(focus->id);
                     if (rect_ptr) {
-                        SDL_FRect quick_rects[kMenuMaxQuickValues];
-                        msi::compute_quick_value_rects(*rect_ptr, focus->quick_value_count, quick_rects);
-                        float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
-                        float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
-                        for (int i = 0; i < focus->quick_value_count; ++i) {
-                            if (msi::point_in_rect(fx, fy, quick_rects[i])) {
-                                if (msi::apply_slider_target(*focus,
-                                                             focus->quick_values[i],
-                                                             ctx,
-                                                             stack_changed,
-                                                             needs_rebuild)) {
-                                    msi::play_confirm_sound();
+                        auto slider_layout = msi::compute_slider_layout(*focus, *rect_ptr);
+                        if (slider_layout.has_buttons) {
+                            float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
+                            float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
+                            auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
+                                if (action.type == MenuActionType::None)
+                                    return false;
+                                sound_fn();
+                                msi::execute_action(action, ctx, stack_changed);
+                                needs_rebuild = true;
+                                return true;
+                            };
+                            if (msi::point_in_rect(fx, fy, slider_layout.left_btn)) {
+                                if (trigger_action(focus->on_left, []() { msi::play_left_sound(); }))
                                     continue;
-                                }
+                            } else if (msi::point_in_rect(fx, fy, slider_layout.right_btn)) {
+                                if (trigger_action(focus->on_right, []() { msi::play_right_sound(); }))
+                                    continue;
                             }
                         }
                     }

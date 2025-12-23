@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -36,6 +38,7 @@ constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
 
 const char* window_mode_to_value(WindowDisplayMode mode);
 bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
+bool parse_slider_option_value(const SettingOption& opt, float& out);
 
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
@@ -118,6 +121,33 @@ void adjust_slider(MenuContext& ctx, std::int32_t index, float direction) {
     float max = desc.max;
     float step = desc.step > 0.0f ? desc.step : (max - min) * 0.05f;
     if (float* fv = std::get_if<float>(binding->entry.value)) {
+        if (!desc.options.empty()) {
+            std::vector<float> discrete;
+            discrete.reserve(desc.options.size());
+            for (const auto& opt : desc.options) {
+                float parsed = 0.0f;
+                if (parse_slider_option_value(opt, parsed))
+                    discrete.push_back(parsed);
+            }
+            if (!discrete.empty()) {
+                int closest = 0;
+                float best_diff = std::numeric_limits<float>::max();
+                for (int i = 0; i < static_cast<int>(discrete.size()); ++i) {
+                    float diff = std::fabs(discrete[static_cast<std::size_t>(i)] - *fv);
+                    if (diff < best_diff) {
+                        best_diff = diff;
+                        closest = i;
+                    }
+                }
+                int target = closest + (direction > 0.0f ? 1 : -1);
+                target = std::clamp(target, 0, static_cast<int>(discrete.size()) - 1);
+                if (target != closest) {
+                    *fv = discrete[static_cast<std::size_t>(target)];
+                    persist_binding(*binding, ctx.state<SettingsCategoryState>().profile_settings);
+                }
+                return;
+            }
+        }
         *fv = std::clamp(*fv + step * direction, min, max);
         persist_binding(*binding, ctx.state<SettingsCategoryState>().profile_settings);
     }
@@ -240,6 +270,26 @@ bool value_to_window_mode(const std::string& value, WindowDisplayMode& out) {
     return false;
 }
 
+bool parse_slider_option_value(const SettingOption& opt, float& out) {
+    if (opt.value.empty())
+        return false;
+    char* end_ptr = nullptr;
+    float parsed = std::strtof(opt.value.c_str(), &end_ptr);
+    if (end_ptr && end_ptr != opt.value.c_str()) {
+        out = parsed;
+        return true;
+    }
+    std::string lower = opt.value;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (lower == "unlimited" || lower == "none" || lower == "off") {
+        out = 0.0f;
+        return true;
+    }
+    return false;
+}
+
 void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) {
     st.entries.clear();
     auto it = catalog.categories.find(st.tag);
@@ -323,6 +373,9 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             w.display_scale = desc.display_scale;
             w.display_offset = desc.display_offset;
             w.display_precision = desc.display_precision;
+            w.on_left = MenuAction::run_command(g_cmd_slider_dec, entry_index);
+            w.on_right = MenuAction::run_command(g_cmd_slider_inc, entry_index);
+            w.has_discrete_options = !desc.options.empty();
             bool is_frame_cap = binding.entry.metadata &&
                                 binding.entry.metadata->key == kFrameCapSettingKey;
             if (const float* fv = std::get_if<float>(binding.entry.value)) {
@@ -342,45 +395,8 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                 if (menu_system_internal::is_text_edit_widget(id))
                     menu_system_internal::set_active_text_buffer(value_buffer, desc.max_text_len);
             }
-            w.on_left = MenuAction::run_command(g_cmd_slider_dec, entry_index);
-            w.on_right = MenuAction::run_command(g_cmd_slider_inc, entry_index);
-            if (is_frame_cap) {
-                auto parse_preset = [](const std::string& text, float& out) -> bool {
-                    char* end_ptr = nullptr;
-                    float parsed = std::strtof(text.c_str(), &end_ptr);
-                    if (end_ptr != text.c_str()) {
-                        out = parsed;
-                        return true;
-                    }
-                    std::string lower = text;
-                    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
-                        return static_cast<char>(std::tolower(c));
-                    });
-                    if (lower == "unlimited") {
-                        out = 0.0f;
-                        return true;
-                    }
-                    return false;
-                };
-                std::vector<std::pair<float, std::string>> presets;
-                for (const auto& opt : desc.options) {
-                    float value = 0.0f;
-                    if (!parse_preset(opt.value, value))
-                        continue;
-                    std::string label = !opt.label.empty() ? opt.label : opt.value;
-                    presets.emplace_back(value, label);
-                }
-                if (presets.empty()) {
-                    presets = {{30.0f, "30"}, {60.0f, "60"}, {120.0f, "120"}, {144.0f, "144"},
-                               {240.0f, "240"}, {0.0f, "Unlimited"}};
-                }
-                w.quick_value_count = std::min(static_cast<int>(presets.size()), kMenuMaxQuickValues);
-                for (int i = 0; i < w.quick_value_count; ++i) {
-                    w.quick_values[i] = presets[static_cast<std::size_t>(i)].first;
-                    label_cache.push_back(presets[static_cast<std::size_t>(i)].second);
-                    w.quick_labels[i] = label_cache.back().c_str();
-                }
-            }
+            if (is_frame_cap)
+                w.show_slider_track = false;
             break;
         }
         case SettingWidgetKind::Option: {
