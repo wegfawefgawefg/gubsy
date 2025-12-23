@@ -174,7 +174,6 @@ void register_engine_settings_schema_entries() {
          SettingOption{"3840x1080", "3840x1080 (32:9)"},
          SettingOption{"5120x1440", "5120x1440 (DQHD)"},
          // Console & Retro Landscape
-         SettingOption{"1280x720", "1280x720 (Switch HD)"},
          SettingOption{"640x480", "640x480 (SD Consoles)"},
          SettingOption{"480x272", "480x272 (PSP)"},
          SettingOption{"480x270", "480x270 (PSP Crop)"},

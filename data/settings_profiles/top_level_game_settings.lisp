@@ -7,7 +7,7 @@
     (key "gubsy.video.safe_area_left" 0)
     (key "gubsy.video.preview_pan_x" 0)
     (key "gubsy.video.preview_zoom" 1)
-    (key "gubsy.audio.music_volume" 0.54)
+    (key "gubsy.audio.music_volume" 0.48)
     (key "gubsy.video.safe_area_bottom" 0)
     (key "gubsy.audio.output_device" "default")
     (key "gubsy.video.frame_cap" 60)
