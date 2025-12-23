@@ -239,15 +239,19 @@ void register_engine_settings_schema_entries() {
                                            false));
 
     // Input (profile-specific)
-    schema.add_setting(make_slider_setting(SettingScope::Profile,
-                                           "gubsy.input.mouse_sensitivity",
-                                           "Mouse Sensitivity",
-                                           "Scales mouse look speed.",
-                                           {"Controls"},
-                                           0.1f,
-                                           10.0f,
-                                           0.1f,
-                                           1.0f));
+    {
+        SettingMetadata meta = make_slider_setting(SettingScope::Profile,
+                                                   "gubsy.input.mouse_sensitivity",
+                                                   "Mouse Sensitivity",
+                                                   "Scales mouse look speed.",
+                                                   {"Controls"},
+                                                   0.1f,
+                                                   10.0f,
+                                                   0.1f,
+                                                   1.0f);
+        meta.order = -100;
+        schema.add_setting(meta);
+    }
     schema.add_setting(make_slider_setting(SettingScope::Profile,
                                            "gubsy.input.controller_deadzone",
                                            "Controller Dead Zone",
@@ -266,27 +270,12 @@ void register_engine_settings_schema_entries() {
                                            1.0f,
                                            0.05f,
                                            0.8f));
-    schema.add_setting(make_toggle_setting(SettingScope::Install,
-                                           "gubsy.input.raw_mouse_input",
-                                           "Raw Mouse Input",
-                                           "Bypass OS-level mouse acceleration.",
-                                           {"Controls"},
-                                           true));
     schema.add_setting(make_toggle_setting(SettingScope::Profile,
                                            "gubsy.input.invert_y_axis",
                                            "Invert Y-Axis",
                                            "Flip vertical look direction.",
                                            {"Controls"},
                                            false));
-    schema.add_setting(make_option_setting(SettingScope::Profile,
-                                           "gubsy.input.controller_layout",
-                                           "Controller Layout",
-                                           "Select the default controller mapping.",
-                                           {"Controls"},
-                                           {SettingOption{"standard", "Standard"},
-                                            SettingOption{"southpaw", "Southpaw"},
-                                            SettingOption{"legacy", "Legacy"}},
-                                           "standard"));
 
     // Accessibility
     schema.add_setting(make_toggle_setting(SettingScope::Profile,

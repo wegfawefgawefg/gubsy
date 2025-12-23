@@ -54,6 +54,7 @@ MenuCommandId g_cmd_option_next = kMenuIdInvalid;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_render_resolution = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_text_setting = kMenuIdInvalid;
 
 std::unordered_map<std::string, MenuScreenId> g_tag_to_screen;
 std::unordered_map<MenuScreenId, std::string> g_screen_to_tag;
@@ -267,6 +268,23 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
     }
 }
 
+void command_apply_text_setting(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value || index < 0 ||
+        index >= static_cast<int>(st.value_buffers.size()))
+        return;
+    std::string new_value = st.value_buffers[static_cast<std::size_t>(index)];
+    if (std::string* sv = std::get_if<std::string>(binding->entry.value)) {
+        if (*sv != new_value) {
+            *sv = new_value;
+            persist_binding(*binding, st.profile_settings);
+            if (binding->entry.metadata)
+                st.status_text = "Updated " + binding->entry.metadata->label;
+        }
+    }
+}
+
 std::string format_value(const SettingsValue& value) {
     if (const int* iv = std::get_if<int>(&value))
         return *iv != 0 ? "On" : "Off";
@@ -411,6 +429,12 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
                 st.value_buffers[i] = format_slider_display(meta->widget, *fv);
             else
                 st.value_buffers[i].clear();
+        } else if (meta && meta->widget.kind == SettingWidgetKind::Text &&
+                   st.entries[i].entry.value && !is_editing_entry) {
+            if (const std::string* sv = std::get_if<std::string>(st.entries[i].entry.value))
+                st.value_buffers[i] = *sv;
+            else
+                st.value_buffers[i].clear();
         } else if (!is_editing_entry) {
             st.value_buffers[i].clear();
         }
@@ -452,6 +476,12 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
     w.type = WidgetType::Card;
     w.label = binding.entry.metadata ? binding.entry.metadata->label.c_str() : "";
     w.secondary = binding.entry.metadata ? binding.entry.metadata->description.c_str() : "";
+    if (binding.entry.metadata &&
+        binding.entry.metadata->scope == SettingScope::Profile &&
+        state.profile_settings) {
+        label_cache.emplace_back("Profile: " + state.profile_settings->name);
+        w.tertiary = label_cache.back().c_str();
+    }
     if (!binding.entry.value || !binding.entry.metadata)
         return w;
 
@@ -585,6 +615,21 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             }
             w.on_left = MenuAction::run_command(g_cmd_option_prev, entry_index);
             w.on_right = MenuAction::run_command(g_cmd_option_next, entry_index);
+            break;
+        }
+        case SettingWidgetKind::Text: {
+            w.type = WidgetType::TextInput;
+            if (value_buffer) {
+                if (value_buffer->empty()) {
+                    if (const std::string* sv = std::get_if<std::string>(binding.entry.value))
+                        *value_buffer = *sv;
+                }
+                w.text_buffer = value_buffer;
+            }
+            w.text_max_len = desc.max_text_len > 0 ? desc.max_text_len : 64;
+            w.placeholder = "Enter text";
+            w.play_select_sound = false;
+            w.on_select = MenuAction::run_command(g_cmd_apply_text_setting, entry_index);
             break;
         }
         default:
@@ -777,4 +822,6 @@ void register_settings_category_screens() {
         g_cmd_apply_window_mode = es->menu_commands.register_command(command_apply_window_mode);
     if (g_cmd_apply_render_resolution == kMenuIdInvalid)
         g_cmd_apply_render_resolution = es->menu_commands.register_command(command_apply_render_resolution);
+    if (g_cmd_apply_text_setting == kMenuIdInvalid)
+        g_cmd_apply_text_setting = es->menu_commands.register_command(command_apply_text_setting);
 }

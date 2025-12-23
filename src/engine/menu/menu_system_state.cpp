@@ -165,7 +165,7 @@ OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& re
     float btn_width = std::min(rect.w * 0.12f, 44.0f);
     float btn_height = std::min(rect.h * 0.4f, 24.0f);
     float spacing = 6.0f;
-    float base_y = rect.y + rect.h - btn_height - 8.0f;
+    float base_y = rect.y + rect.h - btn_height - 12.0f;
     float right_btn_x = rect.x + rect.w - btn_width - 12.0f;
     float left_btn_x = right_btn_x - btn_width - spacing;
     layout.left_btn = SDL_FRect{left_btn_x, base_y, btn_width, btn_height};
@@ -173,7 +173,15 @@ OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& re
     float label_left = rect.x + 16.0f;
     float label_right = left_btn_x - spacing;
     float label_width = std::max(20.0f, label_right - label_left);
-    layout.value_rect = SDL_FRect{label_left, base_y, label_width, btn_height};
+    float value_height = std::min(26.0f, rect.h * 0.35f);
+    float value_y = rect.y + rect.h * 0.55f;
+    float max_y = base_y - value_height - 6.0f;
+    if (value_y > max_y)
+        value_y = max_y;
+    float min_y = rect.y + rect.h * 0.35f;
+    if (value_y < min_y)
+        value_y = min_y;
+    layout.value_rect = SDL_FRect{label_left, value_y, label_width, value_height};
     if (widget.text_buffer && widget.text_max_len > 0) {
         layout.has_primary_input = true;
         float input_width = std::min(rect.w * 0.2f, 110.0f);

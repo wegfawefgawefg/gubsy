@@ -121,14 +121,6 @@ void register_game_settings_schema_entries() {
                                             SettingOption{"10", "10 minutes"},
                                             SettingOption{"off", "Disabled"}},
                                            "5"));
-    schema.add_setting(make_slider_setting("demo.controls.aim_assist_strength",
-                                           "Aim Assist Strength",
-                                           "Adjust magnetism toward targets.",
-                                           {"Controls"},
-                                           0.0f,
-                                           1.0f,
-                                           0.05f,
-                                           0.5f));
     schema.add_setting(make_toggle_setting("demo.controls.invert_x_axis",
                                            "Invert X-Axis",
                                            "Flip horizontal look direction.",
@@ -139,14 +131,6 @@ void register_game_settings_schema_entries() {
                                            "Switch between hold-to-sprint or toggle.",
                                            {"Controls"},
                                            true));
-    schema.add_setting(make_option_setting("demo.controls.controller_layout",
-                                           "Controller Layout",
-                                           "Choose a demo-specific controller preset.",
-                                           {"Controls"},
-                                           {SettingOption{"classic", "Classic"},
-                                            SettingOption{"arcade", "Arcade"},
-                                            SettingOption{"mirror", "Mirror"}},
-                                           "classic"));
     schema.add_setting(make_slider_setting("demo.hud.scale",
                                            "HUD Scale",
                                            "Resize HUD elements.",

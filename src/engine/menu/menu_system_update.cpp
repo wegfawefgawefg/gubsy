@@ -52,6 +52,16 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         inst.player_index,
                         inst.def ? inst.def->id : kMenuIdInvalid,
                         inst.state_ptr};
+        auto handle_text_commit = [&](WidgetId widget_id, bool modified) {
+            if (!modified || widget_id == kMenuIdInvalid)
+                return false;
+            MenuWidget* edited = msi::find_widget(widget_id);
+            if (edited && edited->on_select.type != MenuActionType::None) {
+                msi::execute_action(edited->on_select, ctx, stack_changed);
+                return true;
+            }
+            return false;
+        };
         msi::rebuild_cache(inst, ctx);
         MenuWidget* focus = msi::find_widget(msi::g_focus);
         MenuInputState prev = msi::g_prev_input;
@@ -136,8 +146,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!editing_focus)
                 msi::begin_text_edit(*focus);
             else {
+                WidgetId editing_id = focus->id;
                 bool modified = msi::end_text_edit();
-                if (modified) {
+                if (handle_text_commit(editing_id, modified) || modified) {
                     needs_rebuild = true;
                     continue;
                 }
@@ -151,8 +162,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             up_pressed = down_pressed = left_pressed = right_pressed = false;
             page_prev_pressed = page_next_pressed = false;
             if (back_pressed) {
+                WidgetId editing_id = focus->id;
                 bool modified = msi::end_text_edit();
-                if (modified) {
+                if (handle_text_commit(editing_id, modified) || modified) {
                     needs_rebuild = true;
                     continue;
                 }
@@ -283,8 +295,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         }
         editing_focus = msi::g_text_edit_active && focus && focus->id == msi::g_text_edit_widget;
         if (msi::g_text_edit_active && !editing_focus) {
+            WidgetId editing_id = msi::current_text_widget();
             bool modified = msi::end_text_edit();
-            if (modified) {
+            if (handle_text_commit(editing_id, modified) || modified) {
                 needs_rebuild = true;
                 continue;
             }
@@ -385,8 +398,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                     msi::begin_text_edit(*focus);
                     click_handled = true;
                 } else {
+                    WidgetId editing_id = msi::current_text_widget();
                     bool modified = msi::end_text_edit();
-                    if (modified) {
+                    if (handle_text_commit(editing_id, modified) || modified) {
                         needs_rebuild = true;
                         continue;
                     }
