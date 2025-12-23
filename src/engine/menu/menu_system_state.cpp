@@ -29,6 +29,7 @@ bool g_has_focus_color{false};
 bool g_text_edit_active{false};
 WidgetId g_text_edit_widget{kMenuIdInvalid};
 float g_caret_time{0.0f};
+bool g_text_edit_using_aux{false};
 std::unordered_map<MenuScreenId, WidgetId> g_last_focus;
 MenuScreenId g_current_screen{kMenuIdInvalid};
 bool g_allow_mouse_focus{true};
@@ -159,7 +160,7 @@ SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& re
     return layout;
 }
 
-OptionLayout compute_option_layout(const SDL_FRect& rect) {
+OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& rect) {
     OptionLayout layout;
     float btn_width = std::min(rect.w * 0.12f, 44.0f);
     float btn_height = std::min(rect.h * 0.4f, 24.0f);
@@ -173,6 +174,21 @@ OptionLayout compute_option_layout(const SDL_FRect& rect) {
     float label_right = left_btn_x - spacing;
     float label_width = std::max(20.0f, label_right - label_left);
     layout.value_rect = SDL_FRect{label_left, base_y, label_width, btn_height};
+    if (widget.text_buffer && widget.text_max_len > 0) {
+        layout.has_primary_input = true;
+        float input_width = std::min(rect.w * 0.2f, 110.0f);
+        float input_height = 24.0f;
+        float input_y = rect.y + rect.h * 0.18f;
+        layout.primary_input = SDL_FRect{rect.x + rect.w - input_width - 12.0f, input_y, input_width, input_height};
+        if (widget.aux_text_buffer && widget.aux_text_max_len > 0) {
+            layout.has_secondary_input = true;
+            layout.primary_input.x -= (input_width + 10.0f);
+            layout.secondary_input = SDL_FRect{rect.x + rect.w - input_width - 12.0f,
+                                               input_y,
+                                               input_width,
+                                               input_height};
+        }
+    }
     return layout;
 }
 
@@ -265,13 +281,20 @@ void draw_text_with_clip(SDL_Renderer* renderer,
     }
 }
 
-void begin_text_edit(MenuWidget& widget) {
-    if (!widget.text_buffer)
+void begin_text_edit(MenuWidget& widget, bool use_aux_buffer) {
+    std::string* target_buffer = widget.text_buffer;
+    int target_len = widget.text_max_len;
+    if (use_aux_buffer && widget.aux_text_buffer) {
+        target_buffer = widget.aux_text_buffer;
+        target_len = widget.aux_text_max_len;
+    }
+    if (!target_buffer || target_len <= 0)
         return;
     g_text_edit_active = true;
     g_text_edit_widget = widget.id;
-    g_active_text_buffer = widget.text_buffer;
-    g_active_text_max = widget.text_max_len;
+    g_active_text_buffer = target_buffer;
+    g_active_text_max = target_len;
+    g_text_edit_using_aux = use_aux_buffer;
     g_caret_time = 0.0f;
     if (!g_text_input_enabled) {
         SDL_StartTextInput();
@@ -283,9 +306,9 @@ bool commit_text_edit() {
     if (!g_text_edit_active || !g_active_text_buffer)
         return false;
     MenuWidget* widget = find_widget(g_text_edit_widget);
+    bool modified = true;
     if (!widget || !widget->bind_ptr)
-        return false;
-    bool modified = false;
+        return modified;
     if (widget->type == WidgetType::Slider1D) {
         char* end_ptr = nullptr;
         float parsed = std::strtof(g_active_text_buffer->c_str(), &end_ptr);
@@ -306,7 +329,11 @@ bool commit_text_edit() {
             if (*target != parsed) {
                 *target = parsed;
                 modified = true;
+            } else {
+                modified = false;
             }
+        } else {
+            modified = false;
         }
     }
     return modified;
@@ -319,6 +346,8 @@ bool end_text_edit() {
     g_text_edit_active = false;
     g_text_edit_widget = kMenuIdInvalid;
     g_active_text_buffer = nullptr;
+    g_active_text_max = 0;
+    g_text_edit_using_aux = false;
     if (g_text_input_enabled) {
         SDL_StopTextInput();
         g_text_input_enabled = false;

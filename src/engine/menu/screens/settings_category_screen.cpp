@@ -17,6 +17,7 @@
 #include "engine/menu/menu_system_state.hpp"
 #include "engine/menu/menu_screen.hpp"
 #include "engine/settings_catalog.hpp"
+#include "engine/graphics.hpp"
 #include "game/state.hpp"
 #include "engine/menu/menu_ids.hpp"
 #include "game/ui_layout_ids.hpp"
@@ -35,10 +36,13 @@ constexpr WidgetId kBackButtonId = 430;
 constexpr WidgetId kFirstRowWidgetId = 500;
 constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
 constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
+constexpr const char* kRenderResolutionSettingKey = "gubsy.video.render_resolution";
 
 const char* window_mode_to_value(WindowDisplayMode mode);
 bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
 bool parse_slider_option_value(const SettingOption& opt, float& out);
+bool parse_resolution_value(const std::string& text, int& out_w, int& out_h);
+std::string make_resolution_string(int w, int h);
 
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
@@ -47,6 +51,7 @@ MenuCommandId g_cmd_option_prev = kMenuIdInvalid;
 MenuCommandId g_cmd_option_next = kMenuIdInvalid;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_render_resolution = kMenuIdInvalid;
 
 std::unordered_map<std::string, MenuScreenId> g_tag_to_screen;
 std::unordered_map<MenuScreenId, std::string> g_screen_to_tag;
@@ -64,6 +69,12 @@ struct SettingsCategoryState {
     GameSettings* profile_settings = nullptr;
     std::string tag;
     std::vector<std::string> value_buffers;
+    struct ResolutionEditState {
+        std::string width_text{"1920"};
+        std::string height_text{"1080"};
+        bool dirty{false};
+    } resolution_edit;
+    int resolution_entry_index{-1};
 };
 
 MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* label) {
@@ -217,6 +228,39 @@ void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
     }
 }
 
+void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (index < 0 || index >= static_cast<int>(st.entries.size()))
+        return;
+    if (st.resolution_entry_index != index)
+        return;
+    auto parse_component = [](const std::string& text, int fallback) -> int {
+        try {
+            if (text.empty())
+                return fallback;
+            return std::stoi(text);
+        } catch (...) {
+            return fallback;
+        }
+    };
+    int width = std::clamp(parse_component(st.resolution_edit.width_text, 0), 320, 16384);
+    int height = std::clamp(parse_component(st.resolution_edit.height_text, 0), 240, 9216);
+    std::string value = make_resolution_string(width, height);
+    EntryBinding& binding = st.entries[static_cast<std::size_t>(index)];
+    if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+        *sv = value;
+        persist_binding(binding, st.profile_settings);
+        if (set_render_resolution(width, height)) {
+            st.status_text = "Render resolution set to " + value;
+            st.resolution_edit.width_text = std::to_string(width);
+            st.resolution_edit.height_text = std::to_string(height);
+            st.resolution_edit.dirty = false;
+        } else {
+            st.status_text = "Failed to set render resolution";
+        }
+    }
+}
+
 std::string format_value(const SettingsValue& value) {
     if (const int* iv = std::get_if<int>(&value))
         return *iv != 0 ? "On" : "Off";
@@ -270,6 +314,29 @@ bool value_to_window_mode(const std::string& value, WindowDisplayMode& out) {
     return false;
 }
 
+bool parse_resolution_value(const std::string& text, int& out_w, int& out_h) {
+    auto xpos = text.find('x');
+    if (xpos == std::string::npos)
+        return false;
+    std::string wstr = text.substr(0, xpos);
+    std::string hstr = text.substr(xpos + 1);
+    try {
+        int w = std::stoi(wstr);
+        int h = std::stoi(hstr);
+        if (w <= 0 || h <= 0)
+            return false;
+        out_w = w;
+        out_h = h;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+std::string make_resolution_string(int w, int h) {
+    return std::to_string(w) + "x" + std::to_string(h);
+}
+
 bool parse_slider_option_value(const SettingOption& opt, float& out) {
     if (opt.value.empty())
         return false;
@@ -306,6 +373,8 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
     });
 
     st.value_buffers.resize(st.entries.size());
+    st.resolution_entry_index = -1;
+
     int editing_entry_index = -1;
     WidgetId editing_widget = menu_system_internal::current_text_widget();
     if (editing_widget != kMenuIdInvalid) {
@@ -318,6 +387,8 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
     for (std::size_t i = 0; i < st.entries.size(); ++i) {
         const SettingMetadata* meta = st.entries[i].entry.metadata;
         bool is_editing_entry = (editing_entry_index == static_cast<int>(i));
+        if (meta && meta->key == kRenderResolutionSettingKey)
+            st.resolution_entry_index = static_cast<int>(i);
         if (meta && meta->widget.kind == SettingWidgetKind::Slider && meta->widget.max_text_len > 0 &&
             st.entries[i].entry.value && !is_editing_entry) {
             if (const float* fv = std::get_if<float>(st.entries[i].entry.value))
@@ -328,6 +399,21 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
             st.value_buffers[i].clear();
         }
     }
+    if (st.resolution_entry_index >= 0 && st.resolution_entry_index < static_cast<int>(st.entries.size())) {
+        EntryBinding& binding = st.entries[static_cast<std::size_t>(st.resolution_entry_index)];
+        if (const std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+            if (!st.resolution_edit.dirty) {
+                int rw = 1920, rh = 1080;
+                if (parse_resolution_value(*sv, rw, rh)) {
+                    st.resolution_edit.width_text = std::to_string(rw);
+                    st.resolution_edit.height_text = std::to_string(rh);
+                }
+            }
+            std::string combined =
+                st.resolution_edit.width_text + "x" + st.resolution_edit.height_text;
+            st.resolution_edit.dirty = (combined != *sv);
+        }
+    }
 }
 
 MenuWidget make_setting_widget(const EntryBinding& binding,
@@ -335,7 +421,8 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                                UILayoutObjectId slot,
                                int entry_index,
                                std::vector<std::string>& label_cache,
-                               std::string* value_buffer) {
+                               std::string* value_buffer,
+                               SettingsCategoryState& state) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -428,6 +515,48 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
                     w.badge_color = SDL_Color{240, 205, 120, 255};
                 }
                 w.on_select = MenuAction::run_command(g_cmd_apply_window_mode, entry_index);
+            } else if (binding.entry.metadata && binding.entry.metadata->key == kRenderResolutionSettingKey) {
+                if (state.resolution_entry_index == entry_index) {
+                    auto apply_dirty_style = [&](bool dirty) {
+                        if (dirty) {
+                            w.style.bg_r = 48;
+                            w.style.bg_g = 34;
+                            w.style.bg_b = 18;
+                            w.style.focus_r = 230;
+                            w.style.focus_g = 200;
+                            w.style.focus_b = 90;
+                            w.badge_color = SDL_Color{240, 205, 120, 255};
+                        } else {
+                            w.style.bg_r = 22;
+                            w.style.bg_g = 36;
+                            w.style.bg_b = 26;
+                            w.style.focus_r = 100;
+                            w.style.focus_g = 210;
+                            w.style.focus_b = 150;
+                            w.badge_color = SDL_Color{140, 220, 150, 255};
+                        }
+                    };
+                    apply_dirty_style(state.resolution_edit.dirty);
+                    w.text_buffer = &state.resolution_edit.width_text;
+                    w.text_max_len = 5;
+                    w.placeholder = "Width";
+                    w.aux_text_buffer = &state.resolution_edit.height_text;
+                    w.aux_text_max_len = 5;
+                    w.aux_placeholder = "Height";
+                    w.has_discrete_options = true;
+                    std::string badge_text = binding.entry.metadata->label;
+                    if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+                        for (const auto& opt : binding.entry.metadata->widget.options) {
+                            if (opt.value == *sv && !opt.label.empty()) {
+                                badge_text = opt.label;
+                                break;
+                            }
+                        }
+                    }
+                    label_cache.push_back(badge_text);
+                    w.badge = label_cache.back().c_str();
+                    w.on_select = MenuAction::run_command(g_cmd_apply_render_resolution, entry_index);
+                }
             }
             w.on_left = MenuAction::run_command(g_cmd_option_prev, entry_index);
             w.on_right = MenuAction::run_command(g_cmd_option_next, entry_index);
@@ -515,7 +644,8 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
                                     label_cache,
                                     (entry_index < static_cast<int>(st.value_buffers.size())
                                          ? &st.value_buffers[static_cast<std::size_t>(entry_index)]
-                                         : nullptr));
+                                         : nullptr),
+                                    st);
             row.nav_left = row.id;
             row.nav_right = row.id;
             widgets.push_back(row);
@@ -620,4 +750,6 @@ void register_settings_category_screens() {
         g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
     if (g_cmd_apply_window_mode == kMenuIdInvalid)
         g_cmd_apply_window_mode = es->menu_commands.register_command(command_apply_window_mode);
+    if (g_cmd_apply_render_resolution == kMenuIdInvalid)
+        g_cmd_apply_render_resolution = es->menu_commands.register_command(command_apply_render_resolution);
 }

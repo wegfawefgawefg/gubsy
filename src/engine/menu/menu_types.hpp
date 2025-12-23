@@ -105,7 +105,6 @@ struct MenuWidget {
     const char* tertiary{nullptr};
     const char* badge{nullptr};
     SDL_Color badge_color{180, 180, 200, 255};
-    const char* placeholder{nullptr};
     void* bind_ptr{nullptr};
     float min{0.0f};
     float max{1.0f};
@@ -113,6 +112,10 @@ struct MenuWidget {
     bool has_discrete_options{false};
     std::string* text_buffer{nullptr};
     int text_max_len{0};
+    const char* placeholder{nullptr};
+    std::string* aux_text_buffer{nullptr};
+    int aux_text_max_len{0};
+    const char* aux_placeholder{nullptr};
     bool show_slider_track{true};
 
     MenuAction on_select{};

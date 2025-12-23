@@ -324,7 +324,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (focus && focus->type == WidgetType::OptionCycle) {
                     SDL_FRect* rect_ptr = msi::find_widget_rect(focus->id);
                     if (rect_ptr) {
-                        msi::OptionLayout opt_layout = msi::compute_option_layout(*rect_ptr);
+                        msi::OptionLayout opt_layout = msi::compute_option_layout(*focus, *rect_ptr);
                         float fx = has_render_mouse ? render_mouse_x : static_cast<float>(mouse_x);
                         float fy = has_render_mouse ? render_mouse_y : static_cast<float>(mouse_y);
                         auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
@@ -344,6 +344,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         } else if (msi::point_in_rect(fx, fy, opt_layout.value_rect)) {
                             if (trigger_action(focus->on_select, []() { msi::play_confirm_sound(); }))
                                 continue;
+                        } else if (opt_layout.has_primary_input &&
+                                   msi::point_in_rect(fx, fy, opt_layout.primary_input)) {
+                            msi::begin_text_edit(*focus, false);
+                            continue;
+                        } else if (opt_layout.has_secondary_input &&
+                                   msi::point_in_rect(fx, fy, opt_layout.secondary_input)) {
+                            msi::begin_text_edit(*focus, true);
+                            continue;
                         }
                     }
                 }

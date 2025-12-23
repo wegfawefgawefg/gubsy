@@ -36,6 +36,53 @@ void draw_nav_button(SDL_Renderer* renderer,
     SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
 }
 
+void draw_text_input(SDL_Renderer* renderer,
+                     const SDL_FRect& rect,
+                     const MenuWidget& widget,
+                     const std::string* buffer,
+                     const char* placeholder,
+                     bool editing) {
+    SDL_Color input_bg{24, 26, 36, 255};
+    SDL_Color input_border{80, 90, 110, 255};
+    if (editing)
+        input_border = SDL_Color{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, 255};
+    SDL_SetRenderDrawColor(renderer, input_bg.r, input_bg.g, input_bg.b, input_bg.a);
+    SDL_RenderFillRectF(renderer, &rect);
+    SDL_SetRenderDrawColor(renderer, input_border.r, input_border.g, input_border.b, input_border.a);
+    SDL_RenderDrawRectF(renderer, &rect);
+    std::string display;
+    if (buffer && !buffer->empty())
+        display = *buffer;
+    else if (placeholder)
+        display = placeholder;
+    SDL_Rect input_clip{
+        static_cast<int>(rect.x) + 4,
+        static_cast<int>(rect.y) + 3,
+        std::max(0, static_cast<int>(rect.w) - 8),
+        std::max(0, static_cast<int>(rect.h) - 6)};
+    menu_system_internal::draw_text_with_clip(renderer,
+                                              display.c_str(),
+                                              static_cast<int>(rect.x) + 6,
+                                              static_cast<int>(rect.y) + 4,
+                                              SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
+                                              &input_clip);
+    if (editing && menu_system_internal::g_text_edit_active) {
+        bool editing_this = menu_system_internal::g_text_edit_widget == widget.id &&
+                            ((menu_system_internal::g_text_edit_using_aux && buffer == widget.aux_text_buffer) ||
+                             (!menu_system_internal::g_text_edit_using_aux && buffer == widget.text_buffer));
+        if (editing_this && std::fmod(menu_system_internal::g_caret_time, 1.0f) < 0.5f && buffer) {
+            int caret_x = static_cast<int>(rect.x) + 6 +
+                          menu_system_internal::measure_text_width(buffer->c_str());
+            if (caret_x > static_cast<int>(rect.x + rect.w) - 6)
+                caret_x = static_cast<int>(rect.x + rect.w) - 6;
+            int caret_top = static_cast<int>(rect.y) + 4;
+            int caret_bottom = caret_top + static_cast<int>(rect.h) - 8;
+            SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
+            SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
+        }
+    }
+}
+
 } // namespace
 
 void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_height) {
@@ -204,40 +251,13 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
             SDL_RenderDrawRectF(renderer, &knob);
 
             if (slider_has_input) {
-                SDL_Color input_bg{24, 26, 36, 255};
-                SDL_Color input_border{80, 90, 110, 255};
-                bool editing = msi::g_text_edit_active && widget.id == msi::g_text_edit_widget;
-                if (editing)
-                    input_border = SDL_Color{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, 255};
-                SDL_SetRenderDrawColor(renderer, input_bg.r, input_bg.g, input_bg.b, input_bg.a);
-                SDL_RenderFillRectF(renderer, &slider_visual.input_rect);
-                SDL_SetRenderDrawColor(renderer, input_border.r, input_border.g, input_border.b, input_border.a);
-                SDL_RenderDrawRectF(renderer, &slider_visual.input_rect);
-
-                std::string display = widget.text_buffer ? *widget.text_buffer : std::string{};
-                if (display.empty() && widget.placeholder)
-                    display = widget.placeholder;
-                SDL_Rect input_clip{
-                    static_cast<int>(slider_visual.input_rect.x) + 4,
-                    static_cast<int>(slider_visual.input_rect.y) + 3,
-                    std::max(0, static_cast<int>(slider_visual.input_rect.w) - 8),
-                    std::max(0, static_cast<int>(slider_visual.input_rect.h) - 6)};
-                msi::draw_text_with_clip(renderer,
-                                         display.c_str(),
-                                         static_cast<int>(slider_visual.input_rect.x) + 6,
-                                         static_cast<int>(slider_visual.input_rect.y) + 4,
-                                         SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
-                                         &input_clip);
-                if (editing && std::fmod(msi::g_caret_time, 1.0f) < 0.5f && widget.text_buffer) {
-                    int caret_x = static_cast<int>(slider_visual.input_rect.x) + 6 +
-                                  msi::measure_text_width(widget.text_buffer->c_str());
-                    if (caret_x > static_cast<int>(slider_visual.input_rect.x + slider_visual.input_rect.w) - 6)
-                        caret_x = static_cast<int>(slider_visual.input_rect.x + slider_visual.input_rect.w) - 6;
-                    int caret_top = static_cast<int>(slider_visual.input_rect.y) + 4;
-                    int caret_bottom = caret_top + static_cast<int>(slider_visual.input_rect.h) - 8;
-                    SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
-                    SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
-                }
+                draw_text_input(renderer,
+                                slider_visual.input_rect,
+                                widget,
+                                widget.text_buffer,
+                                widget.placeholder,
+                                msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
+                                    !msi::g_text_edit_using_aux);
             }
             if (slider_visual.has_buttons) {
                 draw_nav_button(renderer, slider_visual.left_btn, true, widget);
@@ -245,7 +265,7 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
             }
         }
         if (widget.type == WidgetType::OptionCycle) {
-            msi::OptionLayout opt_layout = msi::compute_option_layout(rect);
+            msi::OptionLayout opt_layout = msi::compute_option_layout(widget, rect);
             draw_nav_button(renderer, opt_layout.left_btn, true, widget);
             draw_nav_button(renderer, opt_layout.right_btn, false, widget);
             if (widget.badge) {
@@ -261,6 +281,24 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                                          SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
                                          &value_clip);
                 drew_option_value = true;
+            }
+            if (opt_layout.has_primary_input) {
+                draw_text_input(renderer,
+                                opt_layout.primary_input,
+                                widget,
+                                widget.text_buffer,
+                                widget.placeholder,
+                                msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
+                                    !msi::g_text_edit_using_aux);
+            }
+            if (opt_layout.has_secondary_input) {
+                draw_text_input(renderer,
+                                opt_layout.secondary_input,
+                                widget,
+                                widget.aux_text_buffer,
+                                widget.aux_placeholder,
+                                msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
+                                    msi::g_text_edit_using_aux);
             }
         }
 

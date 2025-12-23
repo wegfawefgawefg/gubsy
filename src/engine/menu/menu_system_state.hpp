@@ -40,6 +40,7 @@ extern bool g_has_focus_color;
 extern bool g_text_edit_active;
 extern WidgetId g_text_edit_widget;
 extern float g_caret_time;
+extern bool g_text_edit_using_aux;
 extern std::unordered_map<MenuScreenId, WidgetId> g_last_focus;
 extern MenuScreenId g_current_screen;
 extern bool g_allow_mouse_focus;
@@ -104,10 +105,14 @@ struct OptionLayout {
     SDL_FRect left_btn{};
     SDL_FRect right_btn{};
     SDL_FRect value_rect{};
+    bool has_primary_input{false};
+    SDL_FRect primary_input{};
+    bool has_secondary_input{false};
+    SDL_FRect secondary_input{};
 };
 
 SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& rect);
-OptionLayout compute_option_layout(const SDL_FRect& rect);
+OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& rect);
 bool point_in_rect(float x, float y, const SDL_FRect& rect);
 
 WidgetId resolve_focus(WidgetId target);
@@ -125,7 +130,7 @@ void draw_text_with_clip(SDL_Renderer* renderer,
                          int y,
                          SDL_Color color,
                          const SDL_Rect* clip);
-void begin_text_edit(MenuWidget& widget);
+void begin_text_edit(MenuWidget& widget, bool use_aux_buffer = false);
 bool commit_text_edit();
 bool end_text_edit();
 bool is_text_edit_widget(WidgetId id);
