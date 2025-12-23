@@ -229,10 +229,6 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
 
     MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
-    prev_btn.on_left = MenuAction::none();
-    prev_btn.on_right = MenuAction::request_focus(next_btn.id);
-    next_btn.on_left = MenuAction::request_focus(prev_btn.id);
-    next_btn.on_right = MenuAction::none();
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next_btn);

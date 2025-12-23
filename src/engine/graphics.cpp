@@ -404,6 +404,16 @@ void sync_graphics_from_settings() {
             gg->safe_area.w = *fv;
     }
 
+    // Sync render scale mode
+    if (auto it = settings.find("gubsy.video.render_scale_mode"); it != settings.end()) {
+        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+            if (*sv == "fit")
+                gg->render_scale_mode = RenderScaleMode::Fit;
+            else if (*sv == "stretch")
+                gg->render_scale_mode = RenderScaleMode::Stretch;
+        }
+    }
+
     // Sync audio volumes
     if (auto it = settings.find("gubsy.audio.master_volume"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))

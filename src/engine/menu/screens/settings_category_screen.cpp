@@ -903,11 +903,7 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
     MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
-    prev_btn.on_left = MenuAction::none();
-    prev_btn.on_right = MenuAction::request_focus(kNextButtonId);
     MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
-    next_btn.on_left = MenuAction::request_focus(kPrevButtonId);
-    next_btn.on_right = MenuAction::none();
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next_btn);
