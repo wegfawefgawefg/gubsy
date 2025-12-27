@@ -135,6 +135,11 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     auto& st = ctx.state<SettingsHubState>();
     int max_page = std::max(0, st.total_pages - 1);
     st.page = std::clamp(st.page + delta, 0, max_page);
+    if (st.filtered_indices.empty()) {
+        st.page_text = "Page 0 / 0";
+    } else {
+        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+    }
 }
 
 void rebuild_filter(SettingsHubState& st) {
@@ -191,6 +196,11 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         rebuild_filter(st);
     } else if (st.filtered_indices.empty() || st.filtered_indices.size() != st.cards.size()) {
         rebuild_filter(st);
+    }
+    if (st.filtered_indices.empty()) {
+        st.page_text = "Page 0 / 0";
+    } else {
+        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 
     st.status_text = std::to_string(st.filtered_indices.size()) + (st.filtered_indices.size() == 1 ? " category" : " categories");

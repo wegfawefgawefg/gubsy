@@ -13,7 +13,7 @@
     (key "gubsy.video.frame_cap" 60)
     (key "gubsy.localization.language" "en")
     (key "gubsy.video.render_scale_mode" "fit")
-    (key "gubsy.video.show_fps" 1)
+    (key "gubsy.video.show_fps" 0)
     (key "gubsy.audio.master_volume" 0.4)
     (key "gubsy.audio.ui_volume" 0.208199)
     (key "gubsy.video.render_resolution" "1280x720")

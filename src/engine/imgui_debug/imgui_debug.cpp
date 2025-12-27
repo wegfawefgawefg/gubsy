@@ -6,7 +6,7 @@
 
 namespace {
 
-bool g_debug_enabled = true;
+bool g_debug_enabled = false;
 bool g_bar_visible = true;
 bool g_show_players = false;
 bool g_show_binds = false;
@@ -98,7 +98,7 @@ void imgui_debug_render() {
 }
 
 void imgui_debug_shutdown() {
-    g_debug_enabled = true;
+    g_debug_enabled = false;
     g_bar_visible = true;
     g_show_players = false;
     g_show_binds = false;
