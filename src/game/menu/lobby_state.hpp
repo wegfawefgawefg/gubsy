@@ -23,8 +23,6 @@ struct LobbySession {
     int selected_player_index{0};
     std::vector<std::vector<PlayerDeviceKey>> player_devices;
     std::vector<int> cached_profile_ids;
-    int dropped_players_count{0};
-    bool dropped_players_notice{false};
     std::vector<LobbyModEntry> mods;
 };
 

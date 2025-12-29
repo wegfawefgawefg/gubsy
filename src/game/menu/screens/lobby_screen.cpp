@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "engine/alerts.hpp"
 #include "engine/globals.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
@@ -37,12 +38,7 @@ MenuCommandId g_cmd_start_game = kMenuIdInvalid;
 MenuCommandId g_cmd_open_game_settings = kMenuIdInvalid;
 MenuCommandId g_cmd_open_local_players = kMenuIdInvalid;
 
-void clear_drop_notice(LobbySession& lobby) {
-    lobby.dropped_players_notice = false;
-    lobby.dropped_players_count = 0;
-}
-
-void trim_players_to_max(LobbySession& lobby, int max_players, bool set_notice) {
+void trim_players_to_max(LobbySession& lobby, int max_players, bool notify) {
     if (!es)
         return;
     int dropped = 0;
@@ -53,9 +49,11 @@ void trim_players_to_max(LobbySession& lobby, int max_players, bool set_notice) 
         remove_player(static_cast<int>(es->players.size()) - 1);
         ++dropped;
     }
-    if (dropped > 0 && set_notice) {
-        lobby.dropped_players_notice = true;
-        lobby.dropped_players_count += dropped;
+    if (dropped > 0 && notify) {
+        std::string text = "Dropped " + std::to_string(dropped) +
+                           (dropped == 1 ? " player" : " players") +
+                           " (over max players)";
+        add_alert(text);
     }
     if (!es->players.empty())
         lobby.selected_player_index =
@@ -68,7 +66,6 @@ void command_privacy_delta(MenuContext&, std::int32_t delta) {
     if (count <= 0)
         return;
     lobby.privacy = (lobby.privacy + delta + count) % count;
-    clear_drop_notice(lobby);
     if (lobby.privacy == 0 && es) {
         trim_players_to_max(lobby, 1, false);
         lobby.selected_player_index = 0;
@@ -85,7 +82,12 @@ void command_max_players_delta(MenuContext&, std::int32_t delta) {
     lobby.max_players = std::clamp(lobby.max_players + delta, kMinLobbyPlayers, kMaxLobbyPlayers);
     if (lobby.max_players < kMinLobbyPlayers)
         lobby.max_players = kMaxLobbyPlayers;
-    clear_drop_notice(lobby);
+    if (lobby.max_players == 1) {
+        lobby.privacy = 0;
+        trim_players_to_max(lobby, 1, false);
+        lobby.selected_player_index = 0;
+        return;
+    }
     if (lobby.privacy >= 2) {
         int local_count = lobby_local_player_count();
         if (local_count > lobby.max_players)
@@ -196,13 +198,6 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     players_panel.type = WidgetType::Card;
     players_panel.label = "Players";
     players_panel.secondary = text_cache.back().c_str();
-    if (lobby.dropped_players_notice && lobby.dropped_players_count > 0) {
-        std::string notice = "Dropped " + std::to_string(lobby.dropped_players_count) +
-                             (lobby.dropped_players_count == 1 ? " player" : " players");
-        text_cache.emplace_back(std::move(notice));
-        players_panel.badge = text_cache.back().c_str();
-        players_panel.badge_color = SDL_Color{240, 205, 120, 255};
-    }
     players_panel.nav_right = browse.id;
     widgets.push_back(players_panel);
 

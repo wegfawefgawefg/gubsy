@@ -81,8 +81,6 @@ void command_add_player(MenuContext&, std::int32_t) {
         lobby.cached_profile_ids.pop_back();
         set_user_profile_for_player(new_index, profile_id);
     }
-    lobby.dropped_players_notice = false;
-    lobby.dropped_players_count = 0;
     if (lobby.privacy == 0 && es->players.size() > 1)
         lobby.privacy = 1;
     if (lobby.privacy >= 2) {
