@@ -117,6 +117,7 @@ inline constexpr int NEXT = 904;
 inline constexpr int PAGE = 905;
 inline constexpr int MORE = 906;
 inline constexpr int LESS = 907;
+inline constexpr int NUM_PLAYERS = 88622044;
 inline constexpr int CARD0 = 920;
 inline constexpr int CARD1 = 921;
 inline constexpr int CARD2 = 922;

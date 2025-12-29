@@ -16,7 +16,7 @@
 namespace {
 
 constexpr int kPlayersPerPage = 4;
-constexpr int kMaxLocalPlayers = 4;
+constexpr int kMaxLocalPlayers = 64;
 constexpr WidgetId kTitleWidgetId = 900;
 constexpr WidgetId kStatusWidgetId = 901;
 constexpr WidgetId kPageLabelWidgetId = 905;
@@ -108,9 +108,9 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 
     widgets.push_back(make_label_widget(kTitleWidgetId, LocalPlayersObjectID::TITLE, "Local Players"));
 
-    std::string status = std::to_string(total_players) + (total_players == 1 ? " player" : " players");
-    MenuWidget status_label = make_label_widget(kStatusWidgetId, LocalPlayersObjectID::STATUS, status.c_str());
-    widgets.push_back(status_label);
+    text_cache.emplace_back("Num Players: " + std::to_string(total_players));
+    MenuWidget num_players = make_label_widget(9020, LocalPlayersObjectID::NUM_PLAYERS, text_cache.back().c_str());
+    widgets.push_back(num_players);
 
     MenuWidget page_label = make_label_widget(kPageLabelWidgetId, LocalPlayersObjectID::PAGE, st.page_text.c_str());
     page_label.label = st.page_text.c_str();
@@ -160,8 +160,9 @@ BuiltScreen build_local_players(MenuContext& ctx) {
             text_cache.emplace_back("Player " + std::to_string(player_index + 1));
             card.label = text_cache.back().c_str();
             std::string profile_name = player.profile.name.empty() ? "No profile" : player.profile.name;
-            text_cache.emplace_back(profile_name);
+            text_cache.emplace_back("Profile: " + profile_name);
             card.badge = text_cache.back().c_str();
+            card.secondary = "Press to change settings for player.";
             card.on_select = MenuAction::run_command(g_cmd_open_player, player_index);
             card.on_left = prev_action;
             card.on_right = next_action;

@@ -547,7 +547,7 @@
       (object (id 922) (label "card2") (x 0.18) (y 0.6) (w 0.64) (h 0.1))
       (object (id 923) (label "card3") (x 0.18) (y 0.74) (w 0.64) (h 0.1))
       (object (id 930) (label "back") (x 0.08) (y 0.88) (w 0.2) (h 0.07))
-      (object (id 88622044) (label "num_players") (x 0.4) (y 0.2) (w 0.18) (h 0.0799998))
+      (object (id 88622044) (label "num_players") (x 0.38) (y 0.24) (w 0.23) (h 0.04))
     )
   )
   (layout
