@@ -674,7 +674,7 @@
     (form_factor tablet)
     (objects
       (object (id 1101) (label "title") (x 0.08) (y 0.09) (w 0.3) (h 0.09))
-      (object (id 1102) (label "status") (x 0.66) (y 0.88) (w 0.272188) (h 0.08))
+      (object (id 1102) (label "status") (x 0.68) (y 0.84) (w 0.11) (h 0.04))
       (object (id 1103) (label "search") (x 0.16) (y 0.2) (w 0.55) (h 0.08))
       (object (id 1104) (label "prev") (x 0.72) (y 0.2) (w 0.05) (h 0.08))
       (object (id 1105) (label "next") (x 0.79) (y 0.2) (w 0.05) (h 0.08))
@@ -684,7 +684,7 @@
       (object (id 1122) (label "card2") (x 0.16) (y 0.6) (w 0.68) (h 0.11))
       (object (id 1123) (label "card3") (x 0.16) (y 0.74) (w 0.68) (h 0.11))
       (object (id 1030) (label "back") (x 0.08) (y 0.88) (w 0.24) (h 0.08))
-      (object (id 96039231) (label "manage_profiles") (x 0.4) (y 0.88) (w 0.24) (h 0.08))
+      (object (id 96039231) (label "manage_profiles") (x 0.68) (y 0.88) (w 0.24) (h 0.08))
     )
   )
   (layout
