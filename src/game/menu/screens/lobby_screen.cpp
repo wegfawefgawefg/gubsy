@@ -20,7 +20,6 @@ namespace {
 
 constexpr int kMinLobbyPlayers = 1;
 constexpr int kMaxLobbyPlayers = 64;
-constexpr int kMaxLocalPlayers = 4;
 
 const std::array<const char*, 5> kPrivacyLabels = {
     "Solo",
@@ -44,6 +43,12 @@ void command_privacy_delta(MenuContext&, std::int32_t delta) {
     if (count <= 0)
         return;
     lobby.privacy = (lobby.privacy + delta + count) % count;
+    if (lobby.privacy == 0 && es) {
+        while (es->players.size() > 1) {
+            remove_player(static_cast<int>(es->players.size()) - 1);
+        }
+        lobby.selected_player_index = 0;
+    }
 }
 
 void command_max_players_delta(MenuContext&, std::int32_t delta) {
@@ -144,10 +149,8 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     std::string player_line;
     if (privacy_index == 0) {
         player_line = "1 / 1";
-    } else if (privacy_index == 1) {
-        player_line = std::to_string(local_count) + " / " + std::to_string(kMaxLocalPlayers);
     } else {
-        player_line = std::to_string(local_count) + " / " + std::to_string(lobby.max_players);
+        player_line = std::to_string(local_count) + " / N";
     }
     text_cache.emplace_back(std::move(player_line));
     MenuWidget players_panel;
@@ -207,8 +210,9 @@ BuiltScreen build_lobby(MenuContext& ctx) {
 
     MenuWidget local_players = make_button(506,
                                            LobbyObjectID::LOCAL_PLAYERS,
-                                           "Local Players",
+                                           "Player Settings",
                                            MenuAction::run_command(g_cmd_open_local_players));
+    local_players.secondary = "Add Players / Player Settings";
     widgets.push_back(local_players);
 
     MenuWidget game_settings = make_button(503,

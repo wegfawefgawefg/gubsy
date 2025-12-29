@@ -75,6 +75,8 @@ void command_add_player(MenuContext&, std::int32_t) {
     if (count >= kMaxLocalPlayers)
         return;
     add_player();
+    if (lobby_state().privacy == 0 && es->players.size() > 1)
+        lobby_state().privacy = 1;
 }
 
 void command_remove_player(MenuContext&, std::int32_t) {
