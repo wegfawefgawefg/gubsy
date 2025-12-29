@@ -15,6 +15,7 @@
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/menu_ids.hpp"
 #include "engine/settings_catalog.hpp"
+#include "game/menu/menu_ids.hpp"
 #include "game/ui_layout_ids.hpp"
 namespace {
 
@@ -66,7 +67,7 @@ const std::unordered_map<std::string_view, CategoryOverride> kCategoryOverrides 
     {"HUD", {"HUD", "HUD layout & minimap"}},
     {"Accessibility", {"Accessibility", "Accessibility options"}},
     {"Profiles", {"Profiles", "Profile management"}},
-    {"Players", {"Players", "Split-screen players & devices"}},
+    {"Players", {"Players", "Add and Remove Players"}},
     {"Saves", {"Saves", "Save slot management"}},
     {"Cheats", {"Cheats", "Cheats & sandbox"}},
     {"Debug", {"Debug", "Debug & dev tools"}},
@@ -184,6 +185,17 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
     }
+    auto players_it = std::find_if(st.cards.begin(), st.cards.end(), [](const CategoryCard& card) {
+        return card.tag == "Players";
+    });
+    if (players_it == st.cards.end()) {
+        CategoryCard card;
+        card.tag = "Players";
+        card.item_count = 0;
+        card.screen_id = MenuScreenID::LOCAL_PLAYERS;
+        card.order_hint = category_priority(card.tag);
+        st.cards.push_back(std::move(card));
+    }
 
     std::sort(st.cards.begin(), st.cards.end(), [](const CategoryCard& a, const CategoryCard& b) {
         if (a.order_hint != b.order_hint)
@@ -270,7 +282,11 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
                                                             : std::to_string(card.item_count) + " settings";
             std::string subtitle;
             if (override_it != kCategoryOverrides.end() && override_it->second.description) {
-                subtitle = std::string(override_it->second.description) + " · " + count_text;
+                if (card.screen_id == MenuScreenID::LOCAL_PLAYERS) {
+                    subtitle = override_it->second.description;
+                } else {
+                    subtitle = std::string(override_it->second.description) + " · " + count_text;
+                }
             } else {
                 subtitle = dynamic_subtitle(catalog, card.tag);
                 if (!subtitle.empty())

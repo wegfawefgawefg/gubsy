@@ -68,7 +68,17 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     }
 }
 
-void command_add_player(MenuContext&, std::int32_t) {
+bool from_settings_hub(const MenuContext& ctx) {
+    auto stack = ctx.manager.stack();
+    if (stack.size() < 2)
+        return false;
+    const auto& prev = stack[stack.size() - 2];
+    if (!prev.def)
+        return false;
+    return prev.def->id == MenuScreenID::SETTINGS;
+}
+
+void command_add_player(MenuContext& ctx, std::int32_t) {
     if (!es)
         return;
     int count = static_cast<int>(es->players.size());
@@ -81,12 +91,14 @@ void command_add_player(MenuContext&, std::int32_t) {
         lobby.cached_profile_ids.pop_back();
         set_user_profile_for_player(new_index, profile_id);
     }
-    if (lobby.privacy == 0 && es->players.size() > 1)
-        lobby.privacy = 1;
-    if (lobby.privacy >= 2) {
-        int new_count = static_cast<int>(es->players.size());
-        if (lobby.max_players < new_count)
-            lobby.max_players = new_count;
+    if (!from_settings_hub(ctx)) {
+        if (lobby.privacy == 0 && es->players.size() > 1)
+            lobby.privacy = 1;
+        if (lobby.privacy >= 2) {
+            int new_count = static_cast<int>(es->players.size());
+            if (lobby.max_players < new_count)
+                lobby.max_players = new_count;
+        }
     }
 }
 
