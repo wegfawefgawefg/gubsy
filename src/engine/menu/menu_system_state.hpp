@@ -59,8 +59,8 @@ extern NavRepeatState g_repeat_down;
 extern NavRepeatState g_repeat_left;
 extern NavRepeatState g_repeat_right;
 
-constexpr float kRepeatDelay = 0.16f;
-constexpr float kRepeatInterval = 0.04f;
+constexpr float kRepeatDelay = 0.32f;
+constexpr float kRepeatInterval = 0.08f;
 
 extern WidgetId g_slider_drag_id;
 extern bool g_slider_drag_value_valid;

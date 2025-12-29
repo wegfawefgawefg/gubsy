@@ -195,7 +195,7 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     MenuWidget players_panel;
     players_panel.id = 509;
     players_panel.slot = LobbyObjectID::PLAYERS_PANEL;
-    players_panel.type = WidgetType::Card;
+    players_panel.type = WidgetType::Label;
     players_panel.label = "Players";
     players_panel.secondary = text_cache.back().c_str();
     players_panel.nav_right = browse.id;
