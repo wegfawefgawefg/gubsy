@@ -11,6 +11,8 @@ inline constexpr int SERVER_BROWSER_SCREEN = 7;
 inline constexpr int GAME_SETTINGS_SCREEN = 8;
 inline constexpr int LOCAL_PLAYERS_SCREEN = 9;
 inline constexpr int PLAYER_SETTINGS_SCREEN = 10;
+inline constexpr int PROFILE_PICKER_SCREEN = 11;
+inline constexpr int INPUT_DEVICES_SCREEN = 12;
 } // namespace UILayoutID
 
 namespace UIObjectID {
@@ -128,5 +130,36 @@ inline constexpr int BACK = 930;
 namespace PlayerSettingsObjectID {
 inline constexpr int TITLE = 1001;
 inline constexpr int STATUS = 1002;
+inline constexpr int PROFILE = 1003;
+inline constexpr int INPUTS = 1004;
+inline constexpr int BINDS = 1005;
 inline constexpr int BACK = 1030;
 } // namespace PlayerSettingsObjectID
+
+namespace ProfilePickerObjectID {
+inline constexpr int TITLE = 1101;
+inline constexpr int STATUS = 1102;
+inline constexpr int SEARCH = 1103;
+inline constexpr int PREV = 1104;
+inline constexpr int NEXT = 1105;
+inline constexpr int PAGE = 1106;
+inline constexpr int CARD0 = 1120;
+inline constexpr int CARD1 = 1121;
+inline constexpr int CARD2 = 1122;
+inline constexpr int CARD3 = 1123;
+inline constexpr int MANAGE = 96039231;
+inline constexpr int BACK = 1030;
+} // namespace ProfilePickerObjectID
+
+namespace InputDevicesObjectID {
+inline constexpr int TITLE = 1201;
+inline constexpr int STATUS = 1202;
+inline constexpr int PREV = 1203;
+inline constexpr int NEXT = 1204;
+inline constexpr int PAGE = 1205;
+inline constexpr int CARD0 = 1220;
+inline constexpr int CARD1 = 1221;
+inline constexpr int CARD2 = 1222;
+inline constexpr int CARD3 = 1223;
+inline constexpr int BACK = 1230;
+} // namespace InputDevicesObjectID

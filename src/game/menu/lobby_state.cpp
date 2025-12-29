@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "engine/globals.hpp"
+#include "engine/input_sources.hpp"
 
 namespace {
 
@@ -77,4 +78,47 @@ int lobby_local_player_count() {
             ++count;
     }
     return std::max(1, count);
+}
+
+void lobby_ensure_player_devices(int player_index) {
+    if (player_index < 0)
+        return;
+    if (static_cast<std::size_t>(player_index) >= g_lobby.player_devices.size())
+        g_lobby.player_devices.resize(static_cast<std::size_t>(player_index) + 1);
+    auto& devices = g_lobby.player_devices[static_cast<std::size_t>(player_index)];
+    if (!devices.empty())
+        return;
+    if (!es)
+        return;
+    for (const auto& src : es->input_sources) {
+        devices.push_back(PlayerDeviceKey{static_cast<int>(src.type), src.device_id.id});
+    }
+}
+
+bool lobby_device_enabled(int player_index, int type, int id) {
+    if (player_index < 0)
+        return false;
+    if (static_cast<std::size_t>(player_index) >= g_lobby.player_devices.size())
+        return false;
+    const auto& devices = g_lobby.player_devices[static_cast<std::size_t>(player_index)];
+    for (const auto& key : devices) {
+        if (key.type == type && key.id == id)
+            return true;
+    }
+    return false;
+}
+
+void lobby_toggle_device(int player_index, int type, int id) {
+    if (player_index < 0)
+        return;
+    if (static_cast<std::size_t>(player_index) >= g_lobby.player_devices.size())
+        g_lobby.player_devices.resize(static_cast<std::size_t>(player_index) + 1);
+    auto& devices = g_lobby.player_devices[static_cast<std::size_t>(player_index)];
+    for (auto it = devices.begin(); it != devices.end(); ++it) {
+        if (it->type == type && it->id == id) {
+            devices.erase(it);
+            return;
+        }
+    }
+    devices.push_back(PlayerDeviceKey{type, id});
 }

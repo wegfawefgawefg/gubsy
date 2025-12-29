@@ -272,7 +272,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (MenuWidget* prev_widget = find_page_widget({SettingsObjectID::PREV,
                                                                ModsObjectID::PREV,
                                                                LobbyModsObjectID::PREV,
-                                                               LocalPlayersObjectID::PREV}))
+                                                               LocalPlayersObjectID::PREV,
+                                                               ProfilePickerObjectID::PREV,
+                                                               InputDevicesObjectID::PREV}))
                     action = prev_widget->on_select;
                 if (action.type != MenuActionType::None) {
                     msi::play_left_sound();
@@ -295,7 +297,9 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (MenuWidget* next_widget = find_page_widget({SettingsObjectID::NEXT,
                                                                ModsObjectID::NEXT,
                                                                LobbyModsObjectID::NEXT,
-                                                               LocalPlayersObjectID::NEXT}))
+                                                               LocalPlayersObjectID::NEXT,
+                                                               ProfilePickerObjectID::NEXT,
+                                                               InputDevicesObjectID::NEXT}))
                     action = next_widget->on_select;
                 if (action.type != MenuActionType::None) {
                     msi::play_right_sound();

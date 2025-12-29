@@ -22,6 +22,8 @@
 #include "game/menu/screens/game_settings_screen.hpp"
 #include "game/menu/screens/local_players_screen.hpp"
 #include "game/menu/screens/player_settings_screen.hpp"
+#include "game/menu/screens/profile_picker_screen.hpp"
+#include "game/menu/screens/input_devices_screen.hpp"
 #include "game/settings_schema_registry.hpp"
 #include "game/ui_layout_registry.hpp"
 #include "game/binds_schema_registry.hpp"
@@ -62,6 +64,8 @@ int main() {
     register_game_settings_screen();
     register_local_players_screen();
     register_player_settings_screen();
+    register_profile_picker_screen();
+    register_input_devices_screen();
 
     if (es)
         es->mode = modes::TITLE;

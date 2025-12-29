@@ -10,4 +10,6 @@ inline constexpr MenuScreenId SERVER_BROWSER = 4;
 inline constexpr MenuScreenId GAME_SETTINGS = 5;
 inline constexpr MenuScreenId LOCAL_PLAYERS = 6;
 inline constexpr MenuScreenId PLAYER_SETTINGS = 7;
+inline constexpr MenuScreenId PROFILE_PICKER = 8;
+inline constexpr MenuScreenId INPUT_DEVICES = 9;
 }
