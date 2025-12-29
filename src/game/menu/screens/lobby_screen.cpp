@@ -221,6 +221,7 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     lobby_name.slot = LobbyObjectID::LOBBY_NAME;
     lobby_name.type = WidgetType::TextInput;
     lobby_name.label = "Lobby Name";
+    lobby_name.secondary = "Select to edit the lobby name.";
     lobby_name.text_buffer = &lobby.session_name;
     lobby_name.text_max_len = 48;
     lobby_name.placeholder = "Local Lobby";

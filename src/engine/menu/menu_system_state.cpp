@@ -487,7 +487,7 @@ void update_arrows(float dt) {
         g_arrows.right_pos = g_arrows.right_target;
         g_arrows.initialized = true;
     }
-    float t = std::clamp(dt * 20.0f, 0.0f, 1.0f);
+    float t = std::clamp(dt * 40.0f, 0.0f, 1.0f);
     auto blend = [t](float current, float target) {
         return current + (target - current) * t;
     };
