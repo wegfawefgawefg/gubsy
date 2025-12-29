@@ -15,6 +15,7 @@ struct LobbySession {
     bool seed_randomized{true};
     bool name_initialized{false};
     std::array<bool, 4> local_players{{true, false, false, false}};
+    int selected_player_index{0};
     std::vector<LobbyModEntry> mods;
 };
 

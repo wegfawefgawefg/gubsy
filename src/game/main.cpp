@@ -21,6 +21,7 @@
 #include "game/menu/screens/server_browser_screen.hpp"
 #include "game/menu/screens/game_settings_screen.hpp"
 #include "game/menu/screens/local_players_screen.hpp"
+#include "game/menu/screens/player_settings_screen.hpp"
 #include "game/settings_schema_registry.hpp"
 #include "game/ui_layout_registry.hpp"
 #include "game/binds_schema_registry.hpp"
@@ -60,6 +61,7 @@ int main() {
     register_server_browser_screen();
     register_game_settings_screen();
     register_local_players_screen();
+    register_player_settings_screen();
 
     if (es)
         es->mode = modes::TITLE;

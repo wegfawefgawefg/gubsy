@@ -10,6 +10,7 @@ inline constexpr int LOBBY_MODS_SCREEN = 6;
 inline constexpr int SERVER_BROWSER_SCREEN = 7;
 inline constexpr int GAME_SETTINGS_SCREEN = 8;
 inline constexpr int LOCAL_PLAYERS_SCREEN = 9;
+inline constexpr int PLAYER_SETTINGS_SCREEN = 10;
 } // namespace UILayoutID
 
 namespace UIObjectID {
@@ -122,3 +123,9 @@ inline constexpr int CARD2 = 922;
 inline constexpr int CARD3 = 923;
 inline constexpr int BACK = 930;
 } // namespace LocalPlayersObjectID
+
+namespace PlayerSettingsObjectID {
+inline constexpr int TITLE = 1001;
+inline constexpr int STATUS = 1002;
+inline constexpr int BACK = 1030;
+} // namespace PlayerSettingsObjectID

@@ -69,6 +69,8 @@ std::vector<std::string> lobby_enabled_mod_ids() {
 }
 
 int lobby_local_player_count() {
+    if (es)
+        return std::max(1, static_cast<int>(es->players.size()));
     int count = 0;
     for (bool enabled : g_lobby.local_players) {
         if (enabled)
