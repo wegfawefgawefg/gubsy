@@ -19,6 +19,8 @@
 #include "game/menu/screens/lobby_screen.hpp"
 #include "game/menu/screens/lobby_mods_screen.hpp"
 #include "game/menu/screens/server_browser_screen.hpp"
+#include "game/menu/screens/game_settings_screen.hpp"
+#include "game/menu/screens/local_players_screen.hpp"
 #include "game/settings_schema_registry.hpp"
 #include "game/ui_layout_registry.hpp"
 #include "game/binds_schema_registry.hpp"
@@ -56,6 +58,8 @@ int main() {
     register_lobby_screen();
     register_lobby_mods_screen();
     register_server_browser_screen();
+    register_game_settings_screen();
+    register_local_players_screen();
 
     if (es)
         es->mode = modes::TITLE;
