@@ -16,6 +16,9 @@
 #include "engine/input_system.hpp"
 #include "game/input_frame.hpp"
 #include "game/menu/screens/main_menu_screen.hpp"
+#include "game/menu/screens/lobby_screen.hpp"
+#include "game/menu/screens/lobby_mods_screen.hpp"
+#include "game/menu/screens/server_browser_screen.hpp"
 #include "game/settings_schema_registry.hpp"
 #include "game/ui_layout_registry.hpp"
 #include "game/binds_schema_registry.hpp"
@@ -50,6 +53,9 @@ int main() {
     register_game_mod_apis();
     set_required_mod_game_version(kGameModVersion);
     register_main_menu_screen();
+    register_lobby_screen();
+    register_lobby_mods_screen();
+    register_server_browser_screen();
 
     if (es)
         es->mode = modes::TITLE;

@@ -19,7 +19,7 @@ MenuCommandId g_cmd_open_mods = kMenuIdInvalid;
 MenuCommandId g_cmd_open_settings = kMenuIdInvalid;
 
 void command_play(MenuContext& ctx, std::int32_t) {
-    ctx.engine.mode = modes::SETUP;
+    ctx.manager.push_screen(MenuScreenID::LOBBY);
 }
 
 void command_quit(MenuContext& ctx, std::int32_t) {

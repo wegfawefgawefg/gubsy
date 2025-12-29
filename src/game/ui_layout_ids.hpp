@@ -5,6 +5,9 @@ inline constexpr int PLAY_SCREEN = 1;
 inline constexpr int MENU_SCREEN = 2;
 inline constexpr int MODS_SCREEN = 3;
 inline constexpr int SETTINGS_SCREEN = 4;
+inline constexpr int LOBBY_SCREEN = 5;
+inline constexpr int LOBBY_MODS_SCREEN = 6;
+inline constexpr int SERVER_BROWSER_SCREEN = 7;
 } // namespace UILayoutID
 
 namespace UIObjectID {
@@ -51,3 +54,48 @@ inline constexpr int CARD2 = 422;
 inline constexpr int CARD3 = 423;
 inline constexpr int BACK = 430;
 } // namespace SettingsObjectID
+
+namespace LobbyObjectID {
+inline constexpr int TITLE = 501;
+inline constexpr int LOBBY_NAME = 502;
+inline constexpr int PRIVACY = 503;
+inline constexpr int GAME_SETTINGS = 504;
+inline constexpr int MAX_PLAYERS = 505;
+inline constexpr int LOCAL_PLAYERS = 506;
+inline constexpr int SEED = 507;
+inline constexpr int RANDOMIZE_SEED = 508;
+inline constexpr int PLAYERS_PANEL = 509;
+inline constexpr int MODS_PANEL = 510;
+inline constexpr int MANAGE_MODS = 511;
+inline constexpr int START_GAME = 512;
+inline constexpr int BACK = 513;
+inline constexpr int BROWSE_SERVERS = 514;
+inline constexpr int PLAYER0 = 515;
+inline constexpr int PLAYER1 = 516;
+inline constexpr int PLAYER2 = 517;
+inline constexpr int PLAYER3 = 518;
+} // namespace LobbyObjectID
+
+namespace LobbyModsObjectID {
+inline constexpr int TITLE = 601;
+inline constexpr int STATUS = 602;
+inline constexpr int SEARCH = 603;
+inline constexpr int PREV = 604;
+inline constexpr int NEXT = 605;
+inline constexpr int PAGE = 606;
+inline constexpr int CARD0 = 620;
+inline constexpr int CARD1 = 621;
+inline constexpr int CARD2 = 622;
+inline constexpr int CARD3 = 623;
+inline constexpr int BACK = 630;
+} // namespace LobbyModsObjectID
+
+namespace ServerBrowserObjectID {
+inline constexpr int TITLE = 701;
+inline constexpr int STATUS = 702;
+inline constexpr int CARD0 = 720;
+inline constexpr int CARD1 = 721;
+inline constexpr int CARD2 = 722;
+inline constexpr int CARD3 = 723;
+inline constexpr int BACK = 730;
+} // namespace ServerBrowserObjectID

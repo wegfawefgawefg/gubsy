@@ -44,6 +44,7 @@ void ensure_menu_ready() {
         return;
     es->menu_manager.clear();
     es->menu_manager.push_screen(MenuScreenID::MAIN);
+    es->menu_manager.push_screen(MenuScreenID::LOBBY);
     menu_system_reset();
     g_menu_initialized = true;
 }
