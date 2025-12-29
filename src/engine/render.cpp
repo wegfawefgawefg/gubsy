@@ -175,6 +175,8 @@ void render() {
         }
     }
 
+    render_alerts(renderer, window_w);
+
     if (layout_editor_is_active()) {
         int overlay_w = std::max(0, static_cast<int>(std::round(drawn_rect.w)));
         int overlay_h = std::max(0, static_cast<int>(std::round(drawn_rect.h)));

@@ -5,6 +5,7 @@
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
 #include "engine/menu/menu_ids.hpp"
+#include "engine/alerts.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mods.hpp"
@@ -358,9 +359,10 @@ void command_uninstall(MenuContext& ctx, std::int32_t payload) {
         return;
     state.busy = true;
     std::string err;
-    if (!uninstall_with_checks(state, payload, err))
+    if (!uninstall_with_checks(state, payload, err)) {
         state.status = err.empty() ? "Uninstall failed" : err;
-    else
+        add_alert(state.status);
+    } else
         state.status = "Removed mod";
     update_install_flags(state);
     recalc_page_text(state);
@@ -480,7 +482,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
         std::vector<std::string> dependents = installed_dependents(state, entry.id);
         bool has_dependents = !dependents.empty();
         bool can_install = !entry.installed && version_ok;
-        bool can_uninstall = entry.installed && !entry.required && !has_dependents;
+        bool can_uninstall = entry.installed && !entry.required;
         bool interactive = can_install || can_uninstall;
         if (interactive)
             card.on_select = MenuAction::run_command(can_install ? g_cmd_install : g_cmd_uninstall,
@@ -588,4 +590,3 @@ void register_mods_menu_screen() {
     def.build = build_mods_screen;
     es->menu_manager.register_screen(def);
 }
-

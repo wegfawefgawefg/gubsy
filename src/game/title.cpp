@@ -4,7 +4,6 @@
 #include "engine/binds_profiles.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/menu/menu_system.hpp"
-#include "engine/render.hpp"
 #include "engine/graphics.hpp"
 #include "game/modes.hpp"
 #include "game/actions.hpp"
@@ -76,5 +75,4 @@ void title_draw() {
     SDL_SetRenderDrawColor(renderer, 14, 12, 26, 255);
     SDL_RenderClear(renderer);
     menu_system_render(renderer, width, height);
-    render_alerts(renderer, width);
 }

@@ -11,6 +11,7 @@
 #include "engine/alerts.hpp"
 #include "engine/globals.hpp"
 #include "engine/mod_install.hpp"
+#include "engine/mod_host.hpp"
 #include "engine/mods.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
@@ -40,6 +41,8 @@ struct SessionModEntry {
     std::string title;
     std::string author;
     std::string description;
+    std::string version;
+    std::string game_version;
     std::vector<std::string> dependencies;
     bool required{false};
     bool installed{false};
@@ -100,6 +103,89 @@ bool path_exists(const ModCatalogEntry& entry) {
         folder = entry.id;
     std::error_code ec;
     return std::filesystem::exists(mods_root / folder, ec);
+}
+
+bool version_compatible(const SessionModEntry& entry) {
+    const std::string& required = required_mod_game_version();
+    if (required.empty() || entry.game_version.empty())
+        return true;
+    return entry.game_version == required;
+}
+
+SDL_Color badge_color_for(const std::string& status) {
+    std::string lower = status;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower.find("incompatible") != std::string::npos || lower.find("needs game") != std::string::npos)
+        return SDL_Color{240, 190, 120, 255};
+    if (lower.find("core") != std::string::npos)
+        return SDL_Color{240, 210, 120, 255};
+    if (lower.find("not install") != std::string::npos)
+        return SDL_Color{235, 200, 110, 255};
+    if (lower.find("not enabled") != std::string::npos)
+        return SDL_Color{200, 160, 120, 255};
+    if (lower.find("enabled") != std::string::npos)
+        return SDL_Color{150, 220, 150, 255};
+    return SDL_Color{170, 170, 190, 255};
+}
+
+MenuStyle style_for_entry(const SessionModEntry& entry,
+                          bool version_ok,
+                          bool locked,
+                          bool interactive) {
+    MenuStyle style;
+    style.bg_r = 26;
+    style.bg_g = 26;
+    style.bg_b = 34;
+    style.fg_r = 230;
+    style.fg_g = 230;
+    style.fg_b = 240;
+    style.focus_r = 140;
+    style.focus_g = 200;
+    style.focus_b = 255;
+
+    if (!version_ok) {
+        style.bg_r = 90;
+        style.bg_g = 32;
+        style.bg_b = 32;
+        style.focus_r = 255;
+        style.focus_g = 160;
+        style.focus_b = 120;
+    } else if (entry.required) {
+        style.bg_r = 88;
+        style.bg_g = 70;
+        style.bg_b = 28;
+        style.focus_r = 255;
+        style.focus_g = 210;
+        style.focus_b = 120;
+    } else if (entry.enabled) {
+        style.bg_r = 30;
+        style.bg_g = 60;
+        style.bg_b = 42;
+        style.focus_r = 120;
+        style.focus_g = 230;
+        style.focus_b = 170;
+    } else if (!entry.installed) {
+        style.bg_r = 28;
+        style.bg_g = 36;
+        style.bg_b = 68;
+    }
+
+    if (locked) {
+        style.bg_r = static_cast<std::uint8_t>((style.bg_r + 60) / 2);
+        style.bg_g = static_cast<std::uint8_t>((style.bg_g + 60) / 2);
+        style.bg_b = static_cast<std::uint8_t>((style.bg_b + 60) / 2);
+    }
+
+    if (!interactive) {
+        style.fg_r = 170;
+        style.fg_g = 170;
+        style.fg_b = 180;
+        style.focus_r = 140;
+        style.focus_g = 140;
+        style.focus_b = 150;
+    }
+    return style;
 }
 
 int find_catalog_index(const std::vector<ModCatalogEntry>& catalog, const std::string& id) {
@@ -173,6 +259,8 @@ void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
             entry.title = cat.title.empty() ? cat.id : cat.title;
             entry.author = cat.author;
             entry.description = cat.description.empty() ? cat.summary : cat.description;
+            entry.version = cat.version;
+            entry.game_version = cat.game_version;
             entry.dependencies = cat.dependencies;
             entry.required = cat.required || cat.id == "base";
             entry.installed = path_exists(cat);
@@ -191,6 +279,8 @@ void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
             entry.title = mod.title.empty() ? mod.name : mod.title;
             entry.author = mod.author;
             entry.description = mod.description;
+            entry.version = mod.version;
+            entry.game_version = mod.game_version;
             entry.dependencies = mod.deps;
             entry.required = mod.required || mod.name == "base";
             entry.installed = true;
@@ -219,6 +309,13 @@ bool enable_with_dependencies(LobbyModsState& st,
             lobby.mods[static_cast<std::size_t>(lobby_idx)].enabled = true;
         entry.enabled = true;
         return true;
+    }
+    if (!version_compatible(entry)) {
+        if (!entry.game_version.empty())
+            err = "Needs game v" + entry.game_version;
+        else
+            err = "Incompatible mod";
+        return false;
     }
     if (visiting.count(entry.id)) {
         err = "Dependency cycle detected";
@@ -423,31 +520,55 @@ BuiltScreen build_lobby_mods(MenuContext& ctx) {
             card.type = WidgetType::Card;
             card.label = entry.title.c_str();
             std::string subtitle;
-            if (!entry.author.empty() && !entry.description.empty())
-                subtitle = entry.author + " - " + entry.description;
-            else if (!entry.author.empty())
-                subtitle = entry.author;
-            else
-                subtitle = entry.description;
+            subtitle = entry.version.empty() ? "" : ("v" + entry.version);
+            if (!entry.author.empty()) {
+                if (!subtitle.empty())
+                    subtitle += "  ·  ";
+                subtitle += "by " + entry.author;
+            }
+            if (!entry.game_version.empty()) {
+                if (!subtitle.empty())
+                    subtitle += "  ·  ";
+                subtitle += "Game v" + entry.game_version;
+            }
+            if (!entry.description.empty()) {
+                if (!subtitle.empty())
+                    subtitle += "  ·  ";
+                subtitle += entry.description;
+            }
+            if (!entry.game_version.empty()) {
+                if (!subtitle.empty())
+                    subtitle += "  ·  ";
+                subtitle += "Game v" + entry.game_version;
+            }
             text_cache.emplace_back(std::move(subtitle));
             card.secondary = text_cache.back().c_str();
-            if (entry.required) {
+            std::string dependent_title;
+            bool has_dependents = has_enabled_dependents(lobby, entry.id, dependent_title);
+            bool version_ok = version_compatible(entry);
+            bool can_enable = !entry.required && !entry.enabled && version_ok;
+            bool interactive = can_enable || entry.enabled;
+            card.on_select = interactive ? MenuAction::run_command(g_cmd_toggle_mod, entry_index)
+                                         : MenuAction::none();
+            card.style = style_for_entry(entry, version_ok, has_dependents || entry.required, interactive);
+            if (!version_ok) {
+                if (!entry.game_version.empty()) {
+                    text_cache.emplace_back("Needs game v" + entry.game_version);
+                    card.badge = text_cache.back().c_str();
+                } else {
+                    card.badge = "Incompatible";
+                }
+            } else if (entry.required) {
                 card.badge = "Core";
-                card.badge_color = SDL_Color{220, 200, 150, 255};
-                card.on_select = MenuAction::none();
             } else if (!entry.installed) {
                 card.badge = "Not installed";
-                card.badge_color = SDL_Color{235, 200, 110, 255};
-                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, entry_index);
             } else if (entry.enabled) {
                 card.badge = "Enabled";
-                card.badge_color = SDL_Color{120, 200, 140, 255};
-                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, entry_index);
             } else {
                 card.badge = "Not enabled";
-                card.badge_color = SDL_Color{200, 160, 120, 255};
-                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, entry_index);
             }
+            if (card.badge)
+                card.badge_color = badge_color_for(card.badge);
             widgets.push_back(card);
             card_ids.push_back(widget_id);
         } else {

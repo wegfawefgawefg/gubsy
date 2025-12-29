@@ -163,8 +163,9 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                     focus.a};
                 SDL_SetRenderDrawColor(renderer, inner_col.r, inner_col.g, inner_col.b, inner_col.a);
                 SDL_RenderDrawRectF(renderer, &inner);
-            }
-        }
+    }
+
+}
 
         bool has_slider_visual = widget.type == WidgetType::Slider1D;
         msi::SliderLayout slider_visual{};
