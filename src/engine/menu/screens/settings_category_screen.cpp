@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "engine/alerts.hpp"
 #include "engine/globals.hpp"
 #include "engine/graphics.hpp"
 #include "engine/menu/menu_commands.hpp"
@@ -18,6 +19,7 @@
 #include "engine/menu/menu_screen.hpp"
 #include "engine/settings_catalog.hpp"
 #include "engine/graphics.hpp"
+#include "engine/player.hpp"
 #include "engine/user_profiles.hpp"
 #include "game/state.hpp"
 #include "engine/menu/menu_ids.hpp"
@@ -41,6 +43,9 @@ constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
 constexpr const char* kRenderResolutionSettingKey = "gubsy.video.render_resolution";
 constexpr const char* kProfileOwnerNameSettingKey = "__gubsy.profile.owner_name";
 constexpr const char* kSettingsProfileNameSettingKey = "__gubsy.settings_profile_name";
+constexpr const char* kProfileDeleteSettingKey = "__gubsy.profile.delete";
+constexpr const char* kProfileResetSettingKey = "__gubsy.profile.reset";
+constexpr int kDangerConfirmPresses = 5;
 
 const char* window_mode_to_value(WindowDisplayMode mode);
 bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
@@ -82,6 +87,38 @@ const SettingMetadata& settings_profile_name_metadata() {
     return meta;
 }
 
+const SettingMetadata& profile_delete_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kProfileDeleteSettingKey;
+        m.label = "Delete Profile";
+        m.description = "Permanently delete this profile.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Button;
+        m.widget.custom_id = "profile_delete";
+        m.order = 900;
+        return m;
+    }();
+    return meta;
+}
+
+const SettingMetadata& profile_reset_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kProfileResetSettingKey;
+        m.label = "Reset Profile";
+        m.description = "Reset this profile to defaults.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Button;
+        m.widget.custom_id = "profile_reset";
+        m.order = 910;
+        return m;
+    }();
+    return meta;
+}
+
 MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_dec = kMenuIdInvalid;
@@ -90,6 +127,8 @@ MenuCommandId g_cmd_option_next = kMenuIdInvalid;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_render_resolution = kMenuIdInvalid;
+MenuCommandId g_cmd_profile_delete = kMenuIdInvalid;
+MenuCommandId g_cmd_profile_reset = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_text_setting = kMenuIdInvalid;
 MenuCommandId g_cmd_slider_set = kMenuIdInvalid;
 
@@ -116,6 +155,8 @@ struct SettingsCategoryState {
     SettingsValue settings_profile_value;
     std::string tag;
     std::vector<std::string> value_buffers;
+    int delete_confirm_remaining{0};
+    int reset_confirm_remaining{0};
     struct ResolutionEditState {
         std::string width_text{"1920"};
         std::string height_text{"1080"};
@@ -141,6 +182,57 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     w.label = label;
     w.on_select = action;
     return w;
+}
+
+int profile_count() {
+    if (!es)
+        return 0;
+    return static_cast<int>(es->user_profiles_pool.size());
+}
+
+bool is_profile_delete(const SettingMetadata* meta) {
+    return meta && meta->key == kProfileDeleteSettingKey;
+}
+
+bool is_profile_reset(const SettingMetadata* meta) {
+    return meta && meta->key == kProfileResetSettingKey;
+}
+
+MenuStyle danger_style(bool enabled) {
+    MenuStyle style;
+    style.bg_r = 70;
+    style.bg_g = 18;
+    style.bg_b = 18;
+    style.fg_r = 230;
+    style.fg_g = 210;
+    style.fg_b = 210;
+    style.focus_r = 200;
+    style.focus_g = 90;
+    style.focus_b = 90;
+    if (!enabled) {
+        style.bg_r = 50;
+        style.bg_g = 20;
+        style.bg_b = 20;
+        style.fg_r = 150;
+        style.fg_g = 140;
+        style.fg_b = 140;
+        style.focus_r = 120;
+        style.focus_g = 90;
+        style.focus_b = 90;
+    }
+    return style;
+}
+
+bool confirm_danger_action(int& remaining, const char* label) {
+    if (remaining <= 0)
+        remaining = kDangerConfirmPresses;
+    remaining -= 1;
+    if (remaining > 0) {
+        add_alert(std::string(label) + " (" + std::to_string(remaining) + " presses remaining)");
+        return false;
+    }
+    remaining = 0;
+    return true;
 }
 
 void rebuild_filter(SettingsCategoryState& st) {
@@ -393,6 +485,78 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
     }
 }
 
+bool update_profile_in_pool(const UserProfile& profile) {
+    if (!es)
+        return false;
+    for (auto& existing : es->user_profiles_pool) {
+        if (existing.id == profile.id) {
+            existing = profile;
+            return true;
+        }
+    }
+    return false;
+}
+
+void command_profile_delete(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (!es || !st.profile_owner)
+        return;
+    if (profile_count() <= 1) {
+        add_alert("Cannot delete the last profile.");
+        return;
+    }
+    st.reset_confirm_remaining = 0;
+    if (!confirm_danger_action(st.delete_confirm_remaining, "Delete profile"))
+        return;
+
+    int deleted_id = st.profile_owner->id;
+    delete_user_profile(deleted_id);
+    es->user_profiles_pool.erase(
+        std::remove_if(es->user_profiles_pool.begin(), es->user_profiles_pool.end(),
+                       [&](const UserProfile& profile) { return profile.id == deleted_id; }),
+        es->user_profiles_pool.end());
+
+    if (es->user_profiles_pool.empty()) {
+        UserProfile fallback = create_default_user_profile();
+        es->user_profiles_pool.push_back(fallback);
+    }
+    int fallback_id = es->user_profiles_pool.front().id;
+    for (int i = 0; i < static_cast<int>(es->players.size()); ++i) {
+        const Player& player = es->players[static_cast<std::size_t>(i)];
+        if (player.has_active_profile && player.profile.id == deleted_id)
+            set_user_profile_for_player(i, fallback_id);
+    }
+    add_alert("Profile deleted.");
+    st.delete_confirm_remaining = 0;
+    ctx.manager.pop_screen();
+}
+
+void command_profile_reset(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (!es || !st.profile_owner)
+        return;
+    st.delete_confirm_remaining = 0;
+    if (!confirm_danger_action(st.reset_confirm_remaining, "Reset profile"))
+        return;
+
+    UserProfile reset = *st.profile_owner;
+    reset.last_binds_profile_id = -1;
+    reset.last_input_settings_profile_id = -1;
+    reset.last_game_settings_profile_id = -1;
+    if (reset.name.empty())
+        reset.name = "Profile";
+    save_user_profile(reset);
+    update_profile_in_pool(reset);
+    for (int i = 0; i < static_cast<int>(es->players.size()); ++i) {
+        const Player& player = es->players[static_cast<std::size_t>(i)];
+        if (player.has_active_profile && player.profile.id == reset.id)
+            set_user_profile_for_player(i, reset.id);
+    }
+    st.profile_owner_name = reset.name;
+    add_alert("Profile reset to defaults.");
+    st.reset_confirm_remaining = 0;
+}
+
 void command_apply_text_setting(MenuContext& ctx, std::int32_t index) {
     auto& st = ctx.state<SettingsCategoryState>();
     EntryBinding* binding = get_entry_binding(ctx, index);
@@ -591,6 +755,16 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
         settings_binding.entry.metadata = &settings_profile_name_metadata();
         settings_binding.entry.value = &st.settings_profile_value;
         st.entries.push_back(settings_binding);
+
+        EntryBinding reset_binding;
+        reset_binding.entry.metadata = &profile_reset_metadata();
+        reset_binding.entry.value = nullptr;
+        st.entries.push_back(reset_binding);
+
+        EntryBinding delete_binding;
+        delete_binding.entry.metadata = &profile_delete_metadata();
+        delete_binding.entry.value = nullptr;
+        st.entries.push_back(delete_binding);
     }
 
     std::sort(st.entries.begin(), st.entries.end(), [](const EntryBinding& a, const EntryBinding& b) {
@@ -672,6 +846,31 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
     w.type = WidgetType::Card;
     w.label = binding.entry.metadata ? binding.entry.metadata->label.c_str() : "";
     w.secondary = binding.entry.metadata ? binding.entry.metadata->description.c_str() : "";
+    if (binding.entry.metadata && binding.entry.metadata->widget.kind == SettingWidgetKind::Button) {
+        const SettingMetadata* meta = binding.entry.metadata;
+        bool delete_btn = is_profile_delete(meta);
+        bool reset_btn = is_profile_reset(meta);
+        int presses_left = kDangerConfirmPresses;
+        if (delete_btn && state.delete_confirm_remaining > 0)
+            presses_left = state.delete_confirm_remaining;
+        if (reset_btn && state.reset_confirm_remaining > 0)
+            presses_left = state.reset_confirm_remaining;
+        label_cache.emplace_back(meta->label + " (" + std::to_string(presses_left) + ")");
+        w.label = label_cache.back().c_str();
+        w.type = WidgetType::Button;
+        bool enabled = true;
+        if (delete_btn && profile_count() <= 1)
+            enabled = false;
+        if (delete_btn) {
+            w.on_select = MenuAction::run_command(g_cmd_profile_delete);
+            if (!enabled)
+                w.play_select_sound = false;
+        } else if (reset_btn) {
+            w.on_select = MenuAction::run_command(g_cmd_profile_reset);
+        }
+        w.style = danger_style(enabled);
+        return w;
+    }
     if (binding.entry.metadata &&
         binding.entry.metadata->scope == SettingScope::Profile &&
         state.profile_settings) {
@@ -1058,6 +1257,10 @@ void register_settings_category_screens() {
         g_cmd_apply_window_mode = es->menu_commands.register_command(command_apply_window_mode);
     if (g_cmd_apply_render_resolution == kMenuIdInvalid)
         g_cmd_apply_render_resolution = es->menu_commands.register_command(command_apply_render_resolution);
+    if (g_cmd_profile_delete == kMenuIdInvalid)
+        g_cmd_profile_delete = es->menu_commands.register_command(command_profile_delete);
+    if (g_cmd_profile_reset == kMenuIdInvalid)
+        g_cmd_profile_reset = es->menu_commands.register_command(command_profile_reset);
     if (g_cmd_apply_text_setting == kMenuIdInvalid) {
         g_cmd_apply_text_setting = es->menu_commands.register_command(command_apply_text_setting);
     }

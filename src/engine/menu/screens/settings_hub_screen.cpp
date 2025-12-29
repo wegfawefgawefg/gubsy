@@ -182,6 +182,10 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         card.tag = tag;
         card.item_count = static_cast<int>(entries.size());
         card.screen_id = ensure_settings_category_screen(tag);
+        if (card.tag == "Profiles") {
+            card.screen_id = MenuScreenID::PROFILES;
+            card.item_count = es ? static_cast<int>(es->user_profiles_pool.size()) : 0;
+        }
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
     }

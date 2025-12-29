@@ -136,6 +136,18 @@ bool save_user_profile(const UserProfile& profile) {
     return write_profiles_file(profiles);
 }
 
+bool delete_user_profile(int profile_id) {
+    if (profile_id <= 0)
+        return false;
+    auto profiles = read_profiles_from_disk();
+    auto it = std::remove_if(profiles.begin(), profiles.end(),
+                             [&](const UserProfile& profile) { return profile.id == profile_id; });
+    if (it == profiles.end())
+        return false;
+    profiles.erase(it, profiles.end());
+    return write_profiles_file(profiles);
+}
+
 bool load_user_profiles_pool() {
     if (!es)
         return false;

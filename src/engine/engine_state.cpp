@@ -2,6 +2,7 @@
 #include "globals.hpp"
 #include "engine/settings_defaults.hpp"
 #include "engine/menu/screens/settings_hub_screen.hpp"
+#include "engine/menu/screens/profiles_screen.hpp"
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/screens/mods_screen.hpp"
 
@@ -13,6 +14,7 @@ bool init_engine_state() {
     register_engine_settings_schema_entries();
     register_settings_category_screens();
     register_settings_hub_screen();
+    register_profiles_screen();
     register_mods_menu_screen();
     return true;
 }

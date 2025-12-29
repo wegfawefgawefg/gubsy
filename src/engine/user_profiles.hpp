@@ -21,6 +21,7 @@ std::vector<UserProfile> load_all_user_profile_metadatas();
 UserProfile load_user_profile(int profile_id);
 
 bool save_user_profile(const UserProfile& profile);
+bool delete_user_profile(int profile_id);
 
 /*
  load all user profiles into the engine state global
