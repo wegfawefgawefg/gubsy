@@ -2,10 +2,16 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+#include "engine/alerts.hpp"
 #include "engine/globals.hpp"
+#include "engine/mod_install.hpp"
+#include "engine/mods.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -24,18 +30,35 @@ constexpr WidgetId kPrevButtonId = 604;
 constexpr WidgetId kNextButtonId = 605;
 constexpr WidgetId kBackButtonId = 630;
 constexpr WidgetId kFirstCardWidgetId = 620;
+constexpr const char* kModServerUrl = "http://127.0.0.1:8787";
 
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_toggle_mod = kMenuIdInvalid;
+
+struct SessionModEntry {
+    std::string id;
+    std::string title;
+    std::string author;
+    std::string description;
+    std::vector<std::string> dependencies;
+    bool required{false};
+    bool installed{false};
+    bool enabled{false};
+};
 
 struct LobbyModsState {
     int page = 0;
     int total_pages = 1;
     std::string page_text;
     std::string status_text;
+    std::string status_message;
     std::vector<int> filtered_indices;
     std::string search_query;
     std::string prev_search;
+    bool catalog_loaded{false};
+    bool busy{false};
+    std::vector<ModCatalogEntry> catalog;
+    std::vector<SessionModEntry> entries;
 };
 
 MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* label) {
@@ -68,18 +91,231 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     }
 }
 
-void command_toggle_mod(MenuContext& ctx, std::int32_t index) {
-    (void)ctx;
-    LobbySession& lobby = lobby_state();
-    if (index < 0 || index >= static_cast<int>(lobby.mods.size()))
-        return;
-    auto& entry = lobby.mods[static_cast<std::size_t>(index)];
-    if (entry.required)
-        return;
-    entry.enabled = !entry.enabled;
+bool path_exists(const ModCatalogEntry& entry) {
+    std::filesystem::path mods_root = mm && !mm->root.empty()
+                                          ? std::filesystem::path(mm->root)
+                                          : std::filesystem::path("mods");
+    std::string folder = entry.folder.empty() ? entry.id : entry.folder;
+    if (folder.empty())
+        folder = entry.id;
+    std::error_code ec;
+    return std::filesystem::exists(mods_root / folder, ec);
 }
 
-void rebuild_filter(LobbyModsState& st, const std::vector<LobbyModEntry>& mods) {
+int find_catalog_index(const std::vector<ModCatalogEntry>& catalog, const std::string& id) {
+    for (std::size_t i = 0; i < catalog.size(); ++i) {
+        if (catalog[i].id == id)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+int find_lobby_entry(const LobbySession& lobby, const std::string& id) {
+    for (std::size_t i = 0; i < lobby.mods.size(); ++i) {
+        if (lobby.mods[i].id == id)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+void ensure_lobby_entry(LobbySession& lobby, const SessionModEntry& entry) {
+    int idx = find_lobby_entry(lobby, entry.id);
+    if (idx >= 0) {
+        LobbyModEntry& target = lobby.mods[static_cast<std::size_t>(idx)];
+        target.title = entry.title;
+        target.author = entry.author;
+        target.description = entry.description;
+        target.dependencies = entry.dependencies;
+        target.required = entry.required;
+        if (target.required)
+            target.enabled = true;
+        return;
+    }
+    LobbyModEntry target;
+    target.id = entry.id;
+    target.title = entry.title;
+    target.author = entry.author;
+    target.description = entry.description;
+    target.dependencies = entry.dependencies;
+    target.required = entry.required;
+    target.enabled = entry.enabled || entry.required;
+    lobby.mods.push_back(std::move(target));
+}
+
+bool ensure_catalog_loaded(LobbyModsState& st) {
+    if (st.catalog_loaded || st.busy)
+        return st.catalog_loaded;
+    st.busy = true;
+    std::string err;
+    if (!fetch_mod_catalog(kModServerUrl, st.catalog, err)) {
+        st.status_message = err.empty() ? "Failed to fetch catalog" : err;
+        st.busy = false;
+        return false;
+    }
+    st.status_message = "Catalog loaded";
+    st.catalog_loaded = true;
+    st.busy = false;
+    return true;
+}
+
+void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
+    st.entries.clear();
+    std::unordered_map<std::string, bool> enabled_map;
+    enabled_map.reserve(lobby.mods.size());
+    for (const auto& mod : lobby.mods)
+        enabled_map[mod.id] = mod.enabled || mod.required;
+
+    std::unordered_set<std::string> seen;
+    if (st.catalog_loaded) {
+        for (const auto& cat : st.catalog) {
+            SessionModEntry entry;
+            entry.id = cat.id;
+            entry.title = cat.title.empty() ? cat.id : cat.title;
+            entry.author = cat.author;
+            entry.description = cat.description.empty() ? cat.summary : cat.description;
+            entry.dependencies = cat.dependencies;
+            entry.required = cat.required || cat.id == "base";
+            entry.installed = path_exists(cat);
+            entry.enabled = entry.required || enabled_map[entry.id];
+            st.entries.push_back(entry);
+            seen.insert(entry.id);
+        }
+    }
+
+    if (mm) {
+        for (const auto& mod : mm->mods) {
+            if (seen.count(mod.name))
+                continue;
+            SessionModEntry entry;
+            entry.id = mod.name;
+            entry.title = mod.title.empty() ? mod.name : mod.title;
+            entry.author = mod.author;
+            entry.description = mod.description;
+            entry.dependencies = mod.deps;
+            entry.required = mod.required || mod.name == "base";
+            entry.installed = true;
+            entry.enabled = entry.required || enabled_map[entry.id];
+            st.entries.push_back(std::move(entry));
+            seen.insert(entry.id);
+        }
+    }
+
+    for (const auto& entry : st.entries)
+        ensure_lobby_entry(lobby, entry);
+}
+
+bool enable_with_dependencies(LobbyModsState& st,
+                              LobbySession& lobby,
+                              int entry_index,
+                              std::unordered_set<std::string>& visiting,
+                              std::string& err) {
+    if (entry_index < 0 || entry_index >= static_cast<int>(st.entries.size()))
+        return false;
+    SessionModEntry& entry = st.entries[static_cast<std::size_t>(entry_index)];
+    if (entry.required) {
+        ensure_lobby_entry(lobby, entry);
+        int lobby_idx = find_lobby_entry(lobby, entry.id);
+        if (lobby_idx >= 0)
+            lobby.mods[static_cast<std::size_t>(lobby_idx)].enabled = true;
+        entry.enabled = true;
+        return true;
+    }
+    if (visiting.count(entry.id)) {
+        err = "Dependency cycle detected";
+        return false;
+    }
+    visiting.insert(entry.id);
+    for (const auto& dep_id : entry.dependencies) {
+        int dep_entry_idx = -1;
+        for (std::size_t i = 0; i < st.entries.size(); ++i) {
+            if (st.entries[i].id == dep_id) {
+                dep_entry_idx = static_cast<int>(i);
+                break;
+            }
+        }
+        if (dep_entry_idx < 0) {
+            err = "Missing dependency: " + dep_id;
+            visiting.erase(entry.id);
+            return false;
+        }
+        if (!enable_with_dependencies(st, lobby, dep_entry_idx, visiting, err)) {
+            visiting.erase(entry.id);
+            return false;
+        }
+    }
+
+    if (!entry.installed) {
+        int cat_idx = find_catalog_index(st.catalog, entry.id);
+        if (cat_idx < 0) {
+            err = "Mod not installed: " + entry.id;
+            visiting.erase(entry.id);
+            return false;
+        }
+        std::string install_err;
+        if (!install_mod_from_catalog(kModServerUrl, st.catalog[static_cast<std::size_t>(cat_idx)], install_err)) {
+            err = install_err.empty() ? "Install failed" : install_err;
+            visiting.erase(entry.id);
+            return false;
+        }
+        lobby_refresh_mods();
+        entry.installed = true;
+    }
+
+    ensure_lobby_entry(lobby, entry);
+    int lobby_idx = find_lobby_entry(lobby, entry.id);
+    if (lobby_idx >= 0)
+        lobby.mods[static_cast<std::size_t>(lobby_idx)].enabled = true;
+    entry.enabled = true;
+    visiting.erase(entry.id);
+    return true;
+}
+
+bool has_enabled_dependents(const LobbySession& lobby, const std::string& id, std::string& out) {
+    for (const auto& entry : lobby.mods) {
+        if (!entry.enabled || entry.required)
+            continue;
+        if (std::find(entry.dependencies.begin(), entry.dependencies.end(), id) != entry.dependencies.end()) {
+            out = entry.title.empty() ? entry.id : entry.title;
+            return true;
+        }
+    }
+    return false;
+}
+
+void command_toggle_mod(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<LobbyModsState>();
+    if (st.busy)
+        return;
+    LobbySession& lobby = lobby_state();
+    if (index < 0 || index >= static_cast<int>(st.entries.size()))
+        return;
+    SessionModEntry& entry = st.entries[static_cast<std::size_t>(index)];
+    if (entry.required)
+        return;
+
+    if (entry.enabled) {
+        std::string dependent;
+        if (has_enabled_dependents(lobby, entry.id, dependent)) {
+            add_alert("Disable dependent mod first: " + dependent);
+            return;
+        }
+        int lobby_idx = find_lobby_entry(lobby, entry.id);
+        if (lobby_idx >= 0)
+            lobby.mods[static_cast<std::size_t>(lobby_idx)].enabled = false;
+        entry.enabled = false;
+        return;
+    }
+
+    st.busy = true;
+    std::unordered_set<std::string> visiting;
+    std::string err;
+    if (!enable_with_dependencies(st, lobby, index, visiting, err)) {
+        add_alert(err.empty() ? "Failed to enable mod" : err);
+    }
+    st.busy = false;
+}
+
+void rebuild_filter(LobbyModsState& st, const std::vector<SessionModEntry>& mods) {
     st.filtered_indices.clear();
     std::string needle = st.search_query;
     std::transform(needle.begin(), needle.end(), needle.begin(),
@@ -113,11 +349,13 @@ BuiltScreen build_lobby_mods(MenuContext& ctx) {
     lobby_refresh_mods();
 
     auto& st = ctx.state<LobbyModsState>();
+    ensure_catalog_loaded(st);
+    rebuild_entries(st, lobby);
     if (st.search_query != st.prev_search) {
         st.prev_search = st.search_query;
-        rebuild_filter(st, lobby.mods);
-    } else if (st.filtered_indices.empty() || st.filtered_indices.size() != lobby.mods.size()) {
-        rebuild_filter(st, lobby.mods);
+        rebuild_filter(st, st.entries);
+    } else if (st.filtered_indices.empty() || st.filtered_indices.size() != st.entries.size()) {
+        rebuild_filter(st, st.entries);
     }
     if (st.filtered_indices.empty()) {
         st.page_text = "Page 0 / 0";
@@ -177,8 +415,8 @@ BuiltScreen build_lobby_mods(MenuContext& ctx) {
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(LobbyModsObjectID::CARD0 + i);
         WidgetId widget_id = static_cast<WidgetId>(kFirstCardWidgetId + static_cast<WidgetId>(i));
         if (filtered_idx < static_cast<int>(st.filtered_indices.size())) {
-            int mod_index = st.filtered_indices[static_cast<std::size_t>(filtered_idx)];
-            const LobbyModEntry& entry = lobby.mods[static_cast<std::size_t>(mod_index)];
+            int entry_index = st.filtered_indices[static_cast<std::size_t>(filtered_idx)];
+            const SessionModEntry& entry = st.entries[static_cast<std::size_t>(entry_index)];
             MenuWidget card;
             card.id = widget_id;
             card.slot = slot;
@@ -197,11 +435,18 @@ BuiltScreen build_lobby_mods(MenuContext& ctx) {
                 card.badge = "Core";
                 card.badge_color = SDL_Color{220, 200, 150, 255};
                 card.on_select = MenuAction::none();
+            } else if (!entry.installed) {
+                card.badge = "Not installed";
+                card.badge_color = SDL_Color{235, 200, 110, 255};
+                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, entry_index);
+            } else if (entry.enabled) {
+                card.badge = "Enabled";
+                card.badge_color = SDL_Color{120, 200, 140, 255};
+                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, entry_index);
             } else {
-                card.badge = entry.enabled ? "Enabled" : "Disabled";
-                card.badge_color = entry.enabled ? SDL_Color{120, 200, 140, 255}
-                                                : SDL_Color{200, 160, 120, 255};
-                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, mod_index);
+                card.badge = "Not enabled";
+                card.badge_color = SDL_Color{200, 160, 120, 255};
+                card.on_select = MenuAction::run_command(g_cmd_toggle_mod, entry_index);
             }
             widgets.push_back(card);
             card_ids.push_back(widget_id);
