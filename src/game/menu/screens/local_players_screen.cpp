@@ -74,9 +74,22 @@ void command_add_player(MenuContext&, std::int32_t) {
     int count = static_cast<int>(es->players.size());
     if (count >= kMaxLocalPlayers)
         return;
-    add_player();
-    if (lobby_state().privacy == 0 && es->players.size() > 1)
-        lobby_state().privacy = 1;
+    int new_index = add_player();
+    LobbySession& lobby = lobby_state();
+    if (new_index >= 0 && !lobby.cached_profile_ids.empty()) {
+        int profile_id = lobby.cached_profile_ids.back();
+        lobby.cached_profile_ids.pop_back();
+        set_user_profile_for_player(new_index, profile_id);
+    }
+    lobby.dropped_players_notice = false;
+    lobby.dropped_players_count = 0;
+    if (lobby.privacy == 0 && es->players.size() > 1)
+        lobby.privacy = 1;
+    if (lobby.privacy >= 2) {
+        int new_count = static_cast<int>(es->players.size());
+        if (lobby.max_players < new_count)
+            lobby.max_players = new_count;
+    }
 }
 
 void command_remove_player(MenuContext&, std::int32_t) {

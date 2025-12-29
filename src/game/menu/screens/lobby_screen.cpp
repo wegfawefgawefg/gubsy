@@ -37,17 +37,46 @@ MenuCommandId g_cmd_start_game = kMenuIdInvalid;
 MenuCommandId g_cmd_open_game_settings = kMenuIdInvalid;
 MenuCommandId g_cmd_open_local_players = kMenuIdInvalid;
 
+void clear_drop_notice(LobbySession& lobby) {
+    lobby.dropped_players_notice = false;
+    lobby.dropped_players_count = 0;
+}
+
+void trim_players_to_max(LobbySession& lobby, int max_players, bool set_notice) {
+    if (!es)
+        return;
+    int dropped = 0;
+    while (es->players.size() > static_cast<std::size_t>(max_players)) {
+        const Player& player = es->players.back();
+        if (player.has_active_profile)
+            lobby.cached_profile_ids.push_back(player.profile.id);
+        remove_player(static_cast<int>(es->players.size()) - 1);
+        ++dropped;
+    }
+    if (dropped > 0 && set_notice) {
+        lobby.dropped_players_notice = true;
+        lobby.dropped_players_count += dropped;
+    }
+    if (!es->players.empty())
+        lobby.selected_player_index =
+            std::clamp(lobby.selected_player_index, 0, static_cast<int>(es->players.size()) - 1);
+}
+
 void command_privacy_delta(MenuContext&, std::int32_t delta) {
     LobbySession& lobby = lobby_state();
     int count = static_cast<int>(kPrivacyLabels.size());
     if (count <= 0)
         return;
     lobby.privacy = (lobby.privacy + delta + count) % count;
+    clear_drop_notice(lobby);
     if (lobby.privacy == 0 && es) {
-        while (es->players.size() > 1) {
-            remove_player(static_cast<int>(es->players.size()) - 1);
-        }
+        trim_players_to_max(lobby, 1, false);
         lobby.selected_player_index = 0;
+    }
+    if (lobby.privacy >= 2) {
+        int local_count = lobby_local_player_count();
+        if (lobby.max_players < local_count)
+            lobby.max_players = local_count;
     }
 }
 
@@ -56,6 +85,12 @@ void command_max_players_delta(MenuContext&, std::int32_t delta) {
     lobby.max_players = std::clamp(lobby.max_players + delta, kMinLobbyPlayers, kMaxLobbyPlayers);
     if (lobby.max_players < kMinLobbyPlayers)
         lobby.max_players = kMaxLobbyPlayers;
+    clear_drop_notice(lobby);
+    if (lobby.privacy >= 2) {
+        int local_count = lobby_local_player_count();
+        if (local_count > lobby.max_players)
+            trim_players_to_max(lobby, lobby.max_players, true);
+    }
 }
 
 void command_open_mods(MenuContext& ctx, std::int32_t) {
@@ -149,8 +184,10 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     std::string player_line;
     if (privacy_index == 0) {
         player_line = "1 / 1";
+    } else if (privacy_index == 1) {
+        player_line = std::to_string(local_count) + " / " + std::to_string(local_count);
     } else {
-        player_line = std::to_string(local_count) + " / N";
+        player_line = std::to_string(local_count) + " / " + std::to_string(lobby.max_players);
     }
     text_cache.emplace_back(std::move(player_line));
     MenuWidget players_panel;
@@ -159,6 +196,13 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     players_panel.type = WidgetType::Card;
     players_panel.label = "Players";
     players_panel.secondary = text_cache.back().c_str();
+    if (lobby.dropped_players_notice && lobby.dropped_players_count > 0) {
+        std::string notice = "Dropped " + std::to_string(lobby.dropped_players_count) +
+                             (lobby.dropped_players_count == 1 ? " player" : " players");
+        text_cache.emplace_back(std::move(notice));
+        players_panel.badge = text_cache.back().c_str();
+        players_panel.badge_color = SDL_Color{240, 205, 120, 255};
+    }
     players_panel.nav_right = browse.id;
     widgets.push_back(players_panel);
 
