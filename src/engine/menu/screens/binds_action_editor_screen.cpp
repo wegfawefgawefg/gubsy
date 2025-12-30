@@ -22,12 +22,13 @@ constexpr WidgetId kStatusWidgetId = 1701;
 constexpr WidgetId kPageLabelWidgetId = 1702;
 constexpr WidgetId kPrevButtonId = 1703;
 constexpr WidgetId kNextButtonId = 1704;
+constexpr WidgetId kResetButtonId = 1705;
 constexpr WidgetId kBackButtonId = 1730;
 constexpr WidgetId kFirstCardWidgetId = 1720;
 
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_edit_mapping = kMenuIdInvalid;
-MenuCommandId g_cmd_delete_mapping = kMenuIdInvalid;
+MenuCommandId g_cmd_reset_action = kMenuIdInvalid;
 
 struct MappingSlot {
     bool empty{true};
@@ -180,37 +181,31 @@ void command_edit_mapping(MenuContext& ctx, std::int32_t slot_index) {
     ctx.manager.push_screen(MenuScreenID::BINDS_CHOOSE_INPUT, ctx.player_index);
 }
 
-void command_delete_mapping(MenuContext& ctx, std::int32_t slot_index) {
+void command_reset_action(MenuContext& ctx, std::int32_t) {
     auto& st = ctx.state<BindsActionEditorState>();
     if (!es)
         return;
-    if (slot_index < 0 || slot_index >= static_cast<int>(st.slots.size()))
-        return;
-    const MappingSlot& slot = st.slots[static_cast<std::size_t>(slot_index)];
-    if (slot.empty)
-        return;
-
     BindsProfile* profile = find_profile(es->selected_binds_profile_id);
     if (!profile)
         return;
     if (st.action_type == BindsActionType::Button) {
         auto& binds = profile->button_binds;
-        if (slot.bind_index < 0 || slot.bind_index >= static_cast<int>(binds.size()))
-            return;
-        binds.erase(binds.begin() + slot.bind_index);
+        binds.erase(std::remove_if(binds.begin(), binds.end(),
+                                   [&](const auto& entry) { return entry.second == st.action_id; }),
+                    binds.end());
     } else if (st.action_type == BindsActionType::Analog1D) {
         auto& binds = profile->analog_1d_binds;
-        if (slot.bind_index < 0 || slot.bind_index >= static_cast<int>(binds.size()))
-            return;
-        binds.erase(binds.begin() + slot.bind_index);
+        binds.erase(std::remove_if(binds.begin(), binds.end(),
+                                   [&](const auto& entry) { return entry.second == st.action_id; }),
+                    binds.end());
     } else {
         auto& binds = profile->analog_2d_binds;
-        if (slot.bind_index < 0 || slot.bind_index >= static_cast<int>(binds.size()))
-            return;
-        binds.erase(binds.begin() + slot.bind_index);
+        binds.erase(std::remove_if(binds.begin(), binds.end(),
+                                   [&](const auto& entry) { return entry.second == st.action_id; }),
+                    binds.end());
     }
     save_binds_profile(*profile);
-    add_alert("Mapping removed");
+    add_alert("Bindings reset");
 }
 
 BuiltScreen build_binds_action_editor(MenuContext& ctx) {
@@ -252,6 +247,12 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     widgets.push_back(make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
+    MenuWidget reset_btn = make_button_widget(kResetButtonId, SettingsObjectID::SEARCH, "Reset Bindings",
+                                              MenuAction::run_command(g_cmd_reset_action));
+    reset_btn.secondary = "Clear all mappings for this action.";
+    widgets.push_back(reset_btn);
+    std::size_t reset_idx = widgets.size() - 1;
+
     MenuAction prev_action = MenuAction::none();
     MenuAction next_action = MenuAction::none();
     if (st.page > 0 && g_cmd_page_delta != kMenuIdInvalid)
@@ -286,10 +287,7 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
             } else {
                 text_cache.emplace_back("Input: " + mapping.label);
                 row.label = text_cache.back().c_str();
-                row.secondary = "Press to change input.";
-                row.tertiary = "Back: Delete";
-                row.tertiary_overlay = false;
-                row.on_back = MenuAction::run_command(g_cmd_delete_mapping, slot_index);
+                row.secondary = "Press to change or clear.";
             }
             row.on_select = MenuAction::run_command(g_cmd_edit_mapping, slot_index);
             row.on_left = prev_action;
@@ -305,6 +303,7 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
+    MenuWidget& reset_ref = widgets[reset_idx];
     MenuWidget& prev_ref = widgets[prev_idx];
     MenuWidget& next_ref = widgets[next_idx];
     MenuWidget& back_ref = widgets[back_idx];
@@ -313,21 +312,26 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     WidgetId last_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.back();
     WidgetId rows_start = first_row_id != kMenuIdInvalid ? first_row_id : back_ref.id;
 
+    reset_ref.nav_left = reset_ref.id;
+    reset_ref.nav_right = prev_ref.id;
+    reset_ref.nav_up = reset_ref.id;
+    reset_ref.nav_down = rows_start;
+
     prev_ref.nav_left = prev_ref.id;
     prev_ref.nav_right = next_ref.id;
-    prev_ref.nav_up = prev_ref.id;
+    prev_ref.nav_up = reset_ref.id;
     prev_ref.nav_down = rows_start;
 
     next_ref.nav_left = prev_ref.id;
     next_ref.nav_right = next_ref.id;
-    next_ref.nav_up = next_ref.id;
+    next_ref.nav_up = reset_ref.id;
     next_ref.nav_down = rows_start;
 
     for (std::size_t i = 0; i < row_ids.size(); ++i) {
         MenuWidget& row = widgets[rows_offset + i];
         row.nav_left = prev_ref.id;
         row.nav_right = next_ref.id;
-        row.nav_up = (i == 0) ? prev_ref.id : row_ids[i - 1];
+        row.nav_up = (i == 0) ? reset_ref.id : row_ids[i - 1];
         row.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
     }
 
@@ -352,8 +356,8 @@ void register_binds_action_editor_screen() {
         g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
     if (g_cmd_edit_mapping == kMenuIdInvalid)
         g_cmd_edit_mapping = es->menu_commands.register_command(command_edit_mapping);
-    if (g_cmd_delete_mapping == kMenuIdInvalid)
-        g_cmd_delete_mapping = es->menu_commands.register_command(command_delete_mapping);
+    if (g_cmd_reset_action == kMenuIdInvalid)
+        g_cmd_reset_action = es->menu_commands.register_command(command_reset_action);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_ACTION_EDITOR;

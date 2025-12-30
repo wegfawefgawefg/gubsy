@@ -4,7 +4,7 @@
     (name "GMan")
     (last_binds_profile 1)
     (last_input_settings_profile_id -1)
-    (last_game_settings 79377772)
+    (last_game_settings 26509180)
   )
   (profile
     (id 72060558)

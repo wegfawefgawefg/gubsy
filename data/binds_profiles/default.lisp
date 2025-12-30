@@ -53,7 +53,28 @@
     (id 19433485)
     (name "Binds 1")
     (button_binds
-      (bind (device_button 111) (gubsy_action 0))
+      (bind (device_button 0) (gubsy_action 0))
+    )
+    (analog_1d_binds
+    )
+    (analog_2d_binds
+    )
+  )
+  (profile
+    (id 39496242)
+    (name "Binds 2")
+    (button_binds
+      (bind (device_button 0) (gubsy_action 0))
+    )
+    (analog_1d_binds
+    )
+    (analog_2d_binds
+    )
+  )
+  (profile
+    (id 63143265)
+    (name "Binds 3")
+    (button_binds
     )
     (analog_1d_binds
     )

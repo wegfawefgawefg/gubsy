@@ -127,6 +127,37 @@ void command_select_input(MenuContext& ctx, std::int32_t choice_index) {
     int mapping_index = es->selected_binds_mapping_index;
     int device_code = st.choices[static_cast<std::size_t>(choice_index)].code;
 
+    if (device_code == -1) {
+        bool removed = false;
+        if (mapping_index >= 0) {
+            if (st.action_type == BindsActionType::Button) {
+                auto& binds = profile->button_binds;
+                if (mapping_index < static_cast<int>(binds.size())) {
+                    binds.erase(binds.begin() + mapping_index);
+                    removed = true;
+                }
+            } else if (st.action_type == BindsActionType::Analog1D) {
+                auto& binds = profile->analog_1d_binds;
+                if (mapping_index < static_cast<int>(binds.size())) {
+                    binds.erase(binds.begin() + mapping_index);
+                    removed = true;
+                }
+            } else {
+                auto& binds = profile->analog_2d_binds;
+                if (mapping_index < static_cast<int>(binds.size())) {
+                    binds.erase(binds.begin() + mapping_index);
+                    removed = true;
+                }
+            }
+        }
+        if (removed) {
+            save_binds_profile(*profile);
+            add_alert("Binding cleared");
+        }
+        ctx.manager.pop_screen();
+        return;
+    }
+
     if (st.action_type == BindsActionType::Button) {
         if (mapping_index >= 0 && mapping_index < static_cast<int>(profile->button_binds.size())) {
             profile->button_binds[static_cast<std::size_t>(mapping_index)] = {device_code, action_id};
@@ -161,7 +192,11 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
     }
 
     st.action_type = static_cast<BindsActionType>(es->selected_binds_action_type);
-    st.choices = binds_input_choices(st.action_type);
+    st.choices.clear();
+    st.choices.reserve(binds_input_choices(st.action_type).size() + 1);
+    st.choices.push_back(InputChoice{-1, "None"});
+    for (const auto& choice : binds_input_choices(st.action_type))
+        st.choices.push_back(choice);
 
     if (st.search_query != st.prev_search) {
         st.prev_search = st.search_query;

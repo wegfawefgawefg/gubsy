@@ -280,6 +280,7 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
             if (entry.kind == EntryKind::Name) {
                 row.type = WidgetType::TextInput;
                 row.label = "Profile Name";
+                row.secondary = "Select to rename this profile.";
                 row.text_buffer = &st.name_buffer;
                 row.text_max_len = 32;
                 row.on_select = MenuAction::none();
