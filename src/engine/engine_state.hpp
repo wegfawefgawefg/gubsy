@@ -46,6 +46,10 @@ struct EngineState {
 
     // binds profiles pool
     std::vector<BindsProfile> binds_profiles;
+    int selected_binds_profile_id{-1};
+    int selected_binds_action_type{0};
+    int selected_binds_action_id{-1};
+    int selected_binds_mapping_index{-1};
     // input settings profiles pool
     std::vector<InputSettingsProfile> input_settings_profiles;
     // game settings pool

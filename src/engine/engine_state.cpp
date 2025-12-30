@@ -3,6 +3,10 @@
 #include "engine/settings_defaults.hpp"
 #include "engine/menu/screens/settings_hub_screen.hpp"
 #include "engine/menu/screens/profiles_screen.hpp"
+#include "engine/menu/screens/binds_profiles_screen.hpp"
+#include "engine/menu/screens/binds_profile_editor_screen.hpp"
+#include "engine/menu/screens/binds_action_editor_screen.hpp"
+#include "engine/menu/screens/binds_choose_input_screen.hpp"
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/screens/mods_screen.hpp"
 
@@ -15,6 +19,10 @@ bool init_engine_state() {
     register_settings_category_screens();
     register_settings_hub_screen();
     register_profiles_screen();
+    register_binds_profiles_screen();
+    register_binds_profile_editor_screen();
+    register_binds_action_editor_screen();
+    register_binds_choose_input_screen();
     register_mods_menu_screen();
     return true;
 }

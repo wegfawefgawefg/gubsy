@@ -49,4 +49,15 @@
       (bind (device_stick 2) (gubsy_stick 0))
     )
   )
+  (profile
+    (id 19433485)
+    (name "Binds 1")
+    (button_binds
+      (bind (device_button 111) (gubsy_action 0))
+    )
+    (analog_1d_binds
+    )
+    (analog_2d_binds
+    )
+  )
 )

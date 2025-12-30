@@ -96,3 +96,4 @@ std::vector<BindsProfile>& get_binds_profiles_pool();
  - Keeps valid binds that match the schema
 */
 void register_binds_schema(const BindsSchema& schema);
+const BindsSchema& get_binds_schema();

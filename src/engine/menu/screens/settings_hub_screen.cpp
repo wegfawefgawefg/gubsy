@@ -67,6 +67,7 @@ const std::unordered_map<std::string_view, CategoryOverride> kCategoryOverrides 
     {"HUD", {"HUD", "HUD layout & minimap"}},
     {"Accessibility", {"Accessibility", "Accessibility options"}},
     {"Profiles", {"Profiles", "Profile management"}},
+    {"Binds Profiles", {"Binds Profiles", "Manage binds profiles"}},
     {"Players", {"Players", "Add and Remove Players"}},
     {"Saves", {"Saves", "Save slot management"}},
     {"Cheats", {"Cheats", "Cheats & sandbox"}},
@@ -197,6 +198,17 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         card.tag = "Players";
         card.item_count = 0;
         card.screen_id = MenuScreenID::LOCAL_PLAYERS;
+        card.order_hint = category_priority(card.tag);
+        st.cards.push_back(std::move(card));
+    }
+    auto binds_it = std::find_if(st.cards.begin(), st.cards.end(), [](const CategoryCard& card) {
+        return card.tag == "Binds Profiles";
+    });
+    if (binds_it == st.cards.end()) {
+        CategoryCard card;
+        card.tag = "Binds Profiles";
+        card.item_count = es ? static_cast<int>(es->binds_profiles.size()) : 0;
+        card.screen_id = MenuScreenID::BINDS_PROFILES;
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
     }

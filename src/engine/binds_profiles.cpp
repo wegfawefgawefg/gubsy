@@ -15,6 +15,7 @@
 namespace {
 
 constexpr const char* kBindsProfilesPath = "data/binds_profiles/default.lisp";
+static BindsSchema g_schema;
 
 std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;
@@ -302,6 +303,7 @@ void BindsSchema::add_2d_analog(int analog_id, const std::string& display_name, 
 }
 
 void register_binds_schema(const BindsSchema& schema) {
+    g_schema = schema;
     // Build sets of valid IDs from schema
     std::unordered_set<int> valid_actions;
     valid_actions.reserve(schema.actions.size());
@@ -358,4 +360,8 @@ void register_binds_schema(const BindsSchema& schema) {
 
     // Reload into engine state
     load_binds_profiles_pool();
+}
+
+const BindsSchema& get_binds_schema() {
+    return g_schema;
 }
