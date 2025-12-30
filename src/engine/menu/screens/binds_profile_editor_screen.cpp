@@ -75,6 +75,53 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     return w;
 }
 
+MenuStyle yellow_style() {
+    MenuStyle style;
+    style.bg_r = 88;
+    style.bg_g = 70;
+    style.bg_b = 28;
+    style.focus_r = 255;
+    style.focus_g = 210;
+    style.focus_b = 120;
+    return style;
+}
+
+MenuStyle green_style() {
+    MenuStyle style;
+    style.bg_r = 30;
+    style.bg_g = 60;
+    style.bg_b = 42;
+    style.focus_r = 120;
+    style.focus_g = 230;
+    style.focus_b = 170;
+    return style;
+}
+
+MenuStyle red_style() {
+    MenuStyle style;
+    style.bg_r = 70;
+    style.bg_g = 18;
+    style.bg_b = 18;
+    style.fg_r = 230;
+    style.fg_g = 210;
+    style.fg_b = 210;
+    style.focus_r = 200;
+    style.focus_g = 90;
+    style.focus_b = 90;
+    return style;
+}
+
+MenuStyle name_style() {
+    MenuStyle style;
+    style.bg_r = 28;
+    style.bg_g = 36;
+    style.bg_b = 68;
+    style.focus_r = 140;
+    style.focus_g = 200;
+    style.focus_b = 255;
+    return style;
+}
+
 BindsProfile* find_profile(int profile_id) {
     if (!es)
         return nullptr;
@@ -91,6 +138,11 @@ void rebuild_entries(BindsProfileEditorState& st) {
     name_entry.kind = EntryKind::Name;
     name_entry.label = "Profile Name";
     st.entries.push_back(name_entry);
+
+    EditorEntry reset_entry;
+    reset_entry.kind = EntryKind::Reset;
+    reset_entry.label = "Reset to Defaults";
+    st.entries.push_back(std::move(reset_entry));
 
     const BindsSchema& schema = get_binds_schema();
     for (const auto& action : schema.actions) {
@@ -120,11 +172,6 @@ void rebuild_entries(BindsProfileEditorState& st) {
         entry.category = analog.category;
         st.entries.push_back(std::move(entry));
     }
-
-    EditorEntry reset_entry;
-    reset_entry.kind = EntryKind::Reset;
-    reset_entry.label = "Reset to Defaults";
-    st.entries.push_back(std::move(reset_entry));
 }
 
 void rebuild_filter(BindsProfileEditorState& st) {
@@ -284,11 +331,45 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
                 row.text_buffer = &st.name_buffer;
                 row.text_max_len = 32;
                 row.on_select = MenuAction::none();
+                row.style = name_style();
             } else if (entry.kind == EntryKind::Binding) {
                 row.on_select = MenuAction::run_command(g_cmd_open_action, entry_index);
-                row.secondary = entry.category.empty() ? nullptr : entry.category.c_str();
+                std::string binds_summary;
+                if (profile) {
+                    auto append_label = [&](int code) {
+                        if (!binds_summary.empty())
+                            binds_summary += ", ";
+                        binds_summary += binds_input_label(entry.action_type, code);
+                    };
+                    if (entry.action_type == BindsActionType::Button) {
+                        for (const auto& bind : profile->button_binds) {
+                            if (bind.second == entry.id)
+                                append_label(bind.first);
+                        }
+                    } else if (entry.action_type == BindsActionType::Analog1D) {
+                        for (const auto& bind : profile->analog_1d_binds) {
+                            if (bind.second == entry.id)
+                                append_label(bind.first);
+                        }
+                    } else {
+                        for (const auto& bind : profile->analog_2d_binds) {
+                            if (bind.second == entry.id)
+                                append_label(bind.first);
+                        }
+                    }
+                }
+                if (!binds_summary.empty()) {
+                    text_cache.push_back(binds_summary);
+                    row.secondary = text_cache.back().c_str();
+                    row.style = green_style();
+                } else {
+                    row.secondary = "Unbound";
+                    row.style = red_style();
+                }
             } else if (entry.kind == EntryKind::Reset) {
                 row.on_select = MenuAction::run_command(g_cmd_reset_profile);
+                row.secondary = "Clear all bindings for this profile.";
+                row.style = yellow_style();
             }
             row.on_left = prev_action;
             row.on_right = next_action;

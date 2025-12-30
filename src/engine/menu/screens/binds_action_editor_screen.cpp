@@ -67,6 +67,28 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     return w;
 }
 
+MenuStyle yellow_style() {
+    MenuStyle style;
+    style.bg_r = 88;
+    style.bg_g = 70;
+    style.bg_b = 28;
+    style.focus_r = 255;
+    style.focus_g = 210;
+    style.focus_b = 120;
+    return style;
+}
+
+MenuStyle green_style() {
+    MenuStyle style;
+    style.bg_r = 30;
+    style.bg_g = 60;
+    style.bg_b = 42;
+    style.focus_r = 120;
+    style.focus_g = 230;
+    style.focus_b = 170;
+    return style;
+}
+
 BindsProfile* find_profile(int profile_id) {
     if (!es)
         return nullptr;
@@ -250,6 +272,7 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     MenuWidget reset_btn = make_button_widget(kResetButtonId, SettingsObjectID::SEARCH, "Reset Bindings",
                                               MenuAction::run_command(g_cmd_reset_action));
     reset_btn.secondary = "Clear all mappings for this action.";
+    reset_btn.style = yellow_style();
     widgets.push_back(reset_btn);
     std::size_t reset_idx = widgets.size() - 1;
 
@@ -284,6 +307,7 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
             if (mapping.empty) {
                 row.label = "New Mapping";
                 row.secondary = "Press to choose input.";
+                row.style = green_style();
             } else {
                 text_cache.emplace_back("Input: " + mapping.label);
                 row.label = text_cache.back().c_str();

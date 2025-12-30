@@ -4,7 +4,7 @@
     (name "GMan")
     (last_binds_profile 1)
     (last_input_settings_profile_id -1)
-    (last_game_settings 26509180)
+    (last_game_settings 51747355)
   )
   (profile
     (id 72060558)
@@ -15,9 +15,9 @@
   )
   (profile
     (id 38631913)
-    (name "Profile 1")
+    (name "anthonygay")
     (last_binds_profile -1)
     (last_input_settings_profile_id -1)
-    (last_game_settings 31605207)
+    (last_game_settings 50576437)
   )
 )
