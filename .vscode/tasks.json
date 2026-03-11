@@ -4,14 +4,14 @@
     {
       "label": "cmake: configure (dev)",
       "type": "shell",
-      "command": "cmake --preset dev",
+      "command": "${workspaceFolder}/scripts/build.sh --configure-only",
       "problemMatcher": ["$gcc", "$msCompile"],
       "group": "build"
     },
     {
       "label": "cmake: build (dev)",
       "type": "shell",
-      "command": "cmake --build --preset dev",
+      "command": "${workspaceFolder}/scripts/build.sh",
       "problemMatcher": ["$gcc", "$msCompile"],
       "group": {
         "kind": "build",
@@ -22,8 +22,7 @@
     {
       "label": "run gubsy",
       "type": "shell",
-      "command": "${workspaceFolder}/build/gubsy",
-      "dependsOn": ["cmake: build (dev)"],
+      "command": "${workspaceFolder}/scripts/run.sh",
       "options": {
         "env": {
           "SDL_VIDEODRIVER": "x11"

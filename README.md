@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="Artificial" width="512" />
+  <img src="image.png" alt="Artificial" width="512" />
 </p>
 
 Artificial
@@ -22,8 +22,8 @@ Quick Build & Run
 - Requirements: CMake 3.20+, a C++20 compiler, SDL2, GLM, Lua 5.4, SDL2_image, SDL2_ttf, SDL2_mixer.
 - Linux (Debian/Ubuntu):
   - `bash scripts/setup_debian.sh`
-  - `cmake --preset dev && cmake --build --preset dev -j`
-  - `./build/artificial` (alias: `./build/arti`)
+  - `bash scripts/build.sh`
+  - `./build/gubsy` (alias: `./build/arti`)
 - Or use the helper script: `bash scripts/run.sh`
 
 Windows/macOS
@@ -43,4 +43,3 @@ More Info
 
 - Developer setup details: see `docs/dev_setup.md`.
 - Technical overview (architecture, globals, modules): see `docs/tech_overview.md`.
-

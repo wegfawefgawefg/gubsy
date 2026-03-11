@@ -15,8 +15,8 @@ Linux (Debian/Ubuntu)
 
 ```
 bash scripts/setup_debian.sh
-cmake --preset dev && cmake --build --preset dev -j
-./build/artificial     # alias: ./build/arti
+bash scripts/build.sh
+./build/gubsy          # alias: ./build/arti
 ```
 
 Windows (vcpkg)
@@ -31,8 +31,8 @@ macOS (Homebrew)
 
 ```
 brew install sdl2 glm lua sdl2_image sdl2_ttf sdl2_mixer
-cmake --preset dev && cmake --build --preset dev -j
-./build/artificial
+bash scripts/build.sh
+./build/gubsy
 ```
 
 CMake Notes
@@ -51,4 +51,3 @@ Troubleshooting
   - `-DSDL2_DIR=/path/to/SDL2/lib/cmake/SDL2`
   - `-Dglm_DIR=/path/to/glm`
 - Run script prefers X11 on i3 unless `SDL_VIDEODRIVER` is set.
-

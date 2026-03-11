@@ -25,6 +25,7 @@
       ],
       "externalConsole": false,
       "preLaunchTask": "cmake: build (dev)",
+      "miDebuggerPath": "/usr/bin/gdb",
       "MIMode": "gdb",
       "setupCommands": [
         {
