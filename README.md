@@ -1,45 +1,91 @@
 <p align="center">
-  <img src="image.png" alt="Artificial" width="512" />
+  <img src="images/logo.png" alt="gubsy" width="384" />
 </p>
 
-Artificial
-==========
+gubsy
+=====
 
-Artificial is a fast, skill‑based top‑down shooter — a spiritual successor to the Synthetik series — built for tight gunplay, crunchy feedback, and high replayability. It features active reloads, weapon jams, dashes, loot and crates, and a moddable content pipeline.
+`gubsy` is a small C++20 game engine/runtime with a bundled game layer used to exercise the engine.
+It currently includes SDL2 rendering, audio, input, menu systems, UI layout tooling, player/profile
+state, and Lua-driven mod loading.
 
-Highlights
-----------
+<p align="center">
+  <img src="images/lobby.png" alt="gubsy lobby screenshot" width="900" />
+</p>
 
-- Combat: active reload windows, jams/unjam, recoil and spread, pellet patterns, and satisfying audio/visual feedback.
-- Progression: randomized stages with enemies, powerups, items, guns, and score review pages between areas.
-- Movement: precise WASD with dash stocks and camera follow.
-- Modding: Lua + hot‑reloadable assets; add guns, ammo, items, sprites, and sounds under `mods/`.
-- Cross‑platform: C++20 + SDL2 + GLM; builds on Linux/macOS/Windows.
+What Is In This Repo
+--------------------
 
-Quick Build & Run
------------------
+- `src/engine/`: reusable engine/runtime code
+- `src/game/`: the current game-specific layer and sample content wiring
+- `mods/` and `mod_repo/`: local mod content and mod repository data
+- `imgui/`: Dear ImGui sources used by the engine
+- `scripts/`: local build/run helpers
 
-- Requirements: CMake 3.20+, a C++20 compiler, SDL2, GLM, Lua 5.4, SDL2_image, SDL2_ttf, SDL2_mixer.
-- Linux (Debian/Ubuntu):
-  - `bash scripts/setup_debian.sh`
-  - `bash scripts/build.sh`
-  - `./build/gubsy` (alias: `./build/arti`)
-- Or use the helper script: `bash scripts/run.sh`
+Current Engine Features
+-----------------------
 
-Windows/macOS
--------------
+- C++20 + CMake build
+- SDL2-based windowing, rendering, image loading, fonts, and audio
+- Input system for keyboard, mouse, and gamepad bindings
+- Menu framework with screen registration, command routing, and per-screen state
+- Player profiles, binds profiles, and game settings persistence
+- UI layout loading/editing support
+- Lua 5.4 mod host with runtime API registration and mod activation/reload
+- ImGui debug/editor tooling in the engine layer
 
-- Windows: use vcpkg for deps (SDL2, glm, lua, sdl2_image, sdl2_ttf, sdl2_mixer) and configure with the vcpkg toolchain file.
-- macOS: install deps via Homebrew, then configure/build with CMake as above.
+Build
+-----
 
-Modding
+Requirements:
+- CMake 3.20+
+- A C++20 compiler
+- SDL2
+- GLM
+- Lua 5.4
+- SDL2_image
+- SDL2_ttf
+- SDL2_mixer
+
+Linux (Debian/Ubuntu):
+- `bash scripts/setup_debian.sh`
+- `bash scripts/build.sh`
+
+Run:
+- `./build/gubsy`
+- or `bash scripts/run.sh`
+
+The build also creates `./build/arti` as a symlink alias to `gubsy`.
+
+VS Code
 -------
 
-- Drop content under `mods/<your_mod>/graphics|sounds|scripts`. Lua tables register guns, ammo, items, and crates; sprites and sounds are discovered by name.
-- Asset changes hot‑reload during development.
+- Build task: `cmake: build (dev)`
+- Run task: `run gubsy`
+- F5 launch config: `Run gubsy (Debug, Linux)` or `Run gubsy (Debug, macOS)`
 
-More Info
----------
+The workspace uses the `dev` CMake preset with strict warnings enabled. On GCC/Clang that includes
+`-Wall -Wextra -Wpedantic`, plus additional warning flags and `-Werror`.
 
-- Developer setup details: see `docs/dev_setup.md`.
-- Technical overview (architecture, globals, modules): see `docs/tech_overview.md`.
+Formatting
+----------
+
+- The repo includes a top-level `.clang-format`
+- VS Code is configured to use `clang-format`
+- `compile_commands.json` is generated into `build/` by CMake
+
+Project Layout Notes
+--------------------
+
+- The engine entrypoints live under `src/engine/`
+- The executable target is defined in `CMakeLists.txt` as `gubsy`
+- The bundled game layer registers modes, menus, binds, settings schemas, and mod APIs from `src/game/main.cpp`
+
+Docs
+----
+
+- Developer setup: `docs/dev_setup.md`
+- Engine roadmap: `docs/engine_roadmap.md`
+- Menu system notes: `docs/menu.md`
+- UI layout system notes: `docs/ui_layout_system.md`
+- Mod/API notes: `docs/mod_api_system.md`
