@@ -8,6 +8,7 @@
 #include "engine/graphics.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
+#include "game/coop_session.hpp"
 #include "settings.hpp"
 #include "state.hpp"
 #include "demo_items.hpp"
@@ -33,6 +34,22 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
 
 void playing_step() {
     const float dt = FIXED_TIMESTEP;
+    const CoopStepResult coop = coop_session_step();
+    if (coop.handled) {
+        if (es) {
+            glm::vec2 raw_gamepad =
+                sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
+            ss->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
+            ss->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
+        }
+        for (int i = 0; i < coop.bonk_count; ++i) {
+            add_alert("bonk!");
+            const std::string sound = ss->bonk.sound_key.empty() ? "base:ui_confirm" : ss->bonk.sound_key;
+            play_sound(sound);
+        }
+        return;
+    }
+
     auto& target = ss->bonk;
 
     // Update things that happen once per frame
@@ -312,5 +329,7 @@ void playing_draw() {
         prompt_text = "Press Space/E to use " + nearby_label;
     else
         prompt_text = "Move with WASD. Press Space/E near a pad to run its Lua-defined action.";
+    if (coop_session_active() && !coop_session_status_text().empty())
+        prompt_text += " | " + coop_session_status_text();
     render_instructions(renderer, width, height, prompt_text);
 }

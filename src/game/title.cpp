@@ -7,6 +7,8 @@
 #include "engine/graphics.hpp"
 #include "game/modes.hpp"
 #include "game/actions.hpp"
+#include "game/menu/lobby_online.hpp"
+#include "game/menu/lobby_state.hpp"
 #include "game/menu/menu_ids.hpp"
 
 #include <SDL2/SDL_render.h>
@@ -51,7 +53,12 @@ void ensure_menu_ready() {
 
 } // namespace
 
-void title_step() {}
+void title_step() {
+    LobbySession& lobby = lobby_state();
+    lobby_online_tick(lobby);
+    if (es && lobby.online.in_room && lobby.online.in_game)
+        es->mode = modes::PLAYING;
+}
 
 void title_process_inputs() {
     ensure_menu_ready();

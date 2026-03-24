@@ -23,6 +23,14 @@ This project is aiming for cooperative multiplayer first, not rollback PvP netco
 - State synchronization that tolerates latency.
 - Graceful recovery when peers or content drift slightly.
 
+## Current Implementation Direction
+
+- The first playable online slice is host-authoritative snapshot sync.
+- Clients should locally predict their own movement/input-facing state between host snapshots.
+- The room service is currently an HTTP relay for room membership, latest member inputs, and latest authoritative snapshot.
+- This relay is a bootstrap step for browser/join/validation work, not the final transport choice.
+- A lower-latency transport can replace the relay later without changing the lobby/session model.
+
 ## Mod Boundary
 
 - Mods are part of the network contract.
@@ -46,3 +54,4 @@ That means:
 - Networking should support snapshot/state replication, not just input relay.
 - The room/join path should exist independently of Steam so the same model works on and off Steam.
 - Steam integration should be a backend for invites, lobbies, and transport, not the entire multiplayer design.
+- The first validation harness should be headless and compare client-applied state against host-authoritative state.

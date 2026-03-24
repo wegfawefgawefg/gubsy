@@ -185,6 +185,16 @@ target_include_directories(room_smoke PRIVATE
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
+add_executable(coop_sync_smoke
+  tools/coop_sync_smoke/main.cpp
+  src/game/coop_protocol.cpp
+  src/game/coop_sim.cpp
+)
+target_include_directories(coop_sync_smoke PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/third_party
+)
+
 # Lua 5.4 (required at runtime; build-time optional with stub)
 set(LUA_FOUND_LOCAL OFF)
 find_package(Lua 5.4 QUIET)

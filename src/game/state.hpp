@@ -12,7 +12,6 @@
 #include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include <SDL2/SDL.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -41,6 +40,5 @@ struct State {
 
 bool init_state();
 void cleanup_state();
-
 
 

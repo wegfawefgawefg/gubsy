@@ -157,6 +157,7 @@ void apply_room_to_lobby(const LobbyDiscoveredRoom& room, LobbySession& lobby) {
     lobby.session_name = room.session_name;
     lobby.privacy = room.privacy;
     lobby.max_players = std::max(1, room.max_players);
+    lobby.online.in_game = room.in_game;
 }
 
 void read_room_members(const nlohmann::json& room_json, LobbySession& lobby) {

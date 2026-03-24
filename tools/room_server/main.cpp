@@ -47,6 +47,8 @@ struct RoomRecord {
     int max_players{1};
     bool in_game{false};
     std::vector<RoomMember> members;
+    std::unordered_map<std::string, nlohmann::json> latest_inputs;
+    nlohmann::json latest_snapshot;
     Clock::time_point created_at{Clock::now()};
     Clock::time_point updated_at{Clock::now()};
 };
@@ -77,12 +79,18 @@ struct RoomRegistry {
         const auto now = Clock::now();
         std::vector<std::string> dead_rooms;
         for (auto& [room_code, room] : rooms) {
+            std::vector<std::string> dead_members;
             room.members.erase(std::remove_if(room.members.begin(),
                                               room.members.end(),
                                               [&](const RoomMember& member) {
-                                                  return now - member.last_seen > kMemberTimeout;
+                                                  const bool expired = now - member.last_seen > kMemberTimeout;
+                                                  if (expired)
+                                                      dead_members.push_back(member.member_id);
+                                                  return expired;
                                               }),
                                room.members.end());
+            for (const auto& member_id : dead_members)
+                room.latest_inputs.erase(member_id);
             auto host_it = std::find_if(room.members.begin(), room.members.end(),
                                         [](const RoomMember& member) { return member.is_host; });
             if (room.members.empty() || host_it == room.members.end())
@@ -156,6 +164,21 @@ bool json_bool(const nlohmann::json& body, const char* key, bool fallback = fals
     if (it != body.end() && it->is_boolean())
         return it->get<bool>();
     return fallback;
+}
+
+bool body_member_access(RoomRecord& room,
+                        const nlohmann::json& body,
+                        RoomMember*& member_out,
+                        httplib::Response& res) {
+    RoomMember* member = find_member(room, json_string(body, "member_id"));
+    if (!member) {
+        res.status = 404;
+        res.set_content("member not found", "text/plain");
+        return false;
+    }
+    member->last_seen = Clock::now();
+    member_out = member;
+    return true;
 }
 
 } // namespace
@@ -285,15 +308,11 @@ int main(int argc, char** argv) {
             return;
         }
         RoomRecord& room = it->second;
-        RoomMember* member = find_member(room, json_string(body, "member_id"));
-        if (!member) {
-            res.status = 404;
-            res.set_content("member not found", "text/plain");
+        RoomMember* member = nullptr;
+        if (!body_member_access(room, body, member, res))
             return;
-        }
 
         member->display_name = json_string(body, "display_name", member->display_name.c_str());
-        member->last_seen = Clock::now();
 
         const std::string host_secret = json_string(body, "host_secret");
         if (member->is_host && !host_secret.empty() && host_secret == room.host_secret) {
@@ -312,6 +331,117 @@ int main(int argc, char** argv) {
 
         room.updated_at = Clock::now();
         res.set_content(nlohmann::json{{"ok", true}}.dump(), "application/json");
+    });
+
+    server.Post(R"(/rooms/([A-Z0-9]+)/input)", [](const httplib::Request& req, httplib::Response& res) {
+        nlohmann::json body;
+        if (!read_body_json(req, body, res))
+            return;
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+
+        auto it = g_registry.rooms.find(req.matches[1].str());
+        if (it == g_registry.rooms.end()) {
+            res.status = 404;
+            res.set_content("room not found", "text/plain");
+            return;
+        }
+        RoomRecord& room = it->second;
+        RoomMember* member = nullptr;
+        if (!body_member_access(room, body, member, res))
+            return;
+
+        auto input_it = body.find("input");
+        if (input_it == body.end() || !input_it->is_object()) {
+            res.status = 400;
+            res.set_content("missing input object", "text/plain");
+            return;
+        }
+
+        room.latest_inputs[member->member_id] = *input_it;
+        room.updated_at = Clock::now();
+        res.set_content(nlohmann::json{{"ok", true}}.dump(), "application/json");
+    });
+
+    server.Get(R"(/rooms/([A-Z0-9]+)/inputs)", [](const httplib::Request& req, httplib::Response& res) {
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+
+        auto it = g_registry.rooms.find(req.matches[1].str());
+        if (it == g_registry.rooms.end()) {
+            res.status = 404;
+            res.set_content("room not found", "text/plain");
+            return;
+        }
+
+        nlohmann::json members = nlohmann::json::array();
+        for (const auto& member : it->second.members) {
+            nlohmann::json entry{
+                {"member_id", member.member_id},
+                {"display_name", member.display_name},
+                {"is_host", member.is_host},
+            };
+            auto input_it = it->second.latest_inputs.find(member.member_id);
+            if (input_it != it->second.latest_inputs.end())
+                entry["input"] = input_it->second;
+            members.push_back(std::move(entry));
+        }
+
+        res.set_content(nlohmann::json{{"members", std::move(members)}}.dump(), "application/json");
+    });
+
+    server.Post(R"(/rooms/([A-Z0-9]+)/snapshot)", [](const httplib::Request& req, httplib::Response& res) {
+        nlohmann::json body;
+        if (!read_body_json(req, body, res))
+            return;
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+
+        auto it = g_registry.rooms.find(req.matches[1].str());
+        if (it == g_registry.rooms.end()) {
+            res.status = 404;
+            res.set_content("room not found", "text/plain");
+            return;
+        }
+        RoomRecord& room = it->second;
+        RoomMember* member = nullptr;
+        if (!body_member_access(room, body, member, res))
+            return;
+
+        const std::string host_secret = json_string(body, "host_secret");
+        if (!member->is_host || host_secret != room.host_secret) {
+            res.status = 403;
+            res.set_content("host access required", "text/plain");
+            return;
+        }
+
+        auto snapshot_it = body.find("snapshot");
+        if (snapshot_it == body.end() || !snapshot_it->is_object()) {
+            res.status = 400;
+            res.set_content("missing snapshot object", "text/plain");
+            return;
+        }
+
+        room.latest_snapshot = *snapshot_it;
+        room.updated_at = Clock::now();
+        res.set_content(nlohmann::json{{"ok", true}}.dump(), "application/json");
+    });
+
+    server.Get(R"(/rooms/([A-Z0-9]+)/snapshot)", [](const httplib::Request& req, httplib::Response& res) {
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+
+        auto it = g_registry.rooms.find(req.matches[1].str());
+        if (it == g_registry.rooms.end()) {
+            res.status = 404;
+            res.set_content("room not found", "text/plain");
+            return;
+        }
+
+        nlohmann::json body{{"has_snapshot", it->second.latest_snapshot.is_object()}};
+        if (it->second.latest_snapshot.is_object())
+            body["snapshot"] = it->second.latest_snapshot;
+        res.set_content(body.dump(), "application/json");
     });
 
     server.Post(R"(/rooms/([A-Z0-9]+)/leave)", [](const httplib::Request& req, httplib::Response& res) {
@@ -334,6 +464,7 @@ int main(int argc, char** argv) {
                                       [&](const RoomMember& member) { return member.member_id == member_id; });
         if (member_it != room.members.end()) {
             const bool is_host = member_it->is_host;
+            room.latest_inputs.erase(member_it->member_id);
             room.members.erase(member_it);
             if (is_host || host_secret == room.host_secret)
                 g_registry.rooms.erase(it);
