@@ -56,7 +56,7 @@ void ensure_menu_ready() {
 void title_step() {
     LobbySession& lobby = lobby_state();
     lobby_online_tick(lobby);
-    if (es && lobby.online.in_room && lobby.online.in_game)
+    if (es && lobby_online_ready_to_enter_game(lobby))
         es->mode = modes::PLAYING;
 }
 

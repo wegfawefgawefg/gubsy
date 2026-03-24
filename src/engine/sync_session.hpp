@@ -13,6 +13,7 @@ struct SyncConnectionInfo {
     std::string room_code;
     std::string host_secret;
     std::string local_member_id;
+    std::string remote_endpoint;
 };
 
 struct SyncSessionHooks {
@@ -62,3 +63,4 @@ bool sync_session_active();
 SyncStepResult sync_session_step(float dt);
 const std::string& sync_session_status_text();
 const std::string& sync_session_last_error();
+const std::string& sync_session_advertised_endpoint();

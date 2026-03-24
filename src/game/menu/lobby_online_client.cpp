@@ -18,6 +18,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/mod_host.hpp"
+#include "engine/sync_session.hpp"
 #include "game/lobby_config.hpp"
 #include "game/menu/lobby_state.hpp"
 
@@ -140,6 +141,8 @@ nlohmann::json build_room_metadata(const LobbySession& lobby) {
     body["game_version"] = required_mod_game_version();
     body["mod_hash"] = lobby_enabled_mod_signature();
     body["game_config"] = capture_game_lobby_config(lobby);
+    const std::string& advertised_endpoint = sync_session_advertised_endpoint();
+    body["realtime_endpoint"] = advertised_endpoint;
     body["in_game"] = lobby.online.in_game;
     return body;
 }
@@ -149,6 +152,7 @@ void read_room_summary(const nlohmann::json& room_json, LobbyDiscoveredRoom& out
     out.session_name = room_json.value("session_name", "");
     out.host_name = room_json.value("host_name", "");
     out.session_phase = room_json.value("session_phase", room_json.value("in_game", false) ? "in_game" : "lobby");
+    out.realtime_endpoint = room_json.value("realtime_endpoint", "");
     out.game_version = room_json.value("game_version", "");
     out.mod_hash = room_json.value("mod_hash", "");
     out.privacy = room_json.value("privacy", 0);
@@ -162,6 +166,7 @@ void apply_room_to_lobby(const LobbyDiscoveredRoom& room, LobbySession& lobby) {
     lobby.privacy = room.privacy;
     lobby.max_players = std::max(1, room.max_players);
     lobby.online.session_phase = room.session_phase;
+    lobby.online.realtime_endpoint = room.realtime_endpoint;
     lobby.online.in_game = room.in_game;
 }
 
@@ -247,6 +252,7 @@ bool lobby_online_host_current_room(LobbySession& lobby, std::string& err) {
     lobby.online.host_secret = (*json).value("host_secret", "");
     lobby.online.member_id = (*json).value("member_id", "");
     lobby.online.session_phase = "lobby";
+    lobby.online.realtime_endpoint.clear();
     lobby.online.in_game = false;
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
@@ -267,6 +273,7 @@ bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, s
     lobby.online.host_secret.clear();
     lobby.online.member_id = (*json).value("member_id", "");
     lobby.online.session_phase = "lobby";
+    lobby.online.realtime_endpoint.clear();
     lobby.online.in_game = false;
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
@@ -292,6 +299,7 @@ bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
     lobby.online.room_code.clear();
     lobby.online.host_secret.clear();
     lobby.online.member_id.clear();
+    lobby.online.realtime_endpoint.clear();
     lobby.online.members.clear();
     lobby.online.status_text = "Offline lobby";
     return true;

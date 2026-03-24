@@ -30,6 +30,7 @@ bool query_connection(void*, SyncConnectionInfo& out) {
     out.room_code = lobby.online.room_code;
     out.host_secret = lobby.online.host_secret;
     out.local_member_id = lobby.online.member_id;
+    out.remote_endpoint = lobby.online.is_host ? std::string{} : lobby.online.realtime_endpoint;
     return true;
 }
 

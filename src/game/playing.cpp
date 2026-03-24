@@ -35,6 +35,7 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
 
 void return_to_lobby() {
     LobbySession& lobby = lobby_state();
+    coop_session_reset();
     if (lobby.online.in_room && !lobby.online.is_host) {
         std::string err;
         lobby_online_leave_room(lobby, err);
@@ -81,6 +82,9 @@ void playing_step() {
         }
         return;
     }
+
+    if (lobby.online.in_room && lobby.online.in_game)
+        return;
 
     auto& target = ss->bonk;
 

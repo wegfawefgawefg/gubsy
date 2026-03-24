@@ -117,6 +117,7 @@ int main(int argc, char** argv) {
                        {
                            {"session_name", "Smoke Lobby Updated"},
                            {"host_name", "Host"},
+                           {"realtime_endpoint", "udp://127.0.0.1:9000"},
                            {"privacy", 4},
                            {"max_players", 6},
                            {"game_version", "0.1.1"},
@@ -134,6 +135,8 @@ int main(int argc, char** argv) {
             throw std::runtime_error("room player count mismatch");
         if (room_json.at("mod_hash").get<std::string>() != "ccccdddd")
             throw std::runtime_error("room mod hash did not update");
+        if (room_json.at("realtime_endpoint").get<std::string>() != "udp://127.0.0.1:9000")
+            throw std::runtime_error("room realtime endpoint did not update");
 
         post_json(client,
                   "/rooms/" + room_code + "/leave",

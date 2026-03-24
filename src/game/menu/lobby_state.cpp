@@ -182,3 +182,11 @@ void lobby_toggle_device(int player_index, int type, int id) {
 const char* lobby_session_phase(const LobbySession& lobby) {
     return lobby.online.in_game ? "in_game" : "lobby";
 }
+
+bool lobby_online_ready_to_enter_game(const LobbySession& lobby) {
+    if (!lobby.online.in_room || !lobby.online.in_game)
+        return false;
+    if (lobby.online.is_host)
+        return true;
+    return !lobby.online.realtime_endpoint.empty();
+}

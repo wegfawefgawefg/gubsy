@@ -187,6 +187,7 @@ target_include_directories(room_smoke PRIVATE
 
 add_executable(coop_sync_smoke
   tools/coop_sync_smoke/main.cpp
+  src/engine/sync_transport_udp.cpp
   src/game/coop_protocol.cpp
   src/game/coop_sim.cpp
 )

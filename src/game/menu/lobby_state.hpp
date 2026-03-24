@@ -23,6 +23,7 @@ struct LobbyDiscoveredRoom {
     std::string session_name;
     std::string host_name;
     std::string session_phase{"lobby"};
+    std::string realtime_endpoint;
     std::string game_version;
     std::string mod_hash;
     int privacy{0};
@@ -39,6 +40,7 @@ struct LobbyOnlineState {
     std::string status_text;
     std::string last_error;
     std::string session_phase{"lobby"};
+    std::string realtime_endpoint;
     bool in_room{false};
     bool is_host{false};
     bool in_game{false};
@@ -78,3 +80,4 @@ void lobby_ensure_player_devices(int player_index);
 bool lobby_device_enabled(int player_index, int type, int id);
 void lobby_toggle_device(int player_index, int type, int id);
 const char* lobby_session_phase(const LobbySession& lobby);
+bool lobby_online_ready_to_enter_game(const LobbySession& lobby);
