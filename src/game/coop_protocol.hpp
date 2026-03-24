@@ -20,6 +20,7 @@ struct CoopStateSnapshot {
     std::uint64_t sim_frame{0};
     std::vector<CoopPlayerSnapshot> players;
     BonkTarget bonk{};
+    std::uint64_t bonk_serial{0};
     float bar_height{0.5f};
 };
 

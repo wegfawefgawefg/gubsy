@@ -149,11 +149,11 @@ CoopStepResult coop_session_step() {
     if (!ss)
         return result;
 
-    const float previous_cooldown = ss->bonk.cooldown;
+    const std::uint64_t previous_bonk_serial = ss->bonk_serial;
     SyncStepResult sync_result = sync_session_step(FIXED_TIMESTEP);
     result.handled = sync_result.handled;
-    if (sync_result.handled && previous_cooldown <= 0.0f && ss->bonk.cooldown > 0.0f)
-        result.bonk_count = 1;
+    if (sync_result.handled && ss->bonk_serial > previous_bonk_serial)
+        result.bonk_count = static_cast<int>(ss->bonk_serial - previous_bonk_serial);
     return result;
 }
 

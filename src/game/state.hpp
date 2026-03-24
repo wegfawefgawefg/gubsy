@@ -32,6 +32,7 @@ struct BonkTarget {
 struct State {
     std::vector<DemoPlayer> players;
     BonkTarget bonk{};
+    std::uint64_t bonk_serial{0};
     float bar_height{0.5f};            // 0.0 to 1.0, normalized
     glm::vec2 reticle_pos{0.0f, 0.0f}; // Combined reticle (legacy/merged)
     glm::vec2 reticle_pos_gamepad{0.0f, 0.0f}; // Raw gamepad stick [-1, 1]
@@ -40,5 +41,4 @@ struct State {
 
 bool init_state();
 void cleanup_state();
-
 

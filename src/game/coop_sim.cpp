@@ -100,6 +100,7 @@ CoopSimEvents simulate_demo_world(State& state,
             state.bonk.cooldown <= 0.0f &&
             input_was_pressed(cur, prev, GameAction::USE)) {
             state.bonk.cooldown = BONK_COOLDOWN_SECONDS;
+            state.bonk_serial += 1;
             events.bonk_count += 1;
         }
     }

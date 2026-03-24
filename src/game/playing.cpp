@@ -9,6 +9,9 @@
 #include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
 #include "game/coop_session.hpp"
+#include "game/menu/lobby_online.hpp"
+#include "game/menu/lobby_state.hpp"
+#include "game/modes.hpp"
 #include "settings.hpp"
 #include "state.hpp"
 #include "demo_items.hpp"
@@ -30,10 +33,39 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
     return delta.x <= (a_half.x + b_half.x) && delta.y <= (a_half.y + b_half.y);
 }
 
+void return_to_lobby() {
+    LobbySession& lobby = lobby_state();
+    if (lobby.online.in_room && !lobby.online.is_host) {
+        std::string err;
+        lobby_online_leave_room(lobby, err);
+        if (!err.empty())
+            add_alert(err);
+    } else {
+        lobby.online.in_game = false;
+    }
+    if (es)
+        es->mode = modes::TITLE;
+}
+
 
 
 void playing_step() {
     const float dt = FIXED_TIMESTEP;
+    LobbySession& lobby = lobby_state();
+    if (lobby.online.in_room)
+        lobby_online_tick(lobby);
+
+    if (was_pressed(0, GameAction::MENU_BACK)) {
+        return_to_lobby();
+        return;
+    }
+
+    if (lobby.online.in_room && !lobby.online.in_game) {
+        if (es)
+            es->mode = modes::TITLE;
+        return;
+    }
+
     const CoopStepResult coop = coop_session_step();
     if (coop.handled) {
         if (es) {
@@ -331,5 +363,6 @@ void playing_draw() {
         prompt_text = "Move with WASD. Press Space/E near a pad to run its Lua-defined action.";
     if (coop_session_active() && !coop_session_status_text().empty())
         prompt_text += " | " + coop_session_status_text();
+    prompt_text += " | Esc returns to lobby";
     render_instructions(renderer, width, height, prompt_text);
 }

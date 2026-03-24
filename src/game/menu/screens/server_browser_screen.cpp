@@ -48,7 +48,7 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     return w;
 }
 
-void command_host_or_leave(MenuContext&, std::int32_t) {
+void command_host_or_leave(MenuContext& ctx, std::int32_t) {
     LobbySession& lobby = lobby_state();
     std::string err;
     if (lobby.online.in_room) {
@@ -63,9 +63,10 @@ void command_host_or_leave(MenuContext&, std::int32_t) {
         return;
     }
     add_alert("Hosted online room: " + lobby.online.room_code);
+    ctx.manager.pop_screen();
 }
 
-void command_join_room(MenuContext&, std::int32_t index) {
+void command_join_room(MenuContext& ctx, std::int32_t index) {
     LobbySession& lobby = lobby_state();
     if (index < 0 || index >= static_cast<int>(lobby.online.discovered_rooms.size()))
         return;
@@ -80,6 +81,7 @@ void command_join_room(MenuContext&, std::int32_t index) {
         return;
     }
     add_alert("Joined room " + room.room_code);
+    ctx.manager.pop_screen();
 }
 
 BuiltScreen build_server_browser(MenuContext& ctx) {

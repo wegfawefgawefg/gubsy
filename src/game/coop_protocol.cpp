@@ -89,6 +89,7 @@ nlohmann::json coop_snapshot_to_json(const CoopStateSnapshot& snapshot) {
              {"sound_key", snapshot.bonk.sound_key},
              {"enabled", snapshot.bonk.enabled},
          }},
+        {"bonk_serial", snapshot.bonk_serial},
         {"bar_height", snapshot.bar_height},
     };
 }
@@ -98,6 +99,7 @@ bool coop_snapshot_from_json(const nlohmann::json& json, CoopStateSnapshot& snap
         return false;
     snapshot = CoopStateSnapshot{};
     snapshot.sim_frame = json.value("sim_frame", std::uint64_t{0});
+    snapshot.bonk_serial = json.value("bonk_serial", std::uint64_t{0});
     snapshot.bar_height = json.value("bar_height", 0.5f);
 
     auto bonk_it = json.find("bonk");
@@ -129,6 +131,7 @@ CoopStateSnapshot capture_coop_snapshot(const State& state, const std::vector<st
     CoopStateSnapshot snapshot;
     snapshot.sim_frame = sim_frame;
     snapshot.bonk = state.bonk;
+    snapshot.bonk_serial = state.bonk_serial;
     snapshot.bar_height = state.bar_height;
     snapshot.players.reserve(state.players.size());
     for (std::size_t i = 0; i < state.players.size(); ++i) {
@@ -157,5 +160,6 @@ void apply_coop_snapshot(const CoopStateSnapshot& snapshot, State& state, std::v
         member_ids_out.push_back(player.member_id);
     }
     state.bonk = snapshot.bonk;
+    state.bonk_serial = snapshot.bonk_serial;
     state.bar_height = snapshot.bar_height;
 }
