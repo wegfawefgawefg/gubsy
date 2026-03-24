@@ -55,3 +55,22 @@ That means:
 - The room/join path should exist independently of Steam so the same model works on and off Steam.
 - Steam integration should be a backend for invites, lobbies, and transport, not the entire multiplayer design.
 - The first validation harness should be headless and compare client-applied state against host-authoritative state.
+- The engine should own generic session orchestration, membership, transport/backend polling, and reconciliation hooks.
+- Individual games should provide their own sync driver for input capture, local prediction, snapshot capture, and snapshot application.
+
+## Engine Boundary
+
+Gubsy should not hard-code one game’s world state into the engine-level sync flow.
+
+That means:
+
+- The engine can define session/sync interfaces and lifecycle.
+- The engine can provide reusable room/lobby/browser plumbing.
+- The engine should not assume `DemoPlayer`, `BonkTarget`, or any other particular game state.
+- A game should plug in code-first sync behavior rather than inherit a one-size-fits-all gameplay netcode layer.
+
+## Current Limitation
+
+- The current smoke backend still uses JSON payloads because the room server is an HTTP validation backend.
+- That is a backend detail, not the long-term transport goal.
+- If the JSON payload boundary starts getting in the way, it should be replaced with an opaque packet/byte payload interface.
