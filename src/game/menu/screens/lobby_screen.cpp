@@ -12,6 +12,7 @@
 #include "engine/menu/menu_screen.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/player.hpp"
+#include "game/lobby_config.hpp"
 #include "game/menu/lobby_online.hpp"
 #include "game/menu/lobby_state.hpp"
 #include "game/menu/menu_ids.hpp"
@@ -180,7 +181,9 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     title.id = 500;
     title.slot = LobbyObjectID::TITLE;
     title.type = WidgetType::Label;
-    title.label = lobby.online.in_room && lobby.online.is_host ? "Online Session Lobby" : "Session Lobby";
+    title.label = lobby.online.in_room
+                      ? (lobby.online.in_game ? "Online Session In Progress" : "Online Session Lobby")
+                      : "Session Lobby";
     widgets.push_back(title);
 
     MenuWidget browse = make_button(514, LobbyObjectID::BROWSE_SERVERS, "Browse Servers",
@@ -282,6 +285,8 @@ BuiltScreen build_lobby(MenuContext& ctx) {
                                            LobbyObjectID::GAME_SETTINGS,
                                            "Game Settings",
                                            MenuAction::run_command(g_cmd_open_game_settings));
+    text_cache.emplace_back(describe_game_lobby_config(lobby));
+    game_settings.secondary = text_cache.back().c_str();
     widgets.push_back(game_settings);
 
     widgets.push_back(manage_mods);

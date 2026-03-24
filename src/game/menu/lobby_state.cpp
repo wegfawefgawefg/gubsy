@@ -178,3 +178,7 @@ void lobby_toggle_device(int player_index, int type, int id) {
     }
     devices.push_back(PlayerDeviceKey{type, id});
 }
+
+const char* lobby_session_phase(const LobbySession& lobby) {
+    return lobby.online.in_game ? "in_game" : "lobby";
+}

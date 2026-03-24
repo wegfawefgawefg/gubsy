@@ -41,11 +41,13 @@ struct RoomRecord {
     std::string host_secret;
     std::string session_name;
     std::string host_name;
+    std::string session_phase{"lobby"};
     std::string game_version;
     std::string mod_hash;
     int privacy{0};
     int max_players{1};
     bool in_game{false};
+    nlohmann::json game_config;
     std::vector<RoomMember> members;
     std::unordered_map<std::string, nlohmann::json> latest_inputs;
     nlohmann::json latest_snapshot;
@@ -124,12 +126,14 @@ nlohmann::json room_to_json(const RoomRecord& room) {
         {"room_code", room.room_code},
         {"session_name", room.session_name},
         {"host_name", room.host_name},
+        {"session_phase", room.session_phase},
         {"game_version", room.game_version},
         {"mod_hash", room.mod_hash},
         {"privacy", room.privacy},
         {"max_players", room.max_players},
         {"current_players", static_cast<int>(room.members.size())},
         {"in_game", room.in_game},
+        {"game_config", room.game_config.is_object() ? room.game_config : nlohmann::json::object()},
         {"members", std::move(members)},
     };
 }
@@ -238,11 +242,15 @@ int main(int argc, char** argv) {
         room.host_secret = g_registry.random_token(kSecretLen);
         room.session_name = json_string(body, "session_name", "Online Lobby");
         room.host_name = json_string(body, "host_name", "Host");
+        room.session_phase = json_string(body, "session_phase", json_bool(body, "in_game", false) ? "in_game" : "lobby");
         room.game_version = json_string(body, "game_version");
         room.mod_hash = json_string(body, "mod_hash");
         room.privacy = json_int(body, "privacy", 0);
         room.max_players = std::max(1, json_int(body, "max_players", 4));
-        room.in_game = json_bool(body, "in_game", false);
+        room.in_game = room.session_phase == "in_game" || json_bool(body, "in_game", false);
+        auto game_config_it = body.find("game_config");
+        if (game_config_it != body.end() && game_config_it->is_object())
+            room.game_config = *game_config_it;
 
         RoomMember host;
         host.member_id = g_registry.random_token(kMemberIdLen);
@@ -320,11 +328,17 @@ int main(int argc, char** argv) {
             if (room_it != body.end() && room_it->is_object()) {
                 room.session_name = json_string(*room_it, "session_name", room.session_name.c_str());
                 room.host_name = json_string(*room_it, "host_name", room.host_name.c_str());
+                room.session_phase = json_string(*room_it,
+                                                 "session_phase",
+                                                 room.in_game ? "in_game" : room.session_phase.c_str());
                 room.game_version = json_string(*room_it, "game_version", room.game_version.c_str());
                 room.mod_hash = json_string(*room_it, "mod_hash", room.mod_hash.c_str());
                 room.privacy = json_int(*room_it, "privacy", room.privacy);
                 room.max_players = std::max(1, json_int(*room_it, "max_players", room.max_players));
-                room.in_game = json_bool(*room_it, "in_game", room.in_game);
+                room.in_game = room.session_phase == "in_game" || json_bool(*room_it, "in_game", room.in_game);
+                auto game_config_it = room_it->find("game_config");
+                if (game_config_it != room_it->end() && game_config_it->is_object())
+                    room.game_config = *game_config_it;
                 member->display_name = room.host_name;
             }
         }

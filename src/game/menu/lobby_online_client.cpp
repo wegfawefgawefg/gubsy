@@ -18,6 +18,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/mod_host.hpp"
+#include "game/lobby_config.hpp"
 #include "game/menu/lobby_state.hpp"
 
 namespace {
@@ -133,10 +134,12 @@ nlohmann::json build_room_metadata(const LobbySession& lobby) {
     nlohmann::json body;
     body["session_name"] = lobby.session_name;
     body["host_name"] = lobby_local_player_name();
+    body["session_phase"] = lobby_session_phase(lobby);
     body["privacy"] = lobby.privacy;
     body["max_players"] = lobby.max_players;
     body["game_version"] = required_mod_game_version();
     body["mod_hash"] = lobby_enabled_mod_signature();
+    body["game_config"] = capture_game_lobby_config(lobby);
     body["in_game"] = lobby.online.in_game;
     return body;
 }
@@ -145,6 +148,7 @@ void read_room_summary(const nlohmann::json& room_json, LobbyDiscoveredRoom& out
     out.room_code = room_json.value("room_code", "");
     out.session_name = room_json.value("session_name", "");
     out.host_name = room_json.value("host_name", "");
+    out.session_phase = room_json.value("session_phase", room_json.value("in_game", false) ? "in_game" : "lobby");
     out.game_version = room_json.value("game_version", "");
     out.mod_hash = room_json.value("mod_hash", "");
     out.privacy = room_json.value("privacy", 0);
@@ -157,6 +161,7 @@ void apply_room_to_lobby(const LobbyDiscoveredRoom& room, LobbySession& lobby) {
     lobby.session_name = room.session_name;
     lobby.privacy = room.privacy;
     lobby.max_players = std::max(1, room.max_players);
+    lobby.online.session_phase = room.session_phase;
     lobby.online.in_game = room.in_game;
 }
 
@@ -189,9 +194,13 @@ bool refresh_room_state(LobbySession& lobby, std::string& err) {
     LobbyDiscoveredRoom room;
     read_room_summary((*json)["room"], room);
     apply_room_to_lobby(room, lobby);
+    auto config_it = (*json)["room"].find("game_config");
+    if (config_it != (*json)["room"].end() && config_it->is_object())
+        apply_game_lobby_config(*config_it, lobby);
     read_room_members((*json)["room"], lobby);
     std::ostringstream status;
-    status << "Room " << room.room_code << " | " << room.current_players
+    status << (room.session_phase == "in_game" ? "In Game" : "Lobby")
+           << " | Room " << room.room_code << " | " << room.current_players
            << "/" << room.max_players << " players";
     lobby.online.status_text = status.str();
     return true;
@@ -237,6 +246,7 @@ bool lobby_online_host_current_room(LobbySession& lobby, std::string& err) {
     lobby.online.room_code = (*json).value("room_code", "");
     lobby.online.host_secret = (*json).value("host_secret", "");
     lobby.online.member_id = (*json).value("member_id", "");
+    lobby.online.session_phase = "lobby";
     lobby.online.in_game = false;
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
@@ -256,6 +266,7 @@ bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, s
     lobby.online.room_code = code;
     lobby.online.host_secret.clear();
     lobby.online.member_id = (*json).value("member_id", "");
+    lobby.online.session_phase = "lobby";
     lobby.online.in_game = false;
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
@@ -276,6 +287,7 @@ bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
               err);
     lobby.online.in_room = false;
     lobby.online.is_host = false;
+    lobby.online.session_phase = "lobby";
     lobby.online.in_game = false;
     lobby.online.room_code.clear();
     lobby.online.host_secret.clear();

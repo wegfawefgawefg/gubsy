@@ -108,6 +108,10 @@ inline constexpr int BACK = 730;
 namespace GameSettingsObjectID {
 inline constexpr int TITLE = 801;
 inline constexpr int STATUS = 802;
+inline constexpr int CARD0 = 820;
+inline constexpr int CARD1 = 821;
+inline constexpr int CARD2 = 822;
+inline constexpr int CARD3 = 823;
 inline constexpr int BACK = 830;
 } // namespace GameSettingsObjectID
 
