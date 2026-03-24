@@ -1,24 +1,16 @@
 #include "game/menu/lobby_online.hpp"
 
 #include <algorithm>
-#include <cctype>
-#include <optional>
 #include <sstream>
 #include <string>
 
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#endif
-#include <httplib/httplib.h>
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
 #include <nlohmann/json.hpp>
 
 #include "engine/globals.hpp"
 #include "engine/matchmaking.hpp"
 #include "engine/mod_host.hpp"
+#include "engine/mod_install.hpp"
+#include "engine/mod_server_config.hpp"
 #include "engine/room_matchmaking.hpp"
 #include "engine/session_contract.hpp"
 #include "engine/sync_session.hpp"
@@ -30,14 +22,24 @@ namespace {
 constexpr double kRoomPollIntervalSec = 1.0;
 constexpr double kRoomPublishIntervalSec = 1.0;
 constexpr double kRoomsRefreshIntervalSec = 2.0;
+constexpr double kContentRetryIntervalSec = 3.0;
 
 RoomServerMatchmaking g_matchmaking;
+
+void normalize_required_mod_ids(std::vector<std::string>& ids) {
+    ids.erase(std::remove_if(ids.begin(), ids.end(),
+                             [](const std::string& id) { return id.empty(); }),
+              ids.end());
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+}
 
 std::string content_contract_key(const SessionContract& contract) {
     nlohmann::json key = {
         {"game_version", contract.game_version},
         {"net_protocol", contract.net_protocol},
         {"mod_hash", contract.mod_hash},
+        {"required_mod_ids", contract.required_mod_ids},
         {"allow_live_mod_reload", contract.allow_live_mod_reload},
         {"game_config", contract.game_config},
     };
@@ -50,6 +52,8 @@ SessionContract build_local_contract(LobbySession& lobby) {
     contract.net_protocol = session_contract_default_net_protocol();
     contract.session_phase = lobby_session_phase(lobby);
     contract.mod_hash = lobby_enabled_mod_signature();
+    contract.required_mod_ids = lobby_enabled_mod_ids();
+    normalize_required_mod_ids(contract.required_mod_ids);
     contract.allow_live_mod_reload = true;
     contract.game_config = capture_game_lobby_config(lobby);
     contract.realtime_endpoint = sync_session_advertised_endpoint();
@@ -72,6 +76,8 @@ SessionContract build_expected_local_contract() {
     contract.game_version = required_mod_game_version();
     contract.net_protocol = session_contract_default_net_protocol();
     contract.mod_hash = lobby_enabled_mod_signature();
+    contract.required_mod_ids = lobby_enabled_mod_ids();
+    normalize_required_mod_ids(contract.required_mod_ids);
     contract.allow_live_mod_reload = true;
     return contract;
 }
@@ -92,6 +98,49 @@ void apply_room_to_lobby(const MatchmakingRoom& room, LobbySession& lobby) {
     lobby.privacy = room.privacy;
     lobby.max_players = std::max(1, room.max_players);
     lobby.online.contract = room.contract;
+}
+
+bool should_retry_content_sync(const LobbySession& lobby, std::uint64_t revision) {
+    if (revision == 0 || revision != lobby.online.failed_content_revision)
+        return true;
+    if (!es)
+        return true;
+    return es->now >= lobby.online.next_content_retry_at;
+}
+
+bool sync_remote_content_contract(LobbySession& lobby,
+                                  const SessionContract& remote,
+                                  std::string& err) {
+    if (lobby.online.is_host)
+        return true;
+    if (remote.game_version != required_mod_game_version()) {
+        err = "Host is running a different game version";
+        return false;
+    }
+    if (!remote.net_protocol.empty() &&
+        remote.net_protocol != session_contract_default_net_protocol()) {
+        err = "Host is running a different network protocol";
+        return false;
+    }
+
+    lobby.online.content_status_text = "Syncing host content...";
+    if (!sync_mod_selection_from_catalog(default_mod_server_url(),
+                                         remote.required_mod_ids,
+                                         err)) {
+        lobby.online.failed_content_revision = remote.content_revision;
+        if (es)
+            lobby.online.next_content_retry_at = es->now + kContentRetryIntervalSec;
+        return false;
+    }
+
+    lobby_refresh_mods();
+    lobby.online.synced_content_revision = remote.content_revision;
+    lobby.online.failed_content_revision = 0;
+    lobby.online.next_content_retry_at = 0.0;
+    lobby.online.last_error.clear();
+    lobby.online.content_status_text =
+        remote.required_mod_ids.empty() ? "Content synced" : "Host mods synced";
+    return true;
 }
 
 void read_room_members(const MatchmakingRoom& room, LobbySession& lobby) {
@@ -117,19 +166,53 @@ bool refresh_room_state(LobbySession& lobby, std::string& err) {
     if (room.contract.game_config.is_object())
         apply_game_lobby_config(room.contract.game_config, lobby);
     read_room_members(room, lobby);
+
+    const bool revision_changed =
+        room.contract.content_revision != 0 &&
+        room.contract.content_revision != lobby.online.synced_content_revision;
+    SessionCompatibility compatibility =
+        session_contract_check_compatibility(room.contract, build_expected_local_contract());
+    if (!lobby.online.is_host &&
+        (revision_changed || compatibility == SessionCompatibility::NeedsContentReload)) {
+        if (compatibility == SessionCompatibility::NeedsContentReload &&
+            should_retry_content_sync(lobby, room.contract.content_revision)) {
+            std::string sync_err;
+            if (!sync_remote_content_contract(lobby, room.contract, sync_err)) {
+                if (!sync_err.empty())
+                    lobby.online.last_error = sync_err;
+            }
+            compatibility =
+                session_contract_check_compatibility(room.contract, build_expected_local_contract());
+        } else if (compatibility == SessionCompatibility::Compatible) {
+            lobby.online.synced_content_revision = room.contract.content_revision;
+            lobby.online.content_status_text = "Session content updated";
+        } else if (!should_retry_content_sync(lobby, room.contract.content_revision)) {
+            lobby.online.content_status_text = "Retrying content sync soon";
+        }
+    } else if (lobby.online.is_host || compatibility == SessionCompatibility::Compatible) {
+        lobby.online.synced_content_revision = room.contract.content_revision;
+        if (lobby.online.is_host)
+            lobby.online.content_status_text.clear();
+    }
+
     std::ostringstream status;
     status << (session_contract_is_in_game(room.contract) ? "In Game" : "Lobby")
            << " | Room " << room.room_code << " | " << room.current_players
            << "/" << room.max_players << " players";
-    const SessionCompatibility compatibility =
-        session_contract_check_compatibility(room.contract, build_expected_local_contract());
+    lobby.online.compatibility = compatibility;
     if (compatibility != SessionCompatibility::Compatible) {
         status << " | " << session_contract_compatibility_text(compatibility);
         if (compatibility == SessionCompatibility::WrongGameVersion ||
             compatibility == SessionCompatibility::WrongNetProtocol) {
             lobby.online.last_error = session_contract_compatibility_text(compatibility);
         }
+    } else if (lobby.online.last_error == "Needs content reload" ||
+               lobby.online.last_error == "Wrong game version" ||
+               lobby.online.last_error == "Wrong network protocol") {
+        lobby.online.last_error.clear();
     }
+    if (!lobby.online.content_status_text.empty())
+        status << " | " << lobby.online.content_status_text;
     lobby.online.status_text = status.str();
     return true;
 }
@@ -172,9 +255,14 @@ bool lobby_online_host_current_room(LobbySession& lobby, std::string& err) {
     lobby.online.room_code = created.room_code;
     lobby.online.host_secret = created.host_secret;
     lobby.online.member_id = created.member_id;
+    lobby.online.compatibility = SessionCompatibility::Compatible;
     lobby.online.contract = room.contract;
     lobby.online.contract.session_phase = "lobby";
     lobby.online.contract.realtime_endpoint.clear();
+    lobby.online.synced_content_revision = lobby.online.contract.content_revision;
+    lobby.online.failed_content_revision = 0;
+    lobby.online.next_content_retry_at = 0.0;
+    lobby.online.content_status_text.clear();
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
     err.clear();
@@ -195,8 +283,13 @@ bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, s
     lobby.online.room_code = room_code;
     lobby.online.host_secret.clear();
     lobby.online.member_id = member_id;
+    lobby.online.compatibility = SessionCompatibility::Compatible;
     lobby.online.contract = SessionContract{};
     lobby.online.contract.net_protocol = session_contract_default_net_protocol();
+    lobby.online.synced_content_revision = 0;
+    lobby.online.failed_content_revision = 0;
+    lobby.online.next_content_retry_at = 0.0;
+    lobby.online.content_status_text = "Joining room...";
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
     err.clear();
@@ -213,12 +306,17 @@ bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
                              err);
     lobby.online.in_room = false;
     lobby.online.is_host = false;
+    lobby.online.compatibility = SessionCompatibility::Compatible;
     lobby.online.contract = SessionContract{};
     lobby.online.contract.net_protocol = session_contract_default_net_protocol();
     lobby.online.room_code.clear();
     lobby.online.host_secret.clear();
     lobby.online.member_id.clear();
     lobby.online.last_published_contract_key.clear();
+    lobby.online.synced_content_revision = 0;
+    lobby.online.failed_content_revision = 0;
+    lobby.online.next_content_retry_at = 0.0;
+    lobby.online.content_status_text.clear();
     lobby.online.members.clear();
     lobby.online.status_text = "Offline lobby";
     return true;

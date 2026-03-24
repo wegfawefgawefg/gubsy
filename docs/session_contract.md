@@ -20,6 +20,7 @@ It exists so the engine can answer:
 - `net_protocol`
 - `session_phase`
 - `mod_hash`
+- `required_mod_ids`
 - `content_revision`
 - `allow_live_mod_reload`
 - `realtime_endpoint`
@@ -55,6 +56,18 @@ The host-declared gameplay-relevant mod/content identity.
 
 This is part of the multiplayer contract, not just a cosmetic label.
 
+### `required_mod_ids`
+
+The explicit host-declared gameplay-relevant mod selection.
+
+This exists so clients can do more than notice “the hash changed.”
+
+The engine can use this field to:
+
+- fetch missing mods from the configured mod server
+- deactivate mods that the host no longer wants active
+- apply the exact host-required mod set before or during session entry
+
 ### `content_revision`
 
 The monotonic revision for the current gameplay/content contract.
@@ -69,6 +82,8 @@ Clients do not need to be kicked immediately when this changes.
 Instead, the engine can:
 
 - notice that the contract changed
+- compare the new `required_mod_ids` against the local active set
+- fetch or reactivate missing content if possible
 - reset or resync runtime sync state
 - let the game decide how much stale/orphaned state is acceptable
 
@@ -103,6 +118,7 @@ The engine should own:
 - matchmaking/backend plumbing
 - transport/backend plumbing
 - connection reset/resync when the contract changes
+- generic content resync attempts based on `required_mod_ids`
 
 The game should own:
 
@@ -116,6 +132,16 @@ Right now:
 
 - `IMatchmaking` is backed by the room server
 - `INetTransport` is backed by the UDP realtime transport
+
+## Current Runtime Policy
+
+Right now the engine uses this contract in two practical ways:
+
+- wrong `game_version` or `net_protocol` is treated as a hard incompatibility
+- changed `mod_hash` / `required_mod_ids` is treated as a content reload request
+
+When possible, the client should try to sync to the host’s required mod set
+instead of forcing everyone out of the session.
 
 That means Steam can later replace one or both backends without changing the
 high-level session contract model.

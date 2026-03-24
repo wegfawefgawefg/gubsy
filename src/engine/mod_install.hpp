@@ -14,3 +14,7 @@ bool install_mod_from_catalog(const std::string& server_url,
                               std::string& err);
 
 bool uninstall_mod(const ModCatalogEntry& entry, std::string& err);
+
+bool sync_mod_selection_from_catalog(const std::string& server_url,
+                                     const std::vector<std::string>& required_ids,
+                                     std::string& err);

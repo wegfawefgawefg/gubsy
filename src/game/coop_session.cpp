@@ -22,7 +22,9 @@ bool g_sync_configured = false;
 
 bool query_connection(void*, SyncConnectionInfo& out) {
     const LobbySession& lobby = lobby_state_const();
-    if (!lobby.online.in_room || !session_contract_is_in_game(lobby.online.contract))
+    if (!lobby.online.in_room ||
+        !session_contract_is_in_game(lobby.online.contract) ||
+        lobby.online.compatibility != SessionCompatibility::Compatible)
         return false;
     out.active = true;
     out.is_host = lobby.online.is_host;

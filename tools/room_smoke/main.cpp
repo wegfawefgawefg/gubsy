@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
         room.contract.game_version = "0.1.0";
         room.contract.net_protocol = session_contract_default_net_protocol();
         room.contract.mod_hash = "aaaabbbb";
+        room.contract.required_mod_ids = {"base", "smoke_a"};
 
         MatchmakingCreateResult created;
         if (!matchmaking.create_room(server_url, room, created, err))
@@ -64,6 +65,7 @@ int main(int argc, char** argv) {
         updated.max_players = 6;
         updated.contract.game_version = "0.1.1";
         updated.contract.mod_hash = "ccccdddd";
+        updated.contract.required_mod_ids = {"base", "smoke_b"};
         updated.contract.realtime_endpoint = "udp://127.0.0.1:9000";
         if (!matchmaking.heartbeat_room(server_url,
                                         room_code,
@@ -85,6 +87,8 @@ int main(int argc, char** argv) {
             throw std::runtime_error("room player count mismatch");
         if (fetched.contract.mod_hash != "ccccdddd")
             throw std::runtime_error("room mod hash did not update");
+        if (fetched.contract.required_mod_ids != std::vector<std::string>({"base", "smoke_b"}))
+            throw std::runtime_error("room required_mod_ids did not update");
         if (fetched.contract.realtime_endpoint != "udp://127.0.0.1:9000")
             throw std::runtime_error("room realtime endpoint did not update");
 

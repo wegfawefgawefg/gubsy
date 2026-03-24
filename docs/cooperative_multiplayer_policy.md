@@ -51,6 +51,7 @@ This project is aiming for cooperative multiplayer first, not rollback PvP netco
 
 - Mods are part of the network contract.
 - Sessions should advertise game version plus a mod signature/hash.
+- Sessions should advertise the explicit required mod ID set.
 - Sessions should carry a content revision so live host-side content changes are observable.
 - The host decides the active gameplay-relevant mod set.
 - Clients should sync to the host’s declared mod set before or during session entry.
@@ -65,6 +66,13 @@ That means:
 - We accept that some removed mod content may leave orphaned entities or stale state behind.
 - We prefer “recover and keep going” over rigid correctness if the alternative is blocking experimentation.
 
+## Current Resync Policy
+
+- If the host changes the required mod set, clients should notice that via the session contract revision.
+- Clients should try to fetch missing mods from the configured mod server and apply the exact host-required set.
+- Removed mods do not need to be uninstalled from disk immediately; deactivating them for the session is enough.
+- If a live content change cannot be synced cleanly, the session should surface that mismatch clearly instead of silently pretending everything is fine.
+
 ## Architectural Consequences
 
 - Lobbies must expose version/mod identity, not just player counts.
@@ -75,6 +83,17 @@ That means:
 - The first validation harness should be headless and compare client-applied state against host-authoritative state.
 - The engine should own generic session orchestration, matchmaking/transport backends, compatibility checks, and reconciliation hooks.
 - Individual games should provide their own sync driver for input capture, local prediction, snapshot capture, and snapshot application.
+
+## Transport Test Hooks
+
+The current UDP transport supports lightweight local test hooks:
+
+- `GUB_SYNC_SIMULATED_LATENCY_MS`
+- `GUB_SYNC_SIMULATED_JITTER_MS`
+- `GUB_SYNC_SIMULATED_DROP_PCT`
+
+These are for smoke and feel testing. They are not meant to define the long-term
+transport API.
 
 ## Engine Boundary
 

@@ -10,6 +10,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <unordered_map>
 #include <sstream>
 
 #if defined(__GNUC__)
@@ -118,6 +119,16 @@ void refresh_runtime(const std::vector<std::string>& previously_active) {
     load_all_textures_in_sprite_lookup();
     load_mod_sounds();
     set_active_mods(previously_active);
+}
+
+const ModInfo* find_installed_mod(const std::string& id) {
+    if (!mm)
+        return nullptr;
+    for (const auto& mod : mm->mods) {
+        if (mod.name == id)
+            return &mod;
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -270,5 +281,63 @@ bool uninstall_mod(const ModCatalogEntry& entry, std::string& err) {
     }
 
     refresh_runtime(active);
+    return true;
+}
+
+bool sync_mod_selection_from_catalog(const std::string& server_url,
+                                     const std::vector<std::string>& required_ids,
+                                     std::string& err) {
+    std::vector<std::string> desired;
+    desired.reserve(required_ids.size());
+    for (const std::string& id : required_ids) {
+        if (id.empty())
+            continue;
+        if (std::find(desired.begin(), desired.end(), id) == desired.end())
+            desired.push_back(id);
+    }
+
+    std::vector<ModCatalogEntry> catalog;
+    if (!fetch_mod_catalog(server_url, catalog, err))
+        return false;
+
+    std::unordered_map<std::string, const ModCatalogEntry*> catalog_by_id;
+    catalog_by_id.reserve(catalog.size());
+    for (const auto& entry : catalog)
+        catalog_by_id[entry.id] = &entry;
+
+    discover_mods();
+    for (const std::string& id : desired) {
+        auto catalog_it = catalog_by_id.find(id);
+        if (catalog_it == catalog_by_id.end()) {
+            err = "Required mod missing from catalog: " + id;
+            return false;
+        }
+
+        const ModInfo* installed = find_installed_mod(id);
+        const bool needs_install = !installed;
+        const bool needs_reinstall =
+            installed && installed->version != catalog_it->second->version;
+        if (needs_install || needs_reinstall) {
+            if (!install_mod_from_catalog(server_url, *catalog_it->second, err))
+                return false;
+            discover_mods();
+        }
+    }
+
+    std::vector<std::string> normalized_desired = desired;
+    std::sort(normalized_desired.begin(), normalized_desired.end());
+    if (!set_active_mods(desired)) {
+        if (desired.empty()) {
+            err.clear();
+            return true;
+        }
+        std::vector<std::string> active = get_active_mod_ids();
+        std::sort(active.begin(), active.end());
+        if (active != normalized_desired) {
+            err = "Failed to apply required mod selection";
+            return false;
+        }
+    }
+    discover_mods();
     return true;
 }

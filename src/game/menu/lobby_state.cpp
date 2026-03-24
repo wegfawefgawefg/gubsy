@@ -57,6 +57,7 @@ void lobby_reset_defaults() {
     g_lobby = LobbySession{};
     g_lobby.max_players = std::clamp(g_lobby.max_players, kMinLobbyPlayers, kMaxLobbyPlayers);
     g_lobby.online.server_url = default_room_server_url();
+    g_lobby.online.compatibility = SessionCompatibility::Compatible;
     g_lobby.online.contract.net_protocol = session_contract_default_net_protocol();
 }
 
@@ -187,6 +188,8 @@ const char* lobby_session_phase(const LobbySession& lobby) {
 
 bool lobby_online_ready_to_enter_game(const LobbySession& lobby) {
     if (!lobby.online.in_room || !session_contract_is_in_game(lobby.online.contract))
+        return false;
+    if (lobby.online.compatibility != SessionCompatibility::Compatible)
         return false;
     if (lobby.online.is_host)
         return true;

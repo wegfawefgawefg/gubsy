@@ -15,6 +15,8 @@ namespace {
 
 constexpr double kInputPushIntervalSec = 1.0 / 20.0;
 constexpr double kSnapshotPushIntervalSec = 1.0 / 20.0;
+constexpr double kInitialSnapshotTimeoutSec = 4.0;
+constexpr double kSnapshotStreamTimeoutSec = 4.0;
 
 struct SyncRuntime {
     SyncSessionHooks hooks{};
@@ -30,6 +32,10 @@ struct SyncRuntime {
     SessionContract contract{};
     std::string status_text;
     std::string last_error;
+    double connected_at{0.0};
+    double last_packet_received_at{0.0};
+    double last_snapshot_received_at{0.0};
+    bool snapshot_timed_out{false};
     std::vector<std::string> member_ids;
     std::vector<nlohmann::json> current_inputs;
     std::vector<nlohmann::json> previous_inputs;
@@ -47,6 +53,12 @@ struct SyncRuntime {
 };
 
 SyncRuntime g_sync;
+
+double runtime_now() {
+    if (g_sync.hooks.query_now)
+        return g_sync.hooks.query_now(g_sync.hooks.ctx);
+    return 0.0;
+}
 
 int find_member_index(const SyncRuntime& runtime, const std::string& member_id) {
     for (std::size_t i = 0; i < runtime.member_ids.size(); ++i) {
@@ -111,6 +123,14 @@ void set_status_line() {
     g_sync.status_text = std::string(g_sync.is_host ? "Online Host" : "Online Client") +
                          " | room " + g_sync.room_code +
                          " | peers " + std::to_string(g_sync.member_ids.size());
+    if (!g_sync.is_host) {
+        if (g_sync.contract.realtime_endpoint.empty())
+            g_sync.status_text += " | waiting for endpoint";
+        else if (g_sync.snapshot_timed_out)
+            g_sync.status_text += " | snapshot timeout";
+        else if (!g_sync.has_authoritative_snapshot)
+            g_sync.status_text += " | waiting for snapshot";
+    }
 }
 
 void start_connection(const SyncConnectionInfo& connection) {
@@ -123,6 +143,10 @@ void start_connection(const SyncConnectionInfo& connection) {
     next.local_member_id = connection.local_member_id;
     next.contract = connection.contract;
     next.has_authoritative_snapshot = false;
+    next.connected_at = runtime_now();
+    next.last_packet_received_at = next.connected_at;
+    next.last_snapshot_received_at = next.connected_at;
+    next.snapshot_timed_out = false;
     next.member_ids.clear();
     next.current_inputs.clear();
     next.previous_inputs.clear();
@@ -184,6 +208,8 @@ bool collect_transport_inputs(std::string& err) {
     std::vector<NetTransportPacket> packets;
     if (!g_sync.transport.poll(packets, err))
         return false;
+    if (!packets.empty())
+        g_sync.last_packet_received_at = runtime_now();
     for (const NetTransportPacket& packet : packets) {
         if (packet.kind != NetPacketKind::Input)
             continue;
@@ -277,6 +303,8 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
     std::vector<NetTransportPacket> packets;
     if (!g_sync.transport.poll(packets, err))
         return false;
+    if (!packets.empty())
+        g_sync.last_packet_received_at = runtime_now();
     nlohmann::json snapshot;
     bool has_snapshot = false;
     for (const NetTransportPacket& packet : packets) {
@@ -312,6 +340,9 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
     rebuild_member_buffers(member_ids);
     g_sync.last_applied_snapshot_frame = sim_frame;
     g_sync.has_authoritative_snapshot = true;
+    g_sync.last_snapshot_received_at = runtime_now();
+    g_sync.snapshot_timed_out = false;
+    g_sync.last_error.clear();
     replay_pending_local_inputs(dt, latest_local_input);
     if (g_sync.driver.finish_reconcile)
         g_sync.driver.finish_reconcile(g_sync.driver.ctx,
@@ -319,6 +350,23 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
                                        g_sync.local_member_id,
                                        g_sync.is_host);
     return true;
+}
+
+void update_client_timeout_state() {
+    if (!g_sync.active || g_sync.is_host)
+        return;
+    const double now = runtime_now();
+    if (!g_sync.has_authoritative_snapshot) {
+        if (now - g_sync.connected_at >= kInitialSnapshotTimeoutSec) {
+            g_sync.snapshot_timed_out = true;
+            g_sync.last_error = "Timed out waiting for host snapshot";
+        }
+        return;
+    }
+    if (now - g_sync.last_snapshot_received_at >= kSnapshotStreamTimeoutSec) {
+        g_sync.snapshot_timed_out = true;
+        g_sync.last_error = "Lost host snapshot stream";
+    }
 }
 
 void run_host_step(const SequencedInput& local_input, float dt, double now) {
@@ -416,6 +464,10 @@ void sync_session_reset() {
     g_sync.contract.net_protocol = session_contract_default_net_protocol();
     g_sync.status_text = "Offline";
     g_sync.last_error.clear();
+    g_sync.connected_at = 0.0;
+    g_sync.last_packet_received_at = 0.0;
+    g_sync.last_snapshot_received_at = 0.0;
+    g_sync.snapshot_timed_out = false;
     g_sync.member_ids.clear();
     g_sync.current_inputs.clear();
     g_sync.previous_inputs.clear();
@@ -456,9 +508,7 @@ SyncStepResult sync_session_step(float dt) {
         return result;
 
     result.handled = true;
-    double now = 0.0;
-    if (g_sync.hooks.query_now)
-        now = g_sync.hooks.query_now(g_sync.hooks.ctx);
+    double now = runtime_now();
 
     SequencedInput sequenced_local_input;
     sequenced_local_input.seq = g_sync.next_local_input_seq++;
@@ -468,6 +518,8 @@ SyncStepResult sync_session_step(float dt) {
         run_host_step(sequenced_local_input, dt, now);
     else
         run_client_step(sequenced_local_input, dt, now);
+    update_client_timeout_state();
+    set_status_line();
     if (g_sync.driver.tick_correction)
         g_sync.driver.tick_correction(g_sync.driver.ctx,
                                       g_sync.member_ids,

@@ -49,6 +49,19 @@ void require(bool condition, const std::string& message) {
         throw std::runtime_error(message);
 }
 
+template <typename PollFn>
+bool wait_until(double timeout_sec, PollFn&& poll_fn) {
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                        std::chrono::duration<double>(timeout_sec));
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (poll_fn())
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return poll_fn();
+}
+
 bool nearly_equal(float a, float b, float epsilon = 0.0001f) {
     return std::fabs(a - b) <= epsilon;
 }
@@ -88,6 +101,7 @@ int main(int argc, char** argv) {
         room.contract.game_version = "0.1.0";
         room.contract.net_protocol = session_contract_default_net_protocol();
         room.contract.mod_hash = "smoke";
+        room.contract.required_mod_ids = {"base", "smoke"};
         room.contract.session_phase = "in_game";
 
         MatchmakingCreateResult created;
@@ -141,7 +155,7 @@ int main(int argc, char** argv) {
 
             std::vector<NetTransportPacket> incoming_inputs;
             bool host_has_guest = false;
-            for (int attempt = 0; attempt < 8 && !host_has_guest; ++attempt) {
+            const bool got_guest_input = wait_until(1.0, [&]() {
                 require(host_transport.poll(incoming_inputs, err), err);
                 for (const NetTransportPacket& entry : incoming_inputs) {
                     if (entry.kind != NetPacketKind::Input || entry.member_id != guest_member_id)
@@ -150,9 +164,9 @@ int main(int argc, char** argv) {
                     latest_guest_seq = entry.seq;
                     host_has_guest = true;
                 }
-                if (!host_has_guest)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
+                return host_has_guest;
+            });
+            require(got_guest_input, "missing guest input");
 
             host_current[0] = host_input;
             host_current[1] = latest_guest_input;
@@ -178,8 +192,10 @@ int main(int argc, char** argv) {
 
             NetTransportPacket latest_snapshot;
             bool has_snapshot = false;
-            for (int attempt = 0; attempt < 8 && !has_snapshot; ++attempt) {
+            const bool got_snapshot = wait_until(1.0, [&]() {
                 std::vector<NetTransportPacket> polled;
+                std::vector<NetTransportPacket> host_flush;
+                require(host_transport.poll(host_flush, err), err);
                 require(guest_transport.poll(polled, err), err);
                 for (const NetTransportPacket& packet : polled) {
                     if (packet.kind != NetPacketKind::Snapshot)
@@ -187,10 +203,9 @@ int main(int argc, char** argv) {
                     latest_snapshot = packet;
                     has_snapshot = true;
                 }
-                if (!has_snapshot)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            }
-            require(has_snapshot, "missing guest snapshot");
+                return has_snapshot;
+            });
+            require(got_snapshot, "missing guest snapshot");
 
             CoopStateSnapshot snapshot;
             require(coop_snapshot_from_json(latest_snapshot.payload.at("driver_snapshot"), snapshot),

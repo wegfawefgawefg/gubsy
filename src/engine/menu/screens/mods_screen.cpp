@@ -8,6 +8,7 @@
 #include "engine/alerts.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_install.hpp"
+#include "engine/mod_server_config.hpp"
 #include "engine/mods.hpp"
 #include "game/ui_layout_ids.hpp"
 
@@ -19,7 +20,6 @@
 
 namespace {
 
-constexpr const char* kModServerUrl = "http://127.0.0.1:8787";
 constexpr int kModsPerPage = 4;
 
 MenuCommandId g_cmd_prev_page = kMenuIdInvalid;
@@ -244,7 +244,7 @@ bool ensure_catalog_loaded(ModsScreenState& state) {
         return true;
     state.busy = true;
     std::string err;
-    if (!fetch_mod_catalog(kModServerUrl, state.catalog, err)) {
+    if (!fetch_mod_catalog(default_mod_server_url(), state.catalog, err)) {
         state.status = err.empty() ? "Failed to fetch catalog" : err;
         state.busy = false;
         return false;
@@ -286,7 +286,7 @@ bool install_recursive(ModsScreenState& state,
         }
     }
     entry.status_text = "Installing...";
-    bool ok = install_mod_from_catalog(kModServerUrl, entry, err);
+    bool ok = install_mod_from_catalog(default_mod_server_url(), entry, err);
     entry.installed = ok;
     entry.status_text = ok ? "Installed" : "Install failed";
     visiting.erase(entry.id);

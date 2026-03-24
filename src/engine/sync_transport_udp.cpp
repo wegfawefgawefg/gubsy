@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -158,6 +159,25 @@ bool drain_packet(int socket_fd,
     return true;
 }
 
+std::uint64_t monotonic_ms() {
+    using Clock = std::chrono::steady_clock;
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            Clock::now().time_since_epoch()).count());
+}
+
+int env_int(const char* name, int fallback, int min_value = 0, int max_value = 100000) {
+    const char* value = std::getenv(name);
+    if (!value || *value == '\0')
+        return fallback;
+    try {
+        int parsed = std::stoi(value);
+        return std::clamp(parsed, min_value, max_value);
+    } catch (...) {
+        return fallback;
+    }
+}
+
 bool same_mode(bool open,
                bool is_host_active,
                const std::string& active_room_code,
@@ -199,6 +219,13 @@ void UdpJsonNetTransport::reset() {
     remote_endpoint_.clear();
     public_endpoint_.clear();
     member_endpoints_.clear();
+    pending_packets_.clear();
+}
+
+void UdpJsonNetTransport::load_simulation_config() {
+    simulated_latency_ms_ = env_int("GUB_SYNC_SIMULATED_LATENCY_MS", 0, 0, 30000);
+    simulated_jitter_ms_ = env_int("GUB_SYNC_SIMULATED_JITTER_MS", 0, 0, 30000);
+    simulated_drop_pct_ = env_int("GUB_SYNC_SIMULATED_DROP_PCT", 0, 0, 100);
 }
 
 bool UdpJsonNetTransport::open_socket(bool is_host,
@@ -206,6 +233,7 @@ bool UdpJsonNetTransport::open_socket(bool is_host,
                                       const std::string& remote_endpoint,
                                       std::string& err) {
     reset();
+    load_simulation_config();
 
     int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (socket_fd < 0) {
@@ -289,6 +317,34 @@ bool UdpJsonNetTransport::send(const NetTransportPacket& packet, std::string& er
     return true;
 }
 
+namespace {
+
+std::uint32_t next_random(std::uint32_t& state) {
+    state = state * 1664525u + 1013904223u;
+    return state;
+}
+
+bool should_drop_packet(int drop_pct, std::uint32_t& state) {
+    if (drop_pct <= 0)
+        return false;
+    return static_cast<int>(next_random(state) % 100u) < drop_pct;
+}
+
+std::uint64_t packet_release_time_ms(int latency_ms,
+                                     int jitter_ms,
+                                     std::uint32_t& state) {
+    int release_offset = latency_ms;
+    if (jitter_ms > 0) {
+        const int span = jitter_ms * 2 + 1;
+        release_offset += static_cast<int>(next_random(state) %
+                                           static_cast<std::uint32_t>(span)) -
+                          jitter_ms;
+    }
+    return monotonic_ms() + static_cast<std::uint64_t>(std::max(0, release_offset));
+}
+
+} // namespace
+
 bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string& err) {
     out.clear();
     if (!open_) {
@@ -308,6 +364,26 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
             return false;
         if (!had_packet)
             break;
+        if (should_drop_packet(simulated_drop_pct_, random_state_))
+            continue;
+        PendingPacket pending;
+        pending.packet = std::move(packet);
+        pending.sender_endpoint = std::move(sender_endpoint);
+        pending.release_at_ms =
+            packet_release_time_ms(simulated_latency_ms_, simulated_jitter_ms_, random_state_);
+        pending_packets_.push_back(std::move(pending));
+    }
+
+    const std::uint64_t now_ms = monotonic_ms();
+    std::vector<PendingPacket> still_pending;
+    still_pending.reserve(pending_packets_.size());
+    for (auto& pending : pending_packets_) {
+        if (pending.release_at_ms > now_ms) {
+            still_pending.push_back(std::move(pending));
+            continue;
+        }
+
+        nlohmann::json& packet = pending.packet;
         if (!packet.is_object() ||
             packet.value("room_code", std::string{}) != room_code_) {
             continue;
@@ -326,7 +402,7 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
             if (!is_host_ || entry.member_id.empty())
                 continue;
             entry.kind = NetPacketKind::Input;
-            remember_member_endpoint(member_endpoints_, entry.member_id, sender_endpoint);
+            remember_member_endpoint(member_endpoints_, entry.member_id, pending.sender_endpoint);
             bool replaced = false;
             for (auto& latest : latest_inputs) {
                 if (latest.member_id == entry.member_id) {
@@ -346,6 +422,7 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
             has_snapshot = true;
         }
     }
+    pending_packets_ = std::move(still_pending);
 
     if (is_host_) {
         out = std::move(latest_inputs);

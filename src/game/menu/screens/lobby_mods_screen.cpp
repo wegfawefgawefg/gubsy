@@ -12,6 +12,7 @@
 #include "engine/globals.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mod_host.hpp"
+#include "engine/mod_server_config.hpp"
 #include "engine/mods.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
@@ -31,8 +32,6 @@ constexpr WidgetId kPrevButtonId = 604;
 constexpr WidgetId kNextButtonId = 605;
 constexpr WidgetId kBackButtonId = 630;
 constexpr WidgetId kFirstCardWidgetId = 620;
-constexpr const char* kModServerUrl = "http://127.0.0.1:8787";
-
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_toggle_mod = kMenuIdInvalid;
 
@@ -233,7 +232,7 @@ bool ensure_catalog_loaded(LobbyModsState& st) {
         return st.catalog_loaded;
     st.busy = true;
     std::string err;
-    if (!fetch_mod_catalog(kModServerUrl, st.catalog, err)) {
+    if (!fetch_mod_catalog(default_mod_server_url(), st.catalog, err)) {
         st.status_message = err.empty() ? "Failed to fetch catalog" : err;
         st.busy = false;
         return false;
@@ -349,7 +348,9 @@ bool enable_with_dependencies(LobbyModsState& st,
             return false;
         }
         std::string install_err;
-        if (!install_mod_from_catalog(kModServerUrl, st.catalog[static_cast<std::size_t>(cat_idx)], install_err)) {
+        if (!install_mod_from_catalog(default_mod_server_url(),
+                                      st.catalog[static_cast<std::size_t>(cat_idx)],
+                                      install_err)) {
             err = install_err.empty() ? "Install failed" : install_err;
             visiting.erase(entry.id);
             return false;

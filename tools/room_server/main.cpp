@@ -46,6 +46,7 @@ struct RoomRecord {
     std::string realtime_endpoint;
     std::string game_version;
     std::string mod_hash;
+    std::vector<std::string> required_mod_ids;
     std::uint64_t content_revision{1};
     bool allow_live_mod_reload{true};
     int privacy{0};
@@ -129,6 +130,7 @@ nlohmann::json room_to_json(const RoomRecord& room) {
         {"realtime_endpoint", room.realtime_endpoint},
         {"game_version", room.game_version},
         {"mod_hash", room.mod_hash},
+        {"required_mod_ids", room.required_mod_ids},
         {"content_revision", room.content_revision},
         {"allow_live_mod_reload", room.allow_live_mod_reload},
         {"privacy", room.privacy},
@@ -177,6 +179,20 @@ std::uint64_t json_u64(const nlohmann::json& body, const char* key, std::uint64_
     if (it != body.end() && it->is_number_unsigned())
         return it->get<std::uint64_t>();
     return fallback;
+}
+
+std::vector<std::string> json_string_array(const nlohmann::json& body, const char* key) {
+    std::vector<std::string> out;
+    auto it = body.find(key);
+    if (it == body.end() || !it->is_array())
+        return out;
+    for (const auto& entry : *it) {
+        if (entry.is_string())
+            out.push_back(entry.get<std::string>());
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
 }
 
 bool body_member_access(RoomRecord& room,
@@ -256,6 +272,7 @@ int main(int argc, char** argv) {
         room.realtime_endpoint = json_string(body, "realtime_endpoint");
         room.game_version = json_string(body, "game_version");
         room.mod_hash = json_string(body, "mod_hash");
+        room.required_mod_ids = json_string_array(body, "required_mod_ids");
         room.content_revision = std::max<std::uint64_t>(1, json_u64(body, "content_revision", 1));
         room.allow_live_mod_reload = json_bool(body, "allow_live_mod_reload", true);
         room.privacy = json_int(body, "privacy", 0);
@@ -348,6 +365,7 @@ int main(int argc, char** argv) {
                 room.realtime_endpoint = json_string(*room_it, "realtime_endpoint", room.realtime_endpoint.c_str());
                 room.game_version = json_string(*room_it, "game_version", room.game_version.c_str());
                 room.mod_hash = json_string(*room_it, "mod_hash", room.mod_hash.c_str());
+                room.required_mod_ids = json_string_array(*room_it, "required_mod_ids");
                 room.content_revision = std::max<std::uint64_t>(1, json_u64(*room_it, "content_revision", room.content_revision));
                 room.allow_live_mod_reload = json_bool(*room_it, "allow_live_mod_reload", room.allow_live_mod_reload);
                 room.privacy = json_int(*room_it, "privacy", room.privacy);

@@ -362,6 +362,7 @@ void playing_draw() {
 
     // Alerts + instructions overlay
     render_alerts(renderer, width);
+    const LobbySession& lobby = lobby_state_const();
     std::string prompt_text;
     if (!nearby_label.empty())
         prompt_text = "Press Space/E to use " + nearby_label;
@@ -369,6 +370,10 @@ void playing_draw() {
         prompt_text = "Move with WASD. Press Space/E near a pad to run its Lua-defined action.";
     if (coop_session_active() && !coop_session_status_text().empty())
         prompt_text += " | " + coop_session_status_text();
+    if (lobby.online.in_room && !lobby.online.last_error.empty())
+        prompt_text += " | " + lobby.online.last_error;
+    if (coop_session_active() && !coop_session_last_error().empty())
+        prompt_text += " | " + coop_session_last_error();
     prompt_text += " | Esc returns to lobby";
     render_instructions(renderer, width, height, prompt_text);
 }

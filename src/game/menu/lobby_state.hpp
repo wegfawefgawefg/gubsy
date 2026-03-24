@@ -38,8 +38,13 @@ struct LobbyOnlineState {
     std::string last_error;
     bool in_room{false};
     bool is_host{false};
+    SessionCompatibility compatibility{SessionCompatibility::Compatible};
     SessionContract contract{};
     std::string last_published_contract_key;
+    std::uint64_t synced_content_revision{0};
+    std::uint64_t failed_content_revision{0};
+    double next_content_retry_at{0.0};
+    std::string content_status_text;
     double next_room_poll_at{0.0};
     double next_room_publish_at{0.0};
     double next_rooms_refresh_at{0.0};

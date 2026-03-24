@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -10,6 +11,7 @@ struct SessionContract {
     std::string net_protocol;
     std::string session_phase{"lobby"};
     std::string mod_hash;
+    std::vector<std::string> required_mod_ids;
     std::uint64_t content_revision{1};
     bool allow_live_mod_reload{true};
     std::string realtime_endpoint;

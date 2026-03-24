@@ -2,6 +2,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/mod_host.hpp"
+#include "engine/mod_server_config.hpp"
 #include "engine/render.hpp"
 #include "engine/graphics.hpp"
 #include "engine/mod_install.hpp"
@@ -16,7 +17,6 @@
 
 namespace {
 
-constexpr const char* kModServerUrl = "http://127.0.0.1:8787";
 const std::vector<std::string> kDemoModChain = {
     "base",
     "patch_core",
@@ -57,8 +57,9 @@ bool clear_mod_cache(std::string& err) {
 
 bool ensure_demo_mods_installed(std::string& err) {
     std::vector<ModCatalogEntry> catalog;
+    const std::string mod_server_url = default_mod_server_url();
     g_status = "Fetching mod catalog...";
-    if (!fetch_mod_catalog(kModServerUrl, catalog, err))
+    if (!fetch_mod_catalog(mod_server_url, catalog, err))
         return false;
 
     auto find_entry = [&](const std::string& id) -> const ModCatalogEntry* {
@@ -83,7 +84,7 @@ bool ensure_demo_mods_installed(std::string& err) {
             continue;
 
         g_status = "Installing " + entry->title + "...";
-        if (!install_mod_from_catalog(kModServerUrl, *entry, err))
+        if (!install_mod_from_catalog(mod_server_url, *entry, err))
             return false;
     }
     return true;
