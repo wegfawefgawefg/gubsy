@@ -12,6 +12,7 @@
 #include "engine/menu/menu_screen.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/player.hpp"
+#include "game/menu/lobby_online.hpp"
 #include "game/menu/lobby_state.hpp"
 #include "game/menu/menu_ids.hpp"
 #include "game/modes.hpp"
@@ -104,9 +105,15 @@ void command_browse_servers(MenuContext& ctx, std::int32_t) {
 }
 
 void command_start_game(MenuContext& ctx, std::int32_t) {
+    LobbySession& lobby = lobby_state();
+    if (lobby.online.in_room && !lobby.online.is_host) {
+        add_alert("Only the host can start an online lobby.");
+        return;
+    }
     lobby_refresh_mods();
     auto enabled = lobby_enabled_mod_ids();
     set_active_mods(enabled);
+    lobby.online.in_game = true;
     ctx.engine.mode = modes::PLAYING;
 }
 
@@ -157,6 +164,7 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     (void)ctx;
     LobbySession& lobby = lobby_state();
     lobby_refresh_mods();
+    lobby_online_tick(lobby);
     if (!lobby.name_initialized) {
         lobby.session_name = default_lobby_name();
         lobby.name_initialized = true;
@@ -172,25 +180,40 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     title.id = 500;
     title.slot = LobbyObjectID::TITLE;
     title.type = WidgetType::Label;
-    title.label = "Session Lobby";
+    title.label = lobby.online.in_room && lobby.online.is_host ? "Online Session Lobby" : "Session Lobby";
     widgets.push_back(title);
 
     MenuWidget browse = make_button(514, LobbyObjectID::BROWSE_SERVERS, "Browse Servers",
                                     MenuAction::run_command(g_cmd_browse_servers));
+    if (lobby.online.in_room) {
+        std::string browse_text = lobby.online.status_text.empty()
+                                      ? (lobby.online.is_host ? "Hosting online room" : "Connected to online room")
+                                      : lobby.online.status_text;
+        text_cache.emplace_back(std::move(browse_text));
+        browse.secondary = text_cache.back().c_str();
+    } else {
+        browse.secondary = "Host this lobby online or join another room.";
+    }
     widgets.push_back(browse);
     WidgetId default_focus = browse.id;
 
     int privacy_index = std::clamp(lobby.privacy, 0, static_cast<int>(kPrivacyLabels.size()) - 1);
 
     int local_count = lobby_local_player_count();
+    int room_count = static_cast<int>(lobby.online.members.size());
     std::string player_line;
-    if (privacy_index == 0) {
+    if (lobby.online.in_room) {
+        int shown_count = std::max(local_count, room_count);
+        player_line = std::to_string(shown_count) + " / " + std::to_string(lobby.max_players);
+    } else if (privacy_index == 0) {
         player_line = "1 / 1";
     } else if (privacy_index == 1) {
         player_line = std::to_string(local_count) + " / " + std::to_string(local_count);
     } else {
         player_line = std::to_string(local_count) + " / " + std::to_string(lobby.max_players);
     }
+    if (lobby.online.in_room && !lobby.online.room_code.empty())
+        player_line += " | " + lobby.online.room_code;
     text_cache.emplace_back(std::move(player_line));
     MenuWidget players_panel;
     players_panel.id = 509;
@@ -208,7 +231,7 @@ BuiltScreen build_lobby(MenuContext& ctx) {
 
     MenuWidget start_game = make_button(511,
                                         LobbyObjectID::START_GAME,
-                                        "Start Game",
+                                        lobby.online.in_room && !lobby.online.is_host ? "Wait For Host" : "Start Game",
                                         MenuAction::run_command(g_cmd_start_game));
 
     MenuWidget back = make_button(512,

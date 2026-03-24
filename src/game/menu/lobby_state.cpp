@@ -1,9 +1,15 @@
 #include "game/menu/lobby_state.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <iomanip>
+#include <sstream>
+#include <string_view>
 
 #include "engine/globals.hpp"
 #include "engine/input_sources.hpp"
+#include "engine/player.hpp"
 
 namespace {
 
@@ -14,6 +20,26 @@ LobbySession g_lobby;
 
 bool is_required_mod(const ModInfo& info) {
     return info.required || info.name == "base";
+}
+
+std::string default_room_server_url() {
+    if (const char* value = std::getenv("GUB_ROOM_SERVER_URL")) {
+        if (*value != '\0')
+            return value;
+    }
+    return "http://127.0.0.1:8788";
+}
+
+std::string fnv1a_hex(std::string_view text) {
+    std::uint64_t hash = 1469598103934665603ULL;
+    for (char ch : text) {
+        unsigned char c = static_cast<unsigned char>(ch);
+        hash ^= static_cast<std::uint64_t>(c);
+        hash *= 1099511628211ULL;
+    }
+    std::ostringstream out;
+    out << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return out.str();
 }
 
 } // namespace
@@ -29,6 +55,7 @@ const LobbySession& lobby_state_const() {
 void lobby_reset_defaults() {
     g_lobby = LobbySession{};
     g_lobby.max_players = std::clamp(g_lobby.max_players, kMinLobbyPlayers, kMaxLobbyPlayers);
+    g_lobby.online.server_url = default_room_server_url();
 }
 
 void lobby_refresh_mods() {
@@ -39,6 +66,7 @@ void lobby_refresh_mods() {
             LobbyModEntry entry;
             entry.id = mod.name;
             entry.title = mod.title.empty() ? mod.name : mod.title;
+            entry.version = mod.version;
             entry.author = mod.author;
             entry.description = mod.description;
             entry.dependencies = mod.deps;
@@ -58,6 +86,8 @@ void lobby_refresh_mods() {
 
     g_lobby.mods = std::move(fresh);
     g_lobby.max_players = std::clamp(g_lobby.max_players, kMinLobbyPlayers, kMaxLobbyPlayers);
+    if (g_lobby.online.server_url.empty())
+        g_lobby.online.server_url = default_room_server_url();
 }
 
 std::vector<std::string> lobby_enabled_mod_ids() {
@@ -67,6 +97,32 @@ std::vector<std::string> lobby_enabled_mod_ids() {
             ids.push_back(entry.id);
     }
     return ids;
+}
+
+std::string lobby_enabled_mod_signature() {
+    std::vector<std::string> tokens;
+    tokens.reserve(g_lobby.mods.size());
+    for (const auto& entry : g_lobby.mods) {
+        if (!entry.enabled && !entry.required)
+            continue;
+        tokens.push_back(entry.id + "@" + entry.version);
+    }
+    std::sort(tokens.begin(), tokens.end());
+    std::ostringstream joined;
+    for (std::size_t i = 0; i < tokens.size(); ++i) {
+        if (i > 0)
+            joined << '|';
+        joined << tokens[i];
+    }
+    return fnv1a_hex(joined.str());
+}
+
+std::string lobby_local_player_name() {
+    if (UserProfile* profile = get_player_user_profile(0)) {
+        if (!profile->name.empty())
+            return profile->name;
+    }
+    return "Player";
 }
 
 int lobby_local_player_count() {

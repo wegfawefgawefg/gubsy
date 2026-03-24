@@ -86,6 +86,8 @@ Docs
 
 - Developer setup: `docs/dev_setup.md`
 - Engine roadmap: `docs/engine_roadmap.md`
+- Cooperative multiplayer policy: `docs/cooperative_multiplayer_policy.md`
+- Steam onboarding TODO: `docs/steam_onboarding_todo.md`
 - Menu system notes: `docs/menu.md`
 - UI layout system notes: `docs/ui_layout_system.md`
 - Mod/API notes: `docs/mod_api_system.md`

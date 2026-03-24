@@ -175,6 +175,16 @@ target_include_directories(mod_server PRIVATE
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
+add_executable(room_server tools/room_server/main.cpp)
+target_include_directories(room_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/third_party
+)
+
+add_executable(room_smoke tools/room_smoke/main.cpp)
+target_include_directories(room_smoke PRIVATE
+  ${CMAKE_SOURCE_DIR}/third_party
+)
+
 # Lua 5.4 (required at runtime; build-time optional with stub)
 set(LUA_FOUND_LOCAL OFF)
 find_package(Lua 5.4 QUIET)

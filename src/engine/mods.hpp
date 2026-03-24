@@ -36,6 +36,7 @@ struct ModCatalogEntry {
 struct LobbyModEntry {
     std::string id;
     std::string title;
+    std::string version;
     std::string author;
     std::string description;
     std::vector<std::string> dependencies;
