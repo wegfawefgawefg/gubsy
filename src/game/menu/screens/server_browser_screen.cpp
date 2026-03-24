@@ -134,12 +134,15 @@ BuiltScreen build_server_browser(MenuContext& ctx) {
             card.slot = slot;
             card.type = WidgetType::Button;
             card.label = text_cache.back().c_str();
-            text_cache.emplace_back((room.session_phase == "in_game" ? std::string("In Game") : std::string("Lobby")) +
+            text_cache.emplace_back((session_contract_is_in_game(room.contract)
+                                         ? std::string("In Game")
+                                         : std::string("Lobby")) +
                                     " | " + room.host_name + " | " +
                                     std::to_string(room.current_players) + "/" +
                                     std::to_string(room.max_players));
             card.secondary = text_cache.back().c_str();
-            text_cache.emplace_back(room.room_code + " | " + room.mod_hash.substr(0, std::min<std::size_t>(8, room.mod_hash.size())));
+            text_cache.emplace_back(room.room_code + " | " +
+                                    room.contract.mod_hash.substr(0, std::min<std::size_t>(8, room.contract.mod_hash.size())));
             card.badge = text_cache.back().c_str();
             card.on_select = MenuAction::run_command(g_cmd_join_room, room_index);
             widgets.push_back(card);

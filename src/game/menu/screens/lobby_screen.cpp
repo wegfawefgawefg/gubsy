@@ -114,7 +114,7 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
     lobby_refresh_mods();
     auto enabled = lobby_enabled_mod_ids();
     set_active_mods(enabled);
-    lobby.online.in_game = true;
+    lobby.online.contract.session_phase = "in_game";
     ctx.engine.mode = modes::PLAYING;
 }
 
@@ -182,7 +182,9 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     title.slot = LobbyObjectID::TITLE;
     title.type = WidgetType::Label;
     title.label = lobby.online.in_room
-                      ? (lobby.online.in_game ? "Online Session In Progress" : "Online Session Lobby")
+                      ? (session_contract_is_in_game(lobby.online.contract)
+                             ? "Online Session In Progress"
+                             : "Online Session Lobby")
                       : "Session Lobby";
     widgets.push_back(title);
 

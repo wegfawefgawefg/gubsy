@@ -17,7 +17,10 @@
 #include <nlohmann/json.hpp>
 
 #include "engine/globals.hpp"
+#include "engine/matchmaking.hpp"
 #include "engine/mod_host.hpp"
+#include "engine/room_matchmaking.hpp"
+#include "engine/session_contract.hpp"
 #include "engine/sync_session.hpp"
 #include "game/lobby_config.hpp"
 #include "game/menu/lobby_state.hpp"
@@ -28,160 +31,76 @@ constexpr double kRoomPollIntervalSec = 1.0;
 constexpr double kRoomPublishIntervalSec = 1.0;
 constexpr double kRoomsRefreshIntervalSec = 2.0;
 
-struct EndpointInfo {
-    std::string host;
-    int port{80};
-};
+RoomServerMatchmaking g_matchmaking;
 
-bool parse_http_endpoint(const std::string& url, EndpointInfo& out, std::string& err) {
-    std::string work = url;
-    constexpr const char* prefix = "http://";
-    if (work.rfind(prefix, 0) != 0) {
-        err = "Only http:// room servers are supported";
-        return false;
-    }
-    work = work.substr(7);
-    auto slash = work.find('/');
-    if (slash != std::string::npos)
-        work = work.substr(0, slash);
-    if (work.empty()) {
-        err = "Missing host in room server URL";
-        return false;
-    }
-    out.host = work;
-    auto colon = work.find(':');
-    if (colon != std::string::npos) {
-        out.host = work.substr(0, colon);
-        try {
-            out.port = std::stoi(work.substr(colon + 1));
-        } catch (...) {
-            err = "Invalid room server port";
-            return false;
-        }
-    }
-    if (out.host.empty()) {
-        err = "Invalid room server host";
-        return false;
-    }
-    return true;
+std::string content_contract_key(const SessionContract& contract) {
+    nlohmann::json key = {
+        {"game_version", contract.game_version},
+        {"net_protocol", contract.net_protocol},
+        {"mod_hash", contract.mod_hash},
+        {"allow_live_mod_reload", contract.allow_live_mod_reload},
+        {"game_config", contract.game_config},
+    };
+    return key.dump();
 }
 
-std::optional<nlohmann::json> post_json(const std::string& server_url,
-                                        const std::string& path,
-                                        const nlohmann::json& body,
-                                        std::string& err) {
-    EndpointInfo endpoint;
-    if (!parse_http_endpoint(server_url, endpoint, err))
-        return std::nullopt;
-    httplib::Client client(endpoint.host, endpoint.port);
-    client.set_read_timeout(3, 0);
-    auto res = client.Post(path.c_str(), body.dump(), "application/json");
-    if (!res) {
-        err = "Failed to reach room server";
-        return std::nullopt;
+SessionContract build_local_contract(LobbySession& lobby) {
+    SessionContract contract = lobby.online.contract;
+    contract.game_version = required_mod_game_version();
+    contract.net_protocol = session_contract_default_net_protocol();
+    contract.session_phase = lobby_session_phase(lobby);
+    contract.mod_hash = lobby_enabled_mod_signature();
+    contract.allow_live_mod_reload = true;
+    contract.game_config = capture_game_lobby_config(lobby);
+    contract.realtime_endpoint = sync_session_advertised_endpoint();
+
+    const std::string key = content_contract_key(contract);
+    if (lobby.online.last_published_contract_key.empty()) {
+        if (contract.content_revision == 0)
+            contract.content_revision = 1;
+        lobby.online.last_published_contract_key = key;
+    } else if (lobby.online.last_published_contract_key != key) {
+        contract.content_revision = std::max<std::uint64_t>(contract.content_revision + 1, 1);
+        lobby.online.last_published_contract_key = key;
     }
-    if (res->status < 200 || res->status >= 300) {
-        err = "Room server request failed (" + std::to_string(res->status) + ")";
-        if (!res->body.empty())
-            err += ": " + res->body;
-        return std::nullopt;
-    }
-    try {
-        return nlohmann::json::parse(res->body);
-    } catch (const std::exception& e) {
-        err = e.what();
-        return std::nullopt;
-    }
+    lobby.online.contract = contract;
+    return contract;
 }
 
-std::optional<nlohmann::json> get_json(const std::string& server_url,
-                                       const std::string& path,
-                                       std::string& err) {
-    EndpointInfo endpoint;
-    if (!parse_http_endpoint(server_url, endpoint, err))
-        return std::nullopt;
-    httplib::Client client(endpoint.host, endpoint.port);
-    client.set_read_timeout(3, 0);
-    auto res = client.Get(path.c_str());
-    if (!res) {
-        err = "Failed to reach room server";
-        return std::nullopt;
-    }
-    if (res->status < 200 || res->status >= 300) {
-        err = "Room server request failed (" + std::to_string(res->status) + ")";
-        if (!res->body.empty())
-            err += ": " + res->body;
-        return std::nullopt;
-    }
-    try {
-        return nlohmann::json::parse(res->body);
-    } catch (const std::exception& e) {
-        err = e.what();
-        return std::nullopt;
-    }
+SessionContract build_expected_local_contract() {
+    SessionContract contract;
+    contract.game_version = required_mod_game_version();
+    contract.net_protocol = session_contract_default_net_protocol();
+    contract.mod_hash = lobby_enabled_mod_signature();
+    contract.allow_live_mod_reload = true;
+    return contract;
 }
 
-std::string normalized_room_code(std::string room_code) {
-    room_code.erase(std::remove_if(room_code.begin(),
-                                   room_code.end(),
-                                   [](unsigned char c) { return std::isspace(c) != 0; }),
-                    room_code.end());
-    std::transform(room_code.begin(), room_code.end(), room_code.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    return room_code;
+MatchmakingRoom build_room_metadata(LobbySession& lobby) {
+    MatchmakingRoom room;
+    room.room_code = lobby.online.room_code;
+    room.session_name = lobby.session_name;
+    room.host_name = lobby_local_player_name();
+    room.privacy = lobby.privacy;
+    room.max_players = lobby.max_players;
+    room.contract = build_local_contract(lobby);
+    return room;
 }
 
-nlohmann::json build_room_metadata(const LobbySession& lobby) {
-    nlohmann::json body;
-    body["session_name"] = lobby.session_name;
-    body["host_name"] = lobby_local_player_name();
-    body["session_phase"] = lobby_session_phase(lobby);
-    body["privacy"] = lobby.privacy;
-    body["max_players"] = lobby.max_players;
-    body["game_version"] = required_mod_game_version();
-    body["mod_hash"] = lobby_enabled_mod_signature();
-    body["game_config"] = capture_game_lobby_config(lobby);
-    const std::string& advertised_endpoint = sync_session_advertised_endpoint();
-    body["realtime_endpoint"] = advertised_endpoint;
-    body["in_game"] = lobby.online.in_game;
-    return body;
-}
-
-void read_room_summary(const nlohmann::json& room_json, LobbyDiscoveredRoom& out) {
-    out.room_code = room_json.value("room_code", "");
-    out.session_name = room_json.value("session_name", "");
-    out.host_name = room_json.value("host_name", "");
-    out.session_phase = room_json.value("session_phase", room_json.value("in_game", false) ? "in_game" : "lobby");
-    out.realtime_endpoint = room_json.value("realtime_endpoint", "");
-    out.game_version = room_json.value("game_version", "");
-    out.mod_hash = room_json.value("mod_hash", "");
-    out.privacy = room_json.value("privacy", 0);
-    out.max_players = room_json.value("max_players", 1);
-    out.current_players = room_json.value("current_players", 0);
-    out.in_game = room_json.value("in_game", false);
-}
-
-void apply_room_to_lobby(const LobbyDiscoveredRoom& room, LobbySession& lobby) {
+void apply_room_to_lobby(const MatchmakingRoom& room, LobbySession& lobby) {
     lobby.session_name = room.session_name;
     lobby.privacy = room.privacy;
     lobby.max_players = std::max(1, room.max_players);
-    lobby.online.session_phase = room.session_phase;
-    lobby.online.realtime_endpoint = room.realtime_endpoint;
-    lobby.online.in_game = room.in_game;
+    lobby.online.contract = room.contract;
 }
 
-void read_room_members(const nlohmann::json& room_json, LobbySession& lobby) {
+void read_room_members(const MatchmakingRoom& room, LobbySession& lobby) {
     lobby.online.members.clear();
-    auto members_it = room_json.find("members");
-    if (members_it == room_json.end() || !members_it->is_array())
-        return;
-    for (const auto& member_json : *members_it) {
-        if (!member_json.is_object())
-            continue;
+    for (const auto& member_json : room.members) {
         LobbyOnlineMember member;
-        member.member_id = member_json.value("member_id", "");
-        member.display_name = member_json.value("display_name", "");
-        member.is_host = member_json.value("is_host", false);
+        member.member_id = member_json.member_id;
+        member.display_name = member_json.display_name;
+        member.is_host = member_json.is_host;
         member.is_local = member.member_id == lobby.online.member_id;
         if (!member.member_id.empty())
             lobby.online.members.push_back(std::move(member));
@@ -191,22 +110,26 @@ void read_room_members(const nlohmann::json& room_json, LobbySession& lobby) {
 bool refresh_room_state(LobbySession& lobby, std::string& err) {
     if (!lobby.online.in_room || lobby.online.room_code.empty())
         return false;
-    auto json = get_json(lobby.online.server_url,
-                         "/rooms/" + normalized_room_code(lobby.online.room_code),
-                         err);
-    if (!json)
+    MatchmakingRoom room;
+    if (!g_matchmaking.fetch_room(lobby.online.server_url, lobby.online.room_code, room, err))
         return false;
-    LobbyDiscoveredRoom room;
-    read_room_summary((*json)["room"], room);
     apply_room_to_lobby(room, lobby);
-    auto config_it = (*json)["room"].find("game_config");
-    if (config_it != (*json)["room"].end() && config_it->is_object())
-        apply_game_lobby_config(*config_it, lobby);
-    read_room_members((*json)["room"], lobby);
+    if (room.contract.game_config.is_object())
+        apply_game_lobby_config(room.contract.game_config, lobby);
+    read_room_members(room, lobby);
     std::ostringstream status;
-    status << (room.session_phase == "in_game" ? "In Game" : "Lobby")
+    status << (session_contract_is_in_game(room.contract) ? "In Game" : "Lobby")
            << " | Room " << room.room_code << " | " << room.current_players
            << "/" << room.max_players << " players";
+    const SessionCompatibility compatibility =
+        session_contract_check_compatibility(room.contract, build_expected_local_contract());
+    if (compatibility != SessionCompatibility::Compatible) {
+        status << " | " << session_contract_compatibility_text(compatibility);
+        if (compatibility == SessionCompatibility::WrongGameVersion ||
+            compatibility == SessionCompatibility::WrongNetProtocol) {
+            lobby.online.last_error = session_contract_compatibility_text(compatibility);
+        }
+    }
     lobby.online.status_text = status.str();
     return true;
 }
@@ -214,46 +137,44 @@ bool refresh_room_state(LobbySession& lobby, std::string& err) {
 bool publish_room_state(LobbySession& lobby, std::string& err) {
     if (!lobby.online.in_room || !lobby.online.is_host)
         return false;
-    nlohmann::json body;
-    body["member_id"] = lobby.online.member_id;
-    body["host_secret"] = lobby.online.host_secret;
-    body["display_name"] = lobby_local_player_name();
-    body["room"] = build_room_metadata(lobby);
-    auto json = post_json(lobby.online.server_url,
-                          "/rooms/" + normalized_room_code(lobby.online.room_code) + "/heartbeat",
-                          body,
-                          err);
-    return json.has_value();
+    MatchmakingRoom room = build_room_metadata(lobby);
+    return g_matchmaking.heartbeat_room(lobby.online.server_url,
+                                        lobby.online.room_code,
+                                        lobby.online.member_id,
+                                        lobby_local_player_name(),
+                                        lobby.online.host_secret,
+                                        &room,
+                                        err);
 }
 
 bool heartbeat_member(LobbySession& lobby, std::string& err) {
     if (!lobby.online.in_room || lobby.online.is_host)
         return false;
-    nlohmann::json body;
-    body["member_id"] = lobby.online.member_id;
-    body["display_name"] = lobby_local_player_name();
-    auto json = post_json(lobby.online.server_url,
-                          "/rooms/" + normalized_room_code(lobby.online.room_code) + "/heartbeat",
-                          body,
-                          err);
-    return json.has_value();
+    return g_matchmaking.heartbeat_room(lobby.online.server_url,
+                                        lobby.online.room_code,
+                                        lobby.online.member_id,
+                                        lobby_local_player_name(),
+                                        {},
+                                        nullptr,
+                                        err);
 }
 
 } // namespace
 
 bool lobby_online_host_current_room(LobbySession& lobby, std::string& err) {
-    nlohmann::json body = build_room_metadata(lobby);
-    auto json = post_json(lobby.online.server_url, "/rooms/create", body, err);
-    if (!json)
+    lobby.online.last_published_contract_key.clear();
+    MatchmakingCreateResult created;
+    MatchmakingRoom room = build_room_metadata(lobby);
+    if (!g_matchmaking.create_room(lobby.online.server_url, room, created, err))
         return false;
     lobby.online.in_room = true;
     lobby.online.is_host = true;
-    lobby.online.room_code = (*json).value("room_code", "");
-    lobby.online.host_secret = (*json).value("host_secret", "");
-    lobby.online.member_id = (*json).value("member_id", "");
-    lobby.online.session_phase = "lobby";
-    lobby.online.realtime_endpoint.clear();
-    lobby.online.in_game = false;
+    lobby.online.room_code = created.room_code;
+    lobby.online.host_secret = created.host_secret;
+    lobby.online.member_id = created.member_id;
+    lobby.online.contract = room.contract;
+    lobby.online.contract.session_phase = "lobby";
+    lobby.online.contract.realtime_endpoint.clear();
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
     err.clear();
@@ -261,20 +182,21 @@ bool lobby_online_host_current_room(LobbySession& lobby, std::string& err) {
 }
 
 bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, std::string& err) {
-    nlohmann::json body;
-    body["display_name"] = lobby_local_player_name();
-    std::string code = normalized_room_code(room_code);
-    auto json = post_json(lobby.online.server_url, "/rooms/" + code + "/join", body, err);
-    if (!json)
+    std::string member_id;
+    if (!g_matchmaking.join_room(lobby.online.server_url,
+                                 room_code,
+                                 lobby_local_player_name(),
+                                 member_id,
+                                 err)) {
         return false;
+    }
     lobby.online.in_room = true;
     lobby.online.is_host = false;
-    lobby.online.room_code = code;
+    lobby.online.room_code = room_code;
     lobby.online.host_secret.clear();
-    lobby.online.member_id = (*json).value("member_id", "");
-    lobby.online.session_phase = "lobby";
-    lobby.online.realtime_endpoint.clear();
-    lobby.online.in_game = false;
+    lobby.online.member_id = member_id;
+    lobby.online.contract = SessionContract{};
+    lobby.online.contract.net_protocol = session_contract_default_net_protocol();
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
     err.clear();
@@ -284,22 +206,19 @@ bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, s
 bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
     if (!lobby.online.in_room)
         return true;
-    nlohmann::json body;
-    body["member_id"] = lobby.online.member_id;
-    if (lobby.online.is_host)
-        body["host_secret"] = lobby.online.host_secret;
-    post_json(lobby.online.server_url,
-              "/rooms/" + normalized_room_code(lobby.online.room_code) + "/leave",
-              body,
-              err);
+    g_matchmaking.leave_room(lobby.online.server_url,
+                             lobby.online.room_code,
+                             lobby.online.member_id,
+                             lobby.online.is_host ? lobby.online.host_secret : std::string{},
+                             err);
     lobby.online.in_room = false;
     lobby.online.is_host = false;
-    lobby.online.session_phase = "lobby";
-    lobby.online.in_game = false;
+    lobby.online.contract = SessionContract{};
+    lobby.online.contract.net_protocol = session_contract_default_net_protocol();
     lobby.online.room_code.clear();
     lobby.online.host_secret.clear();
     lobby.online.member_id.clear();
-    lobby.online.realtime_endpoint.clear();
+    lobby.online.last_published_contract_key.clear();
     lobby.online.members.clear();
     lobby.online.status_text = "Offline lobby";
     return true;
@@ -308,18 +227,21 @@ bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
 bool lobby_online_refresh_rooms(LobbySession& lobby, bool force, std::string& err) {
     if (!force && es && es->now < lobby.online.next_rooms_refresh_at)
         return true;
-    auto json = get_json(lobby.online.server_url, "/rooms", err);
-    if (!json)
+    std::vector<MatchmakingRoom> rooms;
+    if (!g_matchmaking.list_rooms(lobby.online.server_url, rooms, err))
         return false;
     lobby.online.discovered_rooms.clear();
-    auto rooms_it = json->find("rooms");
-    if (rooms_it != json->end() && rooms_it->is_array()) {
-        for (const auto& room_json : *rooms_it) {
-            LobbyDiscoveredRoom room;
-            read_room_summary(room_json, room);
-            if (!room.room_code.empty())
-                lobby.online.discovered_rooms.push_back(std::move(room));
-        }
+    for (const MatchmakingRoom& src : rooms) {
+        LobbyDiscoveredRoom room;
+        room.room_code = src.room_code;
+        room.session_name = src.session_name;
+        room.host_name = src.host_name;
+        room.privacy = src.privacy;
+        room.max_players = src.max_players;
+        room.current_players = src.current_players;
+        room.contract = src.contract;
+        if (!room.room_code.empty())
+            lobby.online.discovered_rooms.push_back(std::move(room));
     }
     lobby.online.next_rooms_refresh_at = es ? es->now + kRoomsRefreshIntervalSec : kRoomsRefreshIntervalSec;
     return true;

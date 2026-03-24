@@ -9,6 +9,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/input_sources.hpp"
+#include "engine/session_contract.hpp"
 #include "engine/player.hpp"
 
 namespace {
@@ -56,6 +57,7 @@ void lobby_reset_defaults() {
     g_lobby = LobbySession{};
     g_lobby.max_players = std::clamp(g_lobby.max_players, kMinLobbyPlayers, kMaxLobbyPlayers);
     g_lobby.online.server_url = default_room_server_url();
+    g_lobby.online.contract.net_protocol = session_contract_default_net_protocol();
 }
 
 void lobby_refresh_mods() {
@@ -180,13 +182,17 @@ void lobby_toggle_device(int player_index, int type, int id) {
 }
 
 const char* lobby_session_phase(const LobbySession& lobby) {
-    return lobby.online.in_game ? "in_game" : "lobby";
+    return lobby.online.contract.session_phase.c_str();
 }
 
 bool lobby_online_ready_to_enter_game(const LobbySession& lobby) {
-    if (!lobby.online.in_room || !lobby.online.in_game)
+    if (!lobby.online.in_room || !session_contract_is_in_game(lobby.online.contract))
         return false;
     if (lobby.online.is_host)
         return true;
-    return !lobby.online.realtime_endpoint.empty();
+    return !lobby.online.contract.realtime_endpoint.empty();
+}
+
+void lobby_online_mark_contract_dirty(LobbySession& lobby) {
+    lobby.online.last_published_contract_key.clear();
 }

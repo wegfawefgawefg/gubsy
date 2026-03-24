@@ -27,9 +27,9 @@ This project is aiming for cooperative multiplayer first, not rollback PvP netco
 
 - The first playable online slice is host-authoritative snapshot sync.
 - Clients should locally predict their own movement/input-facing state between host snapshots.
-- The room service is currently an HTTP relay for room membership, latest member inputs, and latest authoritative snapshot.
-- This relay is a bootstrap step for browser/join/validation work, not the final transport choice.
-- A lower-latency transport can replace the relay later without changing the lobby/session model.
+- The room service currently handles directory/bootstrap duties only.
+- Realtime sync currently runs over a separate UDP transport path.
+- The room/bootstrap service should stay replaceable without changing the higher-level session contract.
 
 ## Replay Semantics
 
@@ -51,6 +51,7 @@ This project is aiming for cooperative multiplayer first, not rollback PvP netco
 
 - Mods are part of the network contract.
 - Sessions should advertise game version plus a mod signature/hash.
+- Sessions should carry a content revision so live host-side content changes are observable.
 - The host decides the active gameplay-relevant mod set.
 - Clients should sync to the host’s declared mod set before or during session entry.
 
@@ -67,11 +68,12 @@ That means:
 ## Architectural Consequences
 
 - Lobbies must expose version/mod identity, not just player counts.
+- Lobbies must expose a session contract, not just a bag of unrelated room fields.
 - Networking should support snapshot/state replication, not just input relay.
 - The room/join path should exist independently of Steam so the same model works on and off Steam.
 - Steam integration should be a backend for invites, lobbies, and transport, not the entire multiplayer design.
 - The first validation harness should be headless and compare client-applied state against host-authoritative state.
-- The engine should own generic session orchestration, membership, transport/backend polling, and reconciliation hooks.
+- The engine should own generic session orchestration, matchmaking/transport backends, compatibility checks, and reconciliation hooks.
 - Individual games should provide their own sync driver for input capture, local prediction, snapshot capture, and snapshot application.
 
 ## Engine Boundary
@@ -87,6 +89,6 @@ That means:
 
 ## Current Limitation
 
-- The current smoke backend still uses JSON payloads because the room server is an HTTP validation backend.
+- The current transport still uses JSON payloads for smoke-friendly validation.
 - That is a backend detail, not the long-term transport goal.
 - If the JSON payload boundary starts getting in the way, it should be replaced with an opaque packet/byte payload interface.

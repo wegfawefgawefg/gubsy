@@ -1,47 +1,35 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include "engine/net_transport.hpp"
 
-#include "engine/sync_session_wire.hpp"
+class UdpJsonNetTransport final : public INetTransport {
+public:
+    ~UdpJsonNetTransport() override;
 
-struct SyncTransportMemberInput {
-    std::string member_id;
-    SequencedInput input;
+    void reset() override;
+    bool ensure_host(const std::string& room_code, std::string& err) override;
+    bool ensure_client(const std::string& room_code,
+                       const std::string& remote_endpoint,
+                       std::string& err) override;
+    bool send(const NetTransportPacket& packet, std::string& err) override;
+    bool poll(std::vector<NetTransportPacket>& out, std::string& err) override;
+    const std::string& public_endpoint() const override;
+
+private:
+    bool open_socket(bool is_host,
+                     const std::string& room_code,
+                     const std::string& remote_endpoint,
+                     std::string& err);
+
+    bool open_{false};
+    bool is_host_{false};
+    int socket_fd_{-1};
+    std::string room_code_;
+    std::string remote_endpoint_;
+    std::string public_endpoint_;
+    std::vector<std::pair<std::string, std::string>> member_endpoints_;
 };
-
-struct SyncUdpTransport {
-    bool open{false};
-    bool is_host{false};
-    int socket_fd{-1};
-    std::string room_code;
-    std::string remote_endpoint;
-    std::string public_endpoint;
-    std::vector<std::pair<std::string, std::string>> member_endpoints;
-};
-
-void sync_udp_transport_reset(SyncUdpTransport& transport);
-bool sync_udp_transport_ensure_host(SyncUdpTransport& transport,
-                                    const std::string& room_code,
-                                    std::string& err);
-bool sync_udp_transport_ensure_client(SyncUdpTransport& transport,
-                                      const std::string& room_code,
-                                      const std::string& remote_endpoint,
-                                      std::string& err);
-bool sync_udp_transport_send_input(SyncUdpTransport& transport,
-                                   const std::string& member_id,
-                                   const SequencedInput& input,
-                                   std::string& err);
-bool sync_udp_transport_collect_host_inputs(SyncUdpTransport& transport,
-                                            std::vector<SyncTransportMemberInput>& out,
-                                            std::string& err);
-bool sync_udp_transport_send_snapshot(SyncUdpTransport& transport,
-                                      const nlohmann::json& snapshot,
-                                      std::string& err);
-bool sync_udp_transport_collect_client_snapshot(SyncUdpTransport& transport,
-                                                nlohmann::json& snapshot_out,
-                                                bool& has_snapshot,
-                                                std::string& err);
-const std::string& sync_udp_transport_public_endpoint(const SyncUdpTransport& transport);

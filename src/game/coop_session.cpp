@@ -22,7 +22,7 @@ bool g_sync_configured = false;
 
 bool query_connection(void*, SyncConnectionInfo& out) {
     const LobbySession& lobby = lobby_state_const();
-    if (!lobby.online.in_room || !lobby.online.in_game)
+    if (!lobby.online.in_room || !session_contract_is_in_game(lobby.online.contract))
         return false;
     out.active = true;
     out.is_host = lobby.online.is_host;
@@ -30,7 +30,7 @@ bool query_connection(void*, SyncConnectionInfo& out) {
     out.room_code = lobby.online.room_code;
     out.host_secret = lobby.online.host_secret;
     out.local_member_id = lobby.online.member_id;
-    out.remote_endpoint = lobby.online.is_host ? std::string{} : lobby.online.realtime_endpoint;
+    out.contract = lobby.online.contract;
     return true;
 }
 

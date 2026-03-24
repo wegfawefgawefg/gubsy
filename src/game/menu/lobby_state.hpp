@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 
+#include "engine/session_contract.hpp"
 #include "engine/mods.hpp"
 
 struct PlayerDeviceKey {
@@ -22,14 +23,10 @@ struct LobbyDiscoveredRoom {
     std::string room_code;
     std::string session_name;
     std::string host_name;
-    std::string session_phase{"lobby"};
-    std::string realtime_endpoint;
-    std::string game_version;
-    std::string mod_hash;
     int privacy{0};
     int max_players{1};
     int current_players{0};
-    bool in_game{false};
+    SessionContract contract{};
 };
 
 struct LobbyOnlineState {
@@ -39,11 +36,10 @@ struct LobbyOnlineState {
     std::string member_id;
     std::string status_text;
     std::string last_error;
-    std::string session_phase{"lobby"};
-    std::string realtime_endpoint;
     bool in_room{false};
     bool is_host{false};
-    bool in_game{false};
+    SessionContract contract{};
+    std::string last_published_contract_key;
     double next_room_poll_at{0.0};
     double next_room_publish_at{0.0};
     double next_rooms_refresh_at{0.0};
@@ -81,3 +77,4 @@ bool lobby_device_enabled(int player_index, int type, int id);
 void lobby_toggle_device(int player_index, int type, int id);
 const char* lobby_session_phase(const LobbySession& lobby);
 bool lobby_online_ready_to_enter_game(const LobbySession& lobby);
+void lobby_online_mark_contract_dirty(LobbySession& lobby);

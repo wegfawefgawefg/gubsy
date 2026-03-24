@@ -177,16 +177,24 @@ target_include_directories(mod_server PRIVATE
 
 add_executable(room_server tools/room_server/main.cpp)
 target_include_directories(room_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
-add_executable(room_smoke tools/room_smoke/main.cpp)
+add_executable(room_smoke
+  tools/room_smoke/main.cpp
+  src/engine/room_matchmaking.cpp
+  src/engine/session_contract.cpp
+)
 target_include_directories(room_smoke PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
 add_executable(coop_sync_smoke
   tools/coop_sync_smoke/main.cpp
+  src/engine/room_matchmaking.cpp
+  src/engine/session_contract.cpp
   src/engine/sync_transport_udp.cpp
   src/game/coop_protocol.cpp
   src/game/coop_sim.cpp

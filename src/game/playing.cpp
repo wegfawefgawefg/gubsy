@@ -42,7 +42,8 @@ void return_to_lobby() {
         if (!err.empty())
             add_alert(err);
     } else {
-        lobby.online.in_game = false;
+        lobby.online.contract.session_phase = "lobby";
+        lobby.online.contract.realtime_endpoint.clear();
     }
     if (es)
         es->mode = modes::TITLE;
@@ -61,7 +62,7 @@ void playing_step() {
         return;
     }
 
-    if (lobby.online.in_room && !lobby.online.in_game) {
+    if (lobby.online.in_room && !session_contract_is_in_game(lobby.online.contract)) {
         if (es)
             es->mode = modes::TITLE;
         return;
@@ -83,7 +84,7 @@ void playing_step() {
         return;
     }
 
-    if (lobby.online.in_room && lobby.online.in_game)
+    if (lobby.online.in_room && session_contract_is_in_game(lobby.online.contract))
         return;
 
     auto& target = ss->bonk;

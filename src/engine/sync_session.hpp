@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "engine/session_contract.hpp"
+
 struct SyncConnectionInfo {
     bool active{false};
     bool is_host{false};
@@ -13,7 +15,7 @@ struct SyncConnectionInfo {
     std::string room_code;
     std::string host_secret;
     std::string local_member_id;
-    std::string remote_endpoint;
+    SessionContract contract{};
 };
 
 struct SyncSessionHooks {

@@ -14,149 +14,94 @@
 #include <string>
 #include <thread>
 
-namespace {
-
-struct EndpointInfo {
-    std::string host;
-    int port{80};
-};
-
-bool parse_http_endpoint(const std::string& url, EndpointInfo& out, std::string& err) {
-    if (url.rfind("http://", 0) != 0) {
-        err = "only http:// URLs are supported";
-        return false;
-    }
-    std::string work = url.substr(7);
-    auto slash = work.find('/');
-    if (slash != std::string::npos)
-        work = work.substr(0, slash);
-    out.host = work;
-    auto colon = work.find(':');
-    if (colon != std::string::npos) {
-        out.host = work.substr(0, colon);
-        out.port = std::stoi(work.substr(colon + 1));
-    }
-    return !out.host.empty();
-}
-
-nlohmann::json post_json(httplib::Client& client, const std::string& path, const nlohmann::json& body) {
-    auto res = client.Post(path.c_str(), body.dump(), "application/json");
-    if (!res) {
-        throw std::runtime_error("request failed for " + path);
-    }
-    if (res->status < 200 || res->status >= 300) {
-        throw std::runtime_error("request failed for " + path + ": " + std::to_string(res->status) + " " + res->body);
-    }
-    return nlohmann::json::parse(res->body);
-}
-
-nlohmann::json get_json(httplib::Client& client, const std::string& path) {
-    auto res = client.Get(path.c_str());
-    if (!res) {
-        throw std::runtime_error("request failed for " + path);
-    }
-    if (res->status < 200 || res->status >= 300) {
-        throw std::runtime_error("request failed for " + path + ": " + std::to_string(res->status) + " " + res->body);
-    }
-    return nlohmann::json::parse(res->body);
-}
-
-} // namespace
+#include "engine/matchmaking.hpp"
+#include "engine/room_matchmaking.hpp"
+#include "engine/session_contract.hpp"
 
 int main(int argc, char** argv) {
     std::string server_url = "http://127.0.0.1:8788";
     if (argc > 1)
         server_url = argv[1];
 
-    EndpointInfo endpoint;
-    std::string err;
-    if (!parse_http_endpoint(server_url, endpoint, err)) {
-        std::cerr << err << "\n";
-        return 1;
-    }
-
-    httplib::Client client(endpoint.host, endpoint.port);
-    client.set_read_timeout(3, 0);
-
     try {
-        nlohmann::json created = post_json(client,
-                                           "/rooms/create",
-                                           {
-                                               {"session_name", "Smoke Lobby"},
-                                               {"host_name", "Host"},
-                                               {"privacy", 2},
-                                               {"max_players", 4},
-                                               {"game_version", "0.1.0"},
-                                               {"mod_hash", "aaaabbbb"},
-                                           });
-        std::string room_code = created.at("room_code").get<std::string>();
-        std::string host_secret = created.at("host_secret").get<std::string>();
-        std::string host_member_id = created.at("member_id").get<std::string>();
+        RoomServerMatchmaking matchmaking;
+        std::string err;
+        MatchmakingRoom room;
+        room.session_name = "Smoke Lobby";
+        room.host_name = "Host";
+        room.privacy = 2;
+        room.max_players = 4;
+        room.contract.game_version = "0.1.0";
+        room.contract.net_protocol = session_contract_default_net_protocol();
+        room.contract.mod_hash = "aaaabbbb";
 
-        nlohmann::json listed = get_json(client, "/rooms");
+        MatchmakingCreateResult created;
+        if (!matchmaking.create_room(server_url, room, created, err))
+            throw std::runtime_error(err);
+        std::string room_code = created.room_code;
+        std::string host_secret = created.host_secret;
+        std::string host_member_id = created.member_id;
+
+        std::vector<MatchmakingRoom> listed;
+        if (!matchmaking.list_rooms(server_url, listed, err))
+            throw std::runtime_error(err);
         bool found_room = false;
-        for (const auto& room : listed.at("rooms")) {
-            if (room.at("room_code").get<std::string>() == room_code)
+        for (const auto& listed_room : listed) {
+            if (listed_room.room_code == room_code)
                 found_room = true;
         }
         if (!found_room)
             throw std::runtime_error("created room missing from room list");
 
-        nlohmann::json joined = post_json(client,
-                                          "/rooms/" + room_code + "/join",
-                                          {{"display_name", "Guest"}});
-        std::string guest_member_id = joined.at("member_id").get<std::string>();
+        std::string guest_member_id;
+        if (!matchmaking.join_room(server_url, room_code, "Guest", guest_member_id, err))
+            throw std::runtime_error(err);
 
-        post_json(client,
-                  "/rooms/" + room_code + "/heartbeat",
-                  {
-                      {"member_id", host_member_id},
-                      {"display_name", "Host"},
-                      {"host_secret", host_secret},
-                      {"room",
-                       {
-                           {"session_name", "Smoke Lobby Updated"},
-                           {"host_name", "Host"},
-                           {"realtime_endpoint", "udp://127.0.0.1:9000"},
-                           {"privacy", 4},
-                           {"max_players", 6},
-                           {"game_version", "0.1.1"},
-                           {"mod_hash", "ccccdddd"},
-                           {"in_game", false},
-                       }},
-                  });
+        MatchmakingRoom updated = room;
+        updated.room_code = room_code;
+        updated.session_name = "Smoke Lobby Updated";
+        updated.privacy = 4;
+        updated.max_players = 6;
+        updated.contract.game_version = "0.1.1";
+        updated.contract.mod_hash = "ccccdddd";
+        updated.contract.realtime_endpoint = "udp://127.0.0.1:9000";
+        if (!matchmaking.heartbeat_room(server_url,
+                                        room_code,
+                                        host_member_id,
+                                        "Host",
+                                        host_secret,
+                                        &updated,
+                                        err)) {
+            throw std::runtime_error(err);
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        nlohmann::json room = get_json(client, "/rooms/" + room_code);
-        const auto& room_json = room.at("room");
-        if (room_json.at("session_name").get<std::string>() != "Smoke Lobby Updated")
+        MatchmakingRoom fetched;
+        if (!matchmaking.fetch_room(server_url, room_code, fetched, err))
+            throw std::runtime_error(err);
+        if (fetched.session_name != "Smoke Lobby Updated")
             throw std::runtime_error("room session_name did not update");
-        if (room_json.at("current_players").get<int>() != 2)
+        if (fetched.current_players != 2)
             throw std::runtime_error("room player count mismatch");
-        if (room_json.at("mod_hash").get<std::string>() != "ccccdddd")
+        if (fetched.contract.mod_hash != "ccccdddd")
             throw std::runtime_error("room mod hash did not update");
-        if (room_json.at("realtime_endpoint").get<std::string>() != "udp://127.0.0.1:9000")
+        if (fetched.contract.realtime_endpoint != "udp://127.0.0.1:9000")
             throw std::runtime_error("room realtime endpoint did not update");
 
-        post_json(client,
-                  "/rooms/" + room_code + "/leave",
-                  {
-                      {"member_id", guest_member_id},
-                  });
+        if (!matchmaking.leave_room(server_url, room_code, guest_member_id, {}, err))
+            throw std::runtime_error(err);
 
-        nlohmann::json after_leave = get_json(client, "/rooms/" + room_code);
-        if (after_leave.at("room").at("current_players").get<int>() != 1)
+        MatchmakingRoom after_leave;
+        if (!matchmaking.fetch_room(server_url, room_code, after_leave, err))
+            throw std::runtime_error(err);
+        if (after_leave.current_players != 1)
             throw std::runtime_error("leave did not remove guest");
 
-        post_json(client,
-                  "/rooms/" + room_code + "/leave",
-                  {
-                      {"member_id", host_member_id},
-                      {"host_secret", host_secret},
-                  });
+        if (!matchmaking.leave_room(server_url, room_code, host_member_id, host_secret, err))
+            throw std::runtime_error(err);
 
-        auto res = client.Get(("/rooms/" + room_code).c_str());
-        if (res && res->status != 404)
+        MatchmakingRoom should_fail;
+        if (matchmaking.fetch_room(server_url, room_code, should_fail, err))
             throw std::runtime_error("host leave should remove room");
 
         std::cout << "[room_smoke] ok\n";

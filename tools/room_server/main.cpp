@@ -42,9 +42,12 @@ struct RoomRecord {
     std::string session_name;
     std::string host_name;
     std::string session_phase{"lobby"};
+    std::string net_protocol{"gubsy-sync-1"};
     std::string realtime_endpoint;
     std::string game_version;
     std::string mod_hash;
+    std::uint64_t content_revision{1};
+    bool allow_live_mod_reload{true};
     int privacy{0};
     int max_players{1};
     bool in_game{false};
@@ -122,9 +125,12 @@ nlohmann::json room_to_json(const RoomRecord& room) {
         {"session_name", room.session_name},
         {"host_name", room.host_name},
         {"session_phase", room.session_phase},
+        {"net_protocol", room.net_protocol},
         {"realtime_endpoint", room.realtime_endpoint},
         {"game_version", room.game_version},
         {"mod_hash", room.mod_hash},
+        {"content_revision", room.content_revision},
+        {"allow_live_mod_reload", room.allow_live_mod_reload},
         {"privacy", room.privacy},
         {"max_players", room.max_players},
         {"current_players", static_cast<int>(room.members.size())},
@@ -163,6 +169,13 @@ bool json_bool(const nlohmann::json& body, const char* key, bool fallback = fals
     auto it = body.find(key);
     if (it != body.end() && it->is_boolean())
         return it->get<bool>();
+    return fallback;
+}
+
+std::uint64_t json_u64(const nlohmann::json& body, const char* key, std::uint64_t fallback = 0) {
+    auto it = body.find(key);
+    if (it != body.end() && it->is_number_unsigned())
+        return it->get<std::uint64_t>();
     return fallback;
 }
 
@@ -239,9 +252,12 @@ int main(int argc, char** argv) {
         room.session_name = json_string(body, "session_name", "Online Lobby");
         room.host_name = json_string(body, "host_name", "Host");
         room.session_phase = json_string(body, "session_phase", json_bool(body, "in_game", false) ? "in_game" : "lobby");
+        room.net_protocol = json_string(body, "net_protocol", "gubsy-sync-1");
         room.realtime_endpoint = json_string(body, "realtime_endpoint");
         room.game_version = json_string(body, "game_version");
         room.mod_hash = json_string(body, "mod_hash");
+        room.content_revision = std::max<std::uint64_t>(1, json_u64(body, "content_revision", 1));
+        room.allow_live_mod_reload = json_bool(body, "allow_live_mod_reload", true);
         room.privacy = json_int(body, "privacy", 0);
         room.max_players = std::max(1, json_int(body, "max_players", 4));
         room.in_game = room.session_phase == "in_game" || json_bool(body, "in_game", false);
@@ -328,9 +344,12 @@ int main(int argc, char** argv) {
                 room.session_phase = json_string(*room_it,
                                                  "session_phase",
                                                  room.in_game ? "in_game" : room.session_phase.c_str());
+                room.net_protocol = json_string(*room_it, "net_protocol", room.net_protocol.c_str());
                 room.realtime_endpoint = json_string(*room_it, "realtime_endpoint", room.realtime_endpoint.c_str());
                 room.game_version = json_string(*room_it, "game_version", room.game_version.c_str());
                 room.mod_hash = json_string(*room_it, "mod_hash", room.mod_hash.c_str());
+                room.content_revision = std::max<std::uint64_t>(1, json_u64(*room_it, "content_revision", room.content_revision));
+                room.allow_live_mod_reload = json_bool(*room_it, "allow_live_mod_reload", room.allow_live_mod_reload);
                 room.privacy = json_int(*room_it, "privacy", room.privacy);
                 room.max_players = std::max(1, json_int(*room_it, "max_players", room.max_players));
                 room.in_game = room.session_phase == "in_game" || json_bool(*room_it, "in_game", room.in_game);

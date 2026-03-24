@@ -1,14 +1,3 @@
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#endif
-#include "httplib/httplib.h"
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-
-#include <nlohmann/json.hpp>
-
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -18,6 +7,10 @@
 #include <thread>
 #include <vector>
 
+#include "engine/matchmaking.hpp"
+#include "engine/net_transport.hpp"
+#include "engine/room_matchmaking.hpp"
+#include "engine/session_contract.hpp"
 #include "engine/sync_transport_udp.hpp"
 #include "game/actions.hpp"
 #include "game/coop_protocol.hpp"
@@ -26,47 +19,6 @@
 #include "game/state.hpp"
 
 namespace {
-
-struct EndpointInfo {
-    std::string host;
-    int port{80};
-};
-
-bool parse_http_endpoint(const std::string& url, EndpointInfo& out, std::string& err) {
-    if (url.rfind("http://", 0) != 0) {
-        err = "only http:// URLs are supported";
-        return false;
-    }
-    std::string work = url.substr(7);
-    auto slash = work.find('/');
-    if (slash != std::string::npos)
-        work = work.substr(0, slash);
-    out.host = work;
-    auto colon = work.find(':');
-    if (colon != std::string::npos) {
-        out.host = work.substr(0, colon);
-        out.port = std::stoi(work.substr(colon + 1));
-    }
-    return !out.host.empty();
-}
-
-nlohmann::json post_json(httplib::Client& client, const std::string& path, const nlohmann::json& body) {
-    auto res = client.Post(path.c_str(), body.dump(), "application/json");
-    if (!res)
-        throw std::runtime_error("request failed for " + path);
-    if (res->status < 200 || res->status >= 300)
-        throw std::runtime_error("request failed for " + path + ": " + std::to_string(res->status) + " " + res->body);
-    return nlohmann::json::parse(res->body);
-}
-
-nlohmann::json get_json(httplib::Client& client, const std::string& path) {
-    auto res = client.Get(path.c_str());
-    if (!res)
-        throw std::runtime_error("request failed for " + path);
-    if (res->status < 200 || res->status >= 300)
-        throw std::runtime_error("request failed for " + path + ": " + std::to_string(res->status) + " " + res->body);
-    return nlohmann::json::parse(res->body);
-}
 
 void set_down(InputFrame& frame, int action) {
     frame.down_bits |= (1u << action);
@@ -115,32 +67,6 @@ void compare_states(const State& host,
     require(nearly_equal(host.bar_height, client.bar_height), "bar height mismatch");
 }
 
-void publish_realtime_endpoint(httplib::Client& client,
-                               const std::string& room_code,
-                               const std::string& host_member_id,
-                               const std::string& host_secret,
-                               const std::string& realtime_endpoint) {
-    post_json(client,
-              "/rooms/" + room_code + "/heartbeat",
-              {
-                  {"member_id", host_member_id},
-                  {"display_name", "Host"},
-                  {"host_secret", host_secret},
-                  {"room",
-                   {
-                       {"session_name", "Coop Smoke"},
-                       {"host_name", "Host"},
-                       {"session_phase", "in_game"},
-                       {"realtime_endpoint", realtime_endpoint},
-                       {"privacy", 2},
-                       {"max_players", 4},
-                       {"game_version", "0.1.0"},
-                       {"mod_hash", "smoke"},
-                       {"in_game", true},
-                   }},
-              });
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -148,51 +74,47 @@ int main(int argc, char** argv) {
     if (argc > 1)
         server_url = argv[1];
 
-    EndpointInfo endpoint;
-    std::string err;
-    if (!parse_http_endpoint(server_url, endpoint, err)) {
-        std::cerr << err << "\n";
-        return 1;
-    }
-
-    httplib::Client client(endpoint.host, endpoint.port);
-    client.set_read_timeout(3, 0);
-
-    SyncUdpTransport host_transport;
-    SyncUdpTransport guest_transport;
+    UdpJsonNetTransport host_transport;
+    UdpJsonNetTransport guest_transport;
 
     try {
-        nlohmann::json created = post_json(client,
-                                           "/rooms/create",
-                                           {
-                                               {"session_name", "Coop Smoke"},
-                                               {"host_name", "Host"},
-                                               {"privacy", 2},
-                                               {"max_players", 4},
-                                               {"game_version", "0.1.0"},
-                                               {"mod_hash", "smoke"},
-                                               {"in_game", true},
-                                           });
-        const std::string room_code = created.at("room_code").get<std::string>();
-        const std::string host_secret = created.at("host_secret").get<std::string>();
-        const std::string host_member_id = created.at("member_id").get<std::string>();
+        RoomServerMatchmaking matchmaking;
+        std::string err;
+        MatchmakingRoom room;
+        room.session_name = "Coop Smoke";
+        room.host_name = "Host";
+        room.privacy = 2;
+        room.max_players = 4;
+        room.contract.game_version = "0.1.0";
+        room.contract.net_protocol = session_contract_default_net_protocol();
+        room.contract.mod_hash = "smoke";
+        room.contract.session_phase = "in_game";
 
-        nlohmann::json joined = post_json(client,
-                                          "/rooms/" + room_code + "/join",
-                                          {{"display_name", "Guest"}});
-        const std::string guest_member_id = joined.at("member_id").get<std::string>();
+        MatchmakingCreateResult created;
+        require(matchmaking.create_room(server_url, room, created, err), err);
+        const std::string room_code = created.room_code;
+        const std::string host_secret = created.host_secret;
+        const std::string host_member_id = created.member_id;
 
-        require(sync_udp_transport_ensure_host(host_transport, room_code, err), err);
-        publish_realtime_endpoint(client,
-                                  room_code,
-                                  host_member_id,
-                                  host_secret,
-                                  sync_udp_transport_public_endpoint(host_transport));
+        std::string guest_member_id;
+        require(matchmaking.join_room(server_url, room_code, "Guest", guest_member_id, err), err);
 
-        nlohmann::json room_json = get_json(client, "/rooms/" + room_code).at("room");
-        const std::string realtime_endpoint = room_json.at("realtime_endpoint").get<std::string>();
-        require(!realtime_endpoint.empty(), "missing realtime endpoint");
-        require(sync_udp_transport_ensure_client(guest_transport, room_code, realtime_endpoint, err), err);
+        require(host_transport.ensure_host(room_code, err), err);
+        room.room_code = room_code;
+        room.contract.realtime_endpoint = host_transport.public_endpoint();
+        require(matchmaking.heartbeat_room(server_url,
+                                           room_code,
+                                           host_member_id,
+                                           "Host",
+                                           host_secret,
+                                           &room,
+                                           err),
+                err);
+
+        MatchmakingRoom fetched_room;
+        require(matchmaking.fetch_room(server_url, room_code, fetched_room, err), err);
+        require(!fetched_room.contract.realtime_endpoint.empty(), "missing realtime endpoint");
+        require(guest_transport.ensure_client(room_code, fetched_room.contract.realtime_endpoint, err), err);
 
         State host_state;
         State guest_state;
@@ -209,20 +131,23 @@ int main(int argc, char** argv) {
             const InputFrame host_input = scripted_host_input(frame_index);
             const InputFrame guest_input = scripted_guest_input(frame_index);
 
-            SequencedInput guest_packet;
+            NetTransportPacket guest_packet;
+            guest_packet.kind = NetPacketKind::Input;
+            guest_packet.room_code = room_code;
+            guest_packet.member_id = guest_member_id;
             guest_packet.seq = static_cast<std::uint64_t>(frame_index + 1);
             guest_packet.payload = input_frame_to_json(guest_input);
-            require(sync_udp_transport_send_input(guest_transport, guest_member_id, guest_packet, err), err);
+            require(guest_transport.send(guest_packet, err), err);
 
-            std::vector<SyncTransportMemberInput> incoming_inputs;
+            std::vector<NetTransportPacket> incoming_inputs;
             bool host_has_guest = false;
             for (int attempt = 0; attempt < 8 && !host_has_guest; ++attempt) {
-                require(sync_udp_transport_collect_host_inputs(host_transport, incoming_inputs, err), err);
-                for (const SyncTransportMemberInput& entry : incoming_inputs) {
-                    if (entry.member_id != guest_member_id)
+                require(host_transport.poll(incoming_inputs, err), err);
+                for (const NetTransportPacket& entry : incoming_inputs) {
+                    if (entry.kind != NetPacketKind::Input || entry.member_id != guest_member_id)
                         continue;
-                    require(input_frame_from_json(entry.input.payload, latest_guest_input), "failed to decode guest input");
-                    latest_guest_seq = entry.input.seq;
+                    require(input_frame_from_json(entry.payload, latest_guest_input), "failed to decode guest input");
+                    latest_guest_seq = entry.seq;
                     host_has_guest = true;
                 }
                 if (!host_has_guest)
@@ -238,7 +163,10 @@ int main(int argc, char** argv) {
                 {host_member_id, static_cast<std::uint64_t>(frame_index + 1)},
                 {guest_member_id, latest_guest_seq},
             };
-            nlohmann::json snapshot_packet{
+            NetTransportPacket snapshot_packet;
+            snapshot_packet.kind = NetPacketKind::Snapshot;
+            snapshot_packet.room_code = room_code;
+            snapshot_packet.payload = nlohmann::json{
                 {"sim_frame", static_cast<std::uint64_t>(frame_index + 1)},
                 {"driver_snapshot",
                  coop_snapshot_to_json(capture_coop_snapshot(host_state,
@@ -246,44 +174,43 @@ int main(int argc, char** argv) {
                                                              static_cast<std::uint64_t>(frame_index + 1)))},
                 {"acked_inputs", std::move(acked_inputs)},
             };
-            require(sync_udp_transport_send_snapshot(host_transport, snapshot_packet, err), err);
+            require(host_transport.send(snapshot_packet, err), err);
 
-            nlohmann::json latest_snapshot;
+            NetTransportPacket latest_snapshot;
             bool has_snapshot = false;
             for (int attempt = 0; attempt < 8 && !has_snapshot; ++attempt) {
-                require(sync_udp_transport_collect_client_snapshot(guest_transport, latest_snapshot, has_snapshot, err), err);
+                std::vector<NetTransportPacket> polled;
+                require(guest_transport.poll(polled, err), err);
+                for (const NetTransportPacket& packet : polled) {
+                    if (packet.kind != NetPacketKind::Snapshot)
+                        continue;
+                    latest_snapshot = packet;
+                    has_snapshot = true;
+                }
                 if (!has_snapshot)
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             require(has_snapshot, "missing guest snapshot");
 
             CoopStateSnapshot snapshot;
-            require(coop_snapshot_from_json(latest_snapshot.at("driver_snapshot"), snapshot), "failed to decode snapshot");
+            require(coop_snapshot_from_json(latest_snapshot.payload.at("driver_snapshot"), snapshot),
+                    "failed to decode snapshot");
             apply_coop_snapshot(snapshot, guest_state, guest_member_ids);
             compare_states(host_state, guest_state, host_member_ids, guest_member_ids);
             host_previous = host_current;
         }
 
-        sync_udp_transport_reset(host_transport);
-        sync_udp_transport_reset(guest_transport);
+        host_transport.reset();
+        guest_transport.reset();
 
-        post_json(client,
-                  "/rooms/" + room_code + "/leave",
-                  {
-                      {"member_id", guest_member_id},
-                  });
-        post_json(client,
-                  "/rooms/" + room_code + "/leave",
-                  {
-                      {"member_id", host_member_id},
-                      {"host_secret", host_secret},
-                  });
+        require(matchmaking.leave_room(server_url, room_code, guest_member_id, {}, err), err);
+        require(matchmaking.leave_room(server_url, room_code, host_member_id, host_secret, err), err);
 
         std::cout << "[coop_sync_smoke] ok\n";
         return 0;
     } catch (const std::exception& e) {
-        sync_udp_transport_reset(host_transport);
-        sync_udp_transport_reset(guest_transport);
+        host_transport.reset();
+        guest_transport.reset();
         std::cerr << "[coop_sync_smoke] " << e.what() << "\n";
         return 1;
     }
