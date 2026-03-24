@@ -46,19 +46,7 @@
   ownership-based design instead of awkward pseudo-C emulation.
 - The rule is: prefer explicitness first, but do not write unnatural code just
   to mimic C.
-
-## Configuration Philosophy
-
-- Hardcoded connection details are acceptable in this private workspace when
-  that is the established local convention.
-- This is an intentional tradeoff to reduce bugs caused by mismatched env vars,
-  stale env files, deployment drift, and config being partially copied over chat.
-- Do not introduce env-var churn by default.
-- Do not "clean up" hardcoded private connection details unless explicitly asked.
-- If a platform or deployment target requires env vars, use them there, but do
-  not automatically push the whole codebase toward env-driven config.
-- Prefer one obvious source of truth over multiple partially overlapping config
-  paths.
+- In c++ though, you'll mostly be making things c-like.
 
 ## Change Discipline
 
@@ -67,14 +55,6 @@
 - Do not move code across many files just to satisfy a size guideline if the
   current structure is still easier to work with.
 - When splitting files, keep the resulting layout obvious and boring.
-
-## Backend Bias
-
-- Keep SQL and DB-facing behavior easy to inspect.
-- Favor explicit queries and explicit mapping over hidden ORM magic.
-- Keep schema-affecting behavior close to the code that depends on it.
-- Avoid config patterns that make it unclear which database or service is being
-  targeted.
 
 ## When in Doubt
 
