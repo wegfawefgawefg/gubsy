@@ -30,6 +30,8 @@
       (bind (device_button 3) (gubsy_action 11))
       (bind (device_button 4) (gubsy_action 12))
       (bind (device_button 80) (gubsy_action 12))
+      (bind (device_button 4) (gubsy_action 6))
+      (bind (device_button 16) (gubsy_action 7))
     )
     (analog_1d_binds
       (bind (device_axis 0) (gubsy_analog 0))
