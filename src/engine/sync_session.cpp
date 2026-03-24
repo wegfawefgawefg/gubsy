@@ -138,6 +138,8 @@ void start_connection(const SyncConnectionInfo& connection) {
     next.next_snapshot_push_at = 0.0;
     next.next_snapshot_poll_at = 0.0;
     g_sync = std::move(next);
+    if (g_sync.driver.reset_runtime)
+        g_sync.driver.reset_runtime(g_sync.driver.ctx);
     refresh_member_ids();
     set_status_line();
 }
@@ -150,7 +152,6 @@ bool ensure_connection() {
         sync_session_reset();
         return false;
     }
-
     const std::string normalized_code = sync_session_normalized_room_code(connection.room_code);
     if (!g_sync.active ||
         g_sync.is_host != connection.is_host ||
@@ -183,7 +184,6 @@ bool fetch_room_inputs(std::string& err) {
                                       err);
     if (!json)
         return false;
-
     auto members_it = json->find("members");
     if (members_it == json->end() || !members_it->is_array())
         return false;
@@ -301,7 +301,6 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
         return false;
     if (!json->value("has_snapshot", false))
         return true;
-
     const nlohmann::json& snapshot = (*json)["snapshot"];
     const bool wrapped = snapshot.is_object() && snapshot.contains("driver_snapshot");
     const std::uint64_t sim_frame = snapshot.value("sim_frame", std::uint64_t{0});
@@ -319,6 +318,8 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
     }
     prune_acked_local_inputs(acked_local_seq);
 
+    if (g_sync.driver.begin_reconcile)
+        g_sync.driver.begin_reconcile(g_sync.driver.ctx);
     std::vector<std::string> member_ids;
     const nlohmann::json& driver_snapshot = wrapped ? snapshot["driver_snapshot"] : snapshot;
     if (!g_sync.driver.apply_snapshot(g_sync.driver.ctx, driver_snapshot, member_ids))
@@ -327,6 +328,11 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
     g_sync.last_applied_snapshot_frame = sim_frame;
     g_sync.has_authoritative_snapshot = true;
     replay_pending_local_inputs(dt, latest_local_input);
+    if (g_sync.driver.finish_reconcile)
+        g_sync.driver.finish_reconcile(g_sync.driver.ctx,
+                                       g_sync.member_ids,
+                                       g_sync.local_member_id,
+                                       g_sync.is_host);
     return true;
 }
 
@@ -338,7 +344,6 @@ void run_host_step(const SequencedInput& local_input, float dt, double now) {
         else if (!err.empty())
             g_sync.last_error = err;
     }
-
     int local_index = find_member_index(g_sync, g_sync.local_member_id);
     if (local_index < 0) {
         std::vector<std::string> member_ids = g_sync.member_ids;
@@ -364,7 +369,6 @@ void run_host_step(const SequencedInput& local_input, float dt, double now) {
         else if (!err.empty())
             g_sync.last_error = err;
     }
-
     g_sync.previous_inputs = g_sync.current_inputs;
     g_sync.previous_input_seqs = g_sync.current_input_seqs;
     g_sync.sim_frame += 1;
@@ -407,7 +411,6 @@ void run_client_step(const SequencedInput& local_input, float dt, double now) {
         else if (!err.empty())
             g_sync.last_error = err;
     }
-
     g_sync.previous_inputs = g_sync.current_inputs;
     g_sync.previous_input_seqs = g_sync.current_input_seqs;
 }
@@ -477,7 +480,12 @@ SyncStepResult sync_session_step(float dt) {
         run_host_step(sequenced_local_input, dt, now);
     else
         run_client_step(sequenced_local_input, dt, now);
-
+    if (g_sync.driver.tick_correction)
+        g_sync.driver.tick_correction(g_sync.driver.ctx,
+                                      g_sync.member_ids,
+                                      g_sync.local_member_id,
+                                      g_sync.is_host,
+                                      dt);
     return result;
 }
 

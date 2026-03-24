@@ -39,6 +39,17 @@ struct SyncDriver {
                            const nlohmann::json& snapshot,
                            std::vector<std::string>& member_ids_out){nullptr};
     void (*apply_local_view_input)(void* ctx, const nlohmann::json& input){nullptr};
+    void (*begin_reconcile)(void* ctx){nullptr};
+    void (*finish_reconcile)(void* ctx,
+                             const std::vector<std::string>& member_ids,
+                             const std::string& local_member_id,
+                             bool is_host){nullptr};
+    void (*tick_correction)(void* ctx,
+                            const std::vector<std::string>& member_ids,
+                            const std::string& local_member_id,
+                            bool is_host,
+                            float dt){nullptr};
+    void (*reset_runtime)(void* ctx){nullptr};
 };
 
 struct SyncStepResult {

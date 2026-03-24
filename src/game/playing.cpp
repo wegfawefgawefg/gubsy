@@ -132,6 +132,7 @@ void playing_step() {
             dir = glm::normalize(dir);
         }
         player.pos += dir * player.speed_units_per_sec * dt;
+        player.render_pos = player.pos;
 
         // Handle player-specific interactions
         if (target.enabled &&
@@ -223,7 +224,7 @@ void playing_draw() {
         SDL_Color player_fill = (i % 2 == 0) ? SDL_Color{80, 200, 255, 255} : SDL_Color{255, 180, 80, 255};
         SDL_Color player_border = (i % 2 == 0) ? SDL_Color{15, 40, 70, 255} : SDL_Color{70, 40, 15, 255};
         
-        SDL_FRect player_rect = rect_for(player.pos, player.half_size, space);
+        SDL_FRect player_rect = rect_for(player.render_pos, player.half_size, space);
         fill_and_outline(renderer, player_rect, player_fill, player_border);
     }
 

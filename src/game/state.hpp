@@ -18,6 +18,7 @@
 
 struct DemoPlayer {
     glm::vec2 pos{0.0f, 0.0f};
+    glm::vec2 render_pos{0.0f, 0.0f};
     glm::vec2 half_size{PLAYER_HALF_SIZE_UNITS, PLAYER_HALF_SIZE_UNITS};
     float speed_units_per_sec{PLAYER_MOVE_SPEED_UNITS};
 };
@@ -41,4 +42,3 @@ struct State {
 
 bool init_state();
 void cleanup_state();
-

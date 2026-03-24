@@ -51,6 +51,7 @@ void ensure_demo_player_count(State& state, std::size_t count) {
         for (std::size_t i = old_size; i < count; ++i) {
             DemoPlayer& player = state.players[i];
             player.pos = glm::vec2(static_cast<float>(i) * 1.5f, 0.0f);
+            player.render_pos = player.pos;
         }
     } else if (state.players.size() > count) {
         state.players.resize(count);

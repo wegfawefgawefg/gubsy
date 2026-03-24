@@ -31,6 +31,22 @@ This project is aiming for cooperative multiplayer first, not rollback PvP netco
 - This relay is a bootstrap step for browser/join/validation work, not the final transport choice.
 - A lower-latency transport can replace the relay later without changing the lobby/session model.
 
+## Replay Semantics
+
+- After a client receives an authoritative host snapshot, it prunes any local inputs the host has already acknowledged.
+- The client then reapplies the remaining unacknowledged local inputs, in order, on top of the new authoritative state.
+- That replay step is what keeps local controls responsive instead of waiting for the next round-trip.
+- The engine owns the sequencing, ack tracking, and replay loop.
+- The game owns the actual prediction rules and how corrected state should be presented.
+
+## Correction Policy
+
+- Authoritative state should replace simulation truth immediately.
+- Presentation does not need to snap immediately.
+- The engine should expose explicit reconciliation hooks around snapshot apply and replay.
+- Games can use those hooks to smooth remote corrections, snap large teleports, or keep the local player unsmoothed.
+- Smoothing is a view policy, not a simulation rule.
+
 ## Mod Boundary
 
 - Mods are part of the network contract.

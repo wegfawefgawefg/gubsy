@@ -7,6 +7,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/sync_session.hpp"
+#include "game/coop_correction.hpp"
 #include "game/coop_protocol.hpp"
 #include "game/coop_sim.hpp"
 #include "game/input_frame.hpp"
@@ -111,6 +112,37 @@ void apply_local_view_input(void*, const nlohmann::json& input_json) {
     apply_demo_view_input(*ss, frame);
 }
 
+void begin_reconcile(void*) {
+    if (!ss)
+        return;
+    std::vector<std::string> member_ids;
+    query_member_ids(nullptr, member_ids);
+    demo_sync_correction_begin(*ss, member_ids);
+}
+
+void finish_reconcile(void*,
+                      const std::vector<std::string>& member_ids,
+                      const std::string& local_member_id,
+                      bool is_host) {
+    if (!ss)
+        return;
+    demo_sync_correction_finish(*ss, member_ids, local_member_id, is_host);
+}
+
+void tick_correction(void*,
+                     const std::vector<std::string>& member_ids,
+                     const std::string& local_member_id,
+                     bool is_host,
+                     float dt) {
+    if (!ss)
+        return;
+    demo_sync_correction_tick(*ss, member_ids, local_member_id, is_host, dt);
+}
+
+void reset_runtime(void*) {
+    demo_sync_correction_reset();
+}
+
 void ensure_sync_configured() {
     if (g_sync_configured)
         return;
@@ -126,6 +158,10 @@ void ensure_sync_configured() {
     driver.capture_snapshot = capture_demo_snapshot;
     driver.apply_snapshot = apply_demo_snapshot;
     driver.apply_local_view_input = apply_local_view_input;
+    driver.begin_reconcile = begin_reconcile;
+    driver.finish_reconcile = finish_reconcile;
+    driver.tick_correction = tick_correction;
+    driver.reset_runtime = reset_runtime;
 
     sync_session_configure(hooks, driver);
     g_sync_configured = true;
