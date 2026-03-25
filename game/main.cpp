@@ -9,6 +9,7 @@
 #include "engine/binds_profiles.hpp"
 #include "engine/input.hpp"
 #include "game/actions.hpp"
+#include "game/builtin_mods.hpp"
 #include "engine/game_settings.hpp"
 #include "game/ui_layout_ids.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
@@ -48,6 +49,13 @@ int main() {
         cleanup_engine_state();
         return 1;
     }
+
+    std::string builtin_mod_err;
+    if (!sync_builtin_game_mods(builtin_mod_err)) {
+        std::fprintf(stderr, "[game] built-in mod sync failed: %s\n",
+                     builtin_mod_err.c_str());
+    }
+
     register_input_frame_builder(build_input_frame);
 
     register_game_settings_schema_entries();

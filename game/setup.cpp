@@ -9,6 +9,7 @@
 #include "engine/mod_install.hpp"
 #include "engine/mods.hpp"
 #include "game/modes.hpp"
+#include "game/builtin_mods.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
 
 #include <SDL2/SDL.h>
@@ -44,11 +45,9 @@ std::filesystem::path mods_root_dir() {
     return runtime_mods_path();
 }
 
-bool clear_mod_cache(std::string& err) {
+bool ensure_mod_root(std::string& err) {
     std::error_code ec;
     auto root = mods_root_dir();
-    std::filesystem::remove_all(root, ec);
-    ec.clear();
     if (!std::filesystem::create_directories(root, ec) && ec) {
         err = "Failed to prepare mods directory: " + root.string();
         return false;
@@ -57,6 +56,18 @@ bool clear_mod_cache(std::string& err) {
 }
 
 bool ensure_demo_mods_installed(std::string& err) {
+    std::vector<std::string> missing;
+    for (const auto& id : kDemoModChain) {
+        auto path = mods_root_dir() / id;
+        std::error_code ec;
+        bool installed = std::filesystem::exists(path, ec) && std::filesystem::is_directory(path, ec);
+        if (!installed)
+            missing.push_back(id);
+    }
+
+    if (missing.empty())
+        return true;
+
     std::vector<ModCatalogEntry> catalog;
     const std::string mod_server_url = default_mod_server_url();
     g_status = "Fetching mod catalog...";
@@ -71,7 +82,7 @@ bool ensure_demo_mods_installed(std::string& err) {
         return nullptr;
     };
 
-    for (const auto& id : kDemoModChain) {
+    for (const auto& id : missing) {
         const ModCatalogEntry* entry = find_entry(id);
         if (!entry) {
             err = "Catalog missing mod '" + id + "'";
@@ -93,8 +104,12 @@ bool ensure_demo_mods_installed(std::string& err) {
 
 bool run_setup_once() {
     std::string err;
-    g_status = "Clearing local mod cache...";
-    if (!clear_mod_cache(err)) {
+    g_status = "Preparing local mods...";
+    if (!ensure_mod_root(err)) {
+        g_error = err;
+        return false;
+    }
+    if (!sync_builtin_game_mods(err)) {
         g_error = err;
         return false;
     }
