@@ -85,6 +85,14 @@ Still missing:
 - clear logging for session lifecycle and transport failures
 - simple profiling hooks for update/render/network timing
 
+Current implemented floor:
+
+- room flow smoke
+- coop sync smoke
+- room timeout smoke
+- transport latency / jitter simulation
+- ImGui session debug window
+
 ## Should Have
 
 These are not “ship is impossible without them,” but they matter a lot for the

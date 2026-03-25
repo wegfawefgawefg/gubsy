@@ -11,6 +11,7 @@ bool g_bar_visible = true;
 bool g_show_players = false;
 bool g_show_binds = false;
 bool g_show_layouts = false;
+bool g_show_session = false;
 bool g_show_video = false;
 
 struct WindowToggle {
@@ -24,6 +25,7 @@ constexpr WindowToggle kWindowToggles[] = {
     {"Players", &g_show_players, ImGuiKey_F1, "F1"},
     {"Binds", &g_show_binds, ImGuiKey_F2, "F2"},
     {"UI Layouts", &g_show_layouts, ImGuiKey_F3, "F3"},
+    {"Session", &g_show_session, ImGuiKey_F5, "F5"},
     {"Video/Resolution", &g_show_video, ImGuiKey_F4, "F4"},
 };
 
@@ -94,6 +96,7 @@ void imgui_debug_render() {
     imgui_debug_render_players_window(&g_show_players);
     imgui_debug_render_binds_window(&g_show_binds);
     imgui_debug_render_layout_window(&g_show_layouts);
+    imgui_debug_render_session_window(&g_show_session);
     imgui_debug_render_video_window(&g_show_video);
 }
 
@@ -103,5 +106,6 @@ void imgui_debug_shutdown() {
     g_show_players = false;
     g_show_binds = false;
     g_show_layouts = false;
+    g_show_session = false;
     g_show_video = false;
 }

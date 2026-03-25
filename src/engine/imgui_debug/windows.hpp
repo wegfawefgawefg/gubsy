@@ -7,4 +7,5 @@
 void imgui_debug_render_players_window(bool* open_flag);
 void imgui_debug_render_binds_window(bool* open_flag);
 void imgui_debug_render_layout_window(bool* open_flag);
+void imgui_debug_render_session_window(bool* open_flag);
 void imgui_debug_render_video_window(bool* open_flag);
