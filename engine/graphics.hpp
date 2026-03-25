@@ -64,6 +64,9 @@ struct Graphics {
     std::unordered_map<int, SDL_Texture*> textures_by_id;
 };
 
+Graphics* current_graphics();
+const Graphics* current_graphics_const();
+
 // Initialize window/renderer into Graphics.
 // Returns true on success false if windowed init fails.
 bool init_graphics();

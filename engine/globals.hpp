@@ -6,4 +6,3 @@
 
 // Shared pointers to systems used across modules.
 extern EngineState* es;
-extern Graphics* gg;

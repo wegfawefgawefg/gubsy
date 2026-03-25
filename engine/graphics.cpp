@@ -10,8 +10,19 @@
 #include <algorithm>
 #include <cctype>
 
+Graphics* current_graphics() {
+    return es ? es->graphics : nullptr;
+}
+
+const Graphics* current_graphics_const() {
+    return es ? es->graphics : nullptr;
+}
+
 bool init_font(const std::filesystem::path& fonts_dir, int pt_size) {
-    if (gg->ui_font)
+    Graphics* graphics = current_graphics();
+    if (!graphics)
+        return false;
+    if (graphics->ui_font)
         return true;
     if (!TTF_WasInit()) {
         if (TTF_Init() != 0) {
@@ -33,8 +44,8 @@ bool init_font(const std::filesystem::path& fonts_dir, int pt_size) {
         }
     }
     if (!font_path.empty()) {
-        gg->ui_font = TTF_OpenFont(font_path.c_str(), pt_size);
-        if (!gg->ui_font) {
+        graphics->ui_font = TTF_OpenFont(font_path.c_str(), pt_size);
+        if (!graphics->ui_font) {
             std::fprintf(stderr, "TTF_OpenFont failed: %s\n", TTF_GetError());
             return false;
         }
@@ -67,11 +78,12 @@ int clamp_dimension(int value) {
 }
 
 bool recreate_render_target(int width, int height) {
-    if (!gg || !gg->renderer)
+    Graphics* graphics = current_graphics();
+    if (!graphics || !graphics->renderer)
         return false;
     width = clamp_dimension(width);
     height = clamp_dimension(height);
-    SDL_Texture* tex = SDL_CreateTexture(gg->renderer, SDL_PIXELFORMAT_RGBA8888,
+    SDL_Texture* tex = SDL_CreateTexture(graphics->renderer, SDL_PIXELFORMAT_RGBA8888,
                                          SDL_TEXTUREACCESS_TARGET, width, height);
     if (!tex) {
         std::fprintf(stderr, "Failed to create render target %dx%d: %s\n",
@@ -79,24 +91,29 @@ bool recreate_render_target(int width, int height) {
         return false;
     }
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
-    if (gg->render_target)
-        SDL_DestroyTexture(gg->render_target);
-    gg->render_target = tex;
-    gg->render_dims = {static_cast<unsigned int>(width), static_cast<unsigned int>(height)};
+    if (graphics->render_target)
+        SDL_DestroyTexture(graphics->render_target);
+    graphics->render_target = tex;
+    graphics->render_dims = {static_cast<unsigned int>(width), static_cast<unsigned int>(height)};
     return true;
 }
 
 } // namespace
 
 bool init_graphics() {
-    gg = new Graphics{};
+    if (!es)
+        return false;
+    if (es->graphics)
+        return true;
+    es->graphics = new Graphics{};
+    Graphics* graphics = es->graphics;
 
     const char* title = "artificial";
     glm::ivec2 window_dims = {1280, 720};
 
-    gg->window = nullptr;
-    gg->renderer = nullptr;
-    gg->window_dims = {static_cast<unsigned int>(window_dims.x), static_cast<unsigned int>(window_dims.y)};
+    graphics->window = nullptr;
+    graphics->renderer = nullptr;
+    graphics->window_dims = {static_cast<unsigned int>(window_dims.x), static_cast<unsigned int>(window_dims.y)};
 
     // Initialize SDL video with driver selection
     const char* env_display = std::getenv("DISPLAY");
@@ -117,22 +134,22 @@ bool init_graphics() {
         return false;
 
     Uint32 win_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_UTILITY;
-    gg->window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    graphics->window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                   window_dims.x, window_dims.y, win_flags);
-    if (!gg->window) {
+    if (!graphics->window) {
         const char* err = SDL_GetError();
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", (err && *err) ? err : "(no error text)");
         return false;
     }
 
-    SDL_SetWindowAlwaysOnTop(gg->window, SDL_TRUE);
+    SDL_SetWindowAlwaysOnTop(graphics->window, SDL_TRUE);
 
-    gg->renderer = SDL_CreateRenderer(gg->window, -1, SDL_RENDERER_ACCELERATED);
-    if (!gg->renderer) {
+    graphics->renderer = SDL_CreateRenderer(graphics->window, -1, SDL_RENDERER_ACCELERATED);
+    if (!graphics->renderer) {
         std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
-        gg->renderer = SDL_CreateRenderer(gg->window, -1, 0); // software fallback
+        graphics->renderer = SDL_CreateRenderer(graphics->window, -1, 0); // software fallback
     }
-    if (!gg->renderer)
+    if (!graphics->renderer)
         return false;
 
     const char* active_driver = SDL_GetCurrentVideoDriver();
@@ -145,43 +162,45 @@ bool init_graphics() {
 }
 
 void cleanup_graphics() {
-    if (!gg) return;
-    if (gg->ui_font) { TTF_CloseFont(gg->ui_font); gg->ui_font = nullptr; }
+    Graphics* graphics = current_graphics();
+    if (!graphics)
+        return;
+    if (graphics->ui_font) { TTF_CloseFont(graphics->ui_font); graphics->ui_font = nullptr; }
     // Destroy textures before renderer
     clear_textures();
-    if (gg->render_target) {
-        SDL_DestroyTexture(gg->render_target);
-        gg->render_target = nullptr;
+    if (graphics->render_target) {
+        SDL_DestroyTexture(graphics->render_target);
+        graphics->render_target = nullptr;
     }
-    if (gg->renderer) {
-        SDL_DestroyRenderer(gg->renderer);
-        gg->renderer = nullptr;
+    if (graphics->renderer) {
+        SDL_DestroyRenderer(graphics->renderer);
+        graphics->renderer = nullptr;
     }
-    if (gg->window) {
-        SDL_DestroyWindow(gg->window);
-        gg->window = nullptr;
+    if (graphics->window) {
+        SDL_DestroyWindow(graphics->window);
+        graphics->window = nullptr;
     }
     if (TTF_WasInit()) TTF_Quit();
-    delete gg;
-    gg = nullptr;
+    delete graphics;
+    es->graphics = nullptr;
 }
 
 bool set_window_dimensions(int width, int height) {
-    if (!gg || !gg->window)
+    if (!current_graphics() || !current_graphics()->window)
         return false;
     width = clamp_dimension(width);
     height = clamp_dimension(height);
-    SDL_SetWindowSize(gg->window, width, height);
+    SDL_SetWindowSize(current_graphics()->window, width, height);
     int actual_w = width;
     int actual_h = height;
-    SDL_GetWindowSize(gg->window, &actual_w, &actual_h);
-    gg->window_dims = {static_cast<unsigned int>(actual_w),
+    SDL_GetWindowSize(current_graphics()->window, &actual_w, &actual_h);
+    current_graphics()->window_dims = {static_cast<unsigned int>(actual_w),
                        static_cast<unsigned int>(actual_h)};
     return true;
 }
 
 bool set_window_display_mode(WindowDisplayMode mode) {
-    if (!gg || !gg->window)
+    if (!current_graphics() || !current_graphics()->window)
         return false;
     Uint32 flag = 0;
     switch (mode) {
@@ -195,15 +214,15 @@ bool set_window_display_mode(WindowDisplayMode mode) {
             flag = SDL_WINDOW_FULLSCREEN;
             break;
     }
-    if (SDL_SetWindowFullscreen(gg->window, flag) != 0) {
+    if (SDL_SetWindowFullscreen(current_graphics()->window, flag) != 0) {
         std::fprintf(stderr, "Failed to change window mode: %s\n", SDL_GetError());
         return false;
     }
-    gg->window_mode = mode;
+    current_graphics()->window_mode = mode;
     int actual_w = 0;
     int actual_h = 0;
-    SDL_GetWindowSize(gg->window, &actual_w, &actual_h);
-    gg->window_dims = {static_cast<unsigned int>(actual_w),
+    SDL_GetWindowSize(current_graphics()->window, &actual_w, &actual_h);
+    current_graphics()->window_dims = {static_cast<unsigned int>(actual_w),
                        static_cast<unsigned int>(actual_h)};
     return true;
 }
@@ -213,60 +232,60 @@ bool set_render_resolution(int width, int height) {
 }
 
 void set_render_scale_mode(RenderScaleMode mode) {
-    if (!gg)
+    if (!current_graphics())
         return;
-    gg->render_scale_mode = mode;
+    current_graphics()->render_scale_mode = mode;
 }
 
 glm::ivec2 get_render_dimensions() {
-    if (!gg)
+    if (!current_graphics())
         return glm::ivec2(0, 0);
-    return glm::ivec2(static_cast<int>(gg->render_dims.x),
-                      static_cast<int>(gg->render_dims.y));
+    return glm::ivec2(static_cast<int>(current_graphics()->render_dims.x),
+                      static_cast<int>(current_graphics()->render_dims.y));
 }
 
 glm::ivec2 get_window_dimensions() {
-    if (!gg)
+    if (!current_graphics())
         return glm::ivec2(0, 0);
-    return glm::ivec2(static_cast<int>(gg->window_dims.x),
-                      static_cast<int>(gg->window_dims.y));
+    return glm::ivec2(static_cast<int>(current_graphics()->window_dims.x),
+                      static_cast<int>(current_graphics()->window_dims.y));
 }
 
 
 // ---- Registry ----
 
 void build_sprite_name_id_mapping(const std::vector<std::string>& names) {
-    gg->sprite_name_to_id.clear();
-    gg->sprite_id_to_name.clear();
-    gg->sprite_id_to_name.reserve(names.size());
+    current_graphics()->sprite_name_to_id.clear();
+    current_graphics()->sprite_id_to_name.clear();
+    current_graphics()->sprite_id_to_name.reserve(names.size());
     for (const auto& n : names) {
-        int id = static_cast<int>(gg->sprite_id_to_name.size());
-        gg->sprite_name_to_id.emplace(n, id);
-        gg->sprite_id_to_name.push_back(n);
+        int id = static_cast<int>(current_graphics()->sprite_id_to_name.size());
+        current_graphics()->sprite_name_to_id.emplace(n, id);
+        current_graphics()->sprite_id_to_name.push_back(n);
     }
 }
 
 int add_or_get_sprite_id(const std::string& name) {
-    auto it = gg->sprite_name_to_id.find(name);
-    if (it != gg->sprite_name_to_id.end()) return it->second;
-    int id = static_cast<int>(gg->sprite_id_to_name.size());
-    gg->sprite_name_to_id.emplace(name, id);
-    gg->sprite_id_to_name.push_back(name);
+    auto it = current_graphics()->sprite_name_to_id.find(name);
+    if (it != current_graphics()->sprite_name_to_id.end()) return it->second;
+    int id = static_cast<int>(current_graphics()->sprite_id_to_name.size());
+    current_graphics()->sprite_name_to_id.emplace(name, id);
+    current_graphics()->sprite_id_to_name.push_back(name);
     return id;
 }
 
 int try_get_sprite_id(const std::string& name) {
-    auto it = gg->sprite_name_to_id.find(name);
-    return (it == gg->sprite_name_to_id.end()) ? -1 : it->second;
+    auto it = current_graphics()->sprite_name_to_id.find(name);
+    return (it == current_graphics()->sprite_name_to_id.end()) ? -1 : it->second;
 }
 
 // ---- Sprite definitions ----
 
 void rebuild_sprite_mapping(const std::vector<SpriteDef>& new_defs) {
 
-    auto& name_to_id = gg->sprite_name_to_id;
-    auto& id_to_name = gg->sprite_id_to_name;
-    auto& defs_by_id = gg->sprite_defs_by_id;
+    auto& name_to_id = current_graphics()->sprite_name_to_id;
+    auto& id_to_name = current_graphics()->sprite_id_to_name;
+    auto& defs_by_id = current_graphics()->sprite_defs_by_id;
 
     bool only_additions = true;
     if (!name_to_id.empty()) {
@@ -322,8 +341,8 @@ void rebuild_sprite_mapping(const std::vector<SpriteDef>& new_defs) {
 const SpriteDef* get_sprite_def_by_id(int id) {
     if (id < 0) return nullptr;
     size_t idx = static_cast<size_t>(id);
-    if (idx >= gg->sprite_defs_by_id.size()) return nullptr;
-    return &gg->sprite_defs_by_id[idx];
+    if (idx >= current_graphics()->sprite_defs_by_id.size()) return nullptr;
+    return &current_graphics()->sprite_defs_by_id[idx];
 }
 
 const SpriteDef* try_get_sprite_def(const std::string& name) {
@@ -334,38 +353,38 @@ const SpriteDef* try_get_sprite_def(const std::string& name) {
 // ---- Textures ----
 
 void clear_textures() {
-    for (auto& kv : gg->textures_by_id) {
+    for (auto& kv : current_graphics()->textures_by_id) {
         if (kv.second) SDL_DestroyTexture(kv.second);
     }
-    gg->textures_by_id.clear();
+    current_graphics()->textures_by_id.clear();
 }
 
 /// Runs through the sprite defs from the last mod scan and loads the textures.
 /// Heavy. Dont run often.
 bool load_all_textures_in_sprite_lookup() {
-    if (!gg->renderer) return false;
-    for (int id = 0; id < static_cast<int>(gg->sprite_defs_by_id.size()); ++id) {
+    if (!current_graphics()->renderer) return false;
+    for (int id = 0; id < static_cast<int>(current_graphics()->sprite_defs_by_id.size()); ++id) {
         const auto* def = get_sprite_def_by_id(id);
         if (!def) continue;
         if (def->image_path.empty()) continue;
-        SDL_Texture* tex = IMG_LoadTexture(gg->renderer, def->image_path.c_str());
+        SDL_Texture* tex = IMG_LoadTexture(current_graphics()->renderer, def->image_path.c_str());
         if (!tex) {
             std::fprintf(stderr, "IMG_LoadTexture failed for %s: %s\n", def->image_path.c_str(),
                          IMG_GetError());
             continue;
         }
-        gg->textures_by_id[id] = tex;
+        current_graphics()->textures_by_id[id] = tex;
     }
     return true;
 }
 
 SDL_Texture* get_texture(int sprite_id) {
-    auto it = gg->textures_by_id.find(sprite_id);
-    return (it == gg->textures_by_id.end()) ? nullptr : it->second;
+    auto it = current_graphics()->textures_by_id.find(sprite_id);
+    return (it == current_graphics()->textures_by_id.end()) ? nullptr : it->second;
 }
 
 void sync_graphics_from_settings() {
-    if (!gg || !es)
+    if (!current_graphics() || !es)
         return;
 
     const auto& settings = es->top_level_game_settings.settings;
@@ -373,46 +392,46 @@ void sync_graphics_from_settings() {
     // Sync preview zoom
     if (auto it = settings.find("gubsy.video.preview_zoom"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->preview_zoom = *fv;
+            current_graphics()->preview_zoom = *fv;
     }
 
     // Sync preview pan X
     if (auto it = settings.find("gubsy.video.preview_pan_x"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->preview_pan.x = *fv;
+            current_graphics()->preview_pan.x = *fv;
     }
 
     // Sync preview pan Y
     if (auto it = settings.find("gubsy.video.preview_pan_y"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->preview_pan.y = *fv;
+            current_graphics()->preview_pan.y = *fv;
     }
 
     // Sync safe area (left, right, top, bottom -> x, y, z, w)
     if (auto it = settings.find("gubsy.video.safe_area_left"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->safe_area.x = *fv;
+            current_graphics()->safe_area.x = *fv;
     }
     if (auto it = settings.find("gubsy.video.safe_area_right"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->safe_area.y = *fv;
+            current_graphics()->safe_area.y = *fv;
     }
     if (auto it = settings.find("gubsy.video.safe_area_top"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->safe_area.z = *fv;
+            current_graphics()->safe_area.z = *fv;
     }
     if (auto it = settings.find("gubsy.video.safe_area_bottom"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
-            gg->safe_area.w = *fv;
+            current_graphics()->safe_area.w = *fv;
     }
 
     // Sync render scale mode
     if (auto it = settings.find("gubsy.video.render_scale_mode"); it != settings.end()) {
         if (const std::string* sv = std::get_if<std::string>(&it->second)) {
             if (*sv == "fit")
-                gg->render_scale_mode = RenderScaleMode::Fit;
+                current_graphics()->render_scale_mode = RenderScaleMode::Fit;
             else if (*sv == "stretch")
-                gg->render_scale_mode = RenderScaleMode::Stretch;
+                current_graphics()->render_scale_mode = RenderScaleMode::Stretch;
         }
     }
 

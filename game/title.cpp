@@ -44,7 +44,7 @@ void title_step(void*) {
 
 void title_process_inputs(void*) {
     ensure_menu_ready();
-    if (!gg || !gg->renderer)
+    if (!current_graphics() || !current_graphics()->renderer)
         return;
     glm::ivec2 dims = get_render_dimensions();
     int width = std::max(dims.x, 1);
@@ -55,9 +55,9 @@ void title_process_inputs(void*) {
 }
 
 void title_draw(void*) {
-    if (!gg || !gg->renderer)
+    if (!current_graphics() || !current_graphics()->renderer)
         return;
-    SDL_Renderer* renderer = gg->renderer;
+    SDL_Renderer* renderer = current_graphics()->renderer;
     glm::ivec2 dims = get_render_dimensions();
     int width = std::max(dims.x, 1);
     int height = std::max(dims.y, 1);

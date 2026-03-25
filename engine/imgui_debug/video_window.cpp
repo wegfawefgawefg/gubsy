@@ -111,7 +111,7 @@ void imgui_debug_render_video_window(bool* open_flag) {
         ImGui::End();
         return;
     }
-    if (!gg || !gg->renderer) {
+    if (!current_graphics() || !current_graphics()->renderer) {
         ImGui::TextUnformatted("Graphics subsystem unavailable.");
         ImGui::End();
         return;
@@ -266,36 +266,36 @@ void imgui_debug_render_video_window(bool* open_flag) {
     }
 
     const char* window_mode_labels[] = {"Windowed", "Borderless", "Fullscreen"};
-    int window_mode = static_cast<int>(gg->window_mode);
+    int window_mode = static_cast<int>(current_graphics()->window_mode);
     if (ImGui::Combo("Window Mode", &window_mode,
                      window_mode_labels, IM_ARRAYSIZE(window_mode_labels))) {
         set_window_display_mode(static_cast<WindowDisplayMode>(window_mode));
     }
 
     const char* scale_labels[] = {"Fit (letterbox)", "Stretch"};
-    int scale_mode = static_cast<int>(gg->render_scale_mode);
+    int scale_mode = static_cast<int>(current_graphics()->render_scale_mode);
     if (ImGui::Combo("Render Scale", &scale_mode, scale_labels, IM_ARRAYSIZE(scale_labels))) {
         set_render_scale_mode(static_cast<RenderScaleMode>(scale_mode));
     }
 
     ImGui::Separator();
     ImGui::TextUnformatted("Preview adjustments (debug)");
-    float zoom = gg->preview_zoom;
+    float zoom = current_graphics()->preview_zoom;
     if (ImGui::SliderFloat("Zoom", &zoom, 0.5f, 3.0f, "%.2fx")) {
-        gg->preview_zoom = zoom;
+        current_graphics()->preview_zoom = zoom;
     }
-    float pan[2] = {gg->preview_pan.x, gg->preview_pan.y};
+    float pan[2] = {current_graphics()->preview_pan.x, current_graphics()->preview_pan.y};
     if (ImGui::DragFloat2("Pan (pixels)", pan, 1.0f, -1000.0f, 1000.0f)) {
-        gg->preview_pan = glm::vec2(pan[0], pan[1]);
+        current_graphics()->preview_pan = glm::vec2(pan[0], pan[1]);
     }
-    float safe_vals[4] = {gg->safe_area.x, gg->safe_area.y, gg->safe_area.z, gg->safe_area.w};
+    float safe_vals[4] = {current_graphics()->safe_area.x, current_graphics()->safe_area.y, current_graphics()->safe_area.z, current_graphics()->safe_area.w};
     if (ImGui::SliderFloat4("Safe area (pct of window)", safe_vals, 0.0f, 0.25f, "%.3f")) {
-        gg->safe_area = glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
+        current_graphics()->safe_area = glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
     }
     if (ImGui::Button("Reset Preview Adjustments")) {
-        gg->preview_zoom = 1.0f;
-        gg->preview_pan = glm::vec2(0.0f);
-        gg->safe_area = glm::vec4(0.0f);
+        current_graphics()->preview_zoom = 1.0f;
+        current_graphics()->preview_pan = glm::vec2(0.0f);
+        current_graphics()->safe_area = glm::vec4(0.0f);
     }
 
     ImGui::End();

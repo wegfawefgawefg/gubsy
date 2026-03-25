@@ -222,10 +222,10 @@ void auto_follow_selection() {
                                 g_last_request.height))
             return;
     }
-    if (!gg || !has_layouts())
+    if (!current_graphics() || !has_layouts())
         return;
-    int target_w = static_cast<int>(gg->render_dims.x);
-    int target_h = static_cast<int>(gg->render_dims.y);
+    int target_w = static_cast<int>(current_graphics()->render_dims.x);
+    int target_h = static_cast<int>(current_graphics()->render_dims.y);
     if (target_w <= 0 || target_h <= 0)
         return;
     int best_idx = g_selected_layout;

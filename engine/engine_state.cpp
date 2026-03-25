@@ -1,5 +1,6 @@
 #include "engine_state.hpp"
 #include "engine/audio.hpp"
+#include "engine/graphics.hpp"
 #include "globals.hpp"
 #include "engine/mods.hpp"
 #include "engine/settings_defaults.hpp"
@@ -38,6 +39,8 @@ void cleanup_engine_state() {
     }
     if (es->audio)
         cleanup_audio();
+    if (es->graphics)
+        cleanup_graphics();
     delete es;
     es = nullptr;
 }

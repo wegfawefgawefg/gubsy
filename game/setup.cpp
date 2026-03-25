@@ -168,9 +168,9 @@ void setup_step(void* app_context) {
 }
 
 void setup_draw(void*) {
-    if (!gg || !gg->renderer)
+    if (!current_graphics() || !current_graphics()->renderer)
         return;
-    SDL_Renderer* renderer = gg->renderer;
+    SDL_Renderer* renderer = current_graphics()->renderer;
     glm::ivec2 dims = get_render_dimensions();
     int height = std::max(dims.y, 1);
     SDL_SetRenderDrawColor(renderer, 10, 8, 16, 255);

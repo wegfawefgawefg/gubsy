@@ -24,6 +24,7 @@
 
 struct ModManager;
 struct Audio;
+struct Graphics;
 
 struct EngineState {
     bool running{true};
@@ -88,6 +89,7 @@ struct EngineState {
     MenuCommandRegistry menu_commands;
     ModManager* mod_manager{nullptr};
     Audio* audio{nullptr};
+    Graphics* graphics{nullptr};
 };
 
 bool init_engine_state();

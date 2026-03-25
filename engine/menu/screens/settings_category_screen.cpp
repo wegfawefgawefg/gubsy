@@ -449,8 +449,8 @@ void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
         }
         if (set_window_display_mode(mode)) {
             st.status_text = "Display mode applied";
-            if (gg)
-                gg->window_mode = mode;
+            if (current_graphics())
+                current_graphics()->window_mode = mode;
         } else {
             st.status_text = "Failed to apply display mode";
         }
@@ -946,7 +946,7 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             if (std::string* sv = std::get_if<std::string>(binding.entry.value))
                 w.bind_ptr = sv;
             if (binding.entry.metadata && binding.entry.metadata->key == kWindowModeSettingKey) {
-                const char* applied = gg ? window_mode_to_value(gg->window_mode) : nullptr;
+                const char* applied = current_graphics() ? window_mode_to_value(current_graphics()->window_mode) : nullptr;
                 bool matches = true;
                 if (applied && w.bind_ptr)
                     matches = (*static_cast<std::string*>(w.bind_ptr) == applied);

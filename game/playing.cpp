@@ -187,12 +187,12 @@ void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, cons
 
 void playing_draw(void* app_context) {
     State* state = game_state_from_app_context(app_context);
-    if (!gg || !gg->renderer || !state) {
+    if (!current_graphics() || !current_graphics()->renderer || !state) {
         SDL_Delay(16);
         return;
     }
 
-    SDL_Renderer* renderer = gg->renderer;
+    SDL_Renderer* renderer = current_graphics()->renderer;
     glm::ivec2 dims = get_render_dimensions();
     int width = std::max(dims.x, 1);
     int height = std::max(dims.y, 1);

@@ -82,9 +82,9 @@ glm::vec3 brighten(const glm::vec3& base, float amount) {
 }
 
 void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
-    if (!gg || !gg->ui_font || text.empty())
+    if (!current_graphics() || !current_graphics()->ui_font || text.empty())
         return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(gg->ui_font, text.c_str(), color);
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(current_graphics()->ui_font, text.c_str(), color);
     if (!surf)
         return;
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
@@ -115,11 +115,11 @@ void render_alerts(SDL_Renderer* renderer, int width) {
 }
 
 void render() {
-    SDL_Renderer* renderer = (gg ? gg->renderer : nullptr);
+    SDL_Renderer* renderer = (current_graphics() ? current_graphics()->renderer : nullptr);
     if (!renderer)
         return;
 
-    SDL_Texture* target = (gg ? gg->render_target : nullptr);
+    SDL_Texture* target = (current_graphics() ? current_graphics()->render_target : nullptr);
     if (target)
         SDL_SetRenderTarget(renderer, target);
 
@@ -134,23 +134,23 @@ void render() {
     int window_w = 0;
     int window_h = 0;
     SDL_GetRendererOutputSize(renderer, &window_w, &window_h);
-    if (gg)
-        gg->window_dims = {static_cast<unsigned int>(window_w),
+    if (current_graphics())
+        current_graphics()->window_dims = {static_cast<unsigned int>(window_w),
                            static_cast<unsigned int>(window_h)};
 
     SDL_FRect drawn_rect{0.0f, 0.0f, static_cast<float>(window_w), static_cast<float>(window_h)};
     if (target) {
         SDL_SetRenderDrawColor(renderer, 5, 5, 10, 255);
         SDL_RenderClear(renderer);
-        if (gg->render_scale_mode == RenderScaleMode::Stretch) {
+        if (current_graphics()->render_scale_mode == RenderScaleMode::Stretch) {
             SDL_RenderCopy(renderer, target, nullptr, nullptr);
             drawn_rect = SDL_FRect{0.0f, 0.0f,
                                    static_cast<float>(window_w),
                                    static_cast<float>(window_h)};
         } else {
-            SDL_FRect dst = compute_letterbox_rect(gg->render_dims, gg->window_dims);
-            if (gg) {
-                auto safe = gg->safe_area;
+            SDL_FRect dst = compute_letterbox_rect(current_graphics()->render_dims, current_graphics()->window_dims);
+            if (current_graphics()) {
+                auto safe = current_graphics()->safe_area;
                 float pad_left = std::clamp(safe.x, 0.0f, 0.45f) * static_cast<float>(window_w);
                 float pad_right = std::clamp(safe.y, 0.0f, 0.45f) * static_cast<float>(window_w);
                 float pad_top = std::clamp(safe.z, 0.0f, 0.45f) * static_cast<float>(window_h);
@@ -159,13 +159,13 @@ void render() {
                 dst.y += pad_top;
                 dst.w = std::max(4.0f, dst.w - (pad_left + pad_right));
                 dst.h = std::max(4.0f, dst.h - (pad_top + pad_bottom));
-                float zoom = std::max(0.1f, gg->preview_zoom);
+                float zoom = std::max(0.1f, current_graphics()->preview_zoom);
                 float cx = dst.x + dst.w * 0.5f;
                 float cy = dst.y + dst.h * 0.5f;
                 float new_w = dst.w * zoom;
                 float new_h = dst.h * zoom;
-                dst.x = cx - new_w * 0.5f + gg->preview_pan.x;
-                dst.y = cy - new_h * 0.5f + gg->preview_pan.y;
+                dst.x = cx - new_w * 0.5f + current_graphics()->preview_pan.x;
+                dst.y = cy - new_h * 0.5f + current_graphics()->preview_pan.y;
                 dst.w = new_w;
                 dst.h = new_h;
             }

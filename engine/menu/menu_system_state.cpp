@@ -258,11 +258,11 @@ SDL_FRect rect_from_object(const UIObject& obj, int width, int height) {
 }
 
 int measure_text_width(const char* text) {
-    if (!text || !gg || !gg->ui_font)
+    if (!text || !current_graphics() || !current_graphics()->ui_font)
         return 0;
     int w = 0;
     int h = 0;
-    if (TTF_SizeUTF8(gg->ui_font, text, &w, &h) != 0)
+    if (TTF_SizeUTF8(current_graphics()->ui_font, text, &w, &h) != 0)
         return 0;
     return w;
 }

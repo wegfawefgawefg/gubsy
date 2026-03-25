@@ -56,7 +56,7 @@ bool in_game_menu_blocks_game_input() {
 }
 
 void in_game_menu_process_inputs() {
-    if (!es || !gg || !gg->renderer)
+    if (!es || !current_graphics() || !current_graphics()->renderer)
         return;
 
     const MenuInputState input = gather_menu_input();

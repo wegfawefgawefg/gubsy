@@ -35,20 +35,20 @@ bool do_the_gubsy(const GubsyAppHooks& hooks){
     std::error_code mods_ec;
     std::filesystem::create_directories(runtime_mods_path(), mods_ec);
 
-    if (!init_graphics()) {
-        SDL_Quit();
-        return 1;
-    }
-
     if (!init_engine_state()) {
-        cleanup_graphics();
         SDL_Quit();
         return 1;
     }
     if (es)
         es->app_context = hooks.app_context;
 
-    if (!init_imgui_layer(gg->window, gg->renderer)) {
+    if (!init_graphics()) {
+        cleanup_engine_state();
+        SDL_Quit();
+        return 1;
+    }
+
+    if (!init_imgui_layer(current_graphics()->window, current_graphics()->renderer)) {
         std::fprintf(stderr, "[imgui] init failed\n");
     }
 
@@ -61,7 +61,6 @@ bool do_the_gubsy(const GubsyAppHooks& hooks){
     if (!init_mods_manager(runtime_mods_path().string())) {
         cleanup_audio();
         cleanup_engine_state();
-        cleanup_graphics();
         SDL_Quit();
         return 1;
     }
@@ -141,7 +140,7 @@ bool do_the_gubsy(const GubsyAppHooks& hooks){
             frame_counter = 0;
             accum_sec -= 1.0f;
             title_buf = "gubsy demo - FPS: " + std::to_string(last_fps);
-            SDL_SetWindowTitle(gg->window, title_buf.c_str());
+            SDL_SetWindowTitle(current_graphics()->window, title_buf.c_str());
         }
     }
 
@@ -155,7 +154,6 @@ bool stop_doing_the_gubsy(){
     unload_all_mods_via_host();
     cleanup_audio();
     cleanup_engine_state();
-    cleanup_graphics();
     SDL_Quit();
     return 1;
 }

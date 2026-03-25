@@ -132,8 +132,8 @@ void layout_editor_render_panel(float dt) {
             UILayout fresh;
             fresh.id = generate_ui_layout_id();
             fresh.label = "Layout_" + std::to_string(fresh.id);
-            fresh.resolution_width = gg ? static_cast<int>(gg->render_dims.x) : 1920;
-            fresh.resolution_height = gg ? static_cast<int>(gg->render_dims.y) : 1080;
+            fresh.resolution_width = current_graphics() ? static_cast<int>(current_graphics()->render_dims.x) : 1920;
+            fresh.resolution_height = current_graphics() ? static_cast<int>(current_graphics()->render_dims.y) : 1080;
             fresh.form_factor = UILayoutFormFactor::Desktop;
             es->ui_layouts_pool.push_back(fresh);
             g_selected_layout = static_cast<int>(es->ui_layouts_pool.size()) - 1;
@@ -142,7 +142,7 @@ void layout_editor_render_panel(float dt) {
             append_status("Layout created");
         }
     }
-    if (gg) {
+    if (current_graphics()) {
         glm::ivec2 dims = get_render_dimensions();
         ImGui::Text("Render target: %dx%d", dims.x, dims.y);
     }
