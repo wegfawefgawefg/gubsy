@@ -92,6 +92,8 @@ Docs
 - Repo layout: `docs/repo_layout.md`
 - Content policy: `docs/content_policy.md`
 - Library consumption: `docs/library_consumption.md`
+- Engine/game split plan: `docs/engine_game_split_plan.md`
+- Remove globals plan: `docs/remove_globals_plan.md`
 - Cooperative multiplayer policy: `docs/cooperative_multiplayer_policy.md`
 - Session contract: `docs/session_contract.md`
 - Networking boundary: `docs/networking_boundary.md`
