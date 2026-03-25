@@ -1,7 +1,7 @@
 #include "engine/settings_schema.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/game_settings.hpp"
-#include "engine/globals.hpp"
 #include "engine/top_level_game_settings.hpp"
 
 #include <algorithm>
@@ -13,7 +13,7 @@ namespace {
 
 SettingsSchema g_settings_schema;
 
-bool reconcile_top_level_settings(const SettingsSchema& schema) {
+bool reconcile_top_level_settings(EngineState& engine, const SettingsSchema& schema) {
     bool has_install_entries = false;
     TopLevelGameSettings top = load_top_level_game_settings();
     std::unordered_map<std::string, SettingsValue> reconciled;
@@ -37,7 +37,7 @@ bool reconcile_top_level_settings(const SettingsSchema& schema) {
 
     if (!has_install_entries) {
         // Still make sure the engine state sees whatever is on disk.
-        load_top_level_game_settings_into_state();
+        load_top_level_game_settings_into_state(engine);
         return false;
     }
 
@@ -52,11 +52,11 @@ bool reconcile_top_level_settings(const SettingsSchema& schema) {
         save_top_level_game_settings(top);
     }
 
-    load_top_level_game_settings_into_state();
+    load_top_level_game_settings_into_state(engine);
     return changed;
 }
 
-void reconcile_profile_settings(const SettingsSchema& schema) {
+void reconcile_profile_settings(EngineState& engine, const SettingsSchema& schema) {
     bool has_profile_entries = false;
     for (const auto& entry : schema.entries()) {
         if (entry.scope == SettingScope::Profile) {
@@ -66,7 +66,7 @@ void reconcile_profile_settings(const SettingsSchema& schema) {
     }
 
     if (!has_profile_entries) {
-        load_game_settings_pool();
+        load_game_settings_pool(engine);
         return;
     }
 
@@ -96,7 +96,7 @@ void reconcile_profile_settings(const SettingsSchema& schema) {
         }
     }
 
-    load_game_settings_pool();
+    load_game_settings_pool(engine);
 }
 
 } // namespace
@@ -110,7 +110,7 @@ const SettingsSchema& get_settings_schema() {
     return g_settings_schema;
 }
 
-void register_settings_schema(const SettingsSchema& schema) {
+void register_settings_schema(EngineState& engine, const SettingsSchema& schema) {
     auto& dest = g_settings_schema.entries();
     for (const auto& entry : schema.entries()) {
         auto it = std::find_if(dest.begin(), dest.end(),
@@ -121,6 +121,6 @@ void register_settings_schema(const SettingsSchema& schema) {
             g_settings_schema.add_setting(entry);
         }
     }
-    reconcile_top_level_settings(g_settings_schema);
-    reconcile_profile_settings(g_settings_schema);
+    reconcile_top_level_settings(engine, g_settings_schema);
+    reconcile_profile_settings(engine, g_settings_schema);
 }

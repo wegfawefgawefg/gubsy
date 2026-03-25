@@ -11,9 +11,11 @@ struct CoopStepResult {
     int bonk_count{0};
 };
 
+struct EngineState;
+
 void coop_session_reset();
 bool coop_session_active();
-CoopStepResult coop_session_step(State& state);
+CoopStepResult coop_session_step(EngineState& engine, State& state);
 const std::string& coop_session_status_text();
 const std::string& coop_session_last_error();
 const std::string& coop_session_advertised_endpoint();

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
 #include "game/menu/lobby_state.hpp"
@@ -82,14 +82,11 @@ BuiltScreen build_player_settings(MenuContext&) {
 
 } // namespace
 
-void register_player_settings_screen() {
-    if (!es)
-        return;
-
+void register_player_settings_screen(EngineState& engine) {
     MenuScreenDef def;
     def.id = MenuScreenID::PLAYER_SETTINGS;
     def.layout = UILayoutID::PLAYER_SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<int>();
     def.build = build_player_settings;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

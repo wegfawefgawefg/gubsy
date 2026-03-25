@@ -1,3 +1,5 @@
 #pragma once
 
-void register_game_settings_screen();
+struct EngineState;
+
+void register_game_settings_screen(EngineState& engine);

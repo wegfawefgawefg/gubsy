@@ -1,5 +1,6 @@
 #include "render.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/mode_registry.hpp"
 #include "engine/graphics.hpp"
 #include "engine/imgui_layer.hpp"
@@ -13,7 +14,6 @@
 #include <cmath>
 #include <string>
 #include <glm/glm.hpp>
-#include <engine/globals.hpp>
 
 namespace {
 
@@ -82,9 +82,24 @@ glm::vec3 brighten(const glm::vec3& base, float amount) {
 }
 
 void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
-    if (!current_graphics() || !current_graphics()->ui_font || text.empty())
+    (void)renderer;
+    (void)text;
+    (void)x;
+    (void)y;
+    (void)color;
+}
+
+namespace {
+
+void draw_text_with_font(Graphics& graphics,
+                         SDL_Renderer* renderer,
+                         const std::string& text,
+                         int x,
+                         int y,
+                         SDL_Color color) {
+    if (!graphics.ui_font || text.empty())
         return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(current_graphics()->ui_font, text.c_str(), color);
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(graphics.ui_font, text.c_str(), color);
     if (!surf)
         return;
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
@@ -98,34 +113,39 @@ void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SD
     SDL_DestroyTexture(tex);
 }
 
-void render_alerts(SDL_Renderer* renderer, int width) {
-    if (es->alerts.empty())
+} // namespace
+
+void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width) {
+    if (engine.alerts.empty())
         return;
     int y = 20;
-    for (const auto& alert : es->alerts) {
-        draw_text(renderer, alert.text, 24, y, SDL_Color{255, 235, 160, 255});
+    Graphics* graphics = engine.graphics;
+    if (!graphics)
+        return;
+    for (const auto& alert : engine.alerts) {
+        draw_text_with_font(*graphics, renderer, alert.text, 24, y, SDL_Color{255, 235, 160, 255});
         y += 22;
         if (y > 200)
             break;
     }
 
     // Mode label
-    std::string mode = "Mode: " + es->mode;
-    draw_text(renderer, mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
+    std::string mode = "Mode: " + engine.mode;
+    draw_text_with_font(*graphics, renderer, mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
 }
 
-void render() {
-    SDL_Renderer* renderer = (current_graphics() ? current_graphics()->renderer : nullptr);
+void render(EngineState& engine) {
+    SDL_Renderer* renderer = (current_graphics(engine) ? current_graphics(engine)->renderer : nullptr);
     if (!renderer)
         return;
 
-    SDL_Texture* target = (current_graphics() ? current_graphics()->render_target : nullptr);
+    SDL_Texture* target = (current_graphics(engine) ? current_graphics(engine)->render_target : nullptr);
     if (target)
         SDL_SetRenderTarget(renderer, target);
 
-    if (const ModeDesc* mode = find_mode(es->mode)) {
+    if (const ModeDesc* mode = find_mode(engine, engine.mode)) {
         if (mode->render_fn)
-            mode->render_fn(es ? es->app_context : nullptr);
+            mode->render_fn(engine, engine.app_context);
     }
 
     if (target)
@@ -134,23 +154,23 @@ void render() {
     int window_w = 0;
     int window_h = 0;
     SDL_GetRendererOutputSize(renderer, &window_w, &window_h);
-    if (current_graphics())
-        current_graphics()->window_dims = {static_cast<unsigned int>(window_w),
+    if (current_graphics(engine))
+        current_graphics(engine)->window_dims = {static_cast<unsigned int>(window_w),
                            static_cast<unsigned int>(window_h)};
 
     SDL_FRect drawn_rect{0.0f, 0.0f, static_cast<float>(window_w), static_cast<float>(window_h)};
     if (target) {
         SDL_SetRenderDrawColor(renderer, 5, 5, 10, 255);
         SDL_RenderClear(renderer);
-        if (current_graphics()->render_scale_mode == RenderScaleMode::Stretch) {
+        if (current_graphics(engine)->render_scale_mode == RenderScaleMode::Stretch) {
             SDL_RenderCopy(renderer, target, nullptr, nullptr);
             drawn_rect = SDL_FRect{0.0f, 0.0f,
                                    static_cast<float>(window_w),
                                    static_cast<float>(window_h)};
         } else {
-            SDL_FRect dst = compute_letterbox_rect(current_graphics()->render_dims, current_graphics()->window_dims);
-            if (current_graphics()) {
-                auto safe = current_graphics()->safe_area;
+            SDL_FRect dst = compute_letterbox_rect(current_graphics(engine)->render_dims, current_graphics(engine)->window_dims);
+            if (current_graphics(engine)) {
+                auto safe = current_graphics(engine)->safe_area;
                 float pad_left = std::clamp(safe.x, 0.0f, 0.45f) * static_cast<float>(window_w);
                 float pad_right = std::clamp(safe.y, 0.0f, 0.45f) * static_cast<float>(window_w);
                 float pad_top = std::clamp(safe.z, 0.0f, 0.45f) * static_cast<float>(window_h);
@@ -159,13 +179,13 @@ void render() {
                 dst.y += pad_top;
                 dst.w = std::max(4.0f, dst.w - (pad_left + pad_right));
                 dst.h = std::max(4.0f, dst.h - (pad_top + pad_bottom));
-                float zoom = std::max(0.1f, current_graphics()->preview_zoom);
+                float zoom = std::max(0.1f, current_graphics(engine)->preview_zoom);
                 float cx = dst.x + dst.w * 0.5f;
                 float cy = dst.y + dst.h * 0.5f;
                 float new_w = dst.w * zoom;
                 float new_h = dst.h * zoom;
-                dst.x = cx - new_w * 0.5f + current_graphics()->preview_pan.x;
-                dst.y = cy - new_h * 0.5f + current_graphics()->preview_pan.y;
+                dst.x = cx - new_w * 0.5f + current_graphics(engine)->preview_pan.x;
+                dst.y = cy - new_h * 0.5f + current_graphics(engine)->preview_pan.y;
                 dst.w = new_w;
                 dst.h = new_h;
             }
@@ -174,23 +194,24 @@ void render() {
         }
     }
 
-    render_alerts(renderer, window_w);
+    render_alerts(engine, renderer, window_w);
 
     if (layout_editor_is_active()) {
         int overlay_w = std::max(0, static_cast<int>(std::round(drawn_rect.w)));
         int overlay_h = std::max(0, static_cast<int>(std::round(drawn_rect.h)));
-        layout_editor_render(renderer,
+        layout_editor_render(engine,
+                             renderer,
                              overlay_w,
                              overlay_h,
                              drawn_rect.x,
                              drawn_rect.y);
     }
 
-    if (es->draw_input_device_overlay) {
-        draw_input_devices_overlay(renderer);
+    if (engine.draw_input_device_overlay) {
+        draw_input_devices_overlay(engine, renderer);
     }
 
-    imgui_debug_render();
+    imgui_debug_render(engine);
     imgui_render_layer();
     SDL_RenderPresent(renderer);
 }

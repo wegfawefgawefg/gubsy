@@ -1,7 +1,7 @@
 #include "engine/user_profiles.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/utils.hpp"
-#include "engine/globals.hpp"
 #include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
 
@@ -148,10 +148,8 @@ bool delete_user_profile(int profile_id) {
     return write_profiles_file(profiles);
 }
 
-bool load_user_profiles_pool() {
-    if (!es)
-        return false;
-    es->user_profiles_pool = load_all_user_profile_metadatas();
+bool load_user_profiles_pool(EngineState& engine) {
+    engine.user_profiles_pool = load_all_user_profile_metadatas();
     return true;
 }
 
@@ -182,6 +180,6 @@ UserProfile create_default_user_profile() {
     return profile;
 }
 
-std::vector<UserProfile>& get_user_profiles_pool() {
-    return es->user_profiles_pool;
+std::vector<UserProfile>& get_user_profiles_pool(EngineState& engine) {
+    return engine.user_profiles_pool;
 }

@@ -1,3 +1,5 @@
 #pragma once
 
-void register_local_players_screen();
+struct EngineState;
+
+void register_local_players_screen(EngineState& engine);

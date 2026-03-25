@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+struct EngineState;
 struct State;
 
 // DemoItemDef: template metadata registered by Lua mods. Mods call register_item{}
@@ -35,3 +36,4 @@ bool demo_items_active();
 bool load_demo_item_defs();
 void unload_demo_item_defs();
 void set_demo_item_mod_filter(const std::vector<std::string>& ids);
+void set_demo_items_engine(EngineState* engine);

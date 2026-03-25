@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+struct EngineState;
 
 struct InputSettingsProfile {
     int id;
@@ -39,9 +40,9 @@ InputSettingsProfile load_input_settings_profile(int profile_id);
 bool save_input_settings_profile(const InputSettingsProfile& profile);
 
 /*
- Load all input settings profiles into es->input_settings_profiles pool
+ Load all input settings profiles into engine.input_settings_profiles
 */
-bool load_input_settings_profiles_pool();
+bool load_input_settings_profiles_pool(EngineState& engine);
 
 /*
  Generate random 8-digit ID for input settings profile

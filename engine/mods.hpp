@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+struct EngineState;
 
 struct ModFileEntry {
     std::string path;
@@ -82,26 +83,26 @@ struct ModManager {
         std::vector<std::string>& changed_scripts);
 };
 
-ModManager* current_mod_manager();
-const ModManager* current_mod_manager_const();
+ModManager* current_mod_manager(EngineState& engine);
+const ModManager* current_mod_manager_const(const EngineState& engine);
 
 // Initialize engine-owned Mods manager instance. Returns true on success.
-bool init_mods_manager(const std::string& mods_root);
+bool init_mods_manager(EngineState& engine, const std::string& mods_root);
 
 // Discover available mods (non-recursive: `<mods_root>/*/`).
-void discover_mods();
+void discover_mods(EngineState& engine);
 
 // Poll filesystem for changes and trigger rebuilds as needed.
 // Returns true if anything reloaded.
-bool poll_fs_mods_hot_reload();    
+bool poll_fs_mods_hot_reload(EngineState& engine);    
 
 // Build a sprite registry from all `graphics/` files across mods using Graphics helpers.
 // Returns true if registry was rebuilt (e.g., on first call or change).
-bool cheap_scan_mods_to_update_sprite_name_registry();
+bool cheap_scan_mods_to_update_sprite_name_registry(EngineState& engine);
 
 // Build rich sprite store by scanning manifests and images, updating Graphics sprites.
 // Returns true if store was rebuilt.
-bool scan_mods_for_sprite_defs();
+bool scan_mods_for_sprite_defs(EngineState& engine);
 
 // Destroy engine-owned ModManager and release memory.
-void cleanup_mods_manager();
+void cleanup_mods_manager(EngineState& engine);

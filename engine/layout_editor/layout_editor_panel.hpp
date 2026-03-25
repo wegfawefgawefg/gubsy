@@ -1,3 +1,5 @@
 #pragma once
 
-void layout_editor_render_panel(float dt);
+struct EngineState;
+
+void layout_editor_render_panel(EngineState& engine, float dt);

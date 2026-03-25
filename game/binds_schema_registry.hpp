@@ -1,4 +1,5 @@
 #pragma once
 
-void register_binds_schema_entries();
+struct EngineState;
 
+void register_binds_schema_entries(EngineState& engine);

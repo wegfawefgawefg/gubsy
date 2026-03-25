@@ -1,7 +1,6 @@
 #include "engine_state.hpp"
 #include "engine/audio.hpp"
 #include "engine/graphics.hpp"
-#include "globals.hpp"
 #include "engine/mods.hpp"
 #include "engine/settings_defaults.hpp"
 #include "engine/menu/screens/settings_hub_screen.hpp"
@@ -13,34 +12,27 @@
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/screens/mods_screen.hpp"
 
-bool init_engine_state() {
-    if (es)
-        return true;
-    es = new EngineState{};
-    es->menu_manager.set_command_registry(&es->menu_commands);
-    register_engine_settings_schema_entries();
-    register_settings_category_screens();
-    register_settings_hub_screen();
-    register_profiles_screen();
-    register_binds_profiles_screen();
-    register_binds_profile_editor_screen();
-    register_binds_action_editor_screen();
-    register_binds_choose_input_screen();
-    register_mods_menu_screen();
+bool init_engine_state(EngineState& engine) {
+    engine.menu_manager.set_command_registry(&engine.menu_commands);
+    register_engine_settings_schema_entries(engine);
+    register_settings_category_screens(engine);
+    register_settings_hub_screen(engine);
+    register_profiles_screen(engine);
+    register_binds_profiles_screen(engine);
+    register_binds_profile_editor_screen(engine);
+    register_binds_action_editor_screen(engine);
+    register_binds_choose_input_screen(engine);
+    register_mods_menu_screen(engine);
     return true;
 }
 
-void cleanup_engine_state() {
-    if (!es)
-        return;
-    if (es->mod_manager) {
-        delete es->mod_manager;
-        es->mod_manager = nullptr;
+void cleanup_engine_state(EngineState& engine) {
+    if (engine.mod_manager) {
+        delete engine.mod_manager;
+        engine.mod_manager = nullptr;
     }
-    if (es->audio)
-        cleanup_audio();
-    if (es->graphics)
-        cleanup_graphics();
-    delete es;
-    es = nullptr;
+    if (engine.audio)
+        cleanup_audio(engine);
+    if (engine.graphics)
+        cleanup_graphics(engine);
 }

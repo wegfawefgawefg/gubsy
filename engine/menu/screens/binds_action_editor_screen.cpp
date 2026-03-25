@@ -7,7 +7,7 @@
 #include "engine/alerts.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/binds_ui_helpers.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -89,10 +89,8 @@ MenuStyle green_style() {
     return style;
 }
 
-BindsProfile* find_profile(int profile_id) {
-    if (!es)
-        return nullptr;
-    for (auto& profile : es->binds_profiles) {
+BindsProfile* find_profile(EngineState& engine, int profile_id) {
+    for (auto& profile : engine.binds_profiles) {
         if (profile.id == profile_id)
             return &profile;
     }
@@ -192,22 +190,18 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 
 void command_edit_mapping(MenuContext& ctx, std::int32_t slot_index) {
     auto& st = ctx.state<BindsActionEditorState>();
-    if (!es)
-        return;
     if (slot_index < 0 || slot_index >= static_cast<int>(st.slots.size()))
         return;
     const MappingSlot& slot = st.slots[static_cast<std::size_t>(slot_index)];
-    es->selected_binds_action_type = static_cast<int>(st.action_type);
-    es->selected_binds_action_id = st.action_id;
-    es->selected_binds_mapping_index = slot.empty ? -1 : slot.bind_index;
+    ctx.engine.selected_binds_action_type = static_cast<int>(st.action_type);
+    ctx.engine.selected_binds_action_id = st.action_id;
+    ctx.engine.selected_binds_mapping_index = slot.empty ? -1 : slot.bind_index;
     ctx.manager.push_screen(MenuScreenID::BINDS_CHOOSE_INPUT, ctx.player_index);
 }
 
 void command_reset_action(MenuContext& ctx, std::int32_t) {
     auto& st = ctx.state<BindsActionEditorState>();
-    if (!es)
-        return;
-    BindsProfile* profile = find_profile(es->selected_binds_profile_id);
+    BindsProfile* profile = find_profile(ctx.engine, ctx.engine.selected_binds_profile_id);
     if (!profile)
         return;
     if (st.action_type == BindsActionType::Button) {
@@ -227,22 +221,16 @@ void command_reset_action(MenuContext& ctx, std::int32_t) {
                     binds.end());
     }
     save_binds_profile(*profile);
-    add_alert("Bindings reset");
+    add_alert(ctx.engine, "Bindings reset");
 }
 
 BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     auto& st = ctx.state<BindsActionEditorState>();
-    if (!es) {
-        BuiltScreen built;
-        built.layout = UILayoutID::SETTINGS_SCREEN;
-        return built;
-    }
+    st.action_id = ctx.engine.selected_binds_action_id;
+    st.action_type = static_cast<BindsActionType>(ctx.engine.selected_binds_action_type);
 
-    st.action_id = es->selected_binds_action_id;
-    st.action_type = static_cast<BindsActionType>(es->selected_binds_action_type);
-
-    int profile_id = es->selected_binds_profile_id;
-    BindsProfile* profile = find_profile(profile_id);
+    int profile_id = ctx.engine.selected_binds_profile_id;
+    BindsProfile* profile = find_profile(ctx.engine, profile_id);
     if (!profile)
         return BuiltScreen{};
 
@@ -375,20 +363,18 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
 
 } // namespace
 
-void register_binds_action_editor_screen() {
-    if (!es)
-        return;
+void register_binds_action_editor_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_edit_mapping == kMenuIdInvalid)
-        g_cmd_edit_mapping = es->menu_commands.register_command(command_edit_mapping);
+        g_cmd_edit_mapping = engine.menu_commands.register_command(command_edit_mapping);
     if (g_cmd_reset_action == kMenuIdInvalid)
-        g_cmd_reset_action = es->menu_commands.register_command(command_reset_action);
+        g_cmd_reset_action = engine.menu_commands.register_command(command_reset_action);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_ACTION_EDITOR;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<BindsActionEditorState>();
     def.build = build_binds_action_editor;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

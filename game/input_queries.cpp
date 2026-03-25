@@ -1,19 +1,18 @@
 #include "game/input_queries.hpp"
 
-#include "engine/globals.hpp"
 #include "game/actions.hpp"
 #include "game/input_frame.hpp"
 #include "game/input_runtime.hpp"
 
 bool is_down(int player_index, int game_button) {
-    if (!es || game_button < 0 || game_button >= 32)
+    if (game_button < 0 || game_button >= 32)
         return false;
     const InputFrame& frame = current_input_frame(player_index);
     return (frame.down_bits & (1u << game_button)) != 0;
 }
 
 bool was_pressed(int player_index, int game_button) {
-    if (!es || game_button < 0 || game_button >= 32)
+    if (game_button < 0 || game_button >= 32)
         return false;
     const InputFrame& cur = current_input_frame(player_index);
     const InputFrame& prev = previous_input_frame(player_index);
@@ -22,7 +21,7 @@ bool was_pressed(int player_index, int game_button) {
 }
 
 bool was_released(int player_index, int game_button) {
-    if (!es || game_button < 0 || game_button >= 32)
+    if (game_button < 0 || game_button >= 32)
         return false;
     const InputFrame& cur = current_input_frame(player_index);
     const InputFrame& prev = previous_input_frame(player_index);
@@ -31,7 +30,7 @@ bool was_released(int player_index, int game_button) {
 }
 
 float get_1d_analog(int player_index, int game_axis) {
-    if (!es || game_axis < 0 || static_cast<std::size_t>(game_axis) >= GameAnalog1D::COUNT)
+    if (game_axis < 0 || static_cast<std::size_t>(game_axis) >= GameAnalog1D::COUNT)
         return 0.0f;
     const InputFrame& frame = current_input_frame(player_index);
     return static_cast<float>(frame.analog_1d[static_cast<std::size_t>(game_axis)]) / 32767.0f;
@@ -42,7 +41,7 @@ float get_1d_analog_delta(int, int) {
 }
 
 glm::vec2 get_2d_analog(int player_index, int game_axis) {
-    if (!es || game_axis < 0 || static_cast<std::size_t>(game_axis) >= GameAnalog2D::COUNT)
+    if (game_axis < 0 || static_cast<std::size_t>(game_axis) >= GameAnalog2D::COUNT)
         return glm::vec2(0.0f);
     const InputFrame& frame = current_input_frame(player_index);
     const auto& analog = frame.analog_2d[static_cast<std::size_t>(game_axis)];

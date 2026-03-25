@@ -1,6 +1,6 @@
 #include "engine/menu/menu_system.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/imgui_layer.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
@@ -16,12 +16,9 @@ void menu_system_set_input(const MenuInputState& input) {
     msi::g_current_input = input;
 }
 
-void menu_system_update(float dt, int screen_width, int screen_height) {
+void menu_system_update(EngineState& engine, float dt, int screen_width, int screen_height) {
     msi::g_active = false;
-    if (!es)
-        return;
-
-    MenuManager& manager = es->menu_manager;
+    MenuManager& manager = engine.menu_manager;
     if (manager.stack().empty())
         return;
 
@@ -44,7 +41,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         msi::g_current_screen = inst.def ? inst.def->id : kMenuIdInvalid;
         if (!inst.def || !inst.def->build)
             break;
-        MenuContext ctx{*es,
+        MenuContext ctx{engine,
                         manager,
                         screen_width,
                         screen_height,
@@ -68,14 +65,16 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         bool select_handled = false;
 
         const bool allow_mouse_input = !imgui_want_capture_mouse() && !layout_editor_is_active();
-        int mouse_x = es->device_state.mouse_x;
-        int mouse_y = es->device_state.mouse_y;
-        Uint32 mouse_buttons = allow_mouse_input ? es->device_state.mouse_buttons : 0u;
+        int mouse_x = engine.device_state.mouse_x;
+        int mouse_y = engine.device_state.mouse_y;
+        msi::g_last_mouse_x = mouse_x;
+        msi::g_last_mouse_y = mouse_y;
+        Uint32 mouse_buttons = allow_mouse_input ? engine.device_state.mouse_buttons : 0u;
         float render_mouse_x = static_cast<float>(mouse_x);
         float render_mouse_y = static_cast<float>(mouse_y);
         bool has_render_mouse = false;
         if (allow_mouse_input && msi::g_cache.width > 0 && msi::g_cache.height > 0) {
-            if (mouse_render_position(es->device_state,
+            if (mouse_render_position(engine.device_state,
                                       static_cast<float>(msi::g_cache.width),
                                       static_cast<float>(msi::g_cache.height),
                                       render_mouse_x,
@@ -98,7 +97,8 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         }
 
         const UILayout* layout_rects =
-            get_ui_layout_for_resolution(static_cast<int>(msi::g_cache.layout),
+            get_ui_layout_for_resolution(engine,
+                                         static_cast<int>(msi::g_cache.layout),
                                          msi::g_cache.width,
                                          msi::g_cache.height);
         for (std::size_t idx = 0; idx < msi::g_cache.widgets.size(); ++idx) {
@@ -184,7 +184,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 msi::lock_mouse_focus_at(mouse_x, mouse_y);
                 bool handled = false;
                 if (focus->on_left.type != MenuActionType::None) {
-                    msi::play_left_sound();
+                    msi::play_left_sound(engine);
                     msi::execute_action(focus->on_left, ctx, stack_changed);
                     needs_rebuild = true;
                     handled = true;
@@ -197,14 +197,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                     }
                 }
                 if (!handled)
-                    msi::play_cant_sound();
+                    msi::play_cant_sound(engine);
             }
 
             if (!needs_rebuild && right_pressed) {
                 msi::lock_mouse_focus_at(mouse_x, mouse_y);
                 bool handled = false;
                 if (focus->on_right.type != MenuActionType::None) {
-                    msi::play_right_sound();
+                    msi::play_right_sound(engine);
                     msi::execute_action(focus->on_right, ctx, stack_changed);
                     needs_rebuild = true;
                     handled = true;
@@ -217,7 +217,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                     }
                 }
                 if (!handled)
-                    msi::play_cant_sound();
+                    msi::play_cant_sound(engine);
             }
 
             if (!needs_rebuild) {
@@ -232,13 +232,13 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (select_pressed && focus->on_select.type != MenuActionType::None) {
                     msi::lock_mouse_focus_at(mouse_x, mouse_y);
                     if (focus->play_select_sound)
-                        msi::play_confirm_sound();
+                        msi::play_confirm_sound(engine);
                     select_handled = true;
                     msi::execute_action(focus->on_select, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
                 } else if (select_pressed && !select_handled) {
-                    msi::play_cant_sound();
+                    msi::play_cant_sound(engine);
                     select_pressed = false;
                 } else if (back_pressed) {
                     if (focus->on_back.type != MenuActionType::None) {
@@ -271,12 +271,12 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (MenuWidget* prev_widget = find_page_widget(MenuWidgetRole::PagePrev))
                     action = prev_widget->on_select;
                 if (action.type != MenuActionType::None) {
-                    msi::play_left_sound();
+                    msi::play_left_sound(engine);
                     msi::execute_action(action, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
                 }
-                msi::play_cant_sound();
+                msi::play_cant_sound(engine);
             }
             if (!needs_rebuild && page_next_pressed) {
                 msi::lock_mouse_focus_at(mouse_x, mouse_y);
@@ -291,12 +291,12 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                 if (MenuWidget* next_widget = find_page_widget(MenuWidgetRole::PageNext))
                     action = next_widget->on_select;
                 if (action.type != MenuActionType::None) {
-                    msi::play_right_sound();
+                    msi::play_right_sound(engine);
                     msi::execute_action(action, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
                 }
-                msi::play_cant_sound();
+                msi::play_cant_sound(engine);
             }
         }
 
@@ -400,19 +400,19 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
                             if (action.type == MenuActionType::None)
                                 return false;
-                            sound_fn();
+                            sound_fn(engine);
                             msi::execute_action(action, ctx, stack_changed);
                             needs_rebuild = true;
                             return true;
                         };
                         if (msi::point_in_rect(fx, fy, opt_layout.left_btn)) {
-                            if (trigger_action(focus->on_left, []() { msi::play_left_sound(); }))
+                            if (trigger_action(focus->on_left, [](EngineState& sound_engine) { msi::play_left_sound(sound_engine); }))
                                 continue;
                         } else if (msi::point_in_rect(fx, fy, opt_layout.right_btn)) {
-                            if (trigger_action(focus->on_right, []() { msi::play_right_sound(); }))
+                            if (trigger_action(focus->on_right, [](EngineState& sound_engine) { msi::play_right_sound(sound_engine); }))
                                 continue;
                         } else if (msi::point_in_rect(fx, fy, opt_layout.value_rect)) {
-                            if (trigger_action(focus->on_select, []() { msi::play_confirm_sound(); }))
+                            if (trigger_action(focus->on_select, [](EngineState& sound_engine) { msi::play_confirm_sound(sound_engine); }))
                                 continue;
                         } else if (opt_layout.has_primary_input &&
                                    msi::point_in_rect(fx, fy, opt_layout.primary_input)) {
@@ -434,17 +434,17 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                         auto trigger_action = [&](const MenuAction& action, auto sound_fn) -> bool {
                             if (action.type == MenuActionType::None)
                                 return false;
-                            sound_fn();
+                            sound_fn(engine);
                             msi::execute_action(action, ctx, stack_changed);
                             needs_rebuild = true;
                             return true;
                         };
                         if (focus->has_discrete_options && slider_layout.has_buttons) {
                             if (msi::point_in_rect(fx, fy, slider_layout.left_btn)) {
-                                if (trigger_action(focus->on_left, []() { msi::play_left_sound(); }))
+                                if (trigger_action(focus->on_left, [](EngineState& sound_engine) { msi::play_left_sound(sound_engine); }))
                                     continue;
                             } else if (msi::point_in_rect(fx, fy, slider_layout.right_btn)) {
-                                if (trigger_action(focus->on_right, []() { msi::play_right_sound(); }))
+                                if (trigger_action(focus->on_right, [](EngineState& sound_engine) { msi::play_right_sound(sound_engine); }))
                                     continue;
                             }
                         }
@@ -477,13 +477,13 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
                     }
                 }
                 if (focus && focus->on_select.type != MenuActionType::None) {
-                    msi::play_confirm_sound();
+                    msi::play_confirm_sound(engine);
                     click_handled = true;
                     msi::execute_action(focus->on_select, ctx, stack_changed);
                     needs_rebuild = true;
                     continue;
                 } else if (!click_handled) {
-                    msi::play_cant_sound();
+                    msi::play_cant_sound(engine);
                 }
             }
         }
@@ -514,7 +514,7 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
     msi::update_arrows(dt);
 
     if (msi::g_focus != prev_focus_frame && msi::g_focus != kMenuIdInvalid)
-        msi::play_focus_sound();
+        msi::play_focus_sound(engine);
 
     if (manager.stack().empty()) {
         msi::g_current_screen = kMenuIdInvalid;

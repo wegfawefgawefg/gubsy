@@ -1,3 +1,5 @@
 #pragma once
 
-void register_binds_profiles_screen();
+struct EngineState;
+
+void register_binds_profiles_screen(EngineState& engine);

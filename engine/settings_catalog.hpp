@@ -9,6 +9,7 @@
 
 struct GameSettings;
 struct UserProfile;
+struct EngineState;
 
 struct SettingsCatalogEntry {
     const SettingMetadata* metadata = nullptr;
@@ -24,4 +25,4 @@ struct SettingsCatalog {
     UserProfile* user_profile{nullptr};
 };
 
-SettingsCatalog build_settings_catalog(int player_index = 0);
+SettingsCatalog build_settings_catalog(EngineState& engine, int player_index = 0);

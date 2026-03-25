@@ -1,7 +1,7 @@
 #include "game/imgui_debug/register_game_debug_windows.hpp"
 
 #include "engine/binds_profiles.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/imgui_debug/imgui_debug.hpp"
 #include "engine/input_sources.hpp"
 #include "game/actions.hpp"
@@ -16,6 +16,8 @@
 #include <string>
 
 namespace {
+
+EngineState* g_debug_engine = nullptr;
 
 struct ActionLabel {
     int id;
@@ -51,15 +53,15 @@ void render_players_window(bool* open_flag) {
         ImGui::End();
         return;
     }
-    if (!es) {
+    if (!g_debug_engine) {
         ImGui::TextUnformatted("Engine state unavailable.");
         ImGui::End();
         return;
     }
-    if (es->players.empty())
+    if (g_debug_engine->players.empty())
         ImGui::TextUnformatted("No players registered.");
-    for (std::size_t i = 0; i < es->players.size(); ++i) {
-        const Player& player = es->players[i];
+    for (std::size_t i = 0; i < g_debug_engine->players.size(); ++i) {
+        const Player& player = g_debug_engine->players[i];
         ImGui::Separator();
         ImGui::Text("Player %zu", i);
         if (!player.has_active_profile) {
@@ -88,11 +90,11 @@ void render_players_window(bool* open_flag) {
             ImGui::TextDisabled("(none)");
         ImGui::Unindent();
     }
-    if (!es->input_sources.empty()) {
+    if (!g_debug_engine->input_sources.empty()) {
         ImGui::Separator();
         ImGui::TextUnformatted("Detected Input Sources:");
         ImGui::Indent();
-        for (const auto& source : es->input_sources) {
+        for (const auto& source : g_debug_engine->input_sources) {
             const char* type = "Unknown";
             switch (source.type) {
                 case InputSourceType::Keyboard: type = "Keyboard"; break;
@@ -225,7 +227,8 @@ void render_session_window(bool* open_flag) {
 
 } // namespace
 
-void register_game_debug_windows() {
+void register_game_debug_windows(EngineState& engine) {
+    g_debug_engine = &engine;
     imgui_debug_register_window({"Players", ImGuiKey_F1, "F1", render_players_window});
     imgui_debug_register_window({"Session", ImGuiKey_F5, "F5", render_session_window});
 }

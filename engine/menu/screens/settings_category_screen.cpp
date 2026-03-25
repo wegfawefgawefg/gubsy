@@ -11,7 +11,9 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
+#include "engine/game_settings.hpp"
+#include "engine/graphics.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_ids.hpp"
@@ -20,6 +22,7 @@
 #include "engine/menu_layout_ids.hpp"
 #include "engine/player.hpp"
 #include "engine/settings_catalog.hpp"
+#include "engine/top_level_game_settings.hpp"
 #include "engine/user_profiles.hpp"
 
 namespace {
@@ -181,10 +184,8 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     return w;
 }
 
-int profile_count() {
-    if (!es)
-        return 0;
-    return static_cast<int>(es->user_profiles_pool.size());
+int profile_count(const EngineState& engine) {
+    return static_cast<int>(engine.user_profiles_pool.size());
 }
 
 bool is_profile_delete(const SettingMetadata* meta) {
@@ -220,12 +221,12 @@ MenuStyle danger_style(bool enabled) {
     return style;
 }
 
-bool confirm_danger_action(int& remaining, const char* label) {
+bool confirm_danger_action(EngineState& engine, int& remaining, const char* label) {
     if (remaining <= 0)
         remaining = kDangerConfirmPresses;
     remaining -= 1;
     if (remaining > 0) {
-        add_alert(std::string(label) + " (" + std::to_string(remaining) + " presses remaining)");
+        add_alert(engine, std::string(label) + " (" + std::to_string(remaining) + " presses remaining)");
         return false;
     }
     remaining = 0;
@@ -271,16 +272,17 @@ EntryBinding* get_entry_binding(MenuContext& ctx, std::int32_t index) {
     return &st.entries[static_cast<std::size_t>(index)];
 }
 
-void persist_binding(const EntryBinding& binding, GameSettings* profile_settings) {
+void persist_binding(EngineState& engine, const EntryBinding& binding, GameSettings* profile_settings) {
     if (binding.entry.install_scope) {
-        save_top_level_game_settings(es->top_level_game_settings);
-        sync_graphics_from_settings();
+        save_top_level_game_settings(engine.top_level_game_settings);
+        sync_graphics_from_settings(engine);
     } else if (profile_settings) {
         save_game_settings(*profile_settings);
     }
 }
 
-bool apply_slider_value(SettingsCategoryState& st,
+bool apply_slider_value(EngineState& engine,
+                        SettingsCategoryState& st,
                         EntryBinding& binding,
                         float target_value,
                         bool persist_change) {
@@ -293,7 +295,7 @@ bool apply_slider_value(SettingsCategoryState& st,
         if (changed)
             *fv = snapped;
         if (persist_change && changed)
-            persist_binding(binding, st.profile_settings);
+            persist_binding(engine, binding, st.profile_settings);
         return changed;
     }
     return false;
@@ -308,7 +310,7 @@ void command_toggle_setting(MenuContext& ctx, std::int32_t index) {
     } else if (float* fv = std::get_if<float>(binding->entry.value)) {
         *fv = (*fv >= 0.5f) ? 0.0f : 1.0f;
     }
-    persist_binding(*binding, ctx.state<SettingsCategoryState>().profile_settings);
+    persist_binding(ctx.engine, *binding, ctx.state<SettingsCategoryState>().profile_settings);
 }
 
 void adjust_slider(MenuContext& ctx, std::int32_t index, float direction) {
@@ -342,13 +344,13 @@ void adjust_slider(MenuContext& ctx, std::int32_t index, float direction) {
                 target = std::clamp(target, 0, static_cast<int>(discrete.size()) - 1);
                 if (target != closest) {
                     *fv = discrete[static_cast<std::size_t>(target)];
-                    persist_binding(*binding, ctx.state<SettingsCategoryState>().profile_settings);
+                    persist_binding(ctx.engine, *binding, ctx.state<SettingsCategoryState>().profile_settings);
                 }
                 return;
             }
         }
         *fv = std::clamp(*fv + step * direction, min, max);
-        persist_binding(*binding, ctx.state<SettingsCategoryState>().profile_settings);
+        persist_binding(ctx.engine, *binding, ctx.state<SettingsCategoryState>().profile_settings);
     }
 }
 
@@ -378,7 +380,7 @@ void command_slider_set(MenuContext& ctx, std::int32_t index) {
         return;
     bool persist_change =
         !menu_system_internal::g_slider_drag_value_valid || menu_system_internal::g_slider_commit_pending;
-    if (apply_slider_value(st, *binding, target_value, persist_change)) {
+    if (apply_slider_value(ctx.engine, st, *binding, target_value, persist_change)) {
         if (binding->entry.metadata)
             st.status_text = "Updated " + binding->entry.metadata->label;
     }
@@ -402,7 +404,7 @@ void cycle_option(MenuContext& ctx, std::int32_t index, int direction) {
         }
         current = (current + direction + static_cast<int>(options.size())) % static_cast<int>(options.size());
         *sv = options[static_cast<std::size_t>(current)].value;
-        persist_binding(*binding, st.profile_settings);
+        persist_binding(ctx.engine, *binding, st.profile_settings);
         if (binding->entry.metadata->key == kRenderResolutionSettingKey &&
             st.resolution_entry_index == index) {
             int rw = 0;
@@ -410,7 +412,7 @@ void cycle_option(MenuContext& ctx, std::int32_t index, int direction) {
             if (parse_resolution_value(*sv, rw, rh)) {
                 st.resolution_edit.width_text = std::to_string(rw);
                 st.resolution_edit.height_text = std::to_string(rh);
-                glm::ivec2 dims = get_render_dimensions();
+                glm::ivec2 dims = get_render_dimensions(ctx.engine);
                 st.resolution_edit.dirty = (rw != dims.x || rh != dims.y);
             }
         }
@@ -447,10 +449,10 @@ void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
             st.status_text = "Unknown display mode";
             return;
         }
-        if (set_window_display_mode(mode)) {
+        if (set_window_display_mode(ctx.engine, mode)) {
             st.status_text = "Display mode applied";
-            if (current_graphics())
-                current_graphics()->window_mode = mode;
+            if (current_graphics(ctx.engine))
+                current_graphics(ctx.engine)->window_mode = mode;
         } else {
             st.status_text = "Failed to apply display mode";
         }
@@ -469,9 +471,9 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
     EntryBinding& binding = st.entries[static_cast<std::size_t>(index)];
     if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
         *sv = value;
-        persist_binding(binding, st.profile_settings);
-        if (set_render_resolution(width, height)) {
-            msi::play_confirm_sound();
+        persist_binding(ctx.engine, binding, st.profile_settings);
+        if (set_render_resolution(ctx.engine, width, height)) {
+            msi::play_confirm_sound(ctx.engine);
             st.status_text = "Render resolution set to " + value;
             st.resolution_edit.width_text = std::to_string(width);
             st.resolution_edit.height_text = std::to_string(height);
@@ -482,10 +484,8 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
     }
 }
 
-bool update_profile_in_pool(const UserProfile& profile) {
-    if (!es)
-        return false;
-    for (auto& existing : es->user_profiles_pool) {
+bool update_profile_in_pool(EngineState& engine, const UserProfile& profile) {
+    for (auto& existing : engine.user_profiles_pool) {
         if (existing.id == profile.id) {
             existing = profile;
             return true;
@@ -496,44 +496,44 @@ bool update_profile_in_pool(const UserProfile& profile) {
 
 void command_profile_delete(MenuContext& ctx, std::int32_t) {
     auto& st = ctx.state<SettingsCategoryState>();
-    if (!es || !st.profile_owner)
+    if (!st.profile_owner)
         return;
-    if (profile_count() <= 1) {
-        add_alert("Cannot delete the last profile.");
+    if (profile_count(ctx.engine) <= 1) {
+        add_alert(ctx.engine, "Cannot delete the last profile.");
         return;
     }
     st.reset_confirm_remaining = 0;
-    if (!confirm_danger_action(st.delete_confirm_remaining, "Delete profile"))
+    if (!confirm_danger_action(ctx.engine, st.delete_confirm_remaining, "Delete profile"))
         return;
 
     int deleted_id = st.profile_owner->id;
     delete_user_profile(deleted_id);
-    es->user_profiles_pool.erase(
-        std::remove_if(es->user_profiles_pool.begin(), es->user_profiles_pool.end(),
+    ctx.engine.user_profiles_pool.erase(
+        std::remove_if(ctx.engine.user_profiles_pool.begin(), ctx.engine.user_profiles_pool.end(),
                        [&](const UserProfile& profile) { return profile.id == deleted_id; }),
-        es->user_profiles_pool.end());
+        ctx.engine.user_profiles_pool.end());
 
-    if (es->user_profiles_pool.empty()) {
+    if (ctx.engine.user_profiles_pool.empty()) {
         UserProfile fallback = create_default_user_profile();
-        es->user_profiles_pool.push_back(fallback);
+        ctx.engine.user_profiles_pool.push_back(fallback);
     }
-    int fallback_id = es->user_profiles_pool.front().id;
-    for (int i = 0; i < static_cast<int>(es->players.size()); ++i) {
-        const Player& player = es->players[static_cast<std::size_t>(i)];
+    int fallback_id = ctx.engine.user_profiles_pool.front().id;
+    for (int i = 0; i < static_cast<int>(ctx.engine.players.size()); ++i) {
+        const Player& player = ctx.engine.players[static_cast<std::size_t>(i)];
         if (player.has_active_profile && player.profile.id == deleted_id)
-            set_user_profile_for_player(i, fallback_id);
+            set_user_profile_for_player(ctx.engine, i, fallback_id);
     }
-    add_alert("Profile deleted.");
+    add_alert(ctx.engine, "Profile deleted.");
     st.delete_confirm_remaining = 0;
     ctx.manager.pop_screen();
 }
 
 void command_profile_reset(MenuContext& ctx, std::int32_t) {
     auto& st = ctx.state<SettingsCategoryState>();
-    if (!es || !st.profile_owner)
+    if (!st.profile_owner)
         return;
     st.delete_confirm_remaining = 0;
-    if (!confirm_danger_action(st.reset_confirm_remaining, "Reset profile"))
+    if (!confirm_danger_action(ctx.engine, st.reset_confirm_remaining, "Reset profile"))
         return;
 
     UserProfile reset = *st.profile_owner;
@@ -543,14 +543,14 @@ void command_profile_reset(MenuContext& ctx, std::int32_t) {
     if (reset.name.empty())
         reset.name = "Profile";
     save_user_profile(reset);
-    update_profile_in_pool(reset);
-    for (int i = 0; i < static_cast<int>(es->players.size()); ++i) {
-        const Player& player = es->players[static_cast<std::size_t>(i)];
+    update_profile_in_pool(ctx.engine, reset);
+    for (int i = 0; i < static_cast<int>(ctx.engine.players.size()); ++i) {
+        const Player& player = ctx.engine.players[static_cast<std::size_t>(i)];
         if (player.has_active_profile && player.profile.id == reset.id)
-            set_user_profile_for_player(i, reset.id);
+            set_user_profile_for_player(ctx.engine, i, reset.id);
     }
     st.profile_owner_name = reset.name;
-    add_alert("Profile reset to defaults.");
+    add_alert(ctx.engine, "Profile reset to defaults.");
     st.reset_confirm_remaining = 0;
 }
 
@@ -588,7 +588,7 @@ void command_apply_text_setting(MenuContext& ctx, std::int32_t index) {
 
     if (*sv != new_value) {
         *sv = new_value;
-        persist_binding(*binding, st.profile_settings);
+        persist_binding(ctx.engine, *binding, st.profile_settings);
         st.status_text = "Updated " + binding->entry.metadata->label;
     }
 }
@@ -724,7 +724,7 @@ float snap_slider_value(const SettingWidgetDesc& desc, float value) {
     return discrete[static_cast<std::size_t>(closest)];
 }
 
-void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) {
+void refresh_entries(EngineState& engine, SettingsCategoryState& st, const SettingsCatalog& catalog) {
     st.entries.clear();
     bool profiles_section = (st.tag == "Profiles");
     auto it = catalog.categories.find(st.tag);
@@ -816,21 +816,22 @@ void refresh_entries(SettingsCategoryState& st, const SettingsCatalog& catalog) 
                 st.resolution_edit.width_text = std::to_string(desired_w);
                 st.resolution_edit.height_text = std::to_string(desired_h);
             } else if (!editing_resolution) {
-                glm::ivec2 dims = get_render_dimensions();
+                glm::ivec2 dims = get_render_dimensions(engine);
                 desired_w = dims.x;
                 desired_h = dims.y;
                 st.resolution_edit.width_text = std::to_string(desired_w);
                 st.resolution_edit.height_text = std::to_string(desired_h);
             }
         }
-        glm::ivec2 dims = get_render_dimensions();
+        glm::ivec2 dims = get_render_dimensions(engine);
         int pending_w = std::clamp(parse_int_or(st.resolution_edit.width_text, dims.x), 320, 16384);
         int pending_h = std::clamp(parse_int_or(st.resolution_edit.height_text, dims.y), 240, 9216);
         st.resolution_edit.dirty = (pending_w != dims.x || pending_h != dims.y);
     }
 }
 
-MenuWidget make_setting_widget(const EntryBinding& binding,
+MenuWidget make_setting_widget(EngineState& engine,
+                               const EntryBinding& binding,
                                WidgetId id,
                                UILayoutObjectId slot,
                                int entry_index,
@@ -856,7 +857,7 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
         w.label = label_cache.back().c_str();
         w.type = WidgetType::Button;
         bool enabled = true;
-        if (delete_btn && profile_count() <= 1)
+        if (delete_btn && profile_count(engine) <= 1)
             enabled = false;
         if (delete_btn) {
             w.on_select = MenuAction::run_command(g_cmd_profile_delete);
@@ -946,7 +947,8 @@ MenuWidget make_setting_widget(const EntryBinding& binding,
             if (std::string* sv = std::get_if<std::string>(binding.entry.value))
                 w.bind_ptr = sv;
             if (binding.entry.metadata && binding.entry.metadata->key == kWindowModeSettingKey) {
-                const char* applied = current_graphics() ? window_mode_to_value(current_graphics()->window_mode) : nullptr;
+                const Graphics* graphics = current_graphics(engine);
+                const char* applied = graphics ? window_mode_to_value(graphics->window_mode) : nullptr;
                 bool matches = true;
                 if (applied && w.bind_ptr)
                     matches = (*static_cast<std::string*>(w.bind_ptr) == applied);
@@ -1048,7 +1050,7 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
         return built;
     }
 
-    SettingsCatalog catalog = build_settings_catalog(ctx.player_index);
+    SettingsCatalog catalog = build_settings_catalog(ctx.engine, ctx.player_index);
     auto& st = ctx.state<SettingsCategoryState>();
     st.tag = tag_it->second;
     st.profile_settings = catalog.profile_settings;
@@ -1058,7 +1060,7 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     st.settings_profile_value =
         (st.profile_settings && !st.profile_settings->name.empty()) ? st.profile_settings->name : std::string{};
 
-    refresh_entries(st, catalog);
+    refresh_entries(ctx.engine, st, catalog);
 
     if (st.search_query != st.prev_search) {
         st.prev_search = st.search_query;
@@ -1128,7 +1130,8 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
         if (filtered_idx < static_cast<int>(st.filtered_indices.size())) {
             int entry_index = st.filtered_indices[static_cast<std::size_t>(filtered_idx)];
             MenuWidget row =
-                make_setting_widget(st.entries[static_cast<std::size_t>(entry_index)],
+                make_setting_widget(ctx.engine,
+                                    st.entries[static_cast<std::size_t>(entry_index)],
                                     widget_id,
                                     slot,
                                     entry_index,
@@ -1203,20 +1206,18 @@ BuiltScreen build_settings_category(MenuContext& ctx) {
     return built;
 }
 
-void register_screen_for_tag(MenuScreenId id) {
-    if (!es)
-        return;
+void register_screen_for_tag(EngineState& engine, MenuScreenId id) {
     MenuScreenDef def;
     def.id = id;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<SettingsCategoryState>();
     def.build = build_settings_category;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }
 
 } // namespace
 
-MenuScreenId ensure_settings_category_screen(const std::string& tag) {
+MenuScreenId ensure_settings_category_screen(EngineState& engine, const std::string& tag) {
     auto it = g_tag_to_screen.find(tag);
     if (it != g_tag_to_screen.end())
         return it->second;
@@ -1226,7 +1227,7 @@ MenuScreenId ensure_settings_category_screen(const std::string& tag) {
     MenuScreenId id = MenuScreenID::SETTINGS_CATEGORY_BASE + static_cast<MenuScreenId>(g_tag_to_screen.size());
     g_tag_to_screen.emplace(tag, id);
     g_screen_to_tag.emplace(id, tag);
-    register_screen_for_tag(id);
+    register_screen_for_tag(engine, id);
     return id;
 }
 
@@ -1237,32 +1238,30 @@ const std::string* tag_for_settings_screen(MenuScreenId id) {
     return &it->second;
 }
 
-void register_settings_category_screens() {
-    if (!es)
-        return;
+void register_settings_category_screens(EngineState& engine) {
     if (g_cmd_toggle_setting == kMenuIdInvalid)
-        g_cmd_toggle_setting = es->menu_commands.register_command(command_toggle_setting);
+        g_cmd_toggle_setting = engine.menu_commands.register_command(command_toggle_setting);
     if (g_cmd_slider_inc == kMenuIdInvalid)
-        g_cmd_slider_inc = es->menu_commands.register_command(command_slider_inc);
+        g_cmd_slider_inc = engine.menu_commands.register_command(command_slider_inc);
     if (g_cmd_slider_dec == kMenuIdInvalid)
-        g_cmd_slider_dec = es->menu_commands.register_command(command_slider_dec);
+        g_cmd_slider_dec = engine.menu_commands.register_command(command_slider_dec);
     if (g_cmd_option_prev == kMenuIdInvalid)
-        g_cmd_option_prev = es->menu_commands.register_command(command_option_prev);
+        g_cmd_option_prev = engine.menu_commands.register_command(command_option_prev);
     if (g_cmd_option_next == kMenuIdInvalid)
-        g_cmd_option_next = es->menu_commands.register_command(command_option_next);
+        g_cmd_option_next = engine.menu_commands.register_command(command_option_next);
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_apply_window_mode == kMenuIdInvalid)
-        g_cmd_apply_window_mode = es->menu_commands.register_command(command_apply_window_mode);
+        g_cmd_apply_window_mode = engine.menu_commands.register_command(command_apply_window_mode);
     if (g_cmd_apply_render_resolution == kMenuIdInvalid)
-        g_cmd_apply_render_resolution = es->menu_commands.register_command(command_apply_render_resolution);
+        g_cmd_apply_render_resolution = engine.menu_commands.register_command(command_apply_render_resolution);
     if (g_cmd_profile_delete == kMenuIdInvalid)
-        g_cmd_profile_delete = es->menu_commands.register_command(command_profile_delete);
+        g_cmd_profile_delete = engine.menu_commands.register_command(command_profile_delete);
     if (g_cmd_profile_reset == kMenuIdInvalid)
-        g_cmd_profile_reset = es->menu_commands.register_command(command_profile_reset);
+        g_cmd_profile_reset = engine.menu_commands.register_command(command_profile_reset);
     if (g_cmd_apply_text_setting == kMenuIdInvalid) {
-        g_cmd_apply_text_setting = es->menu_commands.register_command(command_apply_text_setting);
+        g_cmd_apply_text_setting = engine.menu_commands.register_command(command_apply_text_setting);
     }
     if (g_cmd_slider_set == kMenuIdInvalid)
-        g_cmd_slider_set = es->menu_commands.register_command(command_slider_set);
+        g_cmd_slider_set = engine.menu_commands.register_command(command_slider_set);
 }

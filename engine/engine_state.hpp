@@ -92,5 +92,5 @@ struct EngineState {
     Graphics* graphics{nullptr};
 };
 
-bool init_engine_state();
-void cleanup_engine_state();
+bool init_engine_state(EngineState& engine);
+void cleanup_engine_state(EngineState& engine);

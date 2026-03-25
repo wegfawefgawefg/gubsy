@@ -1,7 +1,7 @@
 #include "engine/input_settings_profiles.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/utils.hpp"
-#include "engine/globals.hpp"
 #include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
 
@@ -166,10 +166,8 @@ bool save_input_settings_profile(const InputSettingsProfile& profile) {
     return write_input_settings_profiles_file(profiles);
 }
 
-bool load_input_settings_profiles_pool() {
-    if (!es)
-        return false;
-    es->input_settings_profiles = load_all_input_settings_profiles();
+bool load_input_settings_profiles_pool(EngineState& engine) {
+    engine.input_settings_profiles = load_all_input_settings_profiles();
     return true;
 }
 

@@ -7,7 +7,7 @@
 #include "engine/alerts.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/binds_ui_helpers.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -122,10 +122,8 @@ MenuStyle name_style() {
     return style;
 }
 
-BindsProfile* find_profile(int profile_id) {
-    if (!es)
-        return nullptr;
-    for (auto& profile : es->binds_profiles) {
+BindsProfile* find_profile(EngineState& engine, int profile_id) {
+    for (auto& profile : engine.binds_profiles) {
         if (profile.id == profile_id)
             return &profile;
     }
@@ -216,24 +214,20 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 
 void command_open_action(MenuContext& ctx, std::int32_t entry_index) {
     auto& st = ctx.state<BindsProfileEditorState>();
-    if (!es)
-        return;
     if (entry_index < 0 || entry_index >= static_cast<int>(st.entries.size()))
         return;
     const EditorEntry& entry = st.entries[static_cast<std::size_t>(entry_index)];
     if (entry.kind != EntryKind::Binding)
         return;
-    es->selected_binds_action_type = static_cast<int>(entry.action_type);
-    es->selected_binds_action_id = entry.id;
-    es->selected_binds_mapping_index = -1;
+    ctx.engine.selected_binds_action_type = static_cast<int>(entry.action_type);
+    ctx.engine.selected_binds_action_id = entry.id;
+    ctx.engine.selected_binds_mapping_index = -1;
     ctx.manager.push_screen(MenuScreenID::BINDS_ACTION_EDITOR, ctx.player_index);
 }
 
 void command_reset_profile(MenuContext& ctx, std::int32_t) {
-    if (!es)
-        return;
-    int profile_id = es->selected_binds_profile_id;
-    BindsProfile* profile = find_profile(profile_id);
+    int profile_id = ctx.engine.selected_binds_profile_id;
+    BindsProfile* profile = find_profile(ctx.engine, profile_id);
     if (!profile)
         return;
     profile->button_binds.clear();
@@ -241,19 +235,13 @@ void command_reset_profile(MenuContext& ctx, std::int32_t) {
     profile->analog_2d_binds.clear();
     save_binds_profile(*profile);
     ctx.state<BindsProfileEditorState>().status_text = "Binds reset to defaults";
-    add_alert("Binds reset to defaults");
+    add_alert(ctx.engine, "Binds reset to defaults");
 }
 
 BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
     auto& st = ctx.state<BindsProfileEditorState>();
-    if (!es) {
-        BuiltScreen built;
-        built.layout = UILayoutID::SETTINGS_SCREEN;
-        return built;
-    }
-
-    int profile_id = es->selected_binds_profile_id;
-    BindsProfile* profile = find_profile(profile_id);
+    int profile_id = ctx.engine.selected_binds_profile_id;
+    BindsProfile* profile = find_profile(ctx.engine, profile_id);
     if (!profile)
         return BuiltScreen{};
 
@@ -437,20 +425,18 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
 
 } // namespace
 
-void register_binds_profile_editor_screen() {
-    if (!es)
-        return;
+void register_binds_profile_editor_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_open_action == kMenuIdInvalid)
-        g_cmd_open_action = es->menu_commands.register_command(command_open_action);
+        g_cmd_open_action = engine.menu_commands.register_command(command_open_action);
     if (g_cmd_reset_profile == kMenuIdInvalid)
-        g_cmd_reset_profile = es->menu_commands.register_command(command_reset_profile);
+        g_cmd_reset_profile = engine.menu_commands.register_command(command_reset_profile);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_PROFILE_EDITOR;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<BindsProfileEditorState>();
     def.build = build_binds_profile_editor;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

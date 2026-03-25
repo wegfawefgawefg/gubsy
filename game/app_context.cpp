@@ -5,8 +5,10 @@
 
 bool init_game_app_context(GameAppContext& app) {
     reset_state(app.state);
-    load_user_profiles_pool();
-    load_binds_profiles_pool();
+    if (app.engine) {
+        load_user_profiles_pool(*app.engine);
+        load_binds_profiles_pool(*app.engine);
+    }
     return true;
 }
 
@@ -24,4 +26,16 @@ const State* game_state_from_app_context(const void* app_context) {
     if (!app_context)
         return nullptr;
     return &static_cast<const GameAppContext*>(app_context)->state;
+}
+
+EngineState* engine_state_from_app_context(void* app_context) {
+    if (!app_context)
+        return nullptr;
+    return static_cast<GameAppContext*>(app_context)->engine;
+}
+
+const EngineState* engine_state_from_app_context(const void* app_context) {
+    if (!app_context)
+        return nullptr;
+    return static_cast<const GameAppContext*>(app_context)->engine;
 }

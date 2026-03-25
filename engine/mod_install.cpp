@@ -4,7 +4,7 @@
 #include "engine/mods.hpp"
 #include "engine/graphics.hpp"
 #include "engine/audio.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/project_paths.hpp"
 
 #include <algorithm>
@@ -87,18 +87,18 @@ bool parse_http_endpoint(const std::string& url, EndpointInfo& out, std::string&
 
 namespace fs = std::filesystem;
 
-fs::path mods_root_path() {
-    const ModManager* manager = current_mod_manager_const();
+fs::path mods_root_path(EngineState& engine) {
+    const ModManager* manager = current_mod_manager_const(engine);
     if (manager && !manager->root.empty())
         return fs::path(manager->root);
     return runtime_mods_path();
 }
 
-fs::path local_mod_path(const ModCatalogEntry& entry) {
+fs::path local_mod_path(EngineState& engine, const ModCatalogEntry& entry) {
     std::string folder = entry.folder.empty() ? entry.id : entry.folder;
     if (folder.empty())
         folder = entry.id;
-    return mods_root_path() / folder;
+    return mods_root_path(engine) / folder;
 }
 
 bool ensure_parent_dirs(const fs::path& path, std::string& err) {
@@ -115,16 +115,16 @@ bool ensure_parent_dirs(const fs::path& path, std::string& err) {
     return true;
 }
 
-void refresh_runtime(const std::vector<std::string>& previously_active) {
-    discover_mods();
-    scan_mods_for_sprite_defs();
-    load_all_textures_in_sprite_lookup();
-    load_mod_sounds();
-    set_active_mods(previously_active);
+void refresh_runtime(EngineState& engine, const std::vector<std::string>& previously_active) {
+    discover_mods(engine);
+    scan_mods_for_sprite_defs(engine);
+    load_all_textures_in_sprite_lookup(engine);
+    load_mod_sounds(engine);
+    set_active_mods(engine, previously_active);
 }
 
-const ModInfo* find_installed_mod(const std::string& id) {
-    const ModManager* manager = current_mod_manager_const();
+const ModInfo* find_installed_mod(EngineState& engine, const std::string& id) {
+    const ModManager* manager = current_mod_manager_const(engine);
     if (!manager)
         return nullptr;
     for (const auto& mod : manager->mods) {
@@ -208,7 +208,8 @@ bool fetch_mod_catalog(const std::string& server_url,
     }
 }
 
-bool install_mod_from_catalog(const std::string& server_url,
+bool install_mod_from_catalog(EngineState& engine,
+                              const std::string& server_url,
                               const ModCatalogEntry& entry,
                               std::string& err) {
     EndpointInfo endpoint;
@@ -221,7 +222,7 @@ bool install_mod_from_catalog(const std::string& server_url,
     httplib::Client client(endpoint.host, endpoint.port);
     client.set_read_timeout(5, 0);
 
-    fs::path target = local_mod_path(entry);
+    fs::path target = local_mod_path(engine, entry);
     std::error_code ec;
     if (fs::exists(target, ec))
         fs::remove_all(target, ec);
@@ -231,7 +232,7 @@ bool install_mod_from_catalog(const std::string& server_url,
         return false;
     }
 
-    auto active = get_active_mod_ids();
+    auto active = get_active_mod_ids(engine);
 
     for (const auto& file : entry.files) {
         if (file.path.empty())
@@ -257,25 +258,25 @@ bool install_mod_from_catalog(const std::string& server_url,
         out << res->body;
     }
 
-    refresh_runtime(active);
+    refresh_runtime(engine, active);
     return true;
 }
 
-bool uninstall_mod(const ModCatalogEntry& entry, std::string& err) {
+bool uninstall_mod(EngineState& engine, const ModCatalogEntry& entry, std::string& err) {
     if (entry.id.empty()) {
         err = "Missing mod id";
         return false;
     }
-    fs::path root = local_mod_path(entry);
+    fs::path root = local_mod_path(engine, entry);
     std::error_code ec;
     if (!fs::exists(root, ec)) {
         err = "Mod not installed: " + root.string();
         return false;
     }
 
-    auto active = get_active_mod_ids();
+    auto active = get_active_mod_ids(engine);
     active.erase(std::remove(active.begin(), active.end(), entry.id), active.end());
-    deactivate_mod(entry.id);
+    deactivate_mod(engine, entry.id);
 
     fs::remove_all(root, ec);
     if (ec) {
@@ -283,11 +284,12 @@ bool uninstall_mod(const ModCatalogEntry& entry, std::string& err) {
         return false;
     }
 
-    refresh_runtime(active);
+    refresh_runtime(engine, active);
     return true;
 }
 
-bool sync_mod_selection_from_catalog(const std::string& server_url,
+bool sync_mod_selection_from_catalog(EngineState& engine,
+                                     const std::string& server_url,
                                      const std::vector<std::string>& required_ids,
                                      std::string& err) {
     std::vector<std::string> desired;
@@ -308,7 +310,7 @@ bool sync_mod_selection_from_catalog(const std::string& server_url,
     for (const auto& entry : catalog)
         catalog_by_id[entry.id] = &entry;
 
-    discover_mods();
+    discover_mods(engine);
     for (const std::string& id : desired) {
         auto catalog_it = catalog_by_id.find(id);
         if (catalog_it == catalog_by_id.end()) {
@@ -316,31 +318,31 @@ bool sync_mod_selection_from_catalog(const std::string& server_url,
             return false;
         }
 
-        const ModInfo* installed = find_installed_mod(id);
+        const ModInfo* installed = find_installed_mod(engine, id);
         const bool needs_install = !installed;
         const bool needs_reinstall =
             installed && installed->version != catalog_it->second->version;
         if (needs_install || needs_reinstall) {
-            if (!install_mod_from_catalog(server_url, *catalog_it->second, err))
+            if (!install_mod_from_catalog(engine, server_url, *catalog_it->second, err))
                 return false;
-            discover_mods();
+            discover_mods(engine);
         }
     }
 
     std::vector<std::string> normalized_desired = desired;
     std::sort(normalized_desired.begin(), normalized_desired.end());
-    if (!set_active_mods(desired)) {
+    if (!set_active_mods(engine, desired)) {
         if (desired.empty()) {
             err.clear();
             return true;
         }
-        std::vector<std::string> active = get_active_mod_ids();
+        std::vector<std::string> active = get_active_mod_ids(engine);
         std::sort(active.begin(), active.end());
         if (active != normalized_desired) {
             err = "Failed to apply required mod selection";
             return false;
         }
     }
-    discover_mods();
+    discover_mods(engine);
     return true;
 }

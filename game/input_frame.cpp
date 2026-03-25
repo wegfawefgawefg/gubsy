@@ -2,7 +2,7 @@
 
 #include "engine/binds_profiles.hpp"
 #include "engine/device_state.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/input.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/player.hpp"
@@ -32,10 +32,13 @@ void write_2d(InputFrame& frame, int analog_index, float x, float y) {
 
 } // namespace
 
-void build_input_frame(int player_index, const DeviceState& device_state, InputFrame& out) {
+void build_input_frame(EngineState& engine,
+                       int player_index,
+                       const DeviceState& device_state,
+                       InputFrame& out) {
     out = InputFrame{};
 
-    const BindsProfile* binds = get_player_binds_profile(player_index);
+    const BindsProfile* binds = get_player_binds_profile(engine, player_index);
     if (!binds)
         return;
 

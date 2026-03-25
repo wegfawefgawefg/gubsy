@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/engine_state.hpp"
+
 #include <string>
 
 struct UILayout;
@@ -23,9 +25,9 @@ extern int g_history_layout_width;
 extern int g_history_layout_height;
 extern bool g_layout_dirty;
 
-bool has_layouts();
-UILayout* selected_layout_mutable();
-const UILayout* selected_layout();
+bool has_layouts(const EngineState& engine);
+UILayout* selected_layout_mutable(EngineState& engine);
+const UILayout* selected_layout(EngineState& engine);
 void append_status(const std::string& text);
 
 } // namespace layout_editor_internal

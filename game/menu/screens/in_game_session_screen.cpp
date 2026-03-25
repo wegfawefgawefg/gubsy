@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -96,11 +96,11 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
                    " / " + std::to_string(std::max(1, st.total_pages));
 }
 
-void close_menu() {
-    in_game_menu_reset();
+void close_menu(EngineState& engine) {
+    in_game_menu_reset(engine);
 }
 
-void leave_session_to_lobby() {
+void leave_session_to_lobby(EngineState& engine) {
     LobbySession& lobby = lobby_state();
     coop_session_reset();
     if (!lobby.online.in_room || lobby.online.is_host) {
@@ -110,14 +110,13 @@ void leave_session_to_lobby() {
         std::string err;
         lobby_online_leave_room(lobby, err);
         if (!err.empty())
-            add_alert(err);
+            add_alert(engine, err);
     }
-    if (es)
-        es->mode = modes::TITLE;
+    engine.mode = modes::TITLE;
 }
 
-void command_close_menu(MenuContext&, std::int32_t) {
-    close_menu();
+void command_close_menu(MenuContext& ctx, std::int32_t) {
+    close_menu(ctx.engine);
 }
 
 void command_activate_item(MenuContext& ctx, std::int32_t item_index) {
@@ -126,20 +125,20 @@ void command_activate_item(MenuContext& ctx, std::int32_t item_index) {
     const SessionAction action = kSessionMenuItems[static_cast<std::size_t>(item_index)].action;
     switch (action) {
         case SessionAction::Resume:
-            close_menu();
+            close_menu(ctx.engine);
             return;
         case SessionAction::SaveGame:
-            add_alert("Save Game is not implemented yet.");
+            add_alert(ctx.engine, "Save Game is not implemented yet.");
             return;
         case SessionAction::LoadGame:
-            add_alert("Load Game is not implemented yet.");
+            add_alert(ctx.engine, "Load Game is not implemented yet.");
             return;
         case SessionAction::SessionSettings:
             ctx.manager.push_screen(MenuScreenID::GAME_SETTINGS);
             return;
         case SessionAction::ManageMods:
             if (lobby_state_const().online.in_room && !lobby_state_const().online.is_host) {
-                add_alert("Only the host can change online mods.");
+                add_alert(ctx.engine, "Only the host can change online mods.");
                 return;
             }
             ctx.manager.push_screen(MenuScreenID::LOBBY_MODS);
@@ -151,8 +150,8 @@ void command_activate_item(MenuContext& ctx, std::int32_t item_index) {
             ctx.manager.push_screen(MenuScreenID::SETTINGS);
             return;
         case SessionAction::LeaveSession:
-            leave_session_to_lobby();
-            close_menu();
+            leave_session_to_lobby(ctx.engine);
+            close_menu(ctx.engine);
             return;
         case SessionAction::QuitGame:
             ctx.engine.running = false;
@@ -253,20 +252,18 @@ BuiltScreen build_in_game_session_menu(MenuContext& ctx) {
 
 } // namespace
 
-void register_in_game_session_screen() {
-    if (!es)
-        return;
+void register_in_game_session_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_activate_item == kMenuIdInvalid)
-        g_cmd_activate_item = es->menu_commands.register_command(command_activate_item);
+        g_cmd_activate_item = engine.menu_commands.register_command(command_activate_item);
     if (g_cmd_close_menu == kMenuIdInvalid)
-        g_cmd_close_menu = es->menu_commands.register_command(command_close_menu);
+        g_cmd_close_menu = engine.menu_commands.register_command(command_close_menu);
 
     MenuScreenDef def;
     def.id = MenuScreenID::IN_GAME_SESSION;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<InGameSessionMenuState>();
     def.build = build_in_game_session_menu;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

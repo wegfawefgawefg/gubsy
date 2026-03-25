@@ -7,6 +7,8 @@
 #include "engine/session_contract.hpp"
 #include "engine/mods.hpp"
 
+struct EngineState;
+
 struct PlayerDeviceKey {
     int type{0};
     int id{0};
@@ -58,6 +60,7 @@ struct LobbyOnlineState {
 };
 
 struct LobbySession {
+    EngineState* engine{nullptr};
     std::string session_name;
     int privacy{0}; // 0 = Solo, 1 = Couch, 2 = Friends, 3 = Invite Only, 4 = Anyone
     int scenario_index{0};
@@ -76,6 +79,7 @@ struct LobbySession {
 LobbySession& lobby_state();
 const LobbySession& lobby_state_const();
 
+void lobby_bind_engine(EngineState& engine);
 void lobby_reset_defaults();
 void lobby_refresh_mods();
 std::vector<std::string> lobby_enabled_mod_ids();

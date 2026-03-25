@@ -1,5 +1,7 @@
 #pragma once
 
-void title_step(void* app_context);
-void title_process_inputs(void* app_context);
-void title_draw(void* app_context);
+struct EngineState;
+
+void title_step(EngineState& engine, void* app_context);
+void title_process_inputs(EngineState& engine, void* app_context);
+void title_draw(EngineState& engine, void* app_context);

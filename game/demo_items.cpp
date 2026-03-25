@@ -1,6 +1,7 @@
 #include "demo_items.hpp"
 
 #include "engine/audio.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "game/mod_api/demo_items_internal.hpp"
 #include "state.hpp"
@@ -37,13 +38,12 @@ DemoPlayer* ensure_primary_player(State& state) {
 }
 
 struct DemoApi {
+    EngineState* engine{nullptr};
     State* state{nullptr};
 
     void alert(const std::string& text) const {
-        Alert al;
-        al.text = text;
-        al.ttl = 1.4f;
-        add_alert(al.text);
+        if (engine)
+            add_alert(*engine, text);
     }
     void set_player_position(float x, float y) const {
         if (!state)
@@ -52,8 +52,8 @@ struct DemoApi {
             player->pos = glm::vec2{x, y};
     }
     void play_sound(const std::string& key) const {
-        if (!key.empty())
-            ::play_sound(key);
+        if (engine && !key.empty())
+            ::play_sound(*engine, key);
     }
     void set_bonk_enabled(bool enabled) const {
         if (state)
@@ -149,6 +149,12 @@ glm::vec3 read_color(const sol::object& obj, glm::vec3 fallback) {
     return out;
 }
 
+int resolve_sprite_id(const std::string& sprite_name) {
+    if (!g_api.engine || sprite_name.empty())
+        return -1;
+    return try_get_sprite_id(*g_api.engine, sprite_name);
+}
+
 void apply_def_patch(DemoItemRecord& rec, const sol::table& patch) {
     if (auto label = patch.get<sol::optional<std::string>>("label"))
         rec.def.label = *label;
@@ -160,7 +166,7 @@ void apply_def_patch(DemoItemRecord& rec, const sol::table& patch) {
         rec.def.color = read_color(color_obj, rec.def.color);
     if (auto sprite_name = patch.get<sol::optional<std::string>>("sprite")) {
         rec.def.sprite_name = *sprite_name;
-        rec.def.sprite_id = rec.def.sprite_name.empty() ? -1 : try_get_sprite_id(rec.def.sprite_name);
+        rec.def.sprite_id = resolve_sprite_id(rec.def.sprite_name);
     }
 }
 
@@ -225,7 +231,7 @@ void register_item(const std::string& mod_id, const sol::table& t) {
     rec.def.radius = t.get_or("radius", rec.def.radius);
     rec.def.color = read_color(t.get<sol::object>("color"), rec.def.color);
     rec.def.sprite_name = t.get_or("sprite", rec.def.sprite_name);
-    rec.def.sprite_id = rec.def.sprite_name.empty() ? -1 : try_get_sprite_id(rec.def.sprite_name);
+    rec.def.sprite_id = resolve_sprite_id(rec.def.sprite_name);
 
     if (auto cb = t.get<sol::optional<sol::protected_function>>("on_use"))
         rec.on_use = *cb;
@@ -322,7 +328,8 @@ void trigger_demo_item_use(const DemoItemInstance& inst, State& state) {
     } catch (const sol::error& e) {
         std::fprintf(stderr, "[demo_items] on_use exception (%s): %s\n",
                      rec.def.id.c_str(), e.what());
-        add_alert(std::string("Pad failed: ") + rec.def.label);
+        if (g_api.engine)
+            add_alert(*g_api.engine, std::string("Pad failed: ") + rec.def.label);
         g_api.state = nullptr;
         return;
     }
@@ -330,7 +337,8 @@ void trigger_demo_item_use(const DemoItemInstance& inst, State& state) {
         sol::error e = r;
         std::fprintf(stderr, "[demo_items] on_use error (%s): %s\n",
                      rec.def.id.c_str(), e.what());
-        add_alert(std::string("Pad error: ") + rec.def.label);
+        if (g_api.engine)
+            add_alert(*g_api.engine, std::string("Pad error: ") + rec.def.label);
     } else {
         std::printf("[demo_items] triggered '%s' (%s)\n",
                     rec.def.id.c_str(), rec.owner_mod.c_str());
@@ -352,4 +360,8 @@ void unload_demo_item_defs() {
 
 void set_demo_item_mod_filter(const std::vector<std::string>&) {
     // Legacy stub retained for session lobby. Filtering handled by ModHost in future work.
+}
+
+void set_demo_items_engine(EngineState* engine) {
+    g_api.engine = engine;
 }

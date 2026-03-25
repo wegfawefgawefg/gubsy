@@ -6,7 +6,7 @@
 #include "engine/layout_editor/layout_editor_panel.hpp"
 #include "engine/layout_editor/layout_editor_overlay.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 #include "engine/graphics.hpp"
@@ -49,20 +49,20 @@ using namespace layout_editor_internal;
 
 namespace layout_editor_internal {
 
-bool has_layouts() {
-    return es && !es->ui_layouts_pool.empty();
+bool has_layouts(const EngineState& engine) {
+    return !engine.ui_layouts_pool.empty();
 }
 
-UILayout* selected_layout_mutable() {
-    if (!has_layouts())
+UILayout* selected_layout_mutable(EngineState& engine) {
+    if (!has_layouts(engine))
         return nullptr;
     g_selected_layout = std::clamp(g_selected_layout, 0,
-                                   static_cast<int>(es->ui_layouts_pool.size()) - 1);
-    return &es->ui_layouts_pool[static_cast<std::size_t>(g_selected_layout)];
+                                   static_cast<int>(engine.ui_layouts_pool.size()) - 1);
+    return &engine.ui_layouts_pool[static_cast<std::size_t>(g_selected_layout)];
 }
 
-const UILayout* selected_layout() {
-    return selected_layout_mutable();
+const UILayout* selected_layout(EngineState& engine) {
+    return selected_layout_mutable(engine);
 }
 
 void append_status(const std::string& text) {
@@ -90,8 +90,8 @@ struct Clipboard {
 Clipboard g_clipboard;
 constexpr float kClipboardNudge = 0.02f;
 
-void ensure_history_for_selection() {
-    UILayout* layout = selected_layout_mutable();
+void ensure_history_for_selection(EngineState& engine) {
+    UILayout* layout = selected_layout_mutable(engine);
     if (!layout) {
         g_history_initialized = false;
         g_history_layout_id = -1;
@@ -198,11 +198,9 @@ bool translate_selection(UILayout& layout, float dx, float dy) {
     return true;
 }
 
-bool select_layout_exact(int id, int width, int height) {
-    if (!es)
-        return false;
-    for (std::size_t i = 0; i < es->ui_layouts_pool.size(); ++i) {
-        const auto& layout = es->ui_layouts_pool[i];
+bool select_layout_exact(EngineState& engine, int id, int width, int height) {
+    for (std::size_t i = 0; i < engine.ui_layouts_pool.size(); ++i) {
+        const auto& layout = engine.ui_layouts_pool[i];
         if (layout.id == id &&
             layout.resolution_width == width &&
             layout.resolution_height == height) {
@@ -213,25 +211,27 @@ bool select_layout_exact(int id, int width, int height) {
     return false;
 }
 
-void auto_follow_selection() {
+void auto_follow_selection(EngineState& engine) {
     if (!g_follow_active_layout)
         return;
     if (g_last_request.valid) {
-        if (select_layout_exact(g_last_request.id,
+        if (select_layout_exact(engine,
+                                g_last_request.id,
                                 g_last_request.width,
                                 g_last_request.height))
             return;
     }
-    if (!current_graphics() || !has_layouts())
+    const Graphics* graphics = current_graphics(engine);
+    if (!graphics || !has_layouts(engine))
         return;
-    int target_w = static_cast<int>(current_graphics()->render_dims.x);
-    int target_h = static_cast<int>(current_graphics()->render_dims.y);
+    int target_w = static_cast<int>(graphics->render_dims.x);
+    int target_h = static_cast<int>(graphics->render_dims.y);
     if (target_w <= 0 || target_h <= 0)
         return;
     int best_idx = g_selected_layout;
     int best_score = INT_MAX;
-    for (std::size_t i = 0; i < es->ui_layouts_pool.size(); ++i) {
-        const auto& layout = es->ui_layouts_pool[i];
+    for (std::size_t i = 0; i < engine.ui_layouts_pool.size(); ++i) {
+        const auto& layout = engine.ui_layouts_pool[i];
         int dw = layout.resolution_width - target_w;
         int dh = layout.resolution_height - target_h;
         int score = dw * dw + dh * dh;
@@ -243,8 +243,8 @@ void auto_follow_selection() {
     g_selected_layout = best_idx;
 }
 
-void handle_mouse_input() {
-    if (!g_active || !es)
+void handle_mouse_input(EngineState& engine) {
+    if (!g_active)
         return;
     if (ImGui::GetCurrentContext()) {
         const ImGuiIO& io = ImGui::GetIO();
@@ -256,13 +256,13 @@ void handle_mouse_input() {
     LayoutEditorViewport viewport = layout_editor_get_viewport();
     if (viewport.width <= 0.0f || viewport.height <= 0.0f)
         return;
-    UILayout* layout = selected_layout_mutable();
+    UILayout* layout = selected_layout_mutable(engine);
     if (!layout)
         return;
 
-    float mouse_x = static_cast<float>(es->device_state.mouse_x);
-    float mouse_y = static_cast<float>(es->device_state.mouse_y);
-    bool mouse_down = (es->device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+    float mouse_x = static_cast<float>(engine.device_state.mouse_x);
+    float mouse_y = static_cast<float>(engine.device_state.mouse_y);
+    bool mouse_down = (engine.device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
 
     bool shift = false;
     bool ctrl = false;
@@ -328,7 +328,7 @@ void handle_mouse_input() {
     g_mouse_was_down = mouse_down;
 }
 
-void handle_hotkeys() {
+void handle_hotkeys(EngineState& engine) {
     if (!ImGui::GetCurrentContext())
         return;
     const ImGuiIO& io = ImGui::GetIO();
@@ -341,8 +341,8 @@ void handle_hotkeys() {
     }
     if (!g_active)
         return;
-    if (has_layouts() && ImGui::IsKeyPressed(ImGuiKey_S) && io.KeyCtrl) {
-        if (const UILayout* layout = selected_layout()) {
+    if (has_layouts(engine) && ImGui::IsKeyPressed(ImGuiKey_S) && io.KeyCtrl) {
+        if (const UILayout* layout = selected_layout(engine)) {
             if (save_ui_layout(*layout))
                 append_status("Layout saved");
             else
@@ -356,9 +356,9 @@ void handle_hotkeys() {
     if (ImGui::IsKeyPressed(ImGuiKey_Minus))
         g_grid_step = std::min(0.5f, g_grid_step + 0.01f);
 
-    handle_mouse_input();
+    handle_mouse_input(engine);
 
-    UILayout* layout = selected_layout_mutable();
+    UILayout* layout = selected_layout_mutable(engine);
     if (!layout)
         return;
     bool ctrl = io.KeyCtrl;
@@ -422,8 +422,6 @@ void layout_editor_notify_active_layout(int layout_id,
     g_last_request.id = layout_id;
     g_last_request.width = resolution_width;
     g_last_request.height = resolution_height;
-    if (g_follow_active_layout)
-        auto_follow_selection();
 }
 
 bool layout_editor_consume_dirty_flag() {
@@ -432,13 +430,13 @@ bool layout_editor_consume_dirty_flag() {
     return dirty;
 }
 
-void layout_editor_begin_frame(float dt) {
+void layout_editor_begin_frame(EngineState& engine, float dt) {
     if (g_follow_active_layout)
-        auto_follow_selection();
-    ensure_history_for_selection();
-    handle_hotkeys();
+        auto_follow_selection(engine);
+    ensure_history_for_selection(engine);
+    handle_hotkeys(engine);
     if (g_active)
-        layout_editor_render_panel(dt);
+        layout_editor_render_panel(engine, dt);
     else
         g_status_timer = std::max(0.0f, g_status_timer - dt);
 }
@@ -451,14 +449,15 @@ bool layout_editor_wants_input() {
     return g_active;
 }
 
-void layout_editor_render(SDL_Renderer* renderer,
+void layout_editor_render(EngineState& engine,
+                          SDL_Renderer* renderer,
                           int screen_width,
                           int screen_height,
                           float origin_x,
                           float origin_y) {
     if (!g_active || !renderer)
         return;
-    if (!has_layouts())
+    if (!has_layouts(engine))
         return;
     layout_editor_set_viewport(LayoutEditorViewport{origin_x,
                                                     origin_y,
@@ -466,7 +465,7 @@ void layout_editor_render(SDL_Renderer* renderer,
                                                     static_cast<float>(screen_height)});
     layout_editor_draw_grid(renderer, screen_width, screen_height,
                             origin_x, origin_y, g_grid_step);
-    if (const UILayout* layout = selected_layout()) {
+    if (const UILayout* layout = selected_layout(engine)) {
         int dragging_idx = layout_editor_dragging_index();
         layout_editor_draw_layout(renderer, *layout, screen_width, screen_height,
                                   origin_x, origin_y, dragging_idx);

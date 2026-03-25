@@ -1,6 +1,6 @@
 #include "engine/binds_profiles.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
 #include "engine/utils.hpp"
@@ -213,10 +213,8 @@ bool save_binds_profile(const BindsProfile& profile) {
     return write_binds_profiles_file(profiles);
 }
 
-bool load_binds_profiles_pool() {
-    if (!es)
-        return false;
-    es->binds_profiles = load_all_binds_profiles();
+bool load_binds_profiles_pool(EngineState& engine) {
+    engine.binds_profiles = load_all_binds_profiles();
     return true;
 }
 
@@ -275,8 +273,8 @@ void bind_2d_analog(BindsProfile& profile, int device_stick, int gubsy_2d_analog
     profile.analog_2d_binds.push_back(new_bind);
 }
 
-std::vector<BindsProfile>& get_binds_profiles_pool() {
-    return es->binds_profiles;
+std::vector<BindsProfile>& get_binds_profiles_pool(EngineState& engine) {
+    return engine.binds_profiles;
 }
 
 void bind_button(BindsProfile& profile, GubsyButton device_button, int gubsy_action) {
@@ -303,7 +301,7 @@ void BindsSchema::add_2d_analog(int analog_id, const std::string& display_name, 
     analogs_2d.push_back({analog_id, display_name, category});
 }
 
-void register_binds_schema(const BindsSchema& schema) {
+void register_binds_schema(EngineState& engine, const BindsSchema& schema) {
     g_schema = schema;
     // Build sets of valid IDs from schema
     std::unordered_set<int> valid_actions;
@@ -360,7 +358,7 @@ void register_binds_schema(const BindsSchema& schema) {
     }
 
     // Reload into engine state
-    load_binds_profiles_pool();
+    load_binds_profiles_pool(engine);
 }
 
 const BindsSchema& get_binds_schema() {

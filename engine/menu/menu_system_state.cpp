@@ -1,7 +1,8 @@
 #include "engine/menu/menu_system_state.hpp"
 
 #include "engine/audio.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
+#include "engine/graphics.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 
@@ -36,6 +37,8 @@ bool g_allow_mouse_focus{true};
 bool g_mouse_focus_locked{false};
 int g_mouse_focus_lock_x{0};
 int g_mouse_focus_lock_y{0};
+int g_last_mouse_x{0};
+int g_last_mouse_y{0};
 
 NavRepeatState g_repeat_up{};
 NavRepeatState g_repeat_down{};
@@ -50,19 +53,19 @@ FocusArrowState g_arrows;
 
 namespace {
 
-void play_menu_sound(const char* key) {
+void play_menu_sound(EngineState& engine, const char* key) {
     if (!key || !*key)
         return;
-    play_sound(key);
+    play_sound(engine, key);
 }
 
 } // namespace
 
-void play_focus_sound() { play_menu_sound("base:ui_cursor_move"); }
-void play_confirm_sound() { play_menu_sound("base:ui_confirm"); }
-void play_cant_sound() { play_menu_sound("base:ui_cant"); }
-void play_left_sound() { play_menu_sound("base:ui_left"); }
-void play_right_sound() { play_menu_sound("base:ui_right"); }
+void play_focus_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_cursor_move"); }
+void play_confirm_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_confirm"); }
+void play_cant_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_cant"); }
+void play_left_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_left"); }
+void play_right_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_right"); }
 
 void lock_mouse_focus_at(int x, int y) {
     g_allow_mouse_focus = false;
@@ -257,17 +260,19 @@ SDL_FRect rect_from_object(const UIObject& obj, int width, int height) {
     return rect;
 }
 
-int measure_text_width(const char* text) {
-    if (!text || !current_graphics() || !current_graphics()->ui_font)
+int measure_text_width(const EngineState& engine, const char* text) {
+    const Graphics* graphics = current_graphics(engine);
+    if (!text || !graphics || !graphics->ui_font)
         return 0;
     int w = 0;
     int h = 0;
-    if (TTF_SizeUTF8(current_graphics()->ui_font, text, &w, &h) != 0)
+    if (TTF_SizeUTF8(graphics->ui_font, text, &w, &h) != 0)
         return 0;
     return w;
 }
 
-void draw_text_with_clip(SDL_Renderer* renderer,
+void draw_text_with_clip(const EngineState&,
+                         SDL_Renderer* renderer,
                          const char* text,
                          int x,
                          int y,
@@ -361,8 +366,7 @@ bool end_text_edit() {
         SDL_StopTextInput();
         g_text_input_enabled = false;
     }
-    if (es)
-        lock_mouse_focus_at(es->device_state.mouse_x, es->device_state.mouse_y);
+    lock_mouse_focus_at(g_last_mouse_x, g_last_mouse_y);
     return modified;
 }
 

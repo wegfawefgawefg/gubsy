@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_server_config.hpp"
@@ -94,8 +94,8 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     }
 }
 
-bool path_exists(const ModCatalogEntry& entry) {
-    const ModManager* manager = current_mod_manager_const();
+bool path_exists(const EngineState& engine, const ModCatalogEntry& entry) {
+    const ModManager* manager = current_mod_manager_const(engine);
     std::filesystem::path mods_root = manager && !manager->root.empty()
                                           ? std::filesystem::path(manager->root)
                                           : runtime_mods_path();
@@ -245,7 +245,7 @@ bool ensure_catalog_loaded(LobbyModsState& st) {
     return true;
 }
 
-void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
+void rebuild_entries(EngineState& engine, LobbyModsState& st, LobbySession& lobby) {
     st.entries.clear();
     std::unordered_map<std::string, bool> enabled_map;
     enabled_map.reserve(lobby.mods.size());
@@ -264,14 +264,14 @@ void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
             entry.game_version = cat.game_version;
             entry.dependencies = cat.dependencies;
             entry.required = cat.required || cat.id == "base";
-            entry.installed = path_exists(cat);
+            entry.installed = path_exists(engine, cat);
             entry.enabled = entry.required || enabled_map[entry.id];
             st.entries.push_back(entry);
             seen.insert(entry.id);
         }
     }
 
-    if (const ModManager* manager = current_mod_manager_const()) {
+    if (const ModManager* manager = current_mod_manager_const(engine)) {
         for (const auto& mod : manager->mods) {
             if (seen.count(mod.name))
                 continue;
@@ -295,7 +295,8 @@ void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
         ensure_lobby_entry(lobby, entry);
 }
 
-bool enable_with_dependencies(LobbyModsState& st,
+bool enable_with_dependencies(EngineState& engine,
+                              LobbyModsState& st,
                               LobbySession& lobby,
                               int entry_index,
                               std::unordered_set<std::string>& visiting,
@@ -336,7 +337,7 @@ bool enable_with_dependencies(LobbyModsState& st,
             visiting.erase(entry.id);
             return false;
         }
-        if (!enable_with_dependencies(st, lobby, dep_entry_idx, visiting, err)) {
+        if (!enable_with_dependencies(engine, st, lobby, dep_entry_idx, visiting, err)) {
             visiting.erase(entry.id);
             return false;
         }
@@ -350,7 +351,8 @@ bool enable_with_dependencies(LobbyModsState& st,
             return false;
         }
         std::string install_err;
-        if (!install_mod_from_catalog(default_mod_server_url(),
+        if (!install_mod_from_catalog(engine,
+                                      default_mod_server_url(),
                                       st.catalog[static_cast<std::size_t>(cat_idx)],
                                       install_err)) {
             err = install_err.empty() ? "Install failed" : install_err;
@@ -396,7 +398,7 @@ void command_toggle_mod(MenuContext& ctx, std::int32_t index) {
     if (entry.enabled) {
         std::string dependent;
         if (has_enabled_dependents(lobby, entry.id, dependent)) {
-            add_alert("Disable dependent mod first: " + dependent);
+            add_alert(ctx.engine, "Disable dependent mod first: " + dependent);
             return;
         }
         int lobby_idx = find_lobby_entry(lobby, entry.id);
@@ -409,8 +411,8 @@ void command_toggle_mod(MenuContext& ctx, std::int32_t index) {
     st.busy = true;
     std::unordered_set<std::string> visiting;
     std::string err;
-    if (!enable_with_dependencies(st, lobby, index, visiting, err)) {
-        add_alert(err.empty() ? "Failed to enable mod" : err);
+    if (!enable_with_dependencies(ctx.engine, st, lobby, index, visiting, err)) {
+        add_alert(ctx.engine, err.empty() ? "Failed to enable mod" : err);
     }
     st.busy = false;
 }
@@ -450,7 +452,7 @@ BuiltScreen build_lobby_mods(MenuContext& ctx) {
 
     auto& st = ctx.state<LobbyModsState>();
     ensure_catalog_loaded(st);
-    rebuild_entries(st, lobby);
+    rebuild_entries(ctx.engine, st, lobby);
     if (st.search_query != st.prev_search) {
         st.prev_search = st.search_query;
         rebuild_filter(st, st.entries);
@@ -631,18 +633,16 @@ BuiltScreen build_lobby_mods(MenuContext& ctx) {
 
 } // namespace
 
-void register_lobby_mods_screen() {
-    if (!es)
-        return;
+void register_lobby_mods_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_toggle_mod == kMenuIdInvalid)
-        g_cmd_toggle_mod = es->menu_commands.register_command(command_toggle_mod);
+        g_cmd_toggle_mod = engine.menu_commands.register_command(command_toggle_mod);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOBBY_MODS;
     def.layout = UILayoutID::LOBBY_MODS_SCREEN;
     def.state_ops = screen_state_ops<LobbyModsState>();
     def.build = build_lobby_mods;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

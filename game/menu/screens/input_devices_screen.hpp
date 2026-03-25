@@ -1,3 +1,5 @@
 #pragma once
 
-void register_input_devices_screen();
+struct EngineState;
+
+void register_input_devices_screen(EngineState& engine);

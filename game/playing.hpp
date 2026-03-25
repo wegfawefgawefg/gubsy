@@ -1,5 +1,7 @@
 #pragma once
 
-void playing_process_inputs(void* app_context);
-void playing_step(void* app_context);
-void playing_draw(void* app_context);
+struct EngineState;
+
+void playing_process_inputs(EngineState& engine, void* app_context);
+void playing_step(EngineState& engine, void* app_context);
+void playing_draw(EngineState& engine, void* app_context);

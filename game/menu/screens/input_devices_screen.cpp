@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/input_sources.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
@@ -99,12 +99,12 @@ BuiltScreen build_input_devices(MenuContext& ctx) {
     lobby_ensure_player_devices(player_index);
 
     st.devices.clear();
-    if (es) {
+    {
         PlayerDeviceKey keyboard_key{};
         PlayerDeviceKey mouse_key{};
         bool has_keyboard = false;
         bool has_mouse = false;
-        for (const auto& src : es->input_sources) {
+        for (const auto& src : ctx.engine.input_sources) {
             if (src.type == InputSourceType::Keyboard) {
                 keyboard_key = PlayerDeviceKey{static_cast<int>(src.type), src.device_id.id};
                 has_keyboard = true;
@@ -257,19 +257,16 @@ BuiltScreen build_input_devices(MenuContext& ctx) {
 
 } // namespace
 
-void register_input_devices_screen() {
-    if (!es)
-        return;
-
+void register_input_devices_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_toggle_device == kMenuIdInvalid)
-        g_cmd_toggle_device = es->menu_commands.register_command(command_toggle_device);
+        g_cmd_toggle_device = engine.menu_commands.register_command(command_toggle_device);
 
     MenuScreenDef def;
     def.id = MenuScreenID::INPUT_DEVICES;
     def.layout = UILayoutID::INPUT_DEVICES_SCREEN;
     def.state_ops = screen_state_ops<InputDevicesState>();
     def.build = build_input_devices;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

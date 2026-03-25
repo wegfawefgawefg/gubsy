@@ -1,6 +1,6 @@
 #include "engine/ui_layouts.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/layout_editor/layout_editor_hooks.hpp"
 #include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
@@ -243,13 +243,13 @@ bool save_ui_layout(const UILayout& layout) {
     return write_ui_layouts_file(layouts);
 }
 
-const UILayout* get_ui_layout_for_resolution(int layout_id, int width, int height) {
-    if (!es)
-        return nullptr;
-
+const UILayout* get_ui_layout_for_resolution(const EngineState& engine,
+                                             int layout_id,
+                                             int width,
+                                             int height) {
     // Find all layouts with matching id
     std::vector<const UILayout*> candidates;
-    for (const auto& layout : es->ui_layouts_pool) {
+    for (const auto& layout : engine.ui_layouts_pool) {
         if (layout.id == layout_id) {
             candidates.push_back(&layout);
         }
@@ -315,19 +315,17 @@ const UIObject* get_ui_object(const UILayout& layout, const std::string& label) 
     return nullptr;
 }
 
-bool load_ui_layouts_pool() {
-    if (!es)
-        return false;
-    es->ui_layouts_pool = read_ui_layouts_from_disk();
+bool load_ui_layouts_pool(EngineState& engine) {
+    engine.ui_layouts_pool = read_ui_layouts_from_disk();
     return true;
 }
 
-void reload_ui_layouts_pool() {
-    load_ui_layouts_pool();
+void reload_ui_layouts_pool(EngineState& engine) {
+    load_ui_layouts_pool(engine);
 }
 
-std::vector<UILayout>& get_ui_layouts_pool() {
-    return es->ui_layouts_pool;
+std::vector<UILayout>& get_ui_layouts_pool(EngineState& engine) {
+    return engine.ui_layouts_pool;
 }
 
 void set_ui_layout_form_factor(UILayoutFormFactor factor) {

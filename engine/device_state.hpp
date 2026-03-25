@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SDL2/SDL.h>
+#include <glm/glm.hpp>
 
 #include <array>
 #include <cstdint>
@@ -20,5 +21,9 @@ struct DeviceState {
     int mouse_dy{0};
     uint32_t mouse_buttons{0};
     int mouse_wheel{0};
+    glm::vec2 mouse_norm{0.0f, 0.0f};
+    glm::vec2 mouse_norm_render{0.0f, 0.0f};
+    glm::vec2 mouse_render_pos{0.0f, 0.0f};
+    bool has_mouse_render_pos{false};
     std::vector<ControllerState> controllers;
 };

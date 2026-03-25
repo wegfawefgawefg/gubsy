@@ -5,6 +5,7 @@
 
 #include "game/actions.hpp"
 
+struct EngineState;
 struct DeviceState;
 
 struct InputFrame {
@@ -17,4 +18,7 @@ struct InputFrame {
     std::array<Analog2D, GameAnalog2D::COUNT> analog_2d{};
 };
 
-void build_input_frame(int player_index, const DeviceState& device_state, InputFrame& out);
+void build_input_frame(EngineState& engine,
+                       int player_index,
+                       const DeviceState& device_state,
+                       InputFrame& out);

@@ -12,20 +12,26 @@ struct Audio {
     std::unordered_map<std::string, Mix_Chunk*> chunks;
 };
 
+struct EngineState;
+
 // Initialize SDL_mixer and allocate the global Audio instance.
-bool init_audio();
+bool init_audio(EngineState& engine);
 
 // Free all loaded chunks, shutdown SDL_mixer, and destroy the global instance.
-void cleanup_audio();
+void cleanup_audio(EngineState& engine);
 
 // Load a sound file (.wav/.ogg) into the global store with a key.
-bool load_sound(const std::string& key, const std::string& path);
+bool load_sound(EngineState& engine, const std::string& key, const std::string& path);
 
 // Play a sound by key from the global store. Optional loops/channel/volume.
-void play_sound(const std::string& key, int loops = 0, int channel = -1, int volume = -1);
+void play_sound(EngineState& engine,
+                const std::string& key,
+                int loops = 0,
+                int channel = -1,
+                int volume = -1);
 
 // Scan the active mod root for audio assets and load them into the global store.
-void load_mod_sounds(const std::filesystem::path& mods_root = {});
+void load_mod_sounds(EngineState& engine, const std::filesystem::path& mods_root = {});
 
 // Load engine-owned built-in sounds.
-void load_builtin_sounds();
+void load_builtin_sounds(EngineState& engine);

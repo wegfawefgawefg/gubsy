@@ -2,7 +2,9 @@
 
 #include <string>
 
-using ModeCallbackFn = void (*)(void* app_context);
+struct EngineState;
+
+using ModeCallbackFn = void (*)(EngineState& engine, void* app_context);
 
 struct ModeDesc {
     std::string name;
@@ -12,10 +14,11 @@ struct ModeDesc {
 };
 
 void register_mode(
+    EngineState& engine,
     const std::string& name, 
     ModeCallbackFn step_fn,
     ModeCallbackFn process_inputs_fn,
     ModeCallbackFn render_fn
 );
 
-const ModeDesc* find_mode(const std::string& name);
+const ModeDesc* find_mode(EngineState& engine, const std::string& name);

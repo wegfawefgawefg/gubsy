@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -61,25 +61,25 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
                    " / " + std::to_string(std::max(1, st.total_pages));
 }
 
-void command_disconnect_client(MenuContext&, std::int32_t member_index) {
+void command_disconnect_client(MenuContext& ctx, std::int32_t member_index) {
     LobbySession& lobby = lobby_state();
     if (!lobby.online.is_host) {
-        add_alert("Only the host can remove clients.");
+        add_alert(ctx.engine, "Only the host can remove clients.");
         return;
     }
     if (member_index < 0 || member_index >= static_cast<int>(lobby.online.members.size()))
         return;
     const LobbyOnlineMember& member = lobby.online.members[static_cast<std::size_t>(member_index)];
     if (member.is_host || member.is_local) {
-        add_alert("Cannot remove the local host.");
+        add_alert(ctx.engine, "Cannot remove the local host.");
         return;
     }
     std::string err;
     if (!lobby_online_remove_member(lobby, member.member_id, err)) {
-        add_alert(err.empty() ? "Failed to remove client." : err);
+        add_alert(ctx.engine, err.empty() ? "Failed to remove client." : err);
         return;
     }
-    add_alert("Removed client " + member.display_name);
+    add_alert(ctx.engine, "Removed client " + member.display_name);
 }
 
 BuiltScreen build_session_clients(MenuContext& ctx) {
@@ -177,18 +177,16 @@ BuiltScreen build_session_clients(MenuContext& ctx) {
 
 } // namespace
 
-void register_session_clients_screen() {
-    if (!es)
-        return;
+void register_session_clients_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_disconnect_client == kMenuIdInvalid)
-        g_cmd_disconnect_client = es->menu_commands.register_command(command_disconnect_client);
+        g_cmd_disconnect_client = engine.menu_commands.register_command(command_disconnect_client);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SESSION_CLIENTS;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<SessionClientsState>();
     def.build = build_session_clients;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

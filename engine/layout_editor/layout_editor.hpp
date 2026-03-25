@@ -2,10 +2,13 @@
 
 #include <SDL2/SDL.h>
 
-void layout_editor_begin_frame(float dt);
+struct EngineState;
+
+void layout_editor_begin_frame(EngineState& engine, float dt);
 bool layout_editor_is_active();
 bool layout_editor_wants_input();
-void layout_editor_render(SDL_Renderer* renderer,
+void layout_editor_render(EngineState& engine,
+                          SDL_Renderer* renderer,
                           int screen_width,
                           int screen_height,
                           float origin_x = 0.0f,

@@ -1,5 +1,6 @@
 #include "engine/audio.hpp"
-#include "globals.hpp"
+#include "engine/engine_state.hpp"
+#include "engine/mods.hpp"
 #include "engine/project_paths.hpp"
 
 #include <algorithm>
@@ -11,17 +12,15 @@
 
 namespace {
 
-Audio* current_audio() {
-    return es ? es->audio : nullptr;
+Audio* current_audio(EngineState& engine) {
+    return engine.audio;
 }
 
 } // namespace
 
-bool init_audio() {
-    if (!es)
-        return false;
-    if (!es->audio)
-        es->audio = new Audio();
+bool init_audio(EngineState& engine) {
+    if (!engine.audio)
+        engine.audio = new Audio();
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) != 0)
         return false;
 
@@ -34,8 +33,8 @@ bool init_audio() {
     return true;
 }
 
-void cleanup_audio() {
-    Audio* audio = current_audio();
+void cleanup_audio(EngineState& engine) {
+    Audio* audio = current_audio(engine);
     if (!audio)
         return;
     for (auto& kv : audio->chunks)
@@ -44,11 +43,11 @@ void cleanup_audio() {
     if (Mix_QuerySpec(nullptr, nullptr, nullptr))
         Mix_CloseAudio();
     delete audio;
-    es->audio = nullptr;
+    engine.audio = nullptr;
 }
 
-bool load_sound(const std::string& key, const std::string& path) {
-    Audio* audio = current_audio();
+bool load_sound(EngineState& engine, const std::string& key, const std::string& path) {
+    Audio* audio = current_audio(engine);
     if (!audio)
         return false;
     Mix_Chunk* ch = Mix_LoadWAV(path.c_str());
@@ -58,8 +57,8 @@ bool load_sound(const std::string& key, const std::string& path) {
     return true;
 }
 
-void play_sound(const std::string& key, int loops, int /*channel_hint*/, int volume) {
-    Audio* audio = current_audio();
+void play_sound(EngineState& engine, const std::string& key, int loops, int /*channel_hint*/, int volume) {
+    Audio* audio = current_audio(engine);
     if (!audio)
         return;
     auto it = audio->chunks.find(key);
@@ -79,20 +78,19 @@ void play_sound(const std::string& key, int loops, int /*channel_hint*/, int vol
     base_volume = std::clamp(base_volume, 0, MIX_MAX_VOLUME);
     float master = 1.0f;
     float sfx = 1.0f;
-    master = std::clamp(es->audio_settings.vol_master, 0.0f, 1.0f);
-    sfx = std::clamp(es->audio_settings.vol_sfx, 0.0f, 1.0f);
+    master = std::clamp(engine.audio_settings.vol_master, 0.0f, 1.0f);
+    sfx = std::clamp(engine.audio_settings.vol_sfx, 0.0f, 1.0f);
     float scaled = static_cast<float>(base_volume) * master * sfx;
     int final_volume = static_cast<int>(std::round(std::clamp(scaled, 0.0f, static_cast<float>(MIX_MAX_VOLUME))));
     Mix_Volume(ch, final_volume); // per-channel, not global
 }
 
-
-void load_mod_sounds(const std::filesystem::path& mods_root) {
+void load_mod_sounds(EngineState& engine, const std::filesystem::path& mods_root) {
 
     std::error_code ec;
     std::filesystem::path mroot = mods_root;
     if (mroot.empty()) {
-        const ModManager* manager = current_mod_manager_const();
+        const ModManager* manager = current_mod_manager_const(engine);
         if (manager && !manager->root.empty())
             mroot = std::filesystem::path(manager->root);
         else
@@ -122,14 +120,14 @@ void load_mod_sounds(const std::filesystem::path& mods_root) {
             if (ext == ".wav" || ext == ".ogg") {
                 std::string stem = p.stem().string();
                 std::string key = modname + ":" + stem;
-                (void)load_sound(key, p.string());
+                (void)load_sound(engine, key, p.string());
             }
         }
     }
 }
 
-void load_builtin_sounds() {
-    if (!current_audio())
+void load_builtin_sounds(EngineState& engine) {
+    if (!current_audio(engine))
         return;
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -149,6 +147,6 @@ void load_builtin_sounds() {
         if (ext != ".wav" && ext != ".ogg")
             continue;
         std::string key = "base:" + entry.path().stem().string();
-        load_sound(key, entry.path().string());
+        load_sound(engine, key, entry.path().string());
     }
 }

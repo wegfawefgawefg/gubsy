@@ -8,8 +8,6 @@
 
 #include <glm/geometric.hpp>
 
-#include "engine/globals.hpp"
-#include "engine/graphics.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
 #include "engine/imgui_layer.hpp"
 
@@ -414,19 +412,7 @@ glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis) {
 }
 
 glm::vec2 normalized_mouse_coords(const DeviceState& state) {
-    if (!current_graphics() || !current_graphics()->renderer)
-        return glm::vec2(0.0f);
-    glm::ivec2 dims = get_window_dimensions();
-    int width = std::max(dims.x, 2);
-    int height = std::max(dims.y, 2);
-    if (width <= 1)
-        width = 2;
-    if (height <= 1)
-        height = 2;
-    float norm_x = (static_cast<float>(state.mouse_x) / static_cast<float>(width - 1)) * 2.0f - 1.0f;
-    float norm_y = (static_cast<float>(state.mouse_y) / static_cast<float>(height - 1)) * 2.0f - 1.0f;
-    return glm::vec2(std::clamp(norm_x, -1.0f, 1.0f),
-                     std::clamp(norm_y, -1.0f, 1.0f));
+    return state.mouse_norm;
 }
 
 bool mouse_render_position(const DeviceState& state,
@@ -434,92 +420,15 @@ bool mouse_render_position(const DeviceState& state,
                            float render_height,
                            float& out_x,
                            float& out_y) {
-    if (!current_graphics() || !current_graphics()->renderer)
+    if (!state.has_mouse_render_pos)
         return false;
     if (render_width <= 1.0f || render_height <= 1.0f)
         return false;
-    if (current_graphics()->render_scale_mode == RenderScaleMode::Stretch) {
-        glm::ivec2 dims = get_window_dimensions();
-        int width = std::max(dims.x, 2);
-        int height = std::max(dims.y, 2);
-        float local_x = static_cast<float>(state.mouse_x) / static_cast<float>(width);
-        float local_y = static_cast<float>(state.mouse_y) / static_cast<float>(height);
-        out_x = std::clamp(local_x, 0.0f, 1.0f) * (render_width - 1.0f);
-        out_y = std::clamp(local_y, 0.0f, 1.0f) * (render_height - 1.0f);
-        return true;
-    }
-
-    int window_w = static_cast<int>(current_graphics()->window_dims.x);
-    int window_h = static_cast<int>(current_graphics()->window_dims.y);
-    if (window_w <= 1 || window_h <= 1)
-        return false;
-
-    float src_w = render_width;
-    float src_h = render_height;
-    float src_aspect = src_w / src_h;
-    float dst_aspect = static_cast<float>(window_w) / static_cast<float>(window_h);
-
-    float draw_x = 0.0f;
-    float draw_y = 0.0f;
-    float draw_w = static_cast<float>(window_w);
-    float draw_h = static_cast<float>(window_h);
-
-    if (dst_aspect >= src_aspect) {
-        draw_h = static_cast<float>(window_h);
-        draw_w = draw_h * src_aspect;
-        draw_x = (static_cast<float>(window_w) - draw_w) * 0.5f;
-    } else {
-        draw_w = static_cast<float>(window_w);
-        draw_h = draw_w / src_aspect;
-        draw_y = (static_cast<float>(window_h) - draw_h) * 0.5f;
-    }
-
-    float pad_left = std::clamp(current_graphics()->safe_area.x, 0.0f, 0.45f) * static_cast<float>(window_w);
-    float pad_right = std::clamp(current_graphics()->safe_area.y, 0.0f, 0.45f) * static_cast<float>(window_w);
-    float pad_top = std::clamp(current_graphics()->safe_area.z, 0.0f, 0.45f) * static_cast<float>(window_h);
-    float pad_bottom = std::clamp(current_graphics()->safe_area.w, 0.0f, 0.45f) * static_cast<float>(window_h);
-
-    draw_x += pad_left;
-    draw_y += pad_top;
-    draw_w = std::max(4.0f, draw_w - (pad_left + pad_right));
-    draw_h = std::max(4.0f, draw_h - (pad_top + pad_bottom));
-
-    float zoom = std::max(0.1f, current_graphics()->preview_zoom);
-    float center_x = draw_x + draw_w * 0.5f;
-    float center_y = draw_y + draw_h * 0.5f;
-    draw_w *= zoom;
-    draw_h *= zoom;
-    draw_x = center_x - draw_w * 0.5f + current_graphics()->preview_pan.x;
-    draw_y = center_y - draw_h * 0.5f + current_graphics()->preview_pan.y;
-
-    float mouse_x = static_cast<float>(state.mouse_x);
-    float mouse_y = static_cast<float>(state.mouse_y);
-
-    if (mouse_x < draw_x || mouse_y < draw_y ||
-        mouse_x > draw_x + draw_w || mouse_y > draw_y + draw_h)
-        return false;
-
-    float local_x = (mouse_x - draw_x) / draw_w;
-    float local_y = (mouse_y - draw_y) / draw_h;
-
-    out_x = std::clamp(local_x, 0.0f, 1.0f) * (render_width - 1.0f);
-    out_y = std::clamp(local_y, 0.0f, 1.0f) * (render_height - 1.0f);
+    out_x = std::clamp(state.mouse_render_pos.x, 0.0f, render_width - 1.0f);
+    out_y = std::clamp(state.mouse_render_pos.y, 0.0f, render_height - 1.0f);
     return true;
 }
 
 glm::vec2 normalized_mouse_coords_in_render(const DeviceState& state) {
-    if (!current_graphics() || !current_graphics()->renderer)
-        return glm::vec2(0.0f);
-    float render_w = static_cast<float>(current_graphics()->render_dims.x);
-    float render_h = static_cast<float>(current_graphics()->render_dims.y);
-    if (render_w <= 1.0f || render_h <= 1.0f)
-        return glm::vec2(0.0f);
-    float px = 0.0f;
-    float py = 0.0f;
-    if (!mouse_render_position(state, render_w, render_h, px, py))
-        return glm::vec2(0.0f);
-    float norm_x = (px / (render_w - 1.0f)) * 2.0f - 1.0f;
-    float norm_y = (py / (render_h - 1.0f)) * 2.0f - 1.0f;
-    return glm::vec2(std::clamp(norm_x, -1.0f, 1.0f),
-                     std::clamp(norm_y, -1.0f, 1.0f));
+    return state.mouse_norm_render;
 }

@@ -1,6 +1,6 @@
 #include "engine/top_level_game_settings.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
 #include "engine/utils.hpp"
@@ -140,10 +140,8 @@ bool save_top_level_game_settings(const TopLevelGameSettings& settings) {
     return write_top_level_settings_file(settings);
 }
 
-bool load_top_level_game_settings_into_state() {
-    if (!es)
-        return false;
-    es->top_level_game_settings = load_top_level_game_settings();
+bool load_top_level_game_settings_into_state(EngineState& engine) {
+    engine.top_level_game_settings = load_top_level_game_settings();
     return true;
 }
 

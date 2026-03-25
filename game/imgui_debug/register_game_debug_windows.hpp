@@ -1,3 +1,5 @@
 #pragma once
 
-void register_game_debug_windows();
+struct EngineState;
+
+void register_game_debug_windows(EngineState& engine);

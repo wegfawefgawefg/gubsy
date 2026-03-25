@@ -7,8 +7,8 @@
 #include <sstream>
 #include <string_view>
 
-#include "engine/globals.hpp"
 #include "engine/input_sources.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/session_contract.hpp"
 #include "engine/player.hpp"
 
@@ -53,8 +53,14 @@ const LobbySession& lobby_state_const() {
     return g_lobby;
 }
 
+void lobby_bind_engine(EngineState& engine) {
+    g_lobby.engine = &engine;
+}
+
 void lobby_reset_defaults() {
+    EngineState* engine = g_lobby.engine;
     g_lobby = LobbySession{};
+    g_lobby.engine = engine;
     g_lobby.max_players = std::clamp(g_lobby.max_players, kMinLobbyPlayers, kMaxLobbyPlayers);
     g_lobby.online.server_url = default_room_server_url();
     g_lobby.online.compatibility = SessionCompatibility::Compatible;
@@ -63,7 +69,8 @@ void lobby_reset_defaults() {
 
 void lobby_refresh_mods() {
     std::vector<LobbyModEntry> fresh;
-    if (const ModManager* manager = current_mod_manager_const()) {
+    if (g_lobby.engine) {
+        if (const ModManager* manager = current_mod_manager_const(*g_lobby.engine)) {
         fresh.reserve(manager->mods.size());
         for (const auto& mod : manager->mods) {
             LobbyModEntry entry;
@@ -76,6 +83,7 @@ void lobby_refresh_mods() {
             entry.required = is_required_mod(mod);
             entry.enabled = mod.enabled || entry.required;
             fresh.push_back(std::move(entry));
+        }
         }
     }
 
@@ -121,16 +129,18 @@ std::string lobby_enabled_mod_signature() {
 }
 
 std::string lobby_local_player_name() {
-    if (UserProfile* profile = get_player_user_profile(0)) {
+    if (g_lobby.engine) {
+        if (UserProfile* profile = get_player_user_profile(*g_lobby.engine, 0)) {
         if (!profile->name.empty())
             return profile->name;
+        }
     }
     return "Player";
 }
 
 int lobby_local_player_count() {
-    if (es)
-        return std::max(1, static_cast<int>(es->players.size()));
+    if (g_lobby.engine)
+        return std::max(1, static_cast<int>(g_lobby.engine->players.size()));
     int count = 0;
     for (bool enabled : g_lobby.local_players) {
         if (enabled)
@@ -147,9 +157,9 @@ void lobby_ensure_player_devices(int player_index) {
     auto& devices = g_lobby.player_devices[static_cast<std::size_t>(player_index)];
     if (!devices.empty())
         return;
-    if (!es)
+    if (!g_lobby.engine)
         return;
-    for (const auto& src : es->input_sources) {
+    for (const auto& src : g_lobby.engine->input_sources) {
         devices.push_back(PlayerDeviceKey{static_cast<int>(src.type), src.device_id.id});
     }
 }

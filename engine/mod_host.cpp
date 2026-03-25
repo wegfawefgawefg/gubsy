@@ -1,6 +1,6 @@
 #include "engine/mod_host.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/mod_api_registry.hpp"
 #include "engine/mods.hpp"
 #include "engine/graphics.hpp"
@@ -18,14 +18,14 @@ namespace {
 std::unordered_map<std::string, ModContext> g_active_mods;
 std::string g_required_version;
 
-void rebuild_mod_assets() {
-    scan_mods_for_sprite_defs();
-    load_all_textures_in_sprite_lookup();
-    load_mod_sounds();
+void rebuild_mod_assets(EngineState& engine) {
+    scan_mods_for_sprite_defs(engine);
+    load_all_textures_in_sprite_lookup(engine);
+    load_mod_sounds(engine);
 }
 
-ModInfo* find_mod_info_mutable(const std::string& id) {
-    ModManager* manager = current_mod_manager();
+ModInfo* find_mod_info_mutable(EngineState& engine, const std::string& id) {
+    ModManager* manager = current_mod_manager(engine);
     if (!manager)
         return nullptr;
     for (auto& info : manager->mods) {
@@ -141,8 +141,8 @@ const std::string& required_mod_game_version() {
     return g_required_version;
 }
 
-bool load_enabled_mods_via_host() {
-    const ModManager* manager = current_mod_manager_const();
+bool load_enabled_mods_via_host(EngineState& engine) {
+    const ModManager* manager = current_mod_manager_const(engine);
     if (!manager)
         return false;
     std::vector<std::string> enabled;
@@ -150,17 +150,17 @@ bool load_enabled_mods_via_host() {
         if (mod.enabled)
             enabled.push_back(mod.name);
     }
-    return set_active_mods(enabled);
+    return set_active_mods(engine, enabled);
 }
 
-bool reload_all_mods_via_host() {
-    auto ids = get_active_mod_ids();
+bool reload_all_mods_via_host(EngineState& engine) {
+    auto ids = get_active_mod_ids(engine);
     if (ids.empty())
         return false;
-    return reload_mods(ids);
+    return reload_mods(engine, ids);
 }
 
-void unload_all_mods_via_host() {
+void unload_all_mods_via_host(EngineState&) {
     std::vector<std::string> ids;
     ids.reserve(g_active_mods.size());
     for (auto const& [id, _] : g_active_mods)
@@ -170,27 +170,27 @@ void unload_all_mods_via_host() {
     g_active_mods.clear();
 }
 
-bool activate_mod(const std::string& id) {
-    auto current = get_active_mod_ids();
+bool activate_mod(EngineState& engine, const std::string& id) {
+    auto current = get_active_mod_ids(engine);
     if (std::find(current.begin(), current.end(), id) == current.end())
         current.push_back(id);
-    return set_active_mods(current);
+    return set_active_mods(engine, current);
 }
 
-bool deactivate_mod(const std::string& id) {
-    auto current = get_active_mod_ids();
+bool deactivate_mod(EngineState& engine, const std::string& id) {
+    auto current = get_active_mod_ids(engine);
     auto it = std::remove(current.begin(), current.end(), id);
     if (it == current.end())
         return false;
     current.erase(it, current.end());
-    return set_active_mods(current);
+    return set_active_mods(engine, current);
 }
 
-bool reload_mod(const std::string& id) {
-    return reload_mods({id});
+bool reload_mod(EngineState& engine, const std::string& id) {
+    return reload_mods(engine, {id});
 }
 
-bool reload_mods(const std::vector<std::string>& ids) {
+bool reload_mods(EngineState& engine, const std::vector<std::string>& ids) {
     if (ids.empty())
         return false;
     bool changed = false;
@@ -199,9 +199,9 @@ bool reload_mods(const std::vector<std::string>& ids) {
             changed = true;
     }
     if (changed)
-        rebuild_mod_assets();
+        rebuild_mod_assets(engine);
     for (const auto& id : ids) {
-        if (auto* info = find_mod_info_mutable(id)) {
+        if (auto* info = find_mod_info_mutable(engine, id)) {
             if (!info->enabled)
                 info->enabled = true;
             if (activate_internal(*info))
@@ -211,8 +211,8 @@ bool reload_mods(const std::vector<std::string>& ids) {
     return changed;
 }
 
-bool set_active_mods(const std::vector<std::string>& ids) {
-    ModManager* manager = current_mod_manager();
+bool set_active_mods(EngineState& engine, const std::vector<std::string>& ids) {
+    ModManager* manager = current_mod_manager(engine);
     if (!manager)
         return false;
     std::unordered_set<std::string> desired(ids.begin(), ids.end());
@@ -238,7 +238,7 @@ bool set_active_mods(const std::vector<std::string>& ids) {
     }
 
     if (changed)
-        rebuild_mod_assets();
+        rebuild_mod_assets(engine);
 
     for (auto& mod : manager->mods) {
         if (!desired.count(mod.name))
@@ -252,9 +252,9 @@ bool set_active_mods(const std::vector<std::string>& ids) {
     return changed;
 }
 
-std::vector<std::string> get_active_mod_ids() {
+std::vector<std::string> get_active_mod_ids(EngineState& engine) {
     std::vector<std::string> ids;
-    const ModManager* manager = current_mod_manager_const();
+    const ModManager* manager = current_mod_manager_const(engine);
     if (!manager) {
         ids.reserve(g_active_mods.size());
         for (const auto& [id, _] : g_active_mods)

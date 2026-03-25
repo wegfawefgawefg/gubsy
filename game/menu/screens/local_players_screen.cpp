@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -79,40 +79,36 @@ bool from_settings_hub(const MenuContext& ctx) {
 }
 
 void command_add_player(MenuContext& ctx, std::int32_t) {
-    if (!es)
-        return;
-    int count = static_cast<int>(es->players.size());
+    int count = static_cast<int>(ctx.engine.players.size());
     if (count >= kMaxLocalPlayers)
         return;
-    int new_index = add_player();
+    int new_index = add_player(ctx.engine);
     LobbySession& lobby = lobby_state();
     if (new_index >= 0 && !lobby.cached_profile_ids.empty()) {
         int profile_id = lobby.cached_profile_ids.back();
         lobby.cached_profile_ids.pop_back();
-        set_user_profile_for_player(new_index, profile_id);
+        set_user_profile_for_player(ctx.engine, new_index, profile_id);
     }
     if (!from_settings_hub(ctx)) {
-        if (lobby.privacy == 0 && es->players.size() > 1)
+        if (lobby.privacy == 0 && ctx.engine.players.size() > 1)
             lobby.privacy = 1;
         if (lobby.privacy >= 2) {
-            int new_count = static_cast<int>(es->players.size());
+            int new_count = static_cast<int>(ctx.engine.players.size());
             if (lobby.max_players < new_count)
                 lobby.max_players = new_count;
         }
     }
 }
 
-void command_remove_player(MenuContext&, std::int32_t) {
-    if (!es)
-        return;
-    int count = static_cast<int>(es->players.size());
+void command_remove_player(MenuContext& ctx, std::int32_t) {
+    int count = static_cast<int>(ctx.engine.players.size());
     if (count <= 1)
         return;
-    remove_player(count - 1);
+    remove_player(ctx.engine, count - 1);
 }
 
 void command_open_player(MenuContext& ctx, std::int32_t index) {
-    if (!es || index < 0 || index >= static_cast<int>(es->players.size()))
+    if (index < 0 || index >= static_cast<int>(ctx.engine.players.size()))
         return;
     lobby_state().selected_player_index = index;
     ctx.manager.push_screen(MenuScreenID::PLAYER_SETTINGS);
@@ -120,7 +116,7 @@ void command_open_player(MenuContext& ctx, std::int32_t index) {
 
 BuiltScreen build_local_players(MenuContext& ctx) {
     auto& st = ctx.state<LocalPlayersState>();
-    int total_players = es ? static_cast<int>(es->players.size()) : 1;
+    int total_players = std::max(1, static_cast<int>(ctx.engine.players.size()));
     st.total_pages = std::max(1, (total_players + kPlayersPerPage - 1) / kPlayersPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
     st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
@@ -178,8 +174,8 @@ BuiltScreen build_local_players(MenuContext& ctx) {
         int player_index = start_index + i;
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(LocalPlayersObjectID::CARD0 + i);
         WidgetId widget_id = static_cast<WidgetId>(kFirstCardWidgetId + static_cast<WidgetId>(i));
-        if (es && player_index < static_cast<int>(es->players.size())) {
-            const Player& player = es->players[static_cast<std::size_t>(player_index)];
+        if (player_index < static_cast<int>(ctx.engine.players.size())) {
+            const Player& player = ctx.engine.players[static_cast<std::size_t>(player_index)];
             MenuWidget card;
             card.id = widget_id;
             card.slot = slot;
@@ -256,23 +252,20 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 
 } // namespace
 
-void register_local_players_screen() {
-    if (!es)
-        return;
-
+void register_local_players_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_add_player == kMenuIdInvalid)
-        g_cmd_add_player = es->menu_commands.register_command(command_add_player);
+        g_cmd_add_player = engine.menu_commands.register_command(command_add_player);
     if (g_cmd_remove_player == kMenuIdInvalid)
-        g_cmd_remove_player = es->menu_commands.register_command(command_remove_player);
+        g_cmd_remove_player = engine.menu_commands.register_command(command_remove_player);
     if (g_cmd_open_player == kMenuIdInvalid)
-        g_cmd_open_player = es->menu_commands.register_command(command_open_player);
+        g_cmd_open_player = engine.menu_commands.register_command(command_open_player);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOCAL_PLAYERS;
     def.layout = UILayoutID::LOCAL_PLAYERS_SCREEN;
     def.state_ops = screen_state_ops<LocalPlayersState>();
     def.build = build_local_players;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

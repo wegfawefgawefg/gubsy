@@ -8,7 +8,7 @@
 #include "engine/alerts.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/binds_ui_helpers.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -61,10 +61,8 @@ MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* la
     return w;
 }
 
-BindsProfile* find_profile(int profile_id) {
-    if (!es)
-        return nullptr;
-    for (auto& profile : es->binds_profiles) {
+BindsProfile* find_profile(EngineState& engine, int profile_id) {
+    for (auto& profile : engine.binds_profiles) {
         if (profile.id == profile_id)
             return &profile;
     }
@@ -113,18 +111,16 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 
 void command_select_input(MenuContext& ctx, std::int32_t choice_index) {
     auto& st = ctx.state<BindsChooseInputState>();
-    if (!es)
-        return;
     if (choice_index < 0 || choice_index >= static_cast<int>(st.choices.size()))
         return;
 
-    int profile_id = es->selected_binds_profile_id;
-    BindsProfile* profile = find_profile(profile_id);
+    int profile_id = ctx.engine.selected_binds_profile_id;
+    BindsProfile* profile = find_profile(ctx.engine, profile_id);
     if (!profile)
         return;
 
-    int action_id = es->selected_binds_action_id;
-    int mapping_index = es->selected_binds_mapping_index;
+    int action_id = ctx.engine.selected_binds_action_id;
+    int mapping_index = ctx.engine.selected_binds_mapping_index;
     int device_code = st.choices[static_cast<std::size_t>(choice_index)].code;
 
     if (device_code == -1) {
@@ -152,7 +148,7 @@ void command_select_input(MenuContext& ctx, std::int32_t choice_index) {
         }
         if (removed) {
             save_binds_profile(*profile);
-            add_alert("Binding cleared");
+            add_alert(ctx.engine, "Binding cleared");
         }
         ctx.manager.pop_screen();
         return;
@@ -179,19 +175,13 @@ void command_select_input(MenuContext& ctx, std::int32_t choice_index) {
     }
 
     save_binds_profile(*profile);
-    add_alert("Input bound");
+    add_alert(ctx.engine, "Input bound");
     ctx.manager.pop_screen();
 }
 
 BuiltScreen build_binds_choose_input(MenuContext& ctx) {
     auto& st = ctx.state<BindsChooseInputState>();
-    if (!es) {
-        BuiltScreen built;
-        built.layout = UILayoutID::SETTINGS_SCREEN;
-        return built;
-    }
-
-    st.action_type = static_cast<BindsActionType>(es->selected_binds_action_type);
+    st.action_type = static_cast<BindsActionType>(ctx.engine.selected_binds_action_type);
     st.choices.clear();
     st.choices.reserve(binds_input_choices(st.action_type).size() + 1);
     st.choices.push_back(InputChoice{-1, "None"});
@@ -320,18 +310,16 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
 
 } // namespace
 
-void register_binds_choose_input_screen() {
-    if (!es)
-        return;
+void register_binds_choose_input_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_select_input == kMenuIdInvalid)
-        g_cmd_select_input = es->menu_commands.register_command(command_select_input);
+        g_cmd_select_input = engine.menu_commands.register_command(command_select_input);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_CHOOSE_INPUT;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<BindsChooseInputState>();
     def.build = build_binds_choose_input;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

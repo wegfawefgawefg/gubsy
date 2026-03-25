@@ -1,6 +1,6 @@
 #include "engine/audio_settings.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/parser.hpp"
 #include "engine/utils.hpp"
 
@@ -21,10 +21,7 @@ void apply_volume_if_present(const sexp::SValue& root,
 
 } // namespace
 
-bool load_audio_settings(const std::string& path) {
-    if (!es)
-        return false;
-
+bool load_audio_settings(EngineState& engine, const std::string& path) {
     std::ifstream in(path);
     if (!in.is_open())
         return false;
@@ -47,16 +44,13 @@ bool load_audio_settings(const std::string& path) {
     if (!root)
         return false;
 
-    apply_volume_if_present(*root, "master", es->audio_settings.vol_master);
-    apply_volume_if_present(*root, "music", es->audio_settings.vol_music);
-    apply_volume_if_present(*root, "sfx", es->audio_settings.vol_sfx);
+    apply_volume_if_present(*root, "master", engine.audio_settings.vol_master);
+    apply_volume_if_present(*root, "music", engine.audio_settings.vol_music);
+    apply_volume_if_present(*root, "sfx", engine.audio_settings.vol_sfx);
     return true;
 }
 
-bool save_audio_settings(const std::string& path) {
-    if (!es)
-        return false;
-
+bool save_audio_settings(const EngineState& engine, const std::string& path) {
     namespace fs = std::filesystem;
     fs::path target(path);
     if (target.has_parent_path()) {
@@ -73,9 +67,9 @@ bool save_audio_settings(const std::string& path) {
     };
 
     out << "(audio_settings\n";
-    out << "  (master " << clamp01(es->audio_settings.vol_master) << ")\n";
-    out << "  (music " << clamp01(es->audio_settings.vol_music) << ")\n";
-    out << "  (sfx " << clamp01(es->audio_settings.vol_sfx) << ")\n";
+    out << "  (master " << clamp01(engine.audio_settings.vol_master) << ")\n";
+    out << "  (music " << clamp01(engine.audio_settings.vol_music) << ")\n";
+    out << "  (sfx " << clamp01(engine.audio_settings.vol_sfx) << ")\n";
     out << ")\n";
     return out.good();
 }

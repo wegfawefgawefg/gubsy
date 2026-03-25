@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -40,36 +40,34 @@ MenuCommandId g_cmd_start_game = kMenuIdInvalid;
 MenuCommandId g_cmd_open_game_settings = kMenuIdInvalid;
 MenuCommandId g_cmd_open_local_players = kMenuIdInvalid;
 
-void trim_players_to_max(LobbySession& lobby, int max_players, bool notify) {
-    if (!es)
-        return;
+void trim_players_to_max(EngineState& engine, LobbySession& lobby, int max_players, bool notify) {
     int dropped = 0;
-    while (es->players.size() > static_cast<std::size_t>(max_players)) {
-        const Player& player = es->players.back();
+    while (engine.players.size() > static_cast<std::size_t>(max_players)) {
+        const Player& player = engine.players.back();
         if (player.has_active_profile)
             lobby.cached_profile_ids.push_back(player.profile.id);
-        remove_player(static_cast<int>(es->players.size()) - 1);
+        remove_player(engine, static_cast<int>(engine.players.size()) - 1);
         ++dropped;
     }
     if (dropped > 0 && notify) {
         std::string text = "Dropped " + std::to_string(dropped) +
                            (dropped == 1 ? " player" : " players") +
                            " (over max players)";
-        add_alert(text);
+        add_alert(engine, text);
     }
-    if (!es->players.empty())
+    if (!engine.players.empty())
         lobby.selected_player_index =
-            std::clamp(lobby.selected_player_index, 0, static_cast<int>(es->players.size()) - 1);
+            std::clamp(lobby.selected_player_index, 0, static_cast<int>(engine.players.size()) - 1);
 }
 
-void command_privacy_delta(MenuContext&, std::int32_t delta) {
+void command_privacy_delta(MenuContext& ctx, std::int32_t delta) {
     LobbySession& lobby = lobby_state();
     int count = static_cast<int>(kPrivacyLabels.size());
     if (count <= 0)
         return;
     lobby.privacy = (lobby.privacy + delta + count) % count;
-    if (lobby.privacy == 0 && es) {
-        trim_players_to_max(lobby, 1, false);
+    if (lobby.privacy == 0) {
+        trim_players_to_max(ctx.engine, lobby, 1, false);
         lobby.selected_player_index = 0;
     }
     if (lobby.privacy >= 2) {
@@ -79,21 +77,21 @@ void command_privacy_delta(MenuContext&, std::int32_t delta) {
     }
 }
 
-void command_max_players_delta(MenuContext&, std::int32_t delta) {
+void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
     LobbySession& lobby = lobby_state();
     lobby.max_players = std::clamp(lobby.max_players + delta, kMinLobbyPlayers, kMaxLobbyPlayers);
     if (lobby.max_players < kMinLobbyPlayers)
         lobby.max_players = kMaxLobbyPlayers;
     if (lobby.max_players == 1) {
         lobby.privacy = 0;
-        trim_players_to_max(lobby, 1, false);
+        trim_players_to_max(ctx.engine, lobby, 1, false);
         lobby.selected_player_index = 0;
         return;
     }
     if (lobby.privacy >= 2) {
         int local_count = lobby_local_player_count();
         if (local_count > lobby.max_players)
-            trim_players_to_max(lobby, lobby.max_players, true);
+            trim_players_to_max(ctx.engine, lobby, lobby.max_players, true);
     }
 }
 
@@ -108,12 +106,12 @@ void command_browse_servers(MenuContext& ctx, std::int32_t) {
 void command_start_game(MenuContext& ctx, std::int32_t) {
     LobbySession& lobby = lobby_state();
     if (lobby.online.in_room && !lobby.online.is_host) {
-        add_alert("Only the host can start an online lobby.");
+        add_alert(ctx.engine, "Only the host can start an online lobby.");
         return;
     }
     lobby_refresh_mods();
     auto enabled = lobby_enabled_mod_ids();
-    set_active_mods(enabled);
+    set_active_mods(ctx.engine, enabled);
     lobby.online.contract.session_phase = "in_game";
     ctx.engine.mode = modes::PLAYING;
 }
@@ -153,8 +151,8 @@ MenuWidget make_option_widget(WidgetId id,
     return widget;
 }
 
-std::string default_lobby_name() {
-    if (UserProfile* profile = get_player_user_profile(0)) {
+std::string default_lobby_name(EngineState& engine) {
+    if (UserProfile* profile = get_player_user_profile(engine, 0)) {
         if (!profile->name.empty())
             return profile->name + "'s Lobby";
     }
@@ -167,7 +165,7 @@ BuiltScreen build_lobby(MenuContext& ctx) {
     lobby_refresh_mods();
     lobby_online_tick(lobby);
     if (!lobby.name_initialized) {
-        lobby.session_name = default_lobby_name();
+        lobby.session_name = default_lobby_name(ctx.engine);
         lobby.name_initialized = true;
     }
 
@@ -338,29 +336,26 @@ BuiltScreen build_lobby(MenuContext& ctx) {
 
 } // namespace
 
-void register_lobby_screen() {
-    if (!es)
-        return;
-
+void register_lobby_screen(EngineState& engine) {
     if (g_cmd_privacy_delta == kMenuIdInvalid)
-        g_cmd_privacy_delta = es->menu_commands.register_command(command_privacy_delta);
+        g_cmd_privacy_delta = engine.menu_commands.register_command(command_privacy_delta);
     if (g_cmd_max_players_delta == kMenuIdInvalid)
-        g_cmd_max_players_delta = es->menu_commands.register_command(command_max_players_delta);
+        g_cmd_max_players_delta = engine.menu_commands.register_command(command_max_players_delta);
     if (g_cmd_open_mods == kMenuIdInvalid)
-        g_cmd_open_mods = es->menu_commands.register_command(command_open_mods);
+        g_cmd_open_mods = engine.menu_commands.register_command(command_open_mods);
     if (g_cmd_browse_servers == kMenuIdInvalid)
-        g_cmd_browse_servers = es->menu_commands.register_command(command_browse_servers);
+        g_cmd_browse_servers = engine.menu_commands.register_command(command_browse_servers);
     if (g_cmd_start_game == kMenuIdInvalid)
-        g_cmd_start_game = es->menu_commands.register_command(command_start_game);
+        g_cmd_start_game = engine.menu_commands.register_command(command_start_game);
     if (g_cmd_open_game_settings == kMenuIdInvalid)
-        g_cmd_open_game_settings = es->menu_commands.register_command(command_open_game_settings);
+        g_cmd_open_game_settings = engine.menu_commands.register_command(command_open_game_settings);
     if (g_cmd_open_local_players == kMenuIdInvalid)
-        g_cmd_open_local_players = es->menu_commands.register_command(command_open_local_players);
+        g_cmd_open_local_players = engine.menu_commands.register_command(command_open_local_players);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOBBY;
     def.layout = UILayoutID::LOBBY_SCREEN;
     def.state_ops = screen_state_ops<int>();
     def.build = build_lobby;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

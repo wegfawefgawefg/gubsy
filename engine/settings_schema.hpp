@@ -5,6 +5,8 @@
 
 #include "engine/settings_types.hpp"
 
+struct EngineState;
+
 enum class SettingScope {
     Install,
     Profile
@@ -59,4 +61,4 @@ private:
 };
 
 const SettingsSchema& get_settings_schema();
-void register_settings_schema(const SettingsSchema& schema);
+void register_settings_schema(EngineState& engine, const SettingsSchema& schema);

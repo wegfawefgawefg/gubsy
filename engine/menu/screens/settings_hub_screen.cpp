@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -171,7 +171,7 @@ void rebuild_filter(SettingsHubState& st) {
 }
 
 BuiltScreen build_settings_hub(MenuContext& ctx) {
-    SettingsCatalog catalog = build_settings_catalog(ctx.player_index);
+    SettingsCatalog catalog = build_settings_catalog(ctx.engine, ctx.player_index);
     auto& st = ctx.state<SettingsHubState>();
     st.cards.clear();
     st.cards.reserve(catalog.categories.size());
@@ -179,10 +179,10 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         CategoryCard card;
         card.tag = tag;
         card.item_count = static_cast<int>(entries.size());
-        card.screen_id = ensure_settings_category_screen(tag);
+        card.screen_id = ensure_settings_category_screen(ctx.engine, tag);
         if (card.tag == "Profiles") {
             card.screen_id = MenuScreenID::PROFILES;
-            card.item_count = es ? static_cast<int>(es->user_profiles_pool.size()) : 0;
+            card.item_count = static_cast<int>(ctx.engine.user_profiles_pool.size());
         }
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
@@ -193,7 +193,7 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     if (binds_it == st.cards.end()) {
         CategoryCard card;
         card.tag = "Binds Profiles";
-        card.item_count = es ? static_cast<int>(es->binds_profiles.size()) : 0;
+        card.item_count = static_cast<int>(ctx.engine.binds_profiles.size());
         card.screen_id = MenuScreenID::BINDS_PROFILES;
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
@@ -365,17 +365,14 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
 
 } // namespace
 
-void register_settings_hub_screen() {
-    if (!es)
-        return;
-
+void register_settings_hub_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SETTINGS;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<SettingsHubState>();
     def.build = build_settings_hub;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

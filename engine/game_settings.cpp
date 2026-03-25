@@ -1,6 +1,6 @@
 #include "engine/game_settings.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
 #include "engine/settings_schema.hpp"
@@ -208,10 +208,8 @@ bool save_game_settings(const GameSettings& settings) {
     return write_game_settings_file(settings_list);
 }
 
-bool load_game_settings_pool() {
-    if (!es)
-        return false;
-    es->game_settings_pool = load_all_game_settings();
+bool load_game_settings_pool(EngineState& engine) {
+    engine.game_settings_pool = load_all_game_settings();
     return true;
 }
 

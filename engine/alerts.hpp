@@ -14,7 +14,9 @@ struct Alert {
 };
 
 // Age and prune alerts using provided dt seconds.
-void age_and_prune_alerts(float dt);
+struct EngineState;
+
+void age_and_prune_alerts(EngineState& engine, float dt);
 
 // Add a new alert with the given text.
-void add_alert(const std::string& text);
+void add_alert(EngineState& engine, const std::string& text);

@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -53,16 +53,16 @@ void command_host_or_leave(MenuContext& ctx, std::int32_t) {
     std::string err;
     if (lobby.online.in_room) {
         if (!lobby_online_leave_room(lobby, err) && !err.empty())
-            add_alert(err);
+            add_alert(ctx.engine, err);
         else
-            add_alert("Left online room.");
+            add_alert(ctx.engine, "Left online room.");
         return;
     }
     if (!lobby_online_host_current_room(lobby, err)) {
-        add_alert(err.empty() ? "Failed to host room." : err);
+        add_alert(ctx.engine, err.empty() ? "Failed to host room." : err);
         return;
     }
-    add_alert("Hosted online room: " + lobby.online.room_code);
+    add_alert(ctx.engine, "Hosted online room: " + lobby.online.room_code);
     ctx.manager.pop_screen();
 }
 
@@ -71,16 +71,16 @@ void command_join_room(MenuContext& ctx, std::int32_t index) {
     if (index < 0 || index >= static_cast<int>(lobby.online.discovered_rooms.size()))
         return;
     if (lobby.online.in_room) {
-        add_alert("Leave the current room before joining another.");
+        add_alert(ctx.engine, "Leave the current room before joining another.");
         return;
     }
     std::string err;
     const auto& room = lobby.online.discovered_rooms[static_cast<std::size_t>(index)];
     if (!lobby_online_join_room(lobby, room.room_code, err)) {
-        add_alert(err.empty() ? "Failed to join room." : err);
+        add_alert(ctx.engine, err.empty() ? "Failed to join room." : err);
         return;
     }
-    add_alert("Joined room " + room.room_code);
+    add_alert(ctx.engine, "Joined room " + room.room_code);
     ctx.manager.pop_screen();
 }
 
@@ -184,19 +184,16 @@ BuiltScreen build_server_browser(MenuContext& ctx) {
 
 } // namespace
 
-void register_server_browser_screen() {
-    if (!es)
-        return;
-
+void register_server_browser_screen(EngineState& engine) {
     if (g_cmd_host_or_leave == kMenuIdInvalid)
-        g_cmd_host_or_leave = es->menu_commands.register_command(command_host_or_leave);
+        g_cmd_host_or_leave = engine.menu_commands.register_command(command_host_or_leave);
     if (g_cmd_join_room == kMenuIdInvalid)
-        g_cmd_join_room = es->menu_commands.register_command(command_join_room);
+        g_cmd_join_room = engine.menu_commands.register_command(command_join_room);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SERVER_BROWSER;
     def.layout = UILayoutID::SERVER_BROWSER_SCREEN;
     def.state_ops = screen_state_ops<ServerBrowserState>();
     def.build = build_server_browser;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

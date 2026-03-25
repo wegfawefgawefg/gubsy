@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+struct EngineState;
 struct UserProfile {
     int id;
     std::string name;
@@ -26,7 +27,7 @@ bool delete_user_profile(int profile_id);
 /*
  load all user profiles into the engine state global
 */
-bool load_user_profiles_pool();
+bool load_user_profiles_pool(EngineState& engine);
 
 /*
  generate a random 8-digit user profile id that doesn't conflict with existing ids
@@ -42,4 +43,4 @@ UserProfile create_default_user_profile();
 /*
  get the global pool of user profiles
 */
-std::vector<UserProfile>& get_user_profiles_pool();
+std::vector<UserProfile>& get_user_profiles_pool(EngineState& engine);

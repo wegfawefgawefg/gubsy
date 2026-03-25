@@ -1,6 +1,6 @@
 #include "engine/menu/screens/mods_screen.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_ids.hpp"
@@ -45,8 +45,8 @@ struct ModsScreenState {
 
 bool version_compatible(const ModCatalogEntry& entry);
 
-bool path_exists(const ModCatalogEntry& entry) {
-    const ModManager* manager = current_mod_manager_const();
+bool path_exists(const EngineState& engine, const ModCatalogEntry& entry) {
+    const ModManager* manager = current_mod_manager_const(engine);
     std::filesystem::path mods_root = manager && !manager->root.empty()
                                           ? std::filesystem::path(manager->root)
                                           : runtime_mods_path();
@@ -55,14 +55,14 @@ bool path_exists(const ModCatalogEntry& entry) {
     return std::filesystem::exists(mods_root / folder, ec);
 }
 
-void update_install_flags(ModsScreenState& state) {
+void update_install_flags(const EngineState& engine, ModsScreenState& state) {
     for (auto& entry : state.catalog) {
         if (entry.required) {
             entry.installed = true;
             entry.status_text = "Core";
             continue;
         }
-        entry.installed = path_exists(entry);
+        entry.installed = path_exists(engine, entry);
         bool version_ok = version_compatible(entry);
         if (entry.installed)
             entry.status_text = version_ok ? "Installed" : "Incompatible";
@@ -241,7 +241,7 @@ void rebuild_filter(ModsScreenState& state) {
     state.page_text = "Page " + std::to_string(state.page + 1) + " / " + std::to_string(max_page + 1);
 }
 
-bool ensure_catalog_loaded(ModsScreenState& state) {
+bool ensure_catalog_loaded(EngineState& engine, ModsScreenState& state) {
     if (state.loaded || state.busy)
         return true;
     state.busy = true;
@@ -251,7 +251,7 @@ bool ensure_catalog_loaded(ModsScreenState& state) {
         state.busy = false;
         return false;
     }
-    update_install_flags(state);
+    update_install_flags(engine, state);
     rebuild_filter(state);
     state.status = "Catalog loaded";
     state.loaded = true;
@@ -259,7 +259,8 @@ bool ensure_catalog_loaded(ModsScreenState& state) {
     return true;
 }
 
-bool install_recursive(ModsScreenState& state,
+bool install_recursive(EngineState& engine,
+                       ModsScreenState& state,
                        int catalog_idx,
                        std::unordered_set<std::string>& visiting,
                        std::string& err) {
@@ -282,20 +283,23 @@ bool install_recursive(ModsScreenState& state,
             visiting.erase(entry.id);
             return false;
         }
-        if (!install_recursive(state, dep_idx, visiting, err)) {
+        if (!install_recursive(engine, state, dep_idx, visiting, err)) {
             visiting.erase(entry.id);
             return false;
         }
     }
     entry.status_text = "Installing...";
-    bool ok = install_mod_from_catalog(default_mod_server_url(), entry, err);
+    bool ok = install_mod_from_catalog(engine, default_mod_server_url(), entry, err);
     entry.installed = ok;
     entry.status_text = ok ? "Installed" : "Install failed";
     visiting.erase(entry.id);
     return ok;
 }
 
-bool uninstall_with_checks(ModsScreenState& state, int catalog_idx, std::string& err) {
+bool uninstall_with_checks(EngineState& engine,
+                           ModsScreenState& state,
+                           int catalog_idx,
+                           std::string& err) {
     if (catalog_idx < 0 || catalog_idx >= static_cast<int>(state.catalog.size()))
         return false;
     ModCatalogEntry& entry = state.catalog[static_cast<std::size_t>(catalog_idx)];
@@ -312,7 +316,7 @@ bool uninstall_with_checks(ModsScreenState& state, int catalog_idx, std::string&
         }
     }
     entry.status_text = "Removing...";
-    if (!uninstall_mod(entry, err)) {
+    if (!uninstall_mod(engine, entry, err)) {
         entry.status_text = "Remove failed";
         return false;
     }
@@ -345,12 +349,12 @@ void command_install(MenuContext& ctx, std::int32_t payload) {
     state.busy = true;
     std::string err;
     std::unordered_set<std::string> visiting;
-    if (!install_recursive(state, payload, visiting, err)) {
+    if (!install_recursive(ctx.engine, state, payload, visiting, err)) {
         state.status = err.empty() ? "Install failed" : err;
     } else {
         state.status = "Installed mod";
     }
-    update_install_flags(state);
+    update_install_flags(ctx.engine, state);
     recalc_page_text(state);
     state.busy = false;
 }
@@ -361,12 +365,12 @@ void command_uninstall(MenuContext& ctx, std::int32_t payload) {
         return;
     state.busy = true;
     std::string err;
-    if (!uninstall_with_checks(state, payload, err)) {
+    if (!uninstall_with_checks(ctx.engine, state, payload, err)) {
         state.status = err.empty() ? "Uninstall failed" : err;
-        add_alert(state.status);
+        add_alert(ctx.engine, state.status);
     } else
         state.status = "Removed mod";
-    update_install_flags(state);
+    update_install_flags(ctx.engine, state);
     recalc_page_text(state);
     state.busy = false;
 }
@@ -378,7 +382,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     widgets.clear();
     frame_actions.clear();
 
-    if (!ensure_catalog_loaded(state)) {
+    if (!ensure_catalog_loaded(ctx.engine, state)) {
         state.loaded = false;
     }
 
@@ -579,18 +583,16 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
 
 } // namespace
 
-void register_mods_menu_screen() {
-    if (!es)
-        return;
-    g_cmd_prev_page = es->menu_commands.register_command(command_prev);
-    g_cmd_next_page = es->menu_commands.register_command(command_next);
-    g_cmd_install = es->menu_commands.register_command(command_install);
-    g_cmd_uninstall = es->menu_commands.register_command(command_uninstall);
+void register_mods_menu_screen(EngineState& engine) {
+    g_cmd_prev_page = engine.menu_commands.register_command(command_prev);
+    g_cmd_next_page = engine.menu_commands.register_command(command_next);
+    g_cmd_install = engine.menu_commands.register_command(command_install);
+    g_cmd_uninstall = engine.menu_commands.register_command(command_uninstall);
 
     MenuScreenDef def;
     def.id = MenuScreenID::MODS;
     def.layout = UILayoutID::MODS_SCREEN;
     def.state_ops = screen_state_ops<ModsScreenState>();
     def.build = build_mods_screen;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

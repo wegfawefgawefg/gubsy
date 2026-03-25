@@ -1,5 +1,6 @@
 #include "engine/imgui_debug/imgui_debug.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/imgui_debug/windows.hpp"
 
 #include <imgui.h>
@@ -19,7 +20,7 @@ struct EngineWindowToggle {
     bool* flag;
     ImGuiKey hotkey;
     const char* hotkey_label;
-    void (*render)(bool* open_flag);
+    void (*render)(EngineState& engine, bool* open_flag);
 };
 
 struct AppWindowToggle {
@@ -108,7 +109,7 @@ void imgui_debug_begin_frame(float /*dt*/) {
     }
 }
 
-void imgui_debug_render() {
+void imgui_debug_render(EngineState& engine) {
     if (!g_debug_enabled)
         return;
 
@@ -119,7 +120,7 @@ void imgui_debug_render() {
         render_debug_bar();
 
     for (const auto& toggle : kEngineWindowToggles)
-        toggle.render(toggle.flag);
+        toggle.render(engine, toggle.flag);
     for (auto& toggle : app_window_toggles()) {
         if (toggle.def.render)
             toggle.def.render(&toggle.open);

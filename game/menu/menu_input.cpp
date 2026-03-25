@@ -1,19 +1,18 @@
 #include "game/menu/menu_input.hpp"
 
 #include "engine/binds_profiles.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/input_binding_utils.hpp"
+#include "engine/player.hpp"
 #include "game/actions.hpp"
 
-MenuInputState gather_menu_input() {
+MenuInputState gather_menu_input(EngineState& engine) {
     MenuInputState state{};
-    if (!es)
-        return state;
-    BindsProfile* profile = get_player_binds_profile(0);
+    BindsProfile* profile = get_player_binds_profile(engine, 0);
     if (!profile)
         return state;
     for (const auto& [device_button, action] : profile->button_binds) {
-        const bool down = device_button_is_down(es->device_state, device_button);
+        const bool down = device_button_is_down(engine.device_state, device_button);
         switch (action) {
             case GameAction::MENU_UP: state.up |= down; break;
             case GameAction::MENU_DOWN: state.down |= down; break;

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "engine/binds_profiles.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -111,24 +111,19 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 }
 
 void open_binds_editor(MenuContext& ctx, int profile_id) {
-    if (es)
-        es->selected_binds_profile_id = profile_id;
+    ctx.engine.selected_binds_profile_id = profile_id;
     ctx.manager.push_screen(MenuScreenID::BINDS_PROFILE_EDITOR, ctx.player_index);
 }
 
 void command_select_profile(MenuContext& ctx, std::int32_t index) {
-    if (!es)
-        return;
-    auto& pool = es->binds_profiles;
+    auto& pool = ctx.engine.binds_profiles;
     if (index < 0 || index >= static_cast<int>(pool.size()))
         return;
     open_binds_editor(ctx, pool[static_cast<std::size_t>(index)].id);
 }
 
 void command_create_profile(MenuContext& ctx, std::int32_t) {
-    if (!es)
-        return;
-    auto& pool = es->binds_profiles;
+    auto& pool = ctx.engine.binds_profiles;
     auto make_name = [&pool]() {
         int counter = 1;
         while (counter < 1000) {
@@ -157,13 +152,7 @@ void command_create_profile(MenuContext& ctx, std::int32_t) {
 
 BuiltScreen build_binds_profiles(MenuContext& ctx) {
     auto& st = ctx.state<BindsProfilesState>();
-    if (!es) {
-        BuiltScreen built;
-        built.layout = UILayoutID::SETTINGS_SCREEN;
-        return built;
-    }
-
-    auto& profiles = es->binds_profiles;
+    auto& profiles = ctx.engine.binds_profiles;
     if (st.search_query != st.prev_search) {
         st.prev_search = st.search_query;
         rebuild_filter(st, profiles);
@@ -295,20 +284,18 @@ BuiltScreen build_binds_profiles(MenuContext& ctx) {
 
 } // namespace
 
-void register_binds_profiles_screen() {
-    if (!es)
-        return;
+void register_binds_profiles_screen(EngineState& engine) {
     if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = es->menu_commands.register_command(command_page_delta);
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_select_profile == kMenuIdInvalid)
-        g_cmd_select_profile = es->menu_commands.register_command(command_select_profile);
+        g_cmd_select_profile = engine.menu_commands.register_command(command_select_profile);
     if (g_cmd_create_profile == kMenuIdInvalid)
-        g_cmd_create_profile = es->menu_commands.register_command(command_create_profile);
+        g_cmd_create_profile = engine.menu_commands.register_command(command_create_profile);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_PROFILES;
     def.layout = UILayoutID::SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<BindsProfilesState>();
     def.build = build_binds_profiles;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

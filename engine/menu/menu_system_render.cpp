@@ -1,5 +1,6 @@
 #include "engine/menu/menu_system.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_system_state.hpp"
 
 #include <algorithm>
@@ -36,7 +37,8 @@ void draw_nav_button(SDL_Renderer* renderer,
     SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
 }
 
-void draw_text_input(SDL_Renderer* renderer,
+void draw_text_input(const EngineState& engine,
+                     SDL_Renderer* renderer,
                      const SDL_FRect& rect,
                      const MenuWidget& widget,
                      const std::string* buffer,
@@ -60,7 +62,8 @@ void draw_text_input(SDL_Renderer* renderer,
         static_cast<int>(rect.y) + 3,
         std::max(0, static_cast<int>(rect.w) - 8),
         std::max(0, static_cast<int>(rect.h) - 6)};
-    menu_system_internal::draw_text_with_clip(renderer,
+    menu_system_internal::draw_text_with_clip(engine,
+                                              renderer,
                                               display.c_str(),
                                               static_cast<int>(rect.x) + 6,
                                               static_cast<int>(rect.y) + 4,
@@ -72,7 +75,7 @@ void draw_text_input(SDL_Renderer* renderer,
                              (!menu_system_internal::g_text_edit_using_aux && buffer == widget.text_buffer));
         if (editing_this && std::fmod(menu_system_internal::g_caret_time, 1.0f) < 0.5f && buffer) {
             int caret_x = static_cast<int>(rect.x) + 6 +
-                          menu_system_internal::measure_text_width(buffer->c_str());
+                          menu_system_internal::measure_text_width(engine, buffer->c_str());
             if (caret_x > static_cast<int>(rect.x + rect.w) - 6)
                 caret_x = static_cast<int>(rect.x + rect.w) - 6;
             int caret_top = static_cast<int>(rect.y) + 4;
@@ -85,18 +88,19 @@ void draw_text_input(SDL_Renderer* renderer,
 
 } // namespace
 
-void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_height) {
+void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_width, int screen_height) {
     if ((msi::g_cache.width != screen_width || msi::g_cache.height != screen_height) &&
         screen_width > 0 && screen_height > 0) {
         MenuInputState zero_input{};
         msi::g_prev_input = msi::g_current_input;
         msi::g_current_input = zero_input;
-        menu_system_update(0.0f, screen_width, screen_height);
+        menu_system_update(engine, 0.0f, screen_width, screen_height);
     }
     if (!renderer || msi::g_cache.widgets.empty())
         return;
 
-    const UILayout* layout = get_ui_layout_for_resolution(static_cast<int>(msi::g_cache.layout),
+    const UILayout* layout = get_ui_layout_for_resolution(engine,
+                                                          static_cast<int>(msi::g_cache.layout),
                                                           msi::g_cache.width,
                                                           msi::g_cache.height);
     for (std::size_t i = 0; i < msi::g_cache.widgets.size(); ++i) {
@@ -204,7 +208,7 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
         };
 
         if (text_ptr) {
-            msi::draw_text_with_clip(renderer, text_ptr, line_x, line_y, text_color, clip_ptr);
+            msi::draw_text_with_clip(engine, renderer, text_ptr, line_x, line_y, text_color, clip_ptr);
             if (is_text_input_widget && !widget.label) {
                 text_input_value_y = line_y;
             }
@@ -215,7 +219,7 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                                 static_cast<Uint8>(widget.style.fg_g / 2 + 50),
                                 static_cast<Uint8>(widget.style.fg_b / 2 + 50),
                                 255};
-            msi::draw_text_with_clip(renderer, widget.secondary, line_x, line_y, sec_color, clip_ptr);
+            msi::draw_text_with_clip(engine, renderer, widget.secondary, line_x, line_y, sec_color, clip_ptr);
             next_line();
         }
         if (widget.tertiary) {
@@ -224,19 +228,19 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                                  static_cast<Uint8>(widget.style.fg_b / 3 + 60),
                                  255};
             if (widget.tertiary_overlay) {
-                int text_w = msi::measure_text_width(widget.tertiary);
+                int text_w = msi::measure_text_width(engine, widget.tertiary);
                 int overlay_x =
                     std::max(static_cast<int>(rect.x) + 16, static_cast<int>(rect.x + rect.w) - text_w - 12);
                 int overlay_y = static_cast<int>(rect.y) + 6;
-                msi::draw_text_with_clip(renderer, widget.tertiary, overlay_x, overlay_y, tert_color, nullptr);
+                msi::draw_text_with_clip(engine, renderer, widget.tertiary, overlay_x, overlay_y, tert_color, nullptr);
             } else {
-                msi::draw_text_with_clip(renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
+                msi::draw_text_with_clip(engine, renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
             }
         }
         if (is_text_input_widget && msi::g_text_edit_active && widget.id == msi::g_text_edit_widget) {
             int input_y = text_input_value_y > 0 ? text_input_value_y : (static_cast<int>(rect.y) + 6);
             if (std::fmod(msi::g_caret_time, 1.0f) < 0.5f) {
-                int caret_x = line_x + msi::measure_text_width(widget.text_buffer->c_str());
+                int caret_x = line_x + msi::measure_text_width(engine, widget.text_buffer->c_str());
                 int caret_top = input_y - 2;
                 int caret_bottom = caret_top + 18;
                 SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
@@ -265,7 +269,8 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
             SDL_RenderDrawRectF(renderer, &knob);
 
             if (slider_has_input) {
-                draw_text_input(renderer,
+                draw_text_input(engine,
+                                renderer,
                                 slider_visual.input_rect,
                                 widget,
                                 widget.text_buffer,
@@ -288,7 +293,8 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                     static_cast<int>(opt_layout.value_rect.y) + 4,
                     std::max(0, static_cast<int>(opt_layout.value_rect.w) - 12),
                     std::max(0, static_cast<int>(opt_layout.value_rect.h) - 8)};
-                msi::draw_text_with_clip(renderer,
+                msi::draw_text_with_clip(engine,
+                                         renderer,
                                          widget.badge,
                                          static_cast<int>(opt_layout.value_rect.x) + 10,
                                          static_cast<int>(opt_layout.value_rect.y) + 5,
@@ -297,7 +303,8 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                 drew_option_value = true;
             }
             if (opt_layout.has_primary_input) {
-                draw_text_input(renderer,
+                draw_text_input(engine,
+                                renderer,
                                 opt_layout.primary_input,
                                 widget,
                                 widget.text_buffer,
@@ -306,7 +313,8 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                                     !msi::g_text_edit_using_aux);
             }
             if (opt_layout.has_secondary_input) {
-                draw_text_input(renderer,
+                draw_text_input(engine,
+                                renderer,
                                 opt_layout.secondary_input,
                                 widget,
                                 widget.aux_text_buffer,
@@ -317,7 +325,7 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
         }
 
         if (widget.badge && !drew_option_value) {
-            int badge_w = msi::measure_text_width(widget.badge);
+            int badge_w = msi::measure_text_width(engine, widget.badge);
             float right_margin = rect.w * 0.03f;
             int badge_x = static_cast<int>(rect.x + rect.w - static_cast<float>(badge_w) - right_margin);
             float left_margin = rect.w * 0.02f;
@@ -329,7 +337,7 @@ void menu_system_render(SDL_Renderer* renderer, int screen_width, int screen_hei
                 static_cast<int>(rect.y + rect.h * 0.05f),
                 std::max(0, static_cast<int>(rect.w - left_margin * 2.0f)),
                 std::max(0, static_cast<int>(rect.h * 0.9f))};
-            msi::draw_text_with_clip(renderer, widget.badge, badge_x, badge_y, widget.badge_color, &badge_clip);
+            msi::draw_text_with_clip(engine, renderer, widget.badge, badge_x, badge_y, widget.badge_color, &badge_clip);
         }
     }
 

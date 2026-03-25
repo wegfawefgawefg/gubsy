@@ -73,7 +73,7 @@ SettingMetadata make_option_setting(SettingScope scope,
 
 } // namespace
 
-void register_engine_settings_schema_entries() {
+void register_engine_settings_schema_entries(EngineState& engine) {
     SettingsSchema schema;
 
     // Localization
@@ -341,5 +341,5 @@ void register_engine_settings_schema_entries() {
                                            false));
 
 
-    register_settings_schema(schema);
+    register_settings_schema(engine, schema);
 }

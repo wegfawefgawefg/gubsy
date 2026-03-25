@@ -4,15 +4,17 @@
 #include <glm/glm.hpp>
 #include <string>
 
+struct EngineState;
+
 struct ScreenSpace {
     float scale{64.0f};
     float cx{0.0f};
     float cy{0.0f};
 };
 
-void render();
+void render(EngineState& engine);
 void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color);
-void render_alerts(SDL_Renderer* renderer, int width);
+void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width);
 void fill_and_outline(SDL_Renderer* renderer, const SDL_FRect& rect,
                       SDL_Color fill, SDL_Color border);
 

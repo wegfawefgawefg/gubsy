@@ -1,6 +1,6 @@
 #include "engine/imgui_debug/windows.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/ui_layouts.hpp"
 
 #include <algorithm>
@@ -8,26 +8,21 @@
 #include <string>
 #include <vector>
 
-void imgui_debug_render_layout_window(bool* open_flag) {
+void imgui_debug_render_layout_window(EngineState& engine, bool* open_flag) {
     if (!open_flag || !*open_flag)
         return;
     if (!ImGui::Begin("Debug: UI Layouts", open_flag)) {
         ImGui::End();
         return;
     }
-    if (!es) {
-        ImGui::TextUnformatted("Engine state unavailable.");
-        ImGui::End();
-        return;
-    }
-    if (es->ui_layouts_pool.empty()) {
+    if (engine.ui_layouts_pool.empty()) {
         ImGui::TextUnformatted("No layouts loaded.");
         ImGui::End();
         return;
     }
     std::vector<const UILayout*> sorted;
-    sorted.reserve(es->ui_layouts_pool.size());
-    for (const auto& layout : es->ui_layouts_pool)
+    sorted.reserve(engine.ui_layouts_pool.size());
+    for (const auto& layout : engine.ui_layouts_pool)
         sorted.push_back(&layout);
     std::sort(sorted.begin(), sorted.end(),
               [](const UILayout* a, const UILayout* b) {

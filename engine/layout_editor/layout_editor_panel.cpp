@@ -5,7 +5,8 @@
 #include "engine/layout_editor/layout_editor.hpp"
 #include "engine/layout_editor/layout_editor_interaction.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
+#include "engine/graphics.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 
@@ -39,7 +40,8 @@ void sync_object_label_buffer(const UILayout& layout, int selected_index) {
 
 } // namespace
 
-void layout_editor_render_panel(float dt) {
+void layout_editor_render_panel(EngineState& engine, float dt) {
+    (void)dt;
     if (!g_active)
         return;
     if (!ImGui::GetCurrentContext())
@@ -56,7 +58,7 @@ void layout_editor_render_panel(float dt) {
     ImGui::Text("Grid %.3f (%s)",
                 static_cast<double>(g_grid_step),
                 g_snap_enabled ? "snap ON" : "snap OFF");
-    if (!has_layouts()) {
+    if (!has_layouts(engine)) {
         ImGui::TextUnformatted("No layouts loaded.");
         ImGui::End();
         return;
@@ -64,10 +66,10 @@ void layout_editor_render_panel(float dt) {
 
     const char* factor_labels[] = {"Desktop", "Tablet", "Phone"};
     std::vector<const char*> labels;
-    labels.reserve(es->ui_layouts_pool.size());
+    labels.reserve(engine.ui_layouts_pool.size());
     static std::vector<std::string> label_storage;
     label_storage.clear();
-    for (const auto& layout : es->ui_layouts_pool) {
+    for (const auto& layout : engine.ui_layouts_pool) {
         std::string label = layout.label + " (ID " + std::to_string(layout.id) + ") " +
                             std::to_string(layout.resolution_width) + "x" +
                             std::to_string(layout.resolution_height) + " [" +
@@ -83,7 +85,7 @@ void layout_editor_render_panel(float dt) {
         g_follow_active_layout = false;
     }
 
-    UILayout* layout_mut = selected_layout_mutable();
+    UILayout* layout_mut = selected_layout_mutable(engine);
     const UILayout* layout = layout_mut;
     if (layout) {
         ImGui::Separator();
@@ -121,29 +123,31 @@ void layout_editor_render_panel(float dt) {
             UILayout copy = *layout_mut;
             copy.id = generate_ui_layout_id();
             copy.label += "_copy";
-            es->ui_layouts_pool.push_back(copy);
+            engine.ui_layouts_pool.push_back(copy);
             layout_editor_select_single(-1);
-            layout_editor_history_reset(es->ui_layouts_pool.back());
-            g_selected_layout = static_cast<int>(es->ui_layouts_pool.size()) - 1;
+            layout_editor_history_reset(engine.ui_layouts_pool.back());
+            g_selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
             append_status("Layout duplicated");
         }
         ImGui::SameLine();
         if (ImGui::Button("New layout")) {
+            Graphics* graphics = current_graphics(engine);
             UILayout fresh;
             fresh.id = generate_ui_layout_id();
             fresh.label = "Layout_" + std::to_string(fresh.id);
-            fresh.resolution_width = current_graphics() ? static_cast<int>(current_graphics()->render_dims.x) : 1920;
-            fresh.resolution_height = current_graphics() ? static_cast<int>(current_graphics()->render_dims.y) : 1080;
+            fresh.resolution_width = graphics ? static_cast<int>(graphics->render_dims.x) : 1920;
+            fresh.resolution_height = graphics ? static_cast<int>(graphics->render_dims.y) : 1080;
             fresh.form_factor = UILayoutFormFactor::Desktop;
-            es->ui_layouts_pool.push_back(fresh);
-            g_selected_layout = static_cast<int>(es->ui_layouts_pool.size()) - 1;
+            engine.ui_layouts_pool.push_back(fresh);
+            g_selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
             layout_editor_clear_selection();
-            layout_editor_history_reset(es->ui_layouts_pool.back());
+            layout_editor_history_reset(engine.ui_layouts_pool.back());
             append_status("Layout created");
         }
     }
-    if (current_graphics()) {
-        glm::ivec2 dims = get_render_dimensions();
+    Graphics* graphics = current_graphics(engine);
+    if (graphics) {
+        glm::ivec2 dims = get_render_dimensions(engine);
         ImGui::Text("Render target: %dx%d", dims.x, dims.y);
     }
 

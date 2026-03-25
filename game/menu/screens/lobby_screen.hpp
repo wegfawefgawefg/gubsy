@@ -1,3 +1,5 @@
 #pragma once
 
-void register_lobby_screen();
+struct EngineState;
+
+void register_lobby_screen(EngineState& engine);

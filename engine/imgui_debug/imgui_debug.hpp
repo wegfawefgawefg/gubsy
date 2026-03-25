@@ -1,5 +1,7 @@
 #pragma once
 
+struct EngineState;
+
 struct ImguiDebugWindowDef {
     const char* label{nullptr};
     int hotkey{0};
@@ -11,7 +13,7 @@ struct ImguiDebugWindowDef {
 void imgui_debug_begin_frame(float dt);
 
 // Called before imgui_render_layer() to draw debug UI.
-void imgui_debug_render();
+void imgui_debug_render(EngineState& engine);
 
 void imgui_debug_register_window(const ImguiDebugWindowDef& def);
 

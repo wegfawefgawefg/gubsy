@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
@@ -25,19 +25,19 @@ bool lobby_settings_editable(const LobbySession& lobby) {
     return !lobby.online.in_room || lobby.online.is_host;
 }
 
-void command_scenario_delta(MenuContext&, std::int32_t delta) {
+void command_scenario_delta(MenuContext& ctx, std::int32_t delta) {
     LobbySession& lobby = lobby_state();
     if (!lobby_settings_editable(lobby)) {
-        add_alert("Only the host can change online game settings.");
+        add_alert(ctx.engine, "Only the host can change online game settings.");
         return;
     }
     lobby.scenario_index = (lobby.scenario_index + delta + kScenarioCount) % kScenarioCount;
 }
 
-void command_seed_mode_toggle(MenuContext&, std::int32_t) {
+void command_seed_mode_toggle(MenuContext& ctx, std::int32_t) {
     LobbySession& lobby = lobby_state();
     if (!lobby_settings_editable(lobby)) {
-        add_alert("Only the host can change online game settings.");
+        add_alert(ctx.engine, "Only the host can change online game settings.");
         return;
     }
     lobby.seed_randomized = !lobby.seed_randomized;
@@ -166,19 +166,16 @@ BuiltScreen build_game_settings(MenuContext&) {
 
 } // namespace
 
-void register_game_settings_screen() {
-    if (!es)
-        return;
-
+void register_game_settings_screen(EngineState& engine) {
     if (g_cmd_scenario_delta == kMenuIdInvalid)
-        g_cmd_scenario_delta = es->menu_commands.register_command(command_scenario_delta);
+        g_cmd_scenario_delta = engine.menu_commands.register_command(command_scenario_delta);
     if (g_cmd_seed_mode_toggle == kMenuIdInvalid)
-        g_cmd_seed_mode_toggle = es->menu_commands.register_command(command_seed_mode_toggle);
+        g_cmd_seed_mode_toggle = engine.menu_commands.register_command(command_seed_mode_toggle);
 
     MenuScreenDef def;
     def.id = MenuScreenID::GAME_SETTINGS;
     def.layout = UILayoutID::GAME_SETTINGS_SCREEN;
     def.state_ops = screen_state_ops<int>();
     def.build = build_game_settings;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

@@ -6,7 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/session_link.hpp"
 #include "engine/sync_payload_codec.hpp"
 #include "game/coop_correction.hpp"
@@ -24,6 +24,7 @@ namespace {
 
 bool g_sync_configured = false;
 State* g_state = nullptr;
+EngineState* g_engine = nullptr;
 
 bool query_connection(void*, SessionLinkConnection& out) {
     const LobbySession& lobby = lobby_state_const();
@@ -60,7 +61,7 @@ void tick_presence(void*) {
 }
 
 double query_now(void*) {
-    return es ? es->now : 0.0;
+    return g_engine ? g_engine->now : 0.0;
 }
 
 bool encode_json_payload(const nlohmann::json& json, std::vector<std::uint8_t>& out) {
@@ -74,11 +75,11 @@ bool decode_json_payload(const std::vector<std::uint8_t>& bytes, nlohmann::json&
 }
 
 bool build_local_input(void*, std::vector<std::uint8_t>& out) {
-    if (!es)
+    if (!g_engine)
         return false;
     InputFrame frame;
     if (!in_game_menu_blocks_game_input())
-        build_input_frame(0, es->device_state, frame);
+        build_input_frame(*g_engine, 0, g_engine->device_state, frame);
     return encode_json_payload(input_frame_to_json(frame), out);
 }
 
@@ -188,7 +189,9 @@ void reset_runtime(void*) {
     demo_sync_correction_reset();
 }
 
-void ensure_sync_configured(State* state = nullptr) {
+void ensure_sync_configured(EngineState* engine = nullptr, State* state = nullptr) {
+    if (engine)
+        g_engine = engine;
     if (state)
         g_state = state;
     if (g_sync_configured)
@@ -228,8 +231,8 @@ bool coop_session_active() {
     return coop_sync_active();
 }
 
-CoopStepResult coop_session_step(State& state) {
-    ensure_sync_configured(&state);
+CoopStepResult coop_session_step(EngineState& engine, State& state) {
+    ensure_sync_configured(&engine, &state);
     CoopStepResult result;
 
     const std::uint64_t previous_bonk_serial = state.bonk_serial;

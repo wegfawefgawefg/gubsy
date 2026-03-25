@@ -7,7 +7,7 @@
 
 #include "engine/alerts.hpp"
 #include "engine/audio.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "engine/input_binding_utils.hpp"
 #include "engine/render.hpp"
@@ -32,11 +32,11 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
     return delta.x <= (a_half.x + b_half.x) && delta.y <= (a_half.y + b_half.y);
 }
 
-void playing_process_inputs(void*) {
-    in_game_menu_process_inputs();
+void playing_process_inputs(EngineState& engine, void*) {
+    in_game_menu_process_inputs(engine);
 }
 
-void playing_step(void* app_context) {
+void playing_step(EngineState& engine, void* app_context) {
     State* state = game_state_from_app_context(app_context);
     if (!state)
         return;
@@ -47,33 +47,29 @@ void playing_step(void* app_context) {
         lobby_online_tick(lobby);
     std::string close_reason;
     if (lobby_online_consume_session_close(lobby, close_reason)) {
-        in_game_menu_reset();
+        in_game_menu_reset(engine);
         coop_session_reset();
-        add_alert(close_reason);
-        if (es)
-            es->mode = modes::TITLE;
+        add_alert(engine, close_reason);
+        engine.mode = modes::TITLE;
         return;
     }
 
     if (lobby.online.in_room && !session_contract_is_in_game(lobby.online.contract)) {
-        in_game_menu_reset();
-        if (es)
-            es->mode = modes::TITLE;
+        in_game_menu_reset(engine);
+        engine.mode = modes::TITLE;
         return;
     }
 
-    const CoopStepResult coop = coop_session_step(*state);
+    const CoopStepResult coop = coop_session_step(engine, *state);
     if (coop.handled) {
-        if (es) {
-            glm::vec2 raw_gamepad =
-                sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
-            state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
-            state->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
-        }
+        glm::vec2 raw_gamepad =
+            sample_analog_2d(engine.device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
+        state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
+        state->reticle_pos_mouse = normalized_mouse_coords(engine.device_state);
         for (int i = 0; i < coop.bonk_count; ++i) {
-            add_alert("bonk!");
+            add_alert(engine, "bonk!");
             const std::string sound = state->bonk.sound_key.empty() ? "base:ui_confirm" : state->bonk.sound_key;
-            play_sound(sound);
+            play_sound(engine, sound);
         }
         return;
     }
@@ -101,15 +97,10 @@ void playing_step(void* app_context) {
         state->reticle_pos = glm::vec2(0.0f);
     }
 
-    if (es) {
-        glm::vec2 raw_gamepad =
-            sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
-        state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
-        state->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
-    } else {
-        state->reticle_pos_gamepad = glm::vec2(0.0f);
-        state->reticle_pos_mouse = glm::vec2(0.0f);
-    }
+    glm::vec2 raw_gamepad =
+        sample_analog_2d(engine.device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
+    state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
+    state->reticle_pos_mouse = normalized_mouse_coords(engine.device_state);
 
     // Update each player
     for (std::size_t i = 0; i < state->players.size(); ++i) {
@@ -141,9 +132,9 @@ void playing_step(void* app_context) {
             overlaps(player.pos, player.half_size, target.pos, target.half_size) &&
             target.cooldown <= 0.0f) {
             target.cooldown = BONK_COOLDOWN_SECONDS;
-            add_alert("bonk!");
+            add_alert(engine, "bonk!");
             const std::string sound = target.sound_key.empty() ? "base:ui_confirm" : target.sound_key;
-            play_sound(sound);
+            play_sound(engine, sound);
         }
 
         const bool use_pressed = was_pressed(player_index, GameAction::USE);
@@ -185,15 +176,15 @@ void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, cons
     draw_text(renderer, text, margin, height - 30, SDL_Color{200, 200, 200, 255});
 }
 
-void playing_draw(void* app_context) {
+void playing_draw(EngineState& engine, void* app_context) {
     State* state = game_state_from_app_context(app_context);
-    if (!current_graphics() || !current_graphics()->renderer || !state) {
+    if (!current_graphics(engine) || !current_graphics(engine)->renderer || !state) {
         SDL_Delay(16);
         return;
     }
 
-    SDL_Renderer* renderer = current_graphics()->renderer;
-    glm::ivec2 dims = get_render_dimensions();
+    SDL_Renderer* renderer = current_graphics(engine)->renderer;
+    glm::ivec2 dims = get_render_dimensions(engine);
     int width = std::max(dims.x, 1);
     int height = std::max(dims.y, 1);
     const float width_f = static_cast<float>(width);
@@ -204,7 +195,7 @@ void playing_draw(void* app_context) {
     SDL_RenderClear(renderer);
 
     // Get best matching UI layout for current resolution
-    const UILayout* layout = get_ui_layout_for_resolution(UILayoutID::PLAY_SCREEN, width, height);
+    const UILayout* layout = get_ui_layout_for_resolution(engine, UILayoutID::PLAY_SCREEN, width, height);
 
     ScreenSpace space = make_space(width, height);
 
@@ -269,7 +260,7 @@ void playing_draw(void* app_context) {
             bool nearby = dist <= (player_radius + item->radius + 0.1f);
             bool drew_sprite = false;
             if (item->sprite_id >= 0) {
-                if (SDL_Texture* tex = get_texture(item->sprite_id)) {
+                if (SDL_Texture* tex = get_texture(engine, item->sprite_id)) {
                     SDL_RenderCopyF(renderer, tex, nullptr, &item_rect);
                     drew_sprite = true;
                 }
@@ -359,7 +350,7 @@ void playing_draw(void* app_context) {
     }
 
     // Alerts + instructions overlay
-    render_alerts(renderer, width);
+    render_alerts(engine, renderer, width);
     const LobbySession& lobby = lobby_state_const();
     std::string prompt_text;
     if (!nearby_label.empty())
@@ -374,5 +365,5 @@ void playing_draw(void* app_context) {
         prompt_text += " | " + coop_session_last_error();
     prompt_text += " | Esc opens session menu";
     render_instructions(renderer, width, height, prompt_text);
-    in_game_menu_render(renderer, width, height);
+    in_game_menu_render(engine, renderer, width, height);
 }

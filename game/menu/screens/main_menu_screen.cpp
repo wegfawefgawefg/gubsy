@@ -1,6 +1,6 @@
 #include "game/menu/screens/main_menu_screen.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/menu/menu_screen.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_commands.hpp"
@@ -84,19 +84,16 @@ BuiltScreen build_main_menu(MenuContext&) {
 
 } // namespace
 
-void register_main_menu_screen() {
-    if (!es)
-        return;
-
-    g_cmd_play = es->menu_commands.register_command(command_play);
-    g_cmd_quit = es->menu_commands.register_command(command_quit);
-    g_cmd_open_mods = es->menu_commands.register_command(command_open_mods);
-    g_cmd_open_settings = es->menu_commands.register_command(command_open_settings);
+void register_main_menu_screen(EngineState& engine) {
+    g_cmd_play = engine.menu_commands.register_command(command_play);
+    g_cmd_quit = engine.menu_commands.register_command(command_quit);
+    g_cmd_open_mods = engine.menu_commands.register_command(command_open_mods);
+    g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
 
     MenuScreenDef def;
     def.id = MenuScreenID::MAIN;
     def.layout = UILayoutID::MENU_SCREEN;
     def.state_ops = screen_state_ops<int>(); // trivial placeholder
     def.build = build_main_menu;
-    es->menu_manager.register_screen(def);
+    engine.menu_manager.register_screen(def);
 }

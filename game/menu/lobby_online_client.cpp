@@ -6,7 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/matchmaking.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_install.hpp"
@@ -89,7 +89,7 @@ void note_room_service_failure(LobbySession& lobby, const std::string& err) {
     if (!lobby.online.reconnecting) {
         lobby.online.reconnecting = true;
         lobby.online.room_failure_count = 1;
-        lobby.online.first_room_failure_at = es ? es->now : 0.0;
+        lobby.online.first_room_failure_at = lobby.engine ? lobby.engine->now : 0.0;
     } else {
         lobby.online.room_failure_count += 1;
     }
@@ -98,9 +98,9 @@ void note_room_service_failure(LobbySession& lobby, const std::string& err) {
     if (!err.empty())
         lobby.online.last_error = err;
 
-    if (!es)
+    if (!lobby.engine)
         return;
-    if (es->now - lobby.online.first_room_failure_at < kRoomReconnectGraceSec)
+    if (lobby.engine->now - lobby.online.first_room_failure_at < kRoomReconnectGraceSec)
         return;
 
     const std::string reason = lobby.online.is_host
@@ -189,9 +189,9 @@ void apply_room_to_lobby(const MatchmakingRoom& room, LobbySession& lobby) {
 bool should_retry_content_sync(const LobbySession& lobby, std::uint64_t revision) {
     if (revision == 0 || revision != lobby.online.failed_content_revision)
         return true;
-    if (!es)
+    if (!lobby.engine)
         return true;
-    return es->now >= lobby.online.next_content_retry_at;
+    return lobby.engine->now >= lobby.online.next_content_retry_at;
 }
 
 bool sync_remote_content_contract(LobbySession& lobby,
@@ -210,12 +210,14 @@ bool sync_remote_content_contract(LobbySession& lobby,
     }
 
     lobby.online.content_status_text = "Syncing host content...";
-    if (!sync_mod_selection_from_catalog(default_mod_server_url(),
+    if (!lobby.engine ||
+        !sync_mod_selection_from_catalog(*lobby.engine,
+                                         default_mod_server_url(),
                                          remote.required_mod_ids,
                                          err)) {
         lobby.online.failed_content_revision = remote.content_revision;
-        if (es)
-            lobby.online.next_content_retry_at = es->now + kContentRetryIntervalSec;
+        if (lobby.engine)
+            lobby.online.next_content_retry_at = lobby.engine->now + kContentRetryIntervalSec;
         return false;
     }
 
@@ -430,7 +432,7 @@ bool lobby_online_consume_session_close(LobbySession& lobby, std::string& reason
 }
 
 bool lobby_online_refresh_rooms(LobbySession& lobby, bool force, std::string& err) {
-    if (!force && es && es->now < lobby.online.next_rooms_refresh_at)
+    if (!force && lobby.engine && lobby.engine->now < lobby.online.next_rooms_refresh_at)
         return true;
     std::vector<MatchmakingRoom> rooms;
     if (!g_matchmaking.list_rooms(lobby.online.server_url, rooms, err))
@@ -448,29 +450,30 @@ bool lobby_online_refresh_rooms(LobbySession& lobby, bool force, std::string& er
         if (!room.room_code.empty())
             lobby.online.discovered_rooms.push_back(std::move(room));
     }
-    lobby.online.next_rooms_refresh_at = es ? es->now + kRoomsRefreshIntervalSec : kRoomsRefreshIntervalSec;
+    lobby.online.next_rooms_refresh_at =
+        lobby.engine ? lobby.engine->now + kRoomsRefreshIntervalSec : kRoomsRefreshIntervalSec;
     return true;
 }
 
 void lobby_online_tick(LobbySession& lobby) {
-    if (!es)
+    if (!lobby.engine)
         return;
     if (lobby.online.session_closed)
         return;
     std::string err;
     if (lobby.online.in_room) {
-        if (lobby.online.is_host && es->now >= lobby.online.next_room_publish_at) {
+        if (lobby.online.is_host && lobby.engine->now >= lobby.online.next_room_publish_at) {
             lobby_refresh_mods();
             if (publish_room_state(lobby, err)) {
                 note_room_service_recovered(lobby);
-                lobby.online.next_room_publish_at = es->now + kRoomPublishIntervalSec;
+                lobby.online.next_room_publish_at = lobby.engine->now + kRoomPublishIntervalSec;
             } else if (!err.empty()) {
                 note_room_service_failure(lobby, err);
             }
-        } else if (!lobby.online.is_host && es->now >= lobby.online.next_room_publish_at) {
+        } else if (!lobby.online.is_host && lobby.engine->now >= lobby.online.next_room_publish_at) {
             if (heartbeat_member(lobby, err)) {
                 note_room_service_recovered(lobby);
-                lobby.online.next_room_publish_at = es->now + kRoomPublishIntervalSec;
+                lobby.online.next_room_publish_at = lobby.engine->now + kRoomPublishIntervalSec;
             } else if (!err.empty()) {
                 note_room_service_failure(lobby, err);
             }
@@ -478,9 +481,9 @@ void lobby_online_tick(LobbySession& lobby) {
 
         if (lobby.online.session_closed)
             return;
-        if (es->now >= lobby.online.next_room_poll_at) {
+        if (lobby.engine->now >= lobby.online.next_room_poll_at) {
             if (refresh_room_state(lobby, err)) {
-                lobby.online.next_room_poll_at = es->now + kRoomPollIntervalSec;
+                lobby.online.next_room_poll_at = lobby.engine->now + kRoomPollIntervalSec;
             } else if (!err.empty()) {
                 note_room_service_failure(lobby, err);
             }

@@ -1,4 +1,6 @@
 #pragma once
 
-void setup_step(void* app_context);
-void setup_draw(void* app_context);
+struct EngineState;
+
+void setup_step(EngineState& engine, void* app_context);
+void setup_draw(EngineState& engine, void* app_context);

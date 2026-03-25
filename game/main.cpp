@@ -12,13 +12,13 @@
 #include "game/actions.hpp"
 #include "game/app_context.hpp"
 #include "game/builtin_mods.hpp"
+#include "game/demo_items.hpp"
 #include "game/modes.hpp"
 #include "game/state.hpp"
 #include "engine/game_settings.hpp"
 #include "game/ui_layout_ids.hpp"
 #include "game/imgui_debug/register_game_debug_windows.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
-#include "engine/globals.hpp"
 #include "game/input_runtime.hpp"
 #include "game/menu/screens/main_menu_screen.hpp"
 #include "game/menu/screens/lobby_screen.hpp"
@@ -31,6 +31,7 @@
 #include "game/menu/screens/profile_picker_screen.hpp"
 #include "game/menu/screens/session_clients_screen.hpp"
 #include "game/menu/screens/input_devices_screen.hpp"
+#include "game/menu/lobby_state.hpp"
 #include "game/settings_schema_registry.hpp"
 #include "game/ui_layout_registry.hpp"
 #include "game/binds_schema_registry.hpp"
@@ -46,19 +47,18 @@ void on_mods_changed(void* app_context) {
 }
 }
 
-void register_modes(){
-    register_mode(modes::TITLE, title_step, title_process_inputs, title_draw);
-    register_mode(modes::SETUP, setup_step, nullptr, setup_draw);
-    register_mode(modes::PLAYING, playing_step, playing_process_inputs, playing_draw);
+void register_modes(EngineState& engine){
+    register_mode(engine, modes::TITLE, title_step, title_process_inputs, title_draw);
+    register_mode(engine, modes::SETUP, setup_step, nullptr, setup_draw);
+    register_mode(engine, modes::PLAYING, playing_step, playing_process_inputs, playing_draw);
 }
 
 int main() {
+    EngineState engine{};
     GameAppContext app{};
-    if (!init_engine_state()) {
-        return 1;
-    }
+    app.engine = &engine;
+    lobby_bind_engine(engine);
     if (!init_game_app_context(app)) {
-        cleanup_engine_state();
         return 1;
     }
 
@@ -68,35 +68,35 @@ int main() {
                      builtin_mod_err.c_str());
     }
 
-    register_game_settings_schema_entries();
+    set_demo_items_engine(&engine);
+    register_game_settings_schema_entries(engine);
     register_game_ui_layouts();
-    register_game_debug_windows();
+    register_game_debug_windows(engine);
 
-    load_ui_layouts_pool();
+    load_ui_layouts_pool(engine);
 
-    register_binds_schema_entries();
+    register_binds_schema_entries(engine);
 
     register_game_mod_apis();
     set_required_mod_game_version(kGameModVersion);
-    register_main_menu_screen();
-    register_lobby_screen();
-    register_lobby_mods_screen();
-    register_server_browser_screen();
-    register_game_settings_screen();
-    register_in_game_session_screen();
-    register_local_players_screen();
-    register_player_settings_screen();
-    register_profile_picker_screen();
-    register_session_clients_screen();
-    register_input_devices_screen();
+    register_main_menu_screen(engine);
+    register_lobby_screen(engine);
+    register_lobby_mods_screen(engine);
+    register_server_browser_screen(engine);
+    register_game_settings_screen(engine);
+    register_in_game_session_screen(engine);
+    register_local_players_screen(engine);
+    register_player_settings_screen(engine);
+    register_profile_picker_screen(engine);
+    register_session_clients_screen(engine);
+    register_input_devices_screen(engine);
     register_fixed_step_prep(build_input_frames_for_step);
 
-    if (es)
-        es->mode = modes::TITLE;
+    engine.mode = modes::TITLE;
 
-    add_player(0);
+    add_player(engine, 0);
 
-    BindsProfile* binds_profile = get_player_binds_profile(0);
+    BindsProfile* binds_profile = get_player_binds_profile(engine, 0);
     if (binds_profile) {
         // Profile is empty, so populate it with defaults
         // Set menu binds
@@ -140,15 +140,15 @@ int main() {
         save_binds_profile(*binds_profile);
     }
 
-    register_modes();
+    register_modes(engine);
    
     GubsyAppHooks hooks{};
     hooks.app_context = &app;
     hooks.on_mods_changed = on_mods_changed;
 
-    do_the_gubsy(hooks);
+    do_the_gubsy(engine, hooks);
 
     shutdown_game_app_context(app);
-    stop_doing_the_gubsy();
+    stop_doing_the_gubsy(engine);
     return 0;
 }

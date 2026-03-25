@@ -5,7 +5,7 @@
 #include <SDL2/SDL_render.h>
 
 #include "engine/alerts.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "engine/menu/menu_system.hpp"
 #include "game/menu/lobby_online.hpp"
@@ -18,50 +18,48 @@ namespace {
 
 bool g_menu_initialized = false;
 
-void ensure_menu_ready() {
-    if (!es)
+void ensure_menu_ready(EngineState& engine) {
+    if (g_menu_initialized && !engine.menu_manager.stack().empty())
         return;
-    if (g_menu_initialized && !es->menu_manager.stack().empty())
-        return;
-    es->menu_manager.clear();
-    es->menu_manager.push_screen(MenuScreenID::MAIN);
-    es->menu_manager.push_screen(MenuScreenID::LOBBY);
+    engine.menu_manager.clear();
+    engine.menu_manager.push_screen(MenuScreenID::MAIN);
+    engine.menu_manager.push_screen(MenuScreenID::LOBBY);
     menu_system_reset();
     g_menu_initialized = true;
 }
 
 } // namespace
 
-void title_step(void*) {
+void title_step(EngineState& engine, void*) {
     LobbySession& lobby = lobby_state();
     lobby_online_tick(lobby);
     std::string close_reason;
     if (lobby_online_consume_session_close(lobby, close_reason))
-        add_alert(close_reason);
-    if (es && lobby_online_ready_to_enter_game(lobby))
-        es->mode = modes::PLAYING;
+        add_alert(engine, close_reason);
+    if (lobby_online_ready_to_enter_game(lobby))
+        engine.mode = modes::PLAYING;
 }
 
-void title_process_inputs(void*) {
-    ensure_menu_ready();
-    if (!current_graphics() || !current_graphics()->renderer)
+void title_process_inputs(EngineState& engine, void*) {
+    ensure_menu_ready(engine);
+    if (!current_graphics(engine) || !current_graphics(engine)->renderer)
         return;
-    glm::ivec2 dims = get_render_dimensions();
+    glm::ivec2 dims = get_render_dimensions(engine);
     int width = std::max(dims.x, 1);
     int height = std::max(dims.y, 1);
-    MenuInputState input = gather_menu_input();
+    MenuInputState input = gather_menu_input(engine);
     menu_system_set_input(input);
-    menu_system_update(es ? es->dt : 0.0f, width, height);
+    menu_system_update(engine, engine.dt, width, height);
 }
 
-void title_draw(void*) {
-    if (!current_graphics() || !current_graphics()->renderer)
+void title_draw(EngineState& engine, void*) {
+    if (!current_graphics(engine) || !current_graphics(engine)->renderer)
         return;
-    SDL_Renderer* renderer = current_graphics()->renderer;
-    glm::ivec2 dims = get_render_dimensions();
+    SDL_Renderer* renderer = current_graphics(engine)->renderer;
+    glm::ivec2 dims = get_render_dimensions(engine);
     int width = std::max(dims.x, 1);
     int height = std::max(dims.y, 1);
     SDL_SetRenderDrawColor(renderer, 14, 12, 26, 255);
     SDL_RenderClear(renderer);
-    menu_system_render(renderer, width, height);
+    menu_system_render(engine, renderer, width, height);
 }

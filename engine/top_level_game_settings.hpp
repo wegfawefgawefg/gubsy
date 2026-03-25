@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "engine/settings_types.hpp"
+struct EngineState;
 
 struct TopLevelGameSettings {
     std::unordered_map<std::string, SettingsValue> settings;
@@ -22,9 +23,9 @@ TopLevelGameSettings load_top_level_game_settings();
 bool save_top_level_game_settings(const TopLevelGameSettings& settings);
 
 /*
- Load top-level settings into es->top_level_game_settings
+ Load top-level settings into engine.top_level_game_settings
 */
-bool load_top_level_game_settings_into_state();
+bool load_top_level_game_settings_into_state(EngineState& engine);
 
 // Helper functions for setting values
 void set_top_level_setting_int(TopLevelGameSettings& settings, const std::string& key, int value);

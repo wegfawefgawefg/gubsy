@@ -1,4 +1,5 @@
 #pragma once
 
-void register_mods_menu_screen();
+struct EngineState;
 
+void register_mods_menu_screen(EngineState& engine);

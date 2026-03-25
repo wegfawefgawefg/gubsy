@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include "input.hpp"
+struct EngineState;
 
 struct BindsProfile {
     int id;
@@ -60,9 +61,9 @@ BindsProfile load_binds_profile(int profile_id);
 bool save_binds_profile(const BindsProfile& profile);
 
 /*
- Load all binds profiles into es->binds_profiles pool
+ Load all binds profiles into engine.binds_profiles
 */
-bool load_binds_profiles_pool();
+bool load_binds_profiles_pool(EngineState& engine);
 
 /*
  Generate random 8-digit ID for binds profile
@@ -87,7 +88,7 @@ void bind_2d_analog(BindsProfile& profile, Gubsy2DAnalog device_stick, int gubsy
 /*
  get the global pool of binds profiles
 */
-std::vector<BindsProfile>& get_binds_profiles_pool();
+std::vector<BindsProfile>& get_binds_profiles_pool(EngineState& engine);
 
 /*
  Register the binds schema and reconcile existing binds profiles
@@ -95,5 +96,5 @@ std::vector<BindsProfile>& get_binds_profiles_pool();
  - Removes binds to actions/analogs not in the schema
  - Keeps valid binds that match the schema
 */
-void register_binds_schema(const BindsSchema& schema);
+void register_binds_schema(EngineState& engine, const BindsSchema& schema);
 const BindsSchema& get_binds_schema();

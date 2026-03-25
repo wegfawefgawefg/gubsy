@@ -11,6 +11,8 @@
 #include "engine/menu_layout_ids.hpp"
 #include "engine/ui_layouts.hpp"
 
+struct EngineState;
+
 inline constexpr float kSliderOptionButtonWidth = 32.0f;
 inline constexpr float kSliderOptionButtonSpacing = 8.0f;
 
@@ -47,6 +49,8 @@ extern bool g_allow_mouse_focus;
 extern bool g_mouse_focus_locked;
 extern int g_mouse_focus_lock_x;
 extern int g_mouse_focus_lock_y;
+extern int g_last_mouse_x;
+extern int g_last_mouse_y;
 
 struct NavRepeatState {
     bool active{false};
@@ -80,11 +84,11 @@ struct FocusArrowState {
 
 extern FocusArrowState g_arrows;
 
-void play_focus_sound();
-void play_confirm_sound();
-void play_cant_sound();
-void play_left_sound();
-void play_right_sound();
+void play_focus_sound(EngineState& engine);
+void play_confirm_sound(EngineState& engine);
+void play_cant_sound(EngineState& engine);
+void play_left_sound(EngineState& engine);
+void play_right_sound(EngineState& engine);
 
 void lock_mouse_focus_at(int x, int y);
 void ensure_mouse_lock(int x, int y);
@@ -128,8 +132,9 @@ void update_repeat(bool down, NavRepeatState& state, bool& trigger, float dt);
 
 SDL_FRect rect_from_object(const UIObject& obj, int width, int height);
 
-int measure_text_width(const char* text);
-void draw_text_with_clip(SDL_Renderer* renderer,
+int measure_text_width(const EngineState& engine, const char* text);
+void draw_text_with_clip(const EngineState& engine,
+                         SDL_Renderer* renderer,
                          const char* text,
                          int x,
                          int y,

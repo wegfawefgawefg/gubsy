@@ -1,5 +1,5 @@
 #include "mods.hpp"
-#include "globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/project_paths.hpp"
@@ -172,35 +172,33 @@ std::vector<ModInfo> resolve_mod_order(std::vector<ModInfo> mods) {
 
 } // namespace
 
-bool init_mods_manager(const std::string& mods_root) {
-    if (!es)
-        return false;
-    cleanup_mods_manager();
+bool init_mods_manager(EngineState& engine, const std::string& mods_root) {
+    cleanup_mods_manager(engine);
     ModManager* manager = new ModManager{};
     manager->root = mods_root;
-    es->mod_manager = manager;
+    engine.mod_manager = manager;
     return true;
 }
 
-void cleanup_mods_manager() {
-    if (es && es->mod_manager) {
-        delete es->mod_manager;
-        es->mod_manager = nullptr;
+void cleanup_mods_manager(EngineState& engine) {
+    if (engine.mod_manager) {
+        delete engine.mod_manager;
+        engine.mod_manager = nullptr;
     }
 }
 
-ModManager* current_mod_manager() {
-    return es ? es->mod_manager : nullptr;
+ModManager* current_mod_manager(EngineState& engine) {
+    return engine.mod_manager;
 }
 
-const ModManager* current_mod_manager_const() {
-    return es ? es->mod_manager : nullptr;
+const ModManager* current_mod_manager_const(const EngineState& engine) {
+    return engine.mod_manager;
 }
 
 /// Discover available mods by scanning the configured mod root for `info.toml`.
 /// Clears any previously discovered mods.
-void discover_mods() {
-    ModManager* manager = current_mod_manager();
+void discover_mods(EngineState& engine) {
+    ModManager* manager = current_mod_manager(engine);
     if (!manager)
         return;
     manager->mods.clear();
@@ -271,8 +269,8 @@ void discover_mods() {
 /// Returns `true` on completion (does not signal whether anything changed).
 /// Complexity: O(#files). Call when you need a fast index refresh after add/remove/rename;
 /// use the full store rebuild for manifest/content changes.
-bool cheap_scan_mods_to_update_sprite_name_registry() {
-    ModManager* manager = current_mod_manager();
+bool cheap_scan_mods_to_update_sprite_name_registry(EngineState& engine) {
+    ModManager* manager = current_mod_manager(engine);
     if (!manager)
         return false;
     std::vector<std::string> names;
@@ -295,7 +293,7 @@ bool cheap_scan_mods_to_update_sprite_name_registry() {
             }
         }
     }
-    build_sprite_name_id_mapping(names);
+    build_sprite_name_id_mapping(engine, names);
     manager->registry_built = true;
     std::printf("[mods] Sprite registry built with %zu entries\n", names.size());
     return true;
@@ -328,8 +326,8 @@ static bool is_image_ext(const std::string& ext) {
 /// Does NOT load textures. Log-and-continue on parse errors. Complexity
 /// O(files + parse). Call on startup and whenever manifests or image content
 /// change. IDs may change if the name set changes.
-bool scan_mods_for_sprite_defs() {
-    const ModManager* manager = current_mod_manager_const();
+bool scan_mods_for_sprite_defs(EngineState& engine) {
+    const ModManager* manager = current_mod_manager_const(engine);
     if (!manager)
         return false;
     auto mod_infos = manager->mods;
@@ -421,17 +419,17 @@ bool scan_mods_for_sprite_defs() {
     for (auto& kv : sorted)
         defs.push_back(std::move(kv.second));
  
-    rebuild_sprite_mapping(defs);
+    rebuild_sprite_mapping(engine, defs);
     std::printf("[mods] Sprite store built with %zu entries\n", defs.size());
     return true;
 }
 
 
-bool poll_fs_mods_hot_reload() {
-    ModManager* manager = current_mod_manager();
-    if (!manager || !es)
+bool poll_fs_mods_hot_reload(EngineState& engine) {
+    ModManager* manager = current_mod_manager(engine);
+    if (!manager)
         return false;
-    manager->accum_poll += es->dt;
+    manager->accum_poll += engine.dt;
     if (manager->accum_poll < HOT_RELOAD_POLL_INTERVAL)
         return false;
     manager->accum_poll = 0.0f;
@@ -464,8 +462,8 @@ bool poll_fs_mods_hot_reload() {
 
     std::vector<std::string> reload_ids(touched_mods.begin(), touched_mods.end());
     std::printf("[mods] Reloading %zu mod(s) due to changes.\n", reload_ids.size());
-    if (reload_mods(reload_ids)) {
-        es->alerts.push_back({"Mods reloaded", 0.0f, 1.5f, false});
+    if (reload_mods(engine, reload_ids)) {
+        engine.alerts.push_back({"Mods reloaded", 0.0f, 1.5f, false});
         return true;
     }
     return false;

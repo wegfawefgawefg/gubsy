@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "engine/settings_types.hpp"
+struct EngineState;
 
 struct GameSettings {
     int id;
@@ -29,9 +30,9 @@ GameSettings load_game_settings(int settings_id);
 bool save_game_settings(const GameSettings& settings);
 
 /*
- Load all game settings into es->game_settings_pool
+ Load all game settings into engine.game_settings_pool
 */
-bool load_game_settings_pool();
+bool load_game_settings_pool(EngineState& engine);
 
 /*
  Generate random 8-digit ID for game settings

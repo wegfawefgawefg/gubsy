@@ -3,7 +3,7 @@
 #include "engine/binds_profiles.hpp"
 #include "game/actions.hpp"
 
-void register_binds_schema_entries() {
+void register_binds_schema_entries(EngineState& engine) {
     BindsSchema schema;
     schema.add_action(GameAction::MENU_UP, "Move Up", "Menu");
     schema.add_action(GameAction::MENU_DOWN, "Move Down", "Menu");
@@ -20,5 +20,5 @@ void register_binds_schema_entries() {
     schema.add_action(GameAction::USE, "Use/Interact", "Actions");
     schema.add_1d_analog(GameAnalog1D::BAR_HEIGHT, "Bar Height", "Demo");
     schema.add_2d_analog(GameAnalog2D::RETICLE_POS, "Reticle Position", "Demo");
-    register_binds_schema(schema);
+    register_binds_schema(engine, schema);
 }

@@ -69,7 +69,7 @@ SettingMetadata make_option_setting(const char* key,
 
 } // namespace
 
-void register_game_settings_schema_entries() {
+void register_game_settings_schema_entries(EngineState& engine) {
     SettingsSchema schema;
 
     schema.add_setting(make_toggle_setting("demo.controls.invert_x_axis",
@@ -120,5 +120,5 @@ void register_game_settings_schema_entries() {
                                            {"Debug"},
                                            false));
 
-    register_settings_schema(schema);
+    register_settings_schema(engine, schema);
 }

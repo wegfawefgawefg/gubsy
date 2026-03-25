@@ -1,6 +1,6 @@
 #include "engine/input_sources.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/input.hpp"
 #include "engine/render.hpp"
 
@@ -9,82 +9,73 @@
 #include <cstdio>
 #include <string>
 
-bool detect_input_sources() {
-    if (!es)
-        return false;
-
-    es->input_sources.clear();
-    es->open_controllers.clear();
-    es->gamepad_states.clear();
+bool detect_input_sources(EngineState& engine) {
+    engine.input_sources.clear();
+    engine.open_controllers.clear();
+    engine.gamepad_states.clear();
 
     // Always add keyboard (aggregates all keyboards, ID=0)
     InputSource keyboard;
     keyboard.type = InputSourceType::Keyboard;
     keyboard.device_id.id = 0;
-    es->input_sources.push_back(keyboard);
+    engine.input_sources.push_back(keyboard);
 
     // Always add mouse (aggregates all mice, ID=0)
     InputSource mouse;
     mouse.type = InputSourceType::Mouse;
     mouse.device_id.id = 0;
-    es->input_sources.push_back(mouse);
+    engine.input_sources.push_back(mouse);
 
     // Enumerate and open gamepads
     int num_joysticks = SDL_NumJoysticks();
     for (int i = 0; i < num_joysticks; ++i) {
         if (SDL_IsGameController(i)) {
-            on_device_added(i); // Use the same logic as hot-plugging
+            on_device_added(engine, i);
         }
     }
 
     std::fprintf(stderr, "[input] Detected %zu input sources (%zu gamepads)\n",
-                 es->input_sources.size(), es->open_controllers.size());
+                 engine.input_sources.size(), engine.open_controllers.size());
 
     return true;
 }
 
-void refresh_input_sources() {
-    if (!es)
-        return;
-
-    size_t old_count = es->open_controllers.size();
+void refresh_input_sources(EngineState& engine) {
+    size_t old_count = engine.open_controllers.size();
 
     // Close all currently open game controllers
-    for (auto const& [id, controller] : es->open_controllers) {
+    for (auto const& [id, controller] : engine.open_controllers) {
         SDL_GameControllerClose(controller);
     }
-    es->open_controllers.clear();
-    es->gamepad_states.clear();
+    engine.open_controllers.clear();
+    engine.gamepad_states.clear();
 
     // Remove all gamepads from the public list
-    es->input_sources.erase(
-        std::remove_if(es->input_sources.begin(), es->input_sources.end(),
+    engine.input_sources.erase(
+        std::remove_if(engine.input_sources.begin(), engine.input_sources.end(),
                       [](const InputSource& src) { return src.type == InputSourceType::Gamepad; }),
-        es->input_sources.end());
+        engine.input_sources.end());
 
     // Re-enumerate and open gamepads
     int num_joysticks = SDL_NumJoysticks();
     for (int i = 0; i < num_joysticks; ++i) {
         if (SDL_IsGameController(i)) {
-            on_device_added(i); // Reuse hot-plug logic
+            on_device_added(engine, i);
         }
     }
 
-    size_t new_count = es->open_controllers.size();
+    size_t new_count = engine.open_controllers.size();
     if (old_count != new_count) {
         std::fprintf(stderr, "[input] Input sources refreshed: %zu -> %zu gamepads\n", old_count, new_count);
     }
 }
 
-void on_device_added(int device_index) {
-    if (!es)
-        return;
-
+void on_device_added(EngineState& engine, int device_index) {
     if (!SDL_IsGameController(device_index))
         return;
 
     // Check if already open
-    if (es->open_controllers.count(device_index)) {
+    if (engine.open_controllers.count(device_index)) {
         return;
     }
     
@@ -94,27 +85,24 @@ void on_device_added(int device_index) {
         return;
     }
 
-    es->open_controllers[device_index] = controller;
-    es->gamepad_states[device_index] = {}; // Zero-initialize the state
+    engine.open_controllers[device_index] = controller;
+    engine.gamepad_states[device_index] = {};
 
     // Also add to the public list of sources
     InputSource gamepad;
     gamepad.type = InputSourceType::Gamepad;
     gamepad.device_id.id = device_index;
-    es->input_sources.push_back(gamepad);
+    engine.input_sources.push_back(gamepad);
 
     std::fprintf(stderr, "[input] Gamepad added and opened (device %d)\n", device_index);
 }
 
-void on_device_removed(int instance_id) {
-    if (!es)
-        return;
-
+void on_device_removed(EngineState& engine, int instance_id) {
     int device_to_remove = -1;
     SDL_GameController* controller_to_close = nullptr;
 
     // Find the controller and its device_id from the instance_id
-    for (auto const& [device_id, controller] : es->open_controllers) {
+    for (auto const& [device_id, controller] : engine.open_controllers) {
         if (SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) == instance_id) {
             device_to_remove = device_id;
             controller_to_close = controller;
@@ -127,20 +115,20 @@ void on_device_removed(int instance_id) {
         
         // Close handle and remove from maps
         SDL_GameControllerClose(controller_to_close);
-        es->open_controllers.erase(device_to_remove);
-        es->gamepad_states.erase(device_to_remove);
+        engine.open_controllers.erase(device_to_remove);
+        engine.gamepad_states.erase(device_to_remove);
 
         // Remove from public list of sources
-        es->input_sources.erase(
-            std::remove_if(es->input_sources.begin(), es->input_sources.end(),
+        engine.input_sources.erase(
+            std::remove_if(engine.input_sources.begin(), engine.input_sources.end(),
                           [device_to_remove](const InputSource& src) {
                               return src.type == InputSourceType::Gamepad && src.device_id.id == device_to_remove;
                           }),
-            es->input_sources.end());
+            engine.input_sources.end());
     }
 }
 
-void draw_input_devices_overlay(SDL_Renderer* renderer) {
+void draw_input_devices_overlay(const EngineState& engine, SDL_Renderer* renderer) {
     const SDL_Color white = {255, 255, 255, 255};
     const SDL_Color green = {100, 255, 100, 255};
     const SDL_Color cyan = {100, 200, 255, 255};
@@ -149,13 +137,13 @@ void draw_input_devices_overlay(SDL_Renderer* renderer) {
     const int line_height = 18;
 
     // Title
-    std::string title = "Input Devices (" + std::to_string(es->input_sources.size()) + ")";
+    std::string title = "Input Devices (" + std::to_string(engine.input_sources.size()) + ")";
     draw_text(renderer, title, 10, y, white);
     y += line_height + 5;
 
     // List each device
-    for (size_t i = 0; i < es->input_sources.size(); ++i) {
-        const auto& src = es->input_sources[i];
+    for (size_t i = 0; i < engine.input_sources.size(); ++i) {
+        const auto& src = engine.input_sources[i];
         std::string device_text;
 
         switch (src.type) {

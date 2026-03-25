@@ -1,7 +1,7 @@
 #include "game/setup.hpp"
 
 #include "game/app_context.hpp"
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_server_config.hpp"
 #include "engine/project_paths.hpp"
@@ -40,16 +40,16 @@ SetupState g_state = SetupState::Idle;
 std::string g_status = "Preparing mods...";
 std::string g_error;
 
-std::filesystem::path mods_root_dir() {
-    const ModManager* manager = current_mod_manager_const();
+std::filesystem::path mods_root_dir(EngineState& engine) {
+    const ModManager* manager = current_mod_manager_const(engine);
     if (manager && !manager->root.empty())
         return std::filesystem::path(manager->root);
     return runtime_mods_path();
 }
 
-bool ensure_mod_root(std::string& err) {
+bool ensure_mod_root(EngineState& engine, std::string& err) {
     std::error_code ec;
-    auto root = mods_root_dir();
+    auto root = mods_root_dir(engine);
     if (!std::filesystem::create_directories(root, ec) && ec) {
         err = "Failed to prepare mods directory: " + root.string();
         return false;
@@ -57,10 +57,10 @@ bool ensure_mod_root(std::string& err) {
     return true;
 }
 
-bool ensure_demo_mods_installed(std::string& err) {
+bool ensure_demo_mods_installed(EngineState& engine, std::string& err) {
     std::vector<std::string> missing;
     for (const auto& id : kDemoModChain) {
-        auto path = mods_root_dir() / id;
+        auto path = mods_root_dir(engine) / id;
         std::error_code ec;
         bool installed = std::filesystem::exists(path, ec) && std::filesystem::is_directory(path, ec);
         if (!installed)
@@ -91,23 +91,23 @@ bool ensure_demo_mods_installed(std::string& err) {
             return false;
         }
         std::string folder = entry->folder.empty() ? entry->id : entry->folder;
-        auto path = mods_root_dir() / folder;
+        auto path = mods_root_dir(engine) / folder;
         std::error_code ec;
         bool installed = std::filesystem::exists(path, ec) && std::filesystem::is_directory(path, ec);
         if (installed)
             continue;
 
         g_status = "Installing " + entry->title + "...";
-        if (!install_mod_from_catalog(mod_server_url, *entry, err))
+        if (!install_mod_from_catalog(engine, mod_server_url, *entry, err))
             return false;
     }
     return true;
 }
 
-bool run_setup_once() {
+bool run_setup_once(EngineState& engine) {
     std::string err;
     g_status = "Preparing local mods...";
-    if (!ensure_mod_root(err)) {
+    if (!ensure_mod_root(engine, err)) {
         g_error = err;
         return false;
     }
@@ -115,18 +115,18 @@ bool run_setup_once() {
         g_error = err;
         return false;
     }
-    if (!ensure_demo_mods_installed(err)) {
+    if (!ensure_demo_mods_installed(engine, err)) {
         g_error = err;
         return false;
     }
     g_status = "Discovering mods...";
-    if (!current_mod_manager()) {
+    if (!current_mod_manager(engine)) {
         g_error = "Mod manager unavailable";
         return false;
     }
-    discover_mods();
+    discover_mods(engine);
     g_status = "Activating mods...";
-    if (!set_active_mods(kDemoModChain)) {
+    if (!set_active_mods(engine, kDemoModChain)) {
         g_error = "Failed to activate mods";
         return false;
     }
@@ -136,18 +136,16 @@ bool run_setup_once() {
 
 void finalize_and_enter_play(void* app_context) {
     State* state = game_state_from_app_context(app_context);
-    if (!state)
+    EngineState* engine = engine_state_from_app_context(app_context);
+    if (!state || !engine)
         return;
     finalize_game_mod_apis(*state);
-    es->mode = modes::PLAYING;
+    engine->mode = modes::PLAYING;
 }
 
 } // namespace
 
-void setup_step(void* app_context) {
-    if (!es)
-        return;
-
+void setup_step(EngineState& engine, void* app_context) {
     switch (g_state) {
     case SetupState::Ready:
         finalize_and_enter_play(app_context);
@@ -156,7 +154,7 @@ void setup_step(void* app_context) {
         return;
     case SetupState::Idle:
         g_state = SetupState::Running;
-        if (run_setup_once())
+        if (run_setup_once(engine))
             g_state = SetupState::Ready;
         else
             g_state = SetupState::Failed;
@@ -167,11 +165,11 @@ void setup_step(void* app_context) {
     }
 }
 
-void setup_draw(void*) {
-    if (!current_graphics() || !current_graphics()->renderer)
+void setup_draw(EngineState& engine, void*) {
+    if (!current_graphics(engine) || !current_graphics(engine)->renderer)
         return;
-    SDL_Renderer* renderer = current_graphics()->renderer;
-    glm::ivec2 dims = get_render_dimensions();
+    SDL_Renderer* renderer = current_graphics(engine)->renderer;
+    glm::ivec2 dims = get_render_dimensions(engine);
     int height = std::max(dims.y, 1);
     SDL_SetRenderDrawColor(renderer, 10, 8, 16, 255);
     SDL_RenderClear(renderer);

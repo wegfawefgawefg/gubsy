@@ -1,6 +1,6 @@
 #include "engine/imgui_debug/windows.hpp"
 
-#include "engine/globals.hpp"
+#include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
@@ -104,20 +104,20 @@ void auto_adjust_form_factor_for_resolution(int width, int height) {
 
 } // namespace
 
-void imgui_debug_render_video_window(bool* open_flag) {
+void imgui_debug_render_video_window(EngineState& engine, bool* open_flag) {
     if (!open_flag || !*open_flag)
         return;
     if (!ImGui::Begin("Debug: Video & Resolution", open_flag)) {
         ImGui::End();
         return;
     }
-    if (!current_graphics() || !current_graphics()->renderer) {
+    if (!current_graphics(engine) || !current_graphics(engine)->renderer) {
         ImGui::TextUnformatted("Graphics subsystem unavailable.");
         ImGui::End();
         return;
     }
-    glm::ivec2 window_dims = get_window_dimensions();
-    glm::ivec2 render_dims = get_render_dimensions();
+    glm::ivec2 window_dims = get_window_dimensions(engine);
+    glm::ivec2 render_dims = get_render_dimensions(engine);
     ImGui::Text("Window: %d x %d", window_dims.x, window_dims.y);
     ImGui::Text("Render: %d x %d", render_dims.x, render_dims.y);
 
@@ -147,8 +147,8 @@ void imgui_debug_render_video_window(bool* open_flag) {
         return -1;
     };
     auto apply_render_resolution = [&](int w, int h, bool auto_adjust) {
-        if (set_render_resolution(w, h)) {
-            glm::ivec2 updated = get_render_dimensions();
+        if (set_render_resolution(engine, w, h)) {
+            glm::ivec2 updated = get_render_dimensions(engine);
             w = updated.x;
             h = updated.y;
         }
@@ -214,8 +214,8 @@ void imgui_debug_render_video_window(bool* open_flag) {
         return -1;
     };
     auto apply_window_size = [&](int w, int h, bool auto_adjust) {
-        set_window_dimensions(w, h);
-        glm::ivec2 dims_now = get_window_dimensions();
+        set_window_dimensions(engine, w, h);
+        glm::ivec2 dims_now = get_window_dimensions(engine);
         pending_window_w = dims_now.x;
         pending_window_h = dims_now.y;
         if (auto_adjust)
@@ -266,36 +266,36 @@ void imgui_debug_render_video_window(bool* open_flag) {
     }
 
     const char* window_mode_labels[] = {"Windowed", "Borderless", "Fullscreen"};
-    int window_mode = static_cast<int>(current_graphics()->window_mode);
+    int window_mode = static_cast<int>(current_graphics(engine)->window_mode);
     if (ImGui::Combo("Window Mode", &window_mode,
                      window_mode_labels, IM_ARRAYSIZE(window_mode_labels))) {
-        set_window_display_mode(static_cast<WindowDisplayMode>(window_mode));
+        set_window_display_mode(engine, static_cast<WindowDisplayMode>(window_mode));
     }
 
     const char* scale_labels[] = {"Fit (letterbox)", "Stretch"};
-    int scale_mode = static_cast<int>(current_graphics()->render_scale_mode);
+    int scale_mode = static_cast<int>(current_graphics(engine)->render_scale_mode);
     if (ImGui::Combo("Render Scale", &scale_mode, scale_labels, IM_ARRAYSIZE(scale_labels))) {
-        set_render_scale_mode(static_cast<RenderScaleMode>(scale_mode));
+        set_render_scale_mode(engine, static_cast<RenderScaleMode>(scale_mode));
     }
 
     ImGui::Separator();
     ImGui::TextUnformatted("Preview adjustments (debug)");
-    float zoom = current_graphics()->preview_zoom;
+    float zoom = current_graphics(engine)->preview_zoom;
     if (ImGui::SliderFloat("Zoom", &zoom, 0.5f, 3.0f, "%.2fx")) {
-        current_graphics()->preview_zoom = zoom;
+        current_graphics(engine)->preview_zoom = zoom;
     }
-    float pan[2] = {current_graphics()->preview_pan.x, current_graphics()->preview_pan.y};
+    float pan[2] = {current_graphics(engine)->preview_pan.x, current_graphics(engine)->preview_pan.y};
     if (ImGui::DragFloat2("Pan (pixels)", pan, 1.0f, -1000.0f, 1000.0f)) {
-        current_graphics()->preview_pan = glm::vec2(pan[0], pan[1]);
+        current_graphics(engine)->preview_pan = glm::vec2(pan[0], pan[1]);
     }
-    float safe_vals[4] = {current_graphics()->safe_area.x, current_graphics()->safe_area.y, current_graphics()->safe_area.z, current_graphics()->safe_area.w};
+    float safe_vals[4] = {current_graphics(engine)->safe_area.x, current_graphics(engine)->safe_area.y, current_graphics(engine)->safe_area.z, current_graphics(engine)->safe_area.w};
     if (ImGui::SliderFloat4("Safe area (pct of window)", safe_vals, 0.0f, 0.25f, "%.3f")) {
-        current_graphics()->safe_area = glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
+        current_graphics(engine)->safe_area = glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
     }
     if (ImGui::Button("Reset Preview Adjustments")) {
-        current_graphics()->preview_zoom = 1.0f;
-        current_graphics()->preview_pan = glm::vec2(0.0f);
-        current_graphics()->safe_area = glm::vec4(0.0f);
+        current_graphics(engine)->preview_zoom = 1.0f;
+        current_graphics(engine)->preview_pan = glm::vec2(0.0f);
+        current_graphics(engine)->safe_area = glm::vec4(0.0f);
     }
 
     ImGui::End();
