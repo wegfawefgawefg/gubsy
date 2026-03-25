@@ -23,6 +23,7 @@
 #include "engine/input_sources.hpp"
 
 struct ModManager;
+struct Audio;
 
 struct EngineState {
     bool running{true};
@@ -86,6 +87,7 @@ struct EngineState {
     MenuManager menu_manager;
     MenuCommandRegistry menu_commands;
     ModManager* mod_manager{nullptr};
+    Audio* audio{nullptr};
 };
 
 bool init_engine_state();

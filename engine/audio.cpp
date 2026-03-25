@@ -9,8 +9,19 @@
 #include <system_error>
 #include <SDL_mixer.h>
 
+namespace {
+
+Audio* current_audio() {
+    return es ? es->audio : nullptr;
+}
+
+} // namespace
+
 bool init_audio() {
-    if (!aa) aa = new Audio();
+    if (!es)
+        return false;
+    if (!es->audio)
+        es->audio = new Audio();
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) != 0)
         return false;
 
@@ -24,29 +35,36 @@ bool init_audio() {
 }
 
 void cleanup_audio() {
-    if (!aa) return;
-    for (auto& kv : aa->chunks)
+    Audio* audio = current_audio();
+    if (!audio)
+        return;
+    for (auto& kv : audio->chunks)
         Mix_FreeChunk(kv.second);
-    aa->chunks.clear();
+    audio->chunks.clear();
     if (Mix_QuerySpec(nullptr, nullptr, nullptr))
         Mix_CloseAudio();
-    delete aa;
-    aa = nullptr;
+    delete audio;
+    es->audio = nullptr;
 }
 
 bool load_sound(const std::string& key, const std::string& path) {
-    if (!aa) return false;
+    Audio* audio = current_audio();
+    if (!audio)
+        return false;
     Mix_Chunk* ch = Mix_LoadWAV(path.c_str());
     if (!ch)
         return false;
-    aa->chunks[key] = ch;
+    audio->chunks[key] = ch;
     return true;
 }
 
 void play_sound(const std::string& key, int loops, int /*channel_hint*/, int volume) {
-    if (!aa) return;
-    auto it = aa->chunks.find(key);
-    if (it == aa->chunks.end()) return;
+    Audio* audio = current_audio();
+    if (!audio)
+        return;
+    auto it = audio->chunks.find(key);
+    if (it == audio->chunks.end())
+        return;
 
     int ch = Mix_GroupAvailable(1);
     if (ch == -1) {
@@ -111,7 +129,7 @@ void load_mod_sounds(const std::filesystem::path& mods_root) {
 }
 
 void load_builtin_sounds() {
-    if (!aa)
+    if (!current_audio())
         return;
     namespace fs = std::filesystem;
     std::error_code ec;

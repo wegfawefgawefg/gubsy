@@ -1,4 +1,5 @@
 #include "engine_state.hpp"
+#include "engine/audio.hpp"
 #include "globals.hpp"
 #include "engine/mods.hpp"
 #include "engine/settings_defaults.hpp"
@@ -35,6 +36,8 @@ void cleanup_engine_state() {
         delete es->mod_manager;
         es->mod_manager = nullptr;
     }
+    if (es->audio)
+        cleanup_audio();
     delete es;
     es = nullptr;
 }
