@@ -205,7 +205,9 @@ add_executable(coop_sync_smoke
   tools/coop_sync_smoke/main.cpp
   src/engine/room_matchmaking.cpp
   src/engine/session_contract.cpp
+  src/engine/sync_payload_codec.cpp
   src/engine/sync_transport_udp.cpp
+  src/engine/sync_transport_packet_codec.cpp
   src/game/coop_protocol.cpp
   src/game/coop_sim.cpp
 )

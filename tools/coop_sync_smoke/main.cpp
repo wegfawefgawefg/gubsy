@@ -11,6 +11,7 @@
 #include "engine/net_transport.hpp"
 #include "engine/room_matchmaking.hpp"
 #include "engine/session_contract.hpp"
+#include "engine/sync_payload_codec.hpp"
 #include "engine/sync_transport_udp.hpp"
 #include "game/actions.hpp"
 #include "game/coop_protocol.hpp"
@@ -87,8 +88,8 @@ int main(int argc, char** argv) {
     if (argc > 1)
         server_url = argv[1];
 
-    UdpJsonNetTransport host_transport;
-    UdpJsonNetTransport guest_transport;
+    UdpSyncNetTransport host_transport;
+    UdpSyncNetTransport guest_transport;
 
     try {
         RoomServerMatchmaking matchmaking;
@@ -150,7 +151,7 @@ int main(int argc, char** argv) {
             guest_packet.room_code = room_code;
             guest_packet.member_id = guest_member_id;
             guest_packet.seq = static_cast<std::uint64_t>(frame_index + 1);
-            guest_packet.payload = input_frame_to_json(guest_input);
+            require(sync_payload_encode_json(input_frame_to_json(guest_input), guest_packet.payload, err), err);
             require(guest_transport.send(guest_packet, err), err);
 
             std::vector<NetTransportPacket> incoming_inputs;
@@ -160,7 +161,9 @@ int main(int argc, char** argv) {
                 for (const NetTransportPacket& entry : incoming_inputs) {
                     if (entry.kind != NetPacketKind::Input || entry.member_id != guest_member_id)
                         continue;
-                    require(input_frame_from_json(entry.payload, latest_guest_input), "failed to decode guest input");
+                    nlohmann::json input_json;
+                    require(sync_payload_decode_json(entry.payload, input_json, err), err);
+                    require(input_frame_from_json(input_json, latest_guest_input), "failed to decode guest input");
                     latest_guest_seq = entry.seq;
                     host_has_guest = true;
                 }
@@ -180,14 +183,14 @@ int main(int argc, char** argv) {
             NetTransportPacket snapshot_packet;
             snapshot_packet.kind = NetPacketKind::Snapshot;
             snapshot_packet.room_code = room_code;
-            snapshot_packet.payload = nlohmann::json{
+            require(sync_payload_encode_json(nlohmann::json{
                 {"sim_frame", static_cast<std::uint64_t>(frame_index + 1)},
                 {"driver_snapshot",
                  coop_snapshot_to_json(capture_coop_snapshot(host_state,
                                                              host_member_ids,
                                                              static_cast<std::uint64_t>(frame_index + 1)))},
                 {"acked_inputs", std::move(acked_inputs)},
-            };
+            }, snapshot_packet.payload, err), err);
             require(host_transport.send(snapshot_packet, err), err);
 
             NetTransportPacket latest_snapshot;
@@ -207,8 +210,10 @@ int main(int argc, char** argv) {
             });
             require(got_snapshot, "missing guest snapshot");
 
+            nlohmann::json snapshot_json;
+            require(sync_payload_decode_json(latest_snapshot.payload, snapshot_json, err), err);
             CoopStateSnapshot snapshot;
-            require(coop_snapshot_from_json(latest_snapshot.payload.at("driver_snapshot"), snapshot),
+            require(coop_snapshot_from_json(snapshot_json.at("driver_snapshot"), snapshot),
                     "failed to decode snapshot");
             apply_coop_snapshot(snapshot, guest_state, guest_member_ids);
             compare_states(host_state, guest_state, host_member_ids, guest_member_ids);

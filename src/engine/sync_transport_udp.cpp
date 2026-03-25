@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -16,6 +17,7 @@
 #include <unistd.h>
 
 #include "engine/net_transport.hpp"
+#include "engine/sync_transport_packet_codec.hpp"
 
 namespace {
 
@@ -105,21 +107,20 @@ std::string sender_endpoint_string(const sockaddr_in& addr) {
     return std::string(ip) + ":" + std::to_string(ntohs(addr.sin_port));
 }
 
-bool send_json_packet(int socket_fd,
-                      const ParsedUdpEndpoint& endpoint,
-                      const nlohmann::json& packet,
+bool send_packet_bytes(int socket_fd,
+                       const ParsedUdpEndpoint& endpoint,
+                       const std::vector<std::uint8_t>& packet,
                       std::string& err) {
     sockaddr_in addr{};
     if (!endpoint_to_sockaddr(endpoint, addr, err))
         return false;
-    std::string payload = packet.dump();
     ssize_t sent = sendto(socket_fd,
-                          payload.data(),
-                          payload.size(),
+                          packet.data(),
+                          packet.size(),
                           0,
                           reinterpret_cast<const sockaddr*>(&addr),
                           sizeof(addr));
-    if (sent < 0 || static_cast<std::size_t>(sent) != payload.size()) {
+    if (sent < 0 || static_cast<std::size_t>(sent) != packet.size()) {
         err = std::strerror(errno);
         return false;
     }
@@ -127,7 +128,7 @@ bool send_json_packet(int socket_fd,
 }
 
 bool drain_packet(int socket_fd,
-                  nlohmann::json& packet_out,
+                  std::vector<std::uint8_t>& packet_out,
                   std::string& sender_endpoint,
                   bool& had_packet,
                   std::string& err) {
@@ -150,12 +151,7 @@ bool drain_packet(int socket_fd,
 
     had_packet = true;
     sender_endpoint = sender_endpoint_string(sender);
-    try {
-        packet_out = nlohmann::json::parse(buffer.data(), buffer.data() + recv_len);
-    } catch (const std::exception& e) {
-        err = e.what();
-        return false;
-    }
+    packet_out.assign(buffer.begin(), buffer.begin() + recv_len);
     return true;
 }
 
@@ -205,11 +201,11 @@ void remember_member_endpoint(std::vector<std::pair<std::string, std::string>>& 
 
 } // namespace
 
-UdpJsonNetTransport::~UdpJsonNetTransport() {
+UdpSyncNetTransport::~UdpSyncNetTransport() {
     reset();
 }
 
-void UdpJsonNetTransport::reset() {
+void UdpSyncNetTransport::reset() {
     if (socket_fd_ >= 0)
         close(socket_fd_);
     open_ = false;
@@ -222,13 +218,13 @@ void UdpJsonNetTransport::reset() {
     pending_packets_.clear();
 }
 
-void UdpJsonNetTransport::load_simulation_config() {
+void UdpSyncNetTransport::load_simulation_config() {
     simulated_latency_ms_ = env_int("GUB_SYNC_SIMULATED_LATENCY_MS", 0, 0, 30000);
     simulated_jitter_ms_ = env_int("GUB_SYNC_SIMULATED_JITTER_MS", 0, 0, 30000);
     simulated_drop_pct_ = env_int("GUB_SYNC_SIMULATED_DROP_PCT", 0, 0, 100);
 }
 
-bool UdpJsonNetTransport::open_socket(bool is_host,
+bool UdpSyncNetTransport::open_socket(bool is_host,
                                       const std::string& room_code,
                                       const std::string& remote_endpoint,
                                       std::string& err) {
@@ -262,13 +258,13 @@ bool UdpJsonNetTransport::open_socket(bool is_host,
     return true;
 }
 
-bool UdpJsonNetTransport::ensure_host(const std::string& room_code, std::string& err) {
+bool UdpSyncNetTransport::ensure_host(const std::string& room_code, std::string& err) {
     if (same_mode(open_, is_host_, room_code_, remote_endpoint_, true, room_code, ""))
         return true;
     return open_socket(true, room_code, "", err);
 }
 
-bool UdpJsonNetTransport::ensure_client(const std::string& room_code,
+bool UdpSyncNetTransport::ensure_client(const std::string& room_code,
                                         const std::string& remote_endpoint,
                                         std::string& err) {
     if (same_mode(open_, is_host_, room_code_, remote_endpoint_, false, room_code, remote_endpoint))
@@ -280,38 +276,28 @@ bool UdpJsonNetTransport::ensure_client(const std::string& room_code,
     return open_socket(false, room_code, remote_endpoint, err);
 }
 
-bool UdpJsonNetTransport::send(const NetTransportPacket& packet, std::string& err) {
+bool UdpSyncNetTransport::send(const NetTransportPacket& packet, std::string& err) {
     if (!open_) {
         err = "realtime transport is not open";
         return false;
     }
 
+    std::vector<std::uint8_t> packet_bytes;
+    if (!sync_transport_packet_serialize(packet, packet_bytes, err))
+        return false;
+
     if (!is_host_) {
         ParsedUdpEndpoint remote{};
         if (!parse_udp_endpoint(remote_endpoint_, remote, err))
             return false;
-        nlohmann::json packet_json{
-            {"type", packet.kind == NetPacketKind::Snapshot ? "snapshot" : "input"},
-            {"room_code", room_code_},
-            {"member_id", packet.member_id},
-            {"seq", packet.seq},
-            {"payload", packet.payload},
-        };
-        return send_json_packet(socket_fd_, remote, packet_json, err);
+        return send_packet_bytes(socket_fd_, remote, packet_bytes, err);
     }
 
-    nlohmann::json packet_json{
-        {"type", packet.kind == NetPacketKind::Snapshot ? "snapshot" : "input"},
-        {"room_code", room_code_},
-        {"member_id", packet.member_id},
-        {"seq", packet.seq},
-        {"payload", packet.payload},
-    };
     for (const auto& entry : member_endpoints_) {
         ParsedUdpEndpoint endpoint{};
         if (!parse_udp_endpoint("udp://" + entry.second, endpoint, err))
             return false;
-        if (!send_json_packet(socket_fd_, endpoint, packet_json, err))
+        if (!send_packet_bytes(socket_fd_, endpoint, packet_bytes, err))
             return false;
     }
     return true;
@@ -345,7 +331,7 @@ std::uint64_t packet_release_time_ms(int latency_ms,
 
 } // namespace
 
-bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string& err) {
+bool UdpSyncNetTransport::poll(std::vector<NetTransportPacket>& out, std::string& err) {
     out.clear();
     if (!open_) {
         err = "realtime transport is not open";
@@ -357,7 +343,7 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
     NetTransportPacket latest_snapshot;
 
     for (;;) {
-        nlohmann::json packet;
+        std::vector<std::uint8_t> packet;
         std::string sender_endpoint;
         bool had_packet = false;
         if (!drain_packet(socket_fd_, packet, sender_endpoint, had_packet, err))
@@ -383,25 +369,16 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
             continue;
         }
 
-        nlohmann::json& packet = pending.packet;
-        if (!packet.is_object() ||
-            packet.value("room_code", std::string{}) != room_code_) {
+        NetTransportPacket entry;
+        if (!sync_transport_packet_deserialize(pending.packet, entry, err))
+            return false;
+        if (entry.room_code != room_code_) {
             continue;
         }
 
-        const std::string type = packet.value("type", std::string{});
-        NetTransportPacket entry;
-        entry.room_code = room_code_;
-        entry.member_id = packet.value("member_id", "");
-        entry.seq = packet.value("seq", std::uint64_t{0});
-        auto payload_it = packet.find("payload");
-        if (payload_it != packet.end() && payload_it->is_object())
-            entry.payload = *payload_it;
-
-        if (type == "input") {
+        if (entry.kind == NetPacketKind::Input) {
             if (!is_host_ || entry.member_id.empty())
                 continue;
-            entry.kind = NetPacketKind::Input;
             remember_member_endpoint(member_endpoints_, entry.member_id, pending.sender_endpoint);
             bool replaced = false;
             for (auto& latest : latest_inputs) {
@@ -416,8 +393,7 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
             continue;
         }
 
-        if (type == "snapshot") {
-            entry.kind = NetPacketKind::Snapshot;
+        if (entry.kind == NetPacketKind::Snapshot) {
             latest_snapshot = std::move(entry);
             has_snapshot = true;
         }
@@ -434,6 +410,6 @@ bool UdpJsonNetTransport::poll(std::vector<NetTransportPacket>& out, std::string
     return true;
 }
 
-const std::string& UdpJsonNetTransport::public_endpoint() const {
+const std::string& UdpSyncNetTransport::public_endpoint() const {
     return public_endpoint_;
 }

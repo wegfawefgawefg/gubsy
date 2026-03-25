@@ -1,14 +1,15 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "engine/net_transport.hpp"
 
-class UdpJsonNetTransport final : public INetTransport {
+class UdpSyncNetTransport final : public INetTransport {
 public:
-    ~UdpJsonNetTransport() override;
+    ~UdpSyncNetTransport() override;
 
     void reset() override;
     bool ensure_host(const std::string& room_code, std::string& err) override;
@@ -21,7 +22,7 @@ public:
 
 private:
     struct PendingPacket {
-        nlohmann::json packet = nlohmann::json::object();
+        std::vector<std::uint8_t> packet;
         std::string sender_endpoint;
         std::uint64_t release_at_ms{0};
     };

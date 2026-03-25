@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "engine/net_transport.hpp"
+#include "engine/sync_payload_codec.hpp"
 #include "engine/sync_transport_udp.hpp"
 #include "engine/sync_session_wire.hpp"
 
@@ -47,7 +48,7 @@ struct SyncRuntime {
     std::uint64_t last_acked_local_input_seq{0};
     nlohmann::json last_acked_local_input = nlohmann::json::object();
     std::deque<SequencedInput> pending_local_inputs;
-    UdpJsonNetTransport transport{};
+    UdpSyncNetTransport transport{};
     double next_input_push_at{0.0};
     double next_snapshot_push_at{0.0};
 };
@@ -216,7 +217,10 @@ bool collect_transport_inputs(std::string& err) {
         int index = find_member_index(g_sync, packet.member_id);
         if (index < 0)
             continue;
-        g_sync.current_inputs[static_cast<std::size_t>(index)] = packet.payload;
+        nlohmann::json payload;
+        if (!sync_payload_decode_json(packet.payload, payload, err))
+            return false;
+        g_sync.current_inputs[static_cast<std::size_t>(index)] = std::move(payload);
         g_sync.current_input_seqs[static_cast<std::size_t>(index)] = packet.seq;
     }
     set_status_line();
@@ -242,7 +246,8 @@ bool publish_snapshot(std::string& err) {
     NetTransportPacket packet;
     packet.kind = NetPacketKind::Snapshot;
     packet.room_code = g_sync.room_code;
-    packet.payload = std::move(snapshot_packet);
+    if (!sync_payload_encode_json(snapshot_packet, packet.payload, err))
+        return false;
     return g_sync.transport.send(packet, err);
 }
 
@@ -310,7 +315,8 @@ bool fetch_snapshot(const nlohmann::json& latest_local_input, float dt, std::str
     for (const NetTransportPacket& packet : packets) {
         if (packet.kind != NetPacketKind::Snapshot)
             continue;
-        snapshot = packet.payload;
+        if (!sync_payload_decode_json(packet.payload, snapshot, err))
+            return false;
         has_snapshot = true;
     }
     if (!has_snapshot)
@@ -431,8 +437,10 @@ void run_client_step(const SequencedInput& local_input, float dt, double now) {
         packet.room_code = g_sync.room_code;
         packet.member_id = g_sync.local_member_id;
         packet.seq = local_input.seq;
-        packet.payload = local_input.payload;
-        if (g_sync.transport.send(packet, transport_err))
+        if (!sync_payload_encode_json(local_input.payload, packet.payload, transport_err)) {
+            if (!transport_err.empty())
+                g_sync.last_error = transport_err;
+        } else if (g_sync.transport.send(packet, transport_err))
             g_sync.next_input_push_at = now + kInputPushIntervalSec;
         else if (!transport_err.empty())
             g_sync.last_error = transport_err;

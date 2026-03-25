@@ -4,8 +4,6 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
 enum class NetPacketKind {
     Input,
     Snapshot,
@@ -16,7 +14,7 @@ struct NetTransportPacket {
     std::string room_code;
     std::string member_id;
     std::uint64_t seq{0};
-    nlohmann::json payload = nlohmann::json::object();
+    std::vector<std::uint8_t> payload;
 };
 
 struct INetTransport {
