@@ -42,7 +42,7 @@
 ## Implementation Notes
 - Create `engine/imgui_debug.hpp/.cpp` to own state + rendering. This module ships with the engine; game-specific overlays can live in game code without touching it.
 - Provide an initialization hook from `engine/render.cpp` after ImGui layer setup.
-- Keep module files small (< ~400 lines each) and group functionality under `src/engine/imgui_debug/`.
+- Keep module files small (< ~400 lines each) and group functionality under `engine/imgui_debug/`.
 - Use ECS/global state accessors but keep drawing code read-only; no mutations inside ImGui except toggles and highlight requests.
 - Guard all data access with `if (!es || !ss)` to avoid crashes when the engine is booting or shutting down.
 

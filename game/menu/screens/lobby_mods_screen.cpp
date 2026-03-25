@@ -17,6 +17,7 @@
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
+#include "engine/project_paths.hpp"
 #include "game/menu/lobby_state.hpp"
 #include "game/menu/menu_ids.hpp"
 #include "game/ui_layout_ids.hpp"
@@ -96,7 +97,7 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 bool path_exists(const ModCatalogEntry& entry) {
     std::filesystem::path mods_root = mm && !mm->root.empty()
                                           ? std::filesystem::path(mm->root)
-                                          : std::filesystem::path("mods");
+                                          : runtime_mods_path();
     std::string folder = entry.folder.empty() ? entry.id : entry.folder;
     if (folder.empty())
         folder = entry.id;

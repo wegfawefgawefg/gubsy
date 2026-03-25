@@ -1,9 +1,10 @@
 #include "engine/ui_layouts.hpp"
 
 #include "engine/globals.hpp"
-#include "engine/parser.hpp"
-#include "engine/utils.hpp"
 #include "engine/layout_editor/layout_editor_hooks.hpp"
+#include "engine/parser.hpp"
+#include "engine/project_paths.hpp"
+#include "engine/utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,8 +17,6 @@
 #include <unordered_set>
 
 namespace {
-
-constexpr const char* kUILayoutsPath = "data/ui_layouts/layouts.lisp";
 
 const char* form_factor_to_string(UILayoutFormFactor factor) {
     switch (factor) {
@@ -123,14 +122,15 @@ std::vector<UILayout> parse_ui_layouts_tree(const std::vector<sexp::SValue>& roo
 }
 
 std::vector<UILayout> read_ui_layouts_from_disk() {
-    std::ifstream f(kUILayoutsPath);
+    std::filesystem::path path = data_path("ui_layouts/layouts.lisp");
+    std::ifstream f(path);
     if (!f.is_open())
         return {};
     std::ostringstream oss;
     oss << f.rdbuf();
     auto parsed = sexp::parse_s_expressions(oss.str());
     if (!parsed) {
-        std::fprintf(stderr, "[ui_layouts] Failed to parse %s\n", kUILayoutsPath);
+        std::fprintf(stderr, "[ui_layouts] Failed to parse %s\n", path.string().c_str());
         return {};
     }
     return parse_ui_layouts_tree(*parsed);
@@ -138,7 +138,7 @@ std::vector<UILayout> read_ui_layouts_from_disk() {
 
 bool write_ui_layouts_file(const std::vector<UILayout>& layouts) {
     namespace fs = std::filesystem;
-    fs::path path(kUILayoutsPath);
+    fs::path path = data_path("ui_layouts/layouts.lisp");
     if (path.has_parent_path()) {
         if (!ensure_dir(path.parent_path().string()))
             return false;

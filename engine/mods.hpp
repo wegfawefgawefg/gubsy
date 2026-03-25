@@ -60,7 +60,7 @@ struct ModInfo {
     bool required{false};
 };
 
-// Very small mod manager that discovers mods in `mods/`,
+// Very small mod manager that discovers mods in the active mod root,
 // loads `info.toml`, and supports polling-based hot reload
 // for `graphics/` and `scripts/` folders.
 struct ModManager {
@@ -83,9 +83,9 @@ struct ModManager {
 };
 
 // Initialize global Mods manager instance. Returns true on success.
-bool init_mods_manager(const std::string& mods_root = "mods");
+bool init_mods_manager(const std::string& mods_root);
 
-// Discover available mods (non-recursive: `mods/*/`).
+// Discover available mods (non-recursive: `<mods_root>/*/`).
 void discover_mods();
 
 // Poll filesystem for changes and trigger rebuilds as needed.

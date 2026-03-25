@@ -2,6 +2,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
+#include "engine/project_paths.hpp"
 #include "engine/utils.hpp"
 
 #include <cstdio>
@@ -10,8 +11,6 @@
 #include <sstream>
 
 namespace {
-
-constexpr const char* kTopLevelSettingsPath = "data/settings_profiles/top_level_game_settings.lisp";
 
 TopLevelGameSettings parse_top_level_settings_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;
@@ -78,14 +77,16 @@ TopLevelGameSettings parse_top_level_settings_tree(const std::vector<sexp::SValu
 }
 
 TopLevelGameSettings read_top_level_settings_from_disk() {
-    std::ifstream f(kTopLevelSettingsPath);
+    std::filesystem::path path = data_path("settings_profiles/top_level_game_settings.lisp");
+    std::ifstream f(path);
     if (!f.is_open())
         return {};
     std::ostringstream oss;
     oss << f.rdbuf();
     auto parsed = sexp::parse_s_expressions(oss.str());
     if (!parsed) {
-        std::fprintf(stderr, "[top_level_settings] Failed to parse %s\n", kTopLevelSettingsPath);
+        std::fprintf(stderr, "[top_level_settings] Failed to parse %s\n",
+                     path.string().c_str());
         return {};
     }
     return parse_top_level_settings_tree(*parsed);
@@ -93,7 +94,7 @@ TopLevelGameSettings read_top_level_settings_from_disk() {
 
 bool write_top_level_settings_file(const TopLevelGameSettings& settings) {
     namespace fs = std::filesystem;
-    fs::path path(kTopLevelSettingsPath);
+    fs::path path = data_path("settings_profiles/top_level_game_settings.lisp");
     if (path.has_parent_path()) {
         if (!ensure_dir(path.parent_path().string()))
             return false;

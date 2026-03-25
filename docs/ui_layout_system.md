@@ -77,7 +77,7 @@ const UILayout* p2 = get_ui_layout_for_resolution(UILayoutID::PLAY_SCREEN, width
 Each player can then fetch objects within their layout and render relative to their viewport dimensions.
 
 ## Example Usage
-- See `src/game/main.cpp` for how we define and save the Play screen layouts for 1080p, 720p, and 2560x1080, using shared ID constants.
-- See `src/game/playing.cpp` for how the Play mode now loads `UILayoutID::PLAY_SCREEN`, pulls out the `UIObjectID::BAR_HEIGHT_INDICATOR`, and renders that UI element using normalized rectangles.
+- See `game/main.cpp` for how we define and save the Play screen layouts for 1080p, 720p, and 2560x1080, using shared ID constants.
+- See `game/playing.cpp` for how the Play mode now loads `UILayoutID::PLAY_SCREEN`, pulls out the `UIObjectID::BAR_HEIGHT_INDICATOR`, and renders that UI element using normalized rectangles.
 
 This doc should stay in sync with the APIs in `engine/ui_layouts.*`. Update both whenever new capabilities (e.g., alignment hints, nested containers) are added so designers know how to author future HUDs.

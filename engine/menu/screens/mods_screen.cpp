@@ -10,6 +10,7 @@
 #include "engine/mod_install.hpp"
 #include "engine/mod_server_config.hpp"
 #include "engine/mods.hpp"
+#include "engine/project_paths.hpp"
 #include "game/ui_layout_ids.hpp"
 
 #include <algorithm>
@@ -47,7 +48,7 @@ bool version_compatible(const ModCatalogEntry& entry);
 bool path_exists(const ModCatalogEntry& entry) {
     std::filesystem::path mods_root = mm && !mm->root.empty()
                                           ? std::filesystem::path(mm->root)
-                                          : std::filesystem::path("mods");
+                                          : runtime_mods_path();
     std::string folder = entry.folder.empty() ? entry.id : entry.folder;
     std::error_code ec;
     return std::filesystem::exists(mods_root / folder, ec);

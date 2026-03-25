@@ -1,5 +1,6 @@
 #include "engine/graphics.hpp"
 #include "globals.hpp"
+#include "engine/project_paths.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -9,7 +10,7 @@
 #include <algorithm>
 #include <cctype>
 
-bool init_font(const char* fonts_dir, int pt_size) {
+bool init_font(const std::filesystem::path& fonts_dir, int pt_size) {
     if (gg->ui_font)
         return true;
     if (!TTF_WasInit()) {
@@ -20,7 +21,7 @@ bool init_font(const char* fonts_dir, int pt_size) {
     }
     std::string font_path;
     std::error_code ec;
-    std::filesystem::path fdir = std::filesystem::path(fonts_dir);
+    std::filesystem::path fdir = fonts_dir.empty() ? engine_assets_path("fonts") : fonts_dir;
     if (std::filesystem::exists(fdir, ec) && std::filesystem::is_directory(fdir, ec)) {
         for (auto const& de : std::filesystem::directory_iterator(fdir, ec)) {
             if (ec) { ec.clear(); continue; }
@@ -39,7 +40,8 @@ bool init_font(const char* fonts_dir, int pt_size) {
         }
         return true;
     } else {
-        std::fprintf(stderr, "No .ttf found in %s. Numeric countdown will be hidden.\n", fonts_dir);
+        std::fprintf(stderr, "No .ttf found in %s. Numeric countdown will be hidden.\n",
+                     fdir.string().c_str());
         return false;
     }
 }

@@ -7,6 +7,8 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include "engine/project_paths.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
@@ -232,7 +234,7 @@ void rebuild_if_needed(RepoState& state, nlohmann::json& cached_catalog) {
 }
 
 int main(int argc, char** argv) {
-    fs::path root = "mod_repo";
+    fs::path root = mod_repo_path();
     int port = 8787;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];

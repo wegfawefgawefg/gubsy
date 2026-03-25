@@ -2,6 +2,7 @@
 #include "globals.hpp"
 #include "engine/graphics.hpp"
 #include "engine/mod_host.hpp"
+#include "engine/project_paths.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -18,8 +19,6 @@ namespace fs = std::filesystem;
 #include "engine/parser.hpp"
 namespace {
 
-constexpr const char* kModsEnabledConfig = "data/mods_enabled.lisp";
-
 struct ModsConfig {
     bool has_enabled_list{false};
     std::unordered_set<std::string> enabled;
@@ -27,7 +26,7 @@ struct ModsConfig {
 };
 
 std::optional<ModsConfig> read_mods_config() {
-    fs::path path = kModsEnabledConfig;
+    fs::path path = data_path("mods_enabled.lisp");
     std::ifstream f(path);
     if (!f.good())
         return std::nullopt;
@@ -69,7 +68,7 @@ std::optional<ModsConfig> read_mods_config() {
 }
 
 void ensure_mods_config_exists() {
-    fs::path path = kModsEnabledConfig;
+    fs::path path = data_path("mods_enabled.lisp");
     std::error_code ec;
     if (fs::exists(path, ec))
         return;
@@ -186,7 +185,7 @@ void cleanup_mods_manager() {
     }
 }
 
-/// Discover available mods by scanning `mods/*/` for `info.toml`.
+/// Discover available mods by scanning the configured mod root for `info.toml`.
 /// Clears any previously discovered mods.
 void discover_mods() {
     mm->mods.clear();

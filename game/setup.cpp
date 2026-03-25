@@ -3,6 +3,7 @@
 #include "engine/globals.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_server_config.hpp"
+#include "engine/project_paths.hpp"
 #include "engine/render.hpp"
 #include "engine/graphics.hpp"
 #include "engine/mod_install.hpp"
@@ -40,7 +41,7 @@ std::string g_error;
 std::filesystem::path mods_root_dir() {
     if (mm && !mm->root.empty())
         return std::filesystem::path(mm->root);
-    return std::filesystem::path("mods_runtime");
+    return runtime_mods_path();
 }
 
 bool clear_mod_cache(std::string& err) {

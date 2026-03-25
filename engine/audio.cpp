@@ -1,5 +1,6 @@
 #include "engine/audio.hpp"
 #include "globals.hpp"
+#include "engine/project_paths.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -68,10 +69,16 @@ void play_sound(const std::string& key, int loops, int /*channel_hint*/, int vol
 }
 
 
-void load_mod_sounds(const std::string& mods_root) {
+void load_mod_sounds(const std::filesystem::path& mods_root) {
 
     std::error_code ec;
-    std::filesystem::path mroot = std::filesystem::path(mods_root);
+    std::filesystem::path mroot = mods_root;
+    if (mroot.empty()) {
+        if (mm && !mm->root.empty())
+            mroot = std::filesystem::path(mm->root);
+        else
+            mroot = runtime_mods_path();
+    }
     if (!std::filesystem::exists(mroot, ec) || !std::filesystem::is_directory(mroot, ec)) {
         return;
     }
@@ -102,12 +109,12 @@ void load_mod_sounds(const std::string& mods_root) {
     }
 }
 
-void load_builtin_sounds(const std::string& root) {
+void load_builtin_sounds() {
     if (!aa)
         return;
     namespace fs = std::filesystem;
     std::error_code ec;
-    fs::path base = fs::path(root);
+    fs::path base = engine_assets_path("sounds");
     if (!fs::exists(base, ec) || !fs::is_directory(base, ec))
         return;
     for (const auto& entry : fs::directory_iterator(base, ec)) {

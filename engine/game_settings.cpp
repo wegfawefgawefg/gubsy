@@ -2,6 +2,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
+#include "engine/project_paths.hpp"
 #include "engine/settings_schema.hpp"
 #include "engine/utils.hpp"
 
@@ -14,8 +15,6 @@
 #include <unordered_set>
 
 namespace {
-
-constexpr const char* kGameSettingsPath = "data/settings_profiles/game_settings.lisp";
 
 std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValue>& roots) {
     const sexp::SValue* root = nullptr;
@@ -100,14 +99,15 @@ std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValu
 }
 
 std::vector<GameSettings> read_game_settings_from_disk() {
-    std::ifstream f(kGameSettingsPath);
+    std::filesystem::path path = data_path("settings_profiles/game_settings.lisp");
+    std::ifstream f(path);
     if (!f.is_open())
         return {};
     std::ostringstream oss;
     oss << f.rdbuf();
     auto parsed = sexp::parse_s_expressions(oss.str());
     if (!parsed) {
-        std::fprintf(stderr, "[game_settings] Failed to parse %s\n", kGameSettingsPath);
+        std::fprintf(stderr, "[game_settings] Failed to parse %s\n", path.string().c_str());
         return {};
     }
     return parse_game_settings_tree(*parsed);
@@ -115,7 +115,7 @@ std::vector<GameSettings> read_game_settings_from_disk() {
 
 bool write_game_settings_file(const std::vector<GameSettings>& settings_list) {
     namespace fs = std::filesystem;
-    fs::path path(kGameSettingsPath);
+    fs::path path = data_path("settings_profiles/game_settings.lisp");
     if (path.has_parent_path()) {
         if (!ensure_dir(path.parent_path().string()))
             return false;

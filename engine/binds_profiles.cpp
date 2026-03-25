@@ -2,6 +2,7 @@
 
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
+#include "engine/project_paths.hpp"
 #include "engine/utils.hpp"
 
 #include <algorithm>
@@ -14,7 +15,6 @@
 
 namespace {
 
-constexpr const char* kBindsProfilesPath = "data/binds_profiles/default.lisp";
 static BindsSchema g_schema;
 
 std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SValue>& roots) {
@@ -104,14 +104,15 @@ std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SVal
 }
 
 std::vector<BindsProfile> read_binds_profiles_from_disk() {
-    std::ifstream f(kBindsProfilesPath);
+    std::filesystem::path path = data_path("binds_profiles/default.lisp");
+    std::ifstream f(path);
     if (!f.is_open())
         return {};
     std::ostringstream oss;
     oss << f.rdbuf();
     auto parsed = sexp::parse_s_expressions(oss.str());
     if (!parsed) {
-        std::fprintf(stderr, "[binds] Failed to parse %s\n", kBindsProfilesPath);
+        std::fprintf(stderr, "[binds] Failed to parse %s\n", path.string().c_str());
         return {};
     }
     return parse_binds_profiles_tree(*parsed);
@@ -119,7 +120,7 @@ std::vector<BindsProfile> read_binds_profiles_from_disk() {
 
 bool write_binds_profiles_file(const std::vector<BindsProfile>& profiles) {
     namespace fs = std::filesystem;
-    fs::path path(kBindsProfilesPath);
+    fs::path path = data_path("binds_profiles/default.lisp");
     if (path.has_parent_path()) {
         if (!ensure_dir(path.parent_path().string()))
             return false;

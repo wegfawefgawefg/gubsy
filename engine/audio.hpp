@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 
@@ -23,8 +24,8 @@ bool load_sound(const std::string& key, const std::string& path);
 // Play a sound by key from the global store. Optional loops/channel/volume.
 void play_sound(const std::string& key, int loops = 0, int channel = -1, int volume = -1);
 
-// Scan mods/*/sounds for audio assets and load into global store.
-void load_mod_sounds(const std::string& mods_root = "mods");
+// Scan the active mod root for audio assets and load them into the global store.
+void load_mod_sounds(const std::filesystem::path& mods_root = {});
 
-// Load built-in sounds from assets/sounds directory.
-void load_builtin_sounds(const std::string& root = "assets/sounds");
+// Load engine-owned built-in sounds.
+void load_builtin_sounds();

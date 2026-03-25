@@ -28,17 +28,14 @@
 #include "engine/imgui_layer.hpp"
 #include "engine/imgui_debug/imgui_debug.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
-
-namespace {
-constexpr const char* kModsRuntimeRoot = "mods_runtime";
-}
+#include "engine/project_paths.hpp"
 
 
 
 bool do_the_gubsy(){
     ensure_data_folder_structure();
     std::error_code mods_ec;
-    std::filesystem::create_directories(kModsRuntimeRoot, mods_ec);
+    std::filesystem::create_directories(runtime_mods_path(), mods_ec);
 
     if (!init_graphics()) {
         SDL_Quit();
@@ -55,13 +52,13 @@ bool do_the_gubsy(){
         std::fprintf(stderr, "[imgui] init failed\n");
     }
 
-    load_audio_settings(kAudioSettingsPath);
+    load_audio_settings(data_path("settings_profiles/audio.lisp").string());
 
 
     if (!init_audio())
         std::fprintf(stderr, "[audio] SDL_mixer init failed: %s\n", Mix_GetError());
 
-    if (!init_mods_manager(kModsRuntimeRoot)) {
+    if (!init_mods_manager(runtime_mods_path().string())) {
         cleanup_audio();
         cleanup_engine_state();
         cleanup_graphics();

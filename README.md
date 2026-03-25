@@ -16,9 +16,10 @@ state, and Lua-driven mod loading.
 What Is In This Repo
 --------------------
 
-- `src/engine/`: reusable engine/runtime code
-- `src/game/`: the current game-specific layer and sample content wiring
-- `mods/` and `mod_repo/`: local mod content and mod repository data
+- `engine/`: reusable engine/runtime code plus engine-owned built-in assets
+- `game/`: the current game-specific layer, shipped game content, and built-in mods
+- `tools/`: standalone servers and smoke-test binaries
+- `data/`: writable runtime state for this game project
 - `imgui/`: Dear ImGui sources used by the engine
 - `scripts/`: local build/run helpers
 
@@ -77,9 +78,9 @@ Formatting
 Project Layout Notes
 --------------------
 
-- The engine entrypoints live under `src/engine/`
+- The engine entrypoints live under `engine/`
 - The executable target is defined in `CMakeLists.txt` as `gubsy`
-- The bundled game layer registers modes, menus, binds, settings schemas, and mod APIs from `src/game/main.cpp`
+- The bundled game layer registers modes, menus, binds, settings schemas, and mod APIs from `game/main.cpp`
 
 Docs
 ----
@@ -88,6 +89,7 @@ Docs
 - Engine roadmap: `docs/engine_roadmap.md`
 - Engine 0.1 checklist: `docs/engine_0_1_checklist.md`
 - Code-first engine intent: `docs/code_first_engine_intent.md`
+- Repo layout: `docs/repo_layout.md`
 - Cooperative multiplayer policy: `docs/cooperative_multiplayer_policy.md`
 - Session contract: `docs/session_contract.md`
 - Networking boundary: `docs/networking_boundary.md`

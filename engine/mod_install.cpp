@@ -5,6 +5,7 @@
 #include "engine/graphics.hpp"
 #include "engine/audio.hpp"
 #include "engine/globals.hpp"
+#include "engine/project_paths.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -89,7 +90,7 @@ namespace fs = std::filesystem;
 fs::path mods_root_path() {
     if (mm && !mm->root.empty())
         return fs::path(mm->root);
-    return fs::path("mods");
+    return runtime_mods_path();
 }
 
 fs::path local_mod_path(const ModCatalogEntry& entry) {

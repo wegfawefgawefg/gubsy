@@ -3,6 +3,7 @@
 #include "engine/utils.hpp"
 #include "engine/globals.hpp"
 #include "engine/parser.hpp"
+#include "engine/project_paths.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -13,8 +14,6 @@
 #include <unordered_set>
 
 namespace {
-
-constexpr const char* kInputSettingsProfilesPath = "data/settings_profiles/input_settings_profiles.lisp";
 
 // Helper to extract bool (treat non-zero int as true)
 std::optional<bool> extract_bool(const sexp::SValue& list, const std::string& symbol) {
@@ -70,14 +69,15 @@ std::vector<InputSettingsProfile> parse_input_settings_profiles_tree(const std::
 }
 
 std::vector<InputSettingsProfile> read_input_settings_profiles_from_disk() {
-    std::ifstream f(kInputSettingsProfilesPath);
+    std::filesystem::path path = data_path("settings_profiles/input_settings_profiles.lisp");
+    std::ifstream f(path);
     if (!f.is_open())
         return {};
     std::ostringstream oss;
     oss << f.rdbuf();
     auto parsed = sexp::parse_s_expressions(oss.str());
     if (!parsed) {
-        std::fprintf(stderr, "[input_settings] Failed to parse %s\n", kInputSettingsProfilesPath);
+        std::fprintf(stderr, "[input_settings] Failed to parse %s\n", path.string().c_str());
         return {};
     }
     return parse_input_settings_profiles_tree(*parsed);
@@ -85,7 +85,7 @@ std::vector<InputSettingsProfile> read_input_settings_profiles_from_disk() {
 
 bool write_input_settings_profiles_file(const std::vector<InputSettingsProfile>& profiles) {
     namespace fs = std::filesystem;
-    fs::path path(kInputSettingsProfilesPath);
+    fs::path path = data_path("settings_profiles/input_settings_profiles.lisp");
     if (path.has_parent_path()) {
         if (!ensure_dir(path.parent_path().string()))
             return false;

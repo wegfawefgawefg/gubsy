@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_compile_definitions(GUB_PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 # Homebrew defaults; helps find_package locate deps on macOS.
 if (APPLE)
   if (EXISTS "/opt/homebrew")
@@ -26,12 +28,12 @@ find_package(PkgConfig QUIET)
 
 # Auto-discover engine and bundled sample-game sources separately.
 file(GLOB_RECURSE GUB_ENGINE_SOURCES
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/*.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/*.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.hpp"
 )
 file(GLOB_RECURSE GUB_GAME_SOURCES
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/game/*.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/game/*.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/game/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/game/*.hpp"
 )
 
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
@@ -174,59 +176,63 @@ if (NOT SDL2_TTF_FOUND_LOCAL)
 endif()
 
 target_include_directories(gubsy_engine PUBLIC
-  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
   ${CMAKE_SOURCE_DIR}/imgui
   ${CMAKE_SOURCE_DIR}/imgui/backends
 )
 target_include_directories(gubsy PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(gubsy PRIVATE gubsy_engine)
 
-add_executable(mod_server tools/mod_server/main.cpp)
+add_executable(mod_server
+  tools/mod_server/main.cpp
+  engine/project_paths.cpp
+)
 target_include_directories(mod_server PRIVATE
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
 add_executable(room_server tools/room_server/main.cpp)
 target_include_directories(room_server PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
 add_executable(room_smoke
   tools/room_smoke/main.cpp
-  src/engine/room_matchmaking.cpp
-  src/engine/session_contract.cpp
+  engine/room_matchmaking.cpp
+  engine/session_contract.cpp
 )
 target_include_directories(room_smoke PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
 add_executable(room_timeout_smoke
   tools/room_timeout_smoke/main.cpp
-  src/engine/room_matchmaking.cpp
-  src/engine/session_contract.cpp
+  engine/room_matchmaking.cpp
+  engine/session_contract.cpp
 )
 target_include_directories(room_timeout_smoke PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
 add_executable(coop_sync_smoke
   tools/coop_sync_smoke/main.cpp
-  src/engine/room_matchmaking.cpp
-  src/engine/session_contract.cpp
-  src/engine/sync_payload_codec.cpp
-  src/engine/sync_transport_udp.cpp
-  src/engine/sync_transport_packet_codec.cpp
-  src/game/coop_protocol.cpp
-  src/game/coop_sim.cpp
+  engine/room_matchmaking.cpp
+  engine/session_contract.cpp
+  engine/sync_payload_codec.cpp
+  engine/sync_transport_udp.cpp
+  engine/sync_transport_packet_codec.cpp
+  game/coop_protocol.cpp
+  game/coop_sim.cpp
 )
 target_include_directories(coop_sync_smoke PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
 )
 

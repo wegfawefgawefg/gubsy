@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <glm/glm.hpp>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -70,8 +71,8 @@ bool init_graphics();
 // Destroy renderer/window if present and reset pointers.
 void cleanup_graphics();
 
-// Initialize UI font into gfx.ui_font by scanning fonts/ for a .ttf. Safe if already initialized.
-bool init_font(const char* fonts_dir = "fonts", int pt_size = 20);
+// Initialize UI font into gfx.ui_font by scanning the engine font directory.
+bool init_font(const std::filesystem::path& fonts_dir = {}, int pt_size = 20);
 
 // Try initializing SDL video with a specific driver; logs on failure.
 bool try_init_video_with_driver(const char* driver);
