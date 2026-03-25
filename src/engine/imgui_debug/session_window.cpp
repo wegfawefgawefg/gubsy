@@ -1,8 +1,8 @@
 #include "engine/imgui_debug/windows.hpp"
 
 #include "engine/session_contract.hpp"
-#include "engine/sync_session.hpp"
 #include "game/coop_session.hpp"
+#include "game/coop_sync_runtime.hpp"
 #include "game/menu/lobby_state.hpp"
 
 #include <imgui.h>
@@ -51,7 +51,7 @@ void render_members(const LobbyOnlineState& online) {
 }
 
 void render_realtime_stats() {
-    SyncSessionStats stats;
+    CoopSyncStats stats;
     if (!coop_session_query_stats(stats)) {
         ImGui::TextUnformatted("Runtime stats: offline");
         return;

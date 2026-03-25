@@ -5,14 +5,13 @@
 #include <vector>
 
 #include "engine/session_link.hpp"
-#include "engine/session_contract.hpp"
 
-struct SyncSessionHooks {
+struct CoopSyncHooks {
     SessionLinkHooks link{};
     void (*query_member_ids)(void* ctx, std::vector<std::string>& out){nullptr};
 };
 
-struct SyncDriver {
+struct CoopSyncDriver {
     void* ctx{nullptr};
     bool (*build_local_input)(void* ctx, std::vector<std::uint8_t>& out){nullptr};
     void (*predict)(void* ctx,
@@ -41,11 +40,11 @@ struct SyncDriver {
     void (*reset_runtime)(void* ctx){nullptr};
 };
 
-struct SyncStepResult {
+struct CoopSyncStepResult {
     bool handled{false};
 };
 
-struct SyncSessionStats {
+struct CoopSyncStats {
     bool active{false};
     bool is_host{false};
     bool has_authoritative_snapshot{false};
@@ -60,11 +59,11 @@ struct SyncSessionStats {
     double snapshot_idle_sec{0.0};
 };
 
-void sync_session_configure(const SyncSessionHooks& hooks, const SyncDriver& driver);
-void sync_session_reset();
-bool sync_session_active();
-SyncStepResult sync_session_step(float dt);
-const std::string& sync_session_status_text();
-const std::string& sync_session_last_error();
-const std::string& sync_session_advertised_endpoint();
-bool sync_session_query_stats(SyncSessionStats& out);
+void coop_sync_configure(const CoopSyncHooks& hooks, const CoopSyncDriver& driver);
+void coop_sync_reset();
+bool coop_sync_active();
+CoopSyncStepResult coop_sync_step(float dt);
+const std::string& coop_sync_status_text();
+const std::string& coop_sync_last_error();
+const std::string& coop_sync_advertised_endpoint();
+bool coop_sync_query_stats(CoopSyncStats& out);

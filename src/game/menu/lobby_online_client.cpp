@@ -13,7 +13,7 @@
 #include "engine/mod_server_config.hpp"
 #include "engine/room_matchmaking.hpp"
 #include "engine/session_contract.hpp"
-#include "engine/sync_session.hpp"
+#include "game/coop_session.hpp"
 #include "game/lobby_config.hpp"
 #include "game/menu/lobby_state.hpp"
 
@@ -142,7 +142,7 @@ SessionContract build_local_contract(LobbySession& lobby) {
     normalize_required_mod_ids(contract.required_mod_ids);
     contract.allow_live_mod_reload = true;
     contract.game_config = capture_game_lobby_config(lobby);
-    contract.realtime_endpoint = sync_session_advertised_endpoint();
+    contract.realtime_endpoint = coop_session_advertised_endpoint();
 
     const std::string key = content_contract_key(contract);
     if (lobby.online.last_published_contract_key.empty()) {

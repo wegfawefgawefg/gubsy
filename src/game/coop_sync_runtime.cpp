@@ -1,4 +1,4 @@
-#include "engine/sync_session.hpp"
+#include "game/coop_sync_runtime.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "engine/net_transport.hpp"
-#include "engine/sync_transport_udp.hpp"
-#include "engine/sync_session_wire.hpp"
+#include "engine/session_link.hpp"
+#include "game/coop_sync_wire.hpp"
 
 namespace {
 
@@ -18,9 +18,9 @@ constexpr double kSnapshotPushIntervalSec = 1.0 / 20.0;
 constexpr double kInitialSnapshotTimeoutSec = 4.0;
 constexpr double kSnapshotStreamTimeoutSec = 4.0;
 
-struct SyncRuntime {
-    SyncSessionHooks hooks{};
-    SyncDriver driver{};
+struct CoopSyncRuntime {
+    CoopSyncHooks hooks{};
+    CoopSyncDriver driver{};
     bool configured{false};
     bool active{false};
     bool is_host{false};
@@ -46,13 +46,12 @@ struct SyncRuntime {
     std::uint64_t next_local_input_seq{1};
     std::uint64_t last_acked_local_input_seq{0};
     std::vector<std::uint8_t> last_acked_local_input;
-    std::deque<SequencedInput> pending_local_inputs;
-    UdpSyncNetTransport transport{};
+    std::deque<CoopSequencedInput> pending_local_inputs;
     double next_input_push_at{0.0};
     double next_snapshot_push_at{0.0};
 };
 
-SyncRuntime g_sync;
+CoopSyncRuntime g_sync;
 
 double runtime_now() {
     if (g_sync.hooks.link.query_now)
@@ -60,7 +59,7 @@ double runtime_now() {
     return 0.0;
 }
 
-int find_member_index(const SyncRuntime& runtime, const std::string& member_id) {
+int find_member_index(const CoopSyncRuntime& runtime, const std::string& member_id) {
     for (std::size_t i = 0; i < runtime.member_ids.size(); ++i) {
         if (runtime.member_ids[i] == member_id)
             return static_cast<int>(i);
@@ -134,11 +133,11 @@ void set_status_line() {
 }
 
 void start_connection(const SessionLinkConnection& connection) {
-    SyncRuntime next = g_sync;
+    CoopSyncRuntime next = g_sync;
     next.active = true;
     next.is_host = connection.is_host;
     next.server_url = connection.server_url;
-    next.room_code = sync_session_normalized_room_code(connection.room_code);
+    next.room_code = coop_sync_normalized_room_code(connection.room_code);
     next.host_secret = connection.host_secret;
     next.local_member_id = connection.local_member_id;
     next.contract = connection.contract;
@@ -158,7 +157,6 @@ void start_connection(const SessionLinkConnection& connection) {
     next.last_acked_local_input_seq = 0;
     next.last_acked_local_input.clear();
     next.pending_local_inputs.clear();
-    next.transport.reset();
     next.next_input_push_at = 0.0;
     next.next_snapshot_push_at = 0.0;
     g_sync = std::move(next);
@@ -168,15 +166,22 @@ void start_connection(const SessionLinkConnection& connection) {
     set_status_line();
 }
 
-bool ensure_connection() {
-    if (!g_sync.configured || !g_sync.hooks.link.query_connection)
+bool ensure_connection(std::string& err) {
+    if (!g_sync.configured)
         return false;
-    SessionLinkConnection connection;
-    if (!g_sync.hooks.link.query_connection(g_sync.hooks.link.ctx, connection) || !connection.active) {
-        sync_session_reset();
+    if (!session_link_update(err)) {
+        coop_sync_reset();
+        if (!err.empty())
+            g_sync.last_error = err;
         return false;
     }
-    const std::string normalized_code = sync_session_normalized_room_code(connection.room_code);
+
+    SessionLinkConnection connection;
+    if (!session_link_query_connection(connection) || !connection.active) {
+        coop_sync_reset();
+        return false;
+    }
+    const std::string normalized_code = coop_sync_normalized_room_code(connection.room_code);
     if (!g_sync.active ||
         g_sync.is_host != connection.is_host ||
         g_sync.local_member_id != connection.local_member_id ||
@@ -192,21 +197,9 @@ bool ensure_connection() {
     return g_sync.active;
 }
 
-bool ensure_transport_ready(std::string& err) {
-    if (g_sync.is_host)
-        return g_sync.transport.ensure_host(g_sync.room_code, err);
-    if (g_sync.contract.realtime_endpoint.empty()) {
-        err = "Waiting for host realtime endpoint";
-        return false;
-    }
-    return g_sync.transport.ensure_client(g_sync.room_code,
-                                          g_sync.contract.realtime_endpoint,
-                                          err);
-}
-
 bool collect_transport_inputs(std::string& err) {
     std::vector<NetTransportPacket> packets;
-    if (!g_sync.transport.poll(packets, err))
+    if (!session_link_poll(packets, err))
         return false;
     if (!packets.empty())
         g_sync.last_packet_received_at = runtime_now();
@@ -230,7 +223,7 @@ bool publish_snapshot(std::string& err) {
     if (!g_sync.driver.capture_snapshot(g_sync.driver.ctx, g_sync.member_ids, g_sync.sim_frame, snapshot))
         return false;
 
-    SyncSnapshotEnvelope snapshot_packet;
+    CoopSnapshotEnvelope snapshot_packet;
     snapshot_packet.sim_frame = g_sync.sim_frame;
     snapshot_packet.driver_snapshot = std::move(snapshot);
     snapshot_packet.acked_inputs.reserve(g_sync.member_ids.size());
@@ -240,9 +233,9 @@ bool publish_snapshot(std::string& err) {
     NetTransportPacket packet;
     packet.kind = NetPacketKind::Snapshot;
     packet.room_code = g_sync.room_code;
-    if (!sync_session_encode_snapshot_envelope(snapshot_packet, packet.payload, err))
+    if (!coop_sync_encode_snapshot_envelope(snapshot_packet, packet.payload, err))
         return false;
-    return g_sync.transport.send(packet, err);
+    return session_link_send(packet, err);
 }
 
 void prune_acked_local_inputs(std::uint64_t acked_local_seq) {
@@ -274,7 +267,7 @@ void replay_pending_local_inputs(float dt, const std::vector<std::uint8_t>& late
     replay_previous[static_cast<std::size_t>(local_index)] = g_sync.last_acked_local_input;
     replay_current[static_cast<std::size_t>(local_index)] = g_sync.last_acked_local_input;
 
-    for (const SequencedInput& pending : g_sync.pending_local_inputs) {
+    for (const CoopSequencedInput& pending : g_sync.pending_local_inputs) {
         replay_current[static_cast<std::size_t>(local_index)] = pending.payload;
         if (g_sync.driver.predict) {
             g_sync.driver.predict(g_sync.driver.ctx,
@@ -289,7 +282,8 @@ void replay_pending_local_inputs(float dt, const std::vector<std::uint8_t>& late
     g_sync.current_inputs = replay_current;
     g_sync.previous_inputs = replay_previous;
     g_sync.current_input_seqs[static_cast<std::size_t>(local_index)] = g_sync.pending_local_inputs.back().seq;
-    g_sync.previous_input_seqs[static_cast<std::size_t>(local_index)] = g_sync.current_input_seqs[static_cast<std::size_t>(local_index)];
+    g_sync.previous_input_seqs[static_cast<std::size_t>(local_index)] =
+        g_sync.current_input_seqs[static_cast<std::size_t>(local_index)];
     if (g_sync.driver.apply_local_view_input)
         g_sync.driver.apply_local_view_input(g_sync.driver.ctx, latest_local_input);
 }
@@ -298,23 +292,23 @@ bool fetch_snapshot(const std::vector<std::uint8_t>& latest_local_input, float d
     if (!g_sync.driver.apply_snapshot)
         return false;
     std::vector<NetTransportPacket> packets;
-    if (!g_sync.transport.poll(packets, err))
+    if (!session_link_poll(packets, err))
         return false;
     if (!packets.empty())
         g_sync.last_packet_received_at = runtime_now();
-    SyncSnapshotEnvelope envelope;
+
+    CoopSnapshotEnvelope envelope;
     bool has_snapshot = false;
     for (const NetTransportPacket& packet : packets) {
         if (packet.kind != NetPacketKind::Snapshot)
             continue;
-        if (!sync_session_decode_snapshot_envelope(packet.payload, envelope, err))
+        if (!coop_sync_decode_snapshot_envelope(packet.payload, envelope, err))
             return false;
         has_snapshot = true;
     }
     if (!has_snapshot)
         return true;
-    const std::uint64_t sim_frame = envelope.sim_frame;
-    if (sim_frame <= g_sync.last_applied_snapshot_frame)
+    if (envelope.sim_frame <= g_sync.last_applied_snapshot_frame)
         return true;
 
     std::uint64_t acked_local_seq = 0;
@@ -332,7 +326,7 @@ bool fetch_snapshot(const std::vector<std::uint8_t>& latest_local_input, float d
     if (!g_sync.driver.apply_snapshot(g_sync.driver.ctx, envelope.driver_snapshot, member_ids))
         return false;
     rebuild_member_buffers(member_ids);
-    g_sync.last_applied_snapshot_frame = sim_frame;
+    g_sync.last_applied_snapshot_frame = envelope.sim_frame;
     g_sync.has_authoritative_snapshot = true;
     g_sync.last_snapshot_received_at = runtime_now();
     g_sync.snapshot_timed_out = false;
@@ -363,7 +357,7 @@ void update_client_timeout_state() {
     }
 }
 
-void run_host_step(const SequencedInput& local_input, float dt, double now) {
+void run_host_step(const CoopSequencedInput& local_input, float dt, double now) {
     std::string transport_err;
     if (!collect_transport_inputs(transport_err) && !transport_err.empty())
         g_sync.last_error = transport_err;
@@ -396,7 +390,7 @@ void run_host_step(const SequencedInput& local_input, float dt, double now) {
     g_sync.sim_frame += 1;
 }
 
-void run_client_step(const SequencedInput& local_input, float dt, double now) {
+void run_client_step(const CoopSequencedInput& local_input, float dt, double now) {
     int local_index = find_member_index(g_sync, g_sync.local_member_id);
     if (local_index < 0) {
         std::vector<std::string> member_ids = g_sync.member_ids;
@@ -426,7 +420,7 @@ void run_client_step(const SequencedInput& local_input, float dt, double now) {
         packet.member_id = g_sync.local_member_id;
         packet.seq = local_input.seq;
         packet.payload = local_input.payload;
-        if (g_sync.transport.send(packet, transport_err))
+        if (session_link_send(packet, transport_err))
             g_sync.next_input_push_at = now + kInputPushIntervalSec;
         else if (!transport_err.empty())
             g_sync.last_error = transport_err;
@@ -440,13 +434,13 @@ void run_client_step(const SequencedInput& local_input, float dt, double now) {
 
 } // namespace
 
-void sync_session_configure(const SyncSessionHooks& hooks, const SyncDriver& driver) {
+void coop_sync_configure(const CoopSyncHooks& hooks, const CoopSyncDriver& driver) {
     g_sync.hooks = hooks;
     g_sync.driver = driver;
     g_sync.configured = true;
 }
 
-void sync_session_reset() {
+void coop_sync_reset() {
     g_sync.active = false;
     g_sync.is_host = false;
     g_sync.has_authoritative_snapshot = false;
@@ -473,38 +467,29 @@ void sync_session_reset() {
     g_sync.last_acked_local_input_seq = 0;
     g_sync.last_acked_local_input.clear();
     g_sync.pending_local_inputs.clear();
-    g_sync.transport.reset();
     g_sync.next_input_push_at = 0.0;
     g_sync.next_snapshot_push_at = 0.0;
 }
 
-bool sync_session_active() {
+bool coop_sync_active() {
     return g_sync.active;
 }
 
-SyncStepResult sync_session_step(float dt) {
-    SyncStepResult result;
-    if (!ensure_connection())
+CoopSyncStepResult coop_sync_step(float dt) {
+    CoopSyncStepResult result;
+    std::string link_err;
+    if (!ensure_connection(link_err))
         return result;
-    std::string transport_err;
-    if (!ensure_transport_ready(transport_err)) {
-        if (!transport_err.empty())
-            g_sync.last_error = transport_err;
-        return result;
-    }
 
-    if (g_sync.hooks.link.tick_presence)
-        g_sync.hooks.link.tick_presence(g_sync.hooks.link.ctx);
     refresh_member_ids();
-
     std::vector<std::uint8_t> local_input;
     if (!g_sync.driver.build_local_input || !g_sync.driver.build_local_input(g_sync.driver.ctx, local_input))
         return result;
 
     result.handled = true;
-    double now = runtime_now();
+    const double now = runtime_now();
 
-    SequencedInput sequenced_local_input;
+    CoopSequencedInput sequenced_local_input;
     sequenced_local_input.seq = g_sync.next_local_input_seq++;
     sequenced_local_input.payload = std::move(local_input);
 
@@ -514,29 +499,30 @@ SyncStepResult sync_session_step(float dt) {
         run_client_step(sequenced_local_input, dt, now);
     update_client_timeout_state();
     set_status_line();
-    if (g_sync.driver.tick_correction)
+    if (g_sync.driver.tick_correction) {
         g_sync.driver.tick_correction(g_sync.driver.ctx,
                                       g_sync.member_ids,
                                       g_sync.local_member_id,
                                       g_sync.is_host,
                                       dt);
+    }
     return result;
 }
 
-const std::string& sync_session_status_text() {
+const std::string& coop_sync_status_text() {
     return g_sync.status_text;
 }
 
-const std::string& sync_session_last_error() {
+const std::string& coop_sync_last_error() {
     return g_sync.last_error;
 }
 
-const std::string& sync_session_advertised_endpoint() {
-    return g_sync.transport.public_endpoint();
+const std::string& coop_sync_advertised_endpoint() {
+    return session_link_advertised_endpoint();
 }
 
-bool sync_session_query_stats(SyncSessionStats& out) {
-    out = SyncSessionStats{};
+bool coop_sync_query_stats(CoopSyncStats& out) {
+    out = CoopSyncStats{};
     if (!g_sync.active)
         return false;
 

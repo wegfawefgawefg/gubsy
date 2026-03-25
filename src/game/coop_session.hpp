@@ -2,7 +2,7 @@
 
 #include <string>
 
-struct SyncSessionStats;
+#include "game/coop_sync_runtime.hpp"
 
 struct CoopStepResult {
     bool handled{false};
@@ -14,4 +14,5 @@ bool coop_session_active();
 CoopStepResult coop_session_step();
 const std::string& coop_session_status_text();
 const std::string& coop_session_last_error();
-bool coop_session_query_stats(SyncSessionStats& out);
+const std::string& coop_session_advertised_endpoint();
+bool coop_session_query_stats(CoopSyncStats& out);

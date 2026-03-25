@@ -1,127 +1,10 @@
-#include "engine/sync_session_wire.hpp"
+#include "game/coop_sync_wire.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <string>
-
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#endif
-#include <httplib/httplib.h>
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-
-namespace {
-
-struct EndpointInfo {
-    std::string host;
-    int port{80};
-};
-
-bool parse_http_endpoint(const std::string& url, EndpointInfo& out, std::string& err) {
-    std::string work = url;
-    constexpr const char* prefix = "http://";
-    if (work.rfind(prefix, 0) != 0) {
-        err = "Only http:// room servers are supported";
-        return false;
-    }
-    work = work.substr(7);
-    auto slash = work.find('/');
-    if (slash != std::string::npos)
-        work = work.substr(0, slash);
-    if (work.empty()) {
-        err = "Missing host in room server URL";
-        return false;
-    }
-    out.host = work;
-    auto colon = work.find(':');
-    if (colon != std::string::npos) {
-        out.host = work.substr(0, colon);
-        try {
-            out.port = std::stoi(work.substr(colon + 1));
-        } catch (...) {
-            err = "Invalid room server port";
-            return false;
-        }
-    }
-    if (out.host.empty()) {
-        err = "Invalid room server host";
-        return false;
-    }
-    return true;
-}
-
-} // namespace
-
-std::optional<nlohmann::json> sync_session_post_json(const std::string& server_url,
-                                                     const std::string& path,
-                                                     const nlohmann::json& body,
-                                                     std::string& err) {
-    EndpointInfo endpoint;
-    if (!parse_http_endpoint(server_url, endpoint, err))
-        return std::nullopt;
-    httplib::Client client(endpoint.host, endpoint.port);
-    client.set_read_timeout(3, 0);
-    auto res = client.Post(path.c_str(), body.dump(), "application/json");
-    if (!res) {
-        err = "Failed to reach room server";
-        return std::nullopt;
-    }
-    if (res->status < 200 || res->status >= 300) {
-        err = "Room server request failed (" + std::to_string(res->status) + ")";
-        if (!res->body.empty())
-            err += ": " + res->body;
-        return std::nullopt;
-    }
-    try {
-        return nlohmann::json::parse(res->body);
-    } catch (const std::exception& e) {
-        err = e.what();
-        return std::nullopt;
-    }
-}
-
-std::optional<nlohmann::json> sync_session_get_json(const std::string& server_url,
-                                                    const std::string& path,
-                                                    std::string& err) {
-    EndpointInfo endpoint;
-    if (!parse_http_endpoint(server_url, endpoint, err))
-        return std::nullopt;
-    httplib::Client client(endpoint.host, endpoint.port);
-    client.set_read_timeout(3, 0);
-    auto res = client.Get(path.c_str());
-    if (!res) {
-        err = "Failed to reach room server";
-        return std::nullopt;
-    }
-    if (res->status < 200 || res->status >= 300) {
-        err = "Room server request failed (" + std::to_string(res->status) + ")";
-        if (!res->body.empty())
-            err += ": " + res->body;
-        return std::nullopt;
-    }
-    try {
-        return nlohmann::json::parse(res->body);
-    } catch (const std::exception& e) {
-        err = e.what();
-        return std::nullopt;
-    }
-}
-
-std::string sync_session_normalized_room_code(std::string room_code) {
-    room_code.erase(std::remove_if(room_code.begin(),
-                                   room_code.end(),
-                                   [](unsigned char c) { return std::isspace(c) != 0; }),
-                    room_code.end());
-    std::transform(room_code.begin(), room_code.end(), room_code.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    return room_code;
-}
 
 namespace {
 
@@ -174,9 +57,19 @@ bool read_u64(const std::vector<std::uint8_t>& bytes, std::size_t& offset, std::
 
 } // namespace
 
-bool sync_session_encode_snapshot_envelope(const SyncSnapshotEnvelope& envelope,
-                                           std::vector<std::uint8_t>& out,
-                                           std::string& err) {
+std::string coop_sync_normalized_room_code(std::string room_code) {
+    room_code.erase(std::remove_if(room_code.begin(),
+                                   room_code.end(),
+                                   [](unsigned char c) { return std::isspace(c) != 0; }),
+                    room_code.end());
+    std::transform(room_code.begin(), room_code.end(), room_code.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return room_code;
+}
+
+bool coop_sync_encode_snapshot_envelope(const CoopSnapshotEnvelope& envelope,
+                                        std::vector<std::uint8_t>& out,
+                                        std::string& err) {
     err.clear();
     if (envelope.acked_inputs.size() > std::numeric_limits<std::uint16_t>::max()) {
         err = "Too many ack entries in snapshot envelope";
@@ -186,6 +79,7 @@ bool sync_session_encode_snapshot_envelope(const SyncSnapshotEnvelope& envelope,
         err = "Snapshot payload too large";
         return false;
     }
+
     out.clear();
     out.reserve(16 + envelope.driver_snapshot.size() + envelope.acked_inputs.size() * 24);
     append_u64(out, envelope.sim_frame);
@@ -205,11 +99,12 @@ bool sync_session_encode_snapshot_envelope(const SyncSnapshotEnvelope& envelope,
     return true;
 }
 
-bool sync_session_decode_snapshot_envelope(const std::vector<std::uint8_t>& bytes,
-                                           SyncSnapshotEnvelope& out,
-                                           std::string& err) {
+bool coop_sync_decode_snapshot_envelope(const std::vector<std::uint8_t>& bytes,
+                                        CoopSnapshotEnvelope& out,
+                                        std::string& err) {
     err.clear();
-    out = SyncSnapshotEnvelope{};
+    out = CoopSnapshotEnvelope{};
+
     std::size_t offset = 0;
     std::uint16_t ack_count = 0;
     if (!read_u64(bytes, offset, out.sim_frame) ||
@@ -217,6 +112,7 @@ bool sync_session_decode_snapshot_envelope(const std::vector<std::uint8_t>& byte
         err = "Snapshot envelope header is truncated";
         return false;
     }
+
     out.acked_inputs.reserve(ack_count);
     for (std::uint16_t i = 0; i < ack_count; ++i) {
         std::uint16_t member_len = 0;

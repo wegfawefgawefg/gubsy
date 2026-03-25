@@ -9,9 +9,9 @@
 #include "engine/globals.hpp"
 #include "engine/session_link.hpp"
 #include "engine/sync_payload_codec.hpp"
-#include "engine/sync_session.hpp"
 #include "game/coop_correction.hpp"
 #include "game/coop_protocol.hpp"
+#include "game/coop_sync_runtime.hpp"
 #include "game/coop_sim.hpp"
 #include "game/in_game_menu.hpp"
 #include "game/input_frame.hpp"
@@ -176,13 +176,15 @@ void reset_runtime(void*) {
 void ensure_sync_configured() {
     if (g_sync_configured)
         return;
-    SyncSessionHooks hooks;
+    CoopSyncHooks hooks;
     hooks.link.query_connection = query_connection;
     hooks.link.tick_presence = tick_presence;
     hooks.link.query_now = query_now;
     hooks.query_member_ids = query_member_ids;
 
-    SyncDriver driver;
+    session_link_configure(hooks.link);
+
+    CoopSyncDriver driver;
     driver.build_local_input = build_local_input;
     driver.predict = predict_demo_world;
     driver.capture_snapshot = capture_demo_snapshot;
@@ -193,7 +195,7 @@ void ensure_sync_configured() {
     driver.tick_correction = tick_correction;
     driver.reset_runtime = reset_runtime;
 
-    sync_session_configure(hooks, driver);
+    coop_sync_configure(hooks, driver);
     g_sync_configured = true;
 }
 
@@ -201,12 +203,12 @@ void ensure_sync_configured() {
 
 void coop_session_reset() {
     ensure_sync_configured();
-    sync_session_reset();
+    coop_sync_reset();
 }
 
 bool coop_session_active() {
     ensure_sync_configured();
-    return sync_session_active();
+    return coop_sync_active();
 }
 
 CoopStepResult coop_session_step() {
@@ -216,7 +218,7 @@ CoopStepResult coop_session_step() {
         return result;
 
     const std::uint64_t previous_bonk_serial = ss->bonk_serial;
-    SyncStepResult sync_result = sync_session_step(FIXED_TIMESTEP);
+    CoopSyncStepResult sync_result = coop_sync_step(FIXED_TIMESTEP);
     result.handled = sync_result.handled;
     if (sync_result.handled && ss->bonk_serial > previous_bonk_serial)
         result.bonk_count = static_cast<int>(ss->bonk_serial - previous_bonk_serial);
@@ -225,15 +227,20 @@ CoopStepResult coop_session_step() {
 
 const std::string& coop_session_status_text() {
     ensure_sync_configured();
-    return sync_session_status_text();
+    return coop_sync_status_text();
 }
 
 const std::string& coop_session_last_error() {
     ensure_sync_configured();
-    return sync_session_last_error();
+    return coop_sync_last_error();
 }
 
-bool coop_session_query_stats(SyncSessionStats& out) {
+const std::string& coop_session_advertised_endpoint() {
     ensure_sync_configured();
-    return sync_session_query_stats(out);
+    return coop_sync_advertised_endpoint();
+}
+
+bool coop_session_query_stats(CoopSyncStats& out) {
+    ensure_sync_configured();
+    return coop_sync_query_stats(out);
 }

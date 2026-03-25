@@ -1,9 +1,9 @@
 #include "engine/session_link.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <utility>
 
-#include "engine/sync_session_wire.hpp"
 #include "engine/sync_transport_udp.hpp"
 
 namespace {
@@ -34,11 +34,21 @@ double runtime_now() {
     return 0.0;
 }
 
+std::string normalized_room_code(std::string room_code) {
+    room_code.erase(std::remove_if(room_code.begin(),
+                                   room_code.end(),
+                                   [](unsigned char c) { return std::isspace(c) != 0; }),
+                    room_code.end());
+    std::transform(room_code.begin(), room_code.end(), room_code.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return room_code;
+}
+
 bool connection_changed(const SessionLinkConnection& connection) {
     return !g_link.active ||
            g_link.is_host != connection.is_host ||
            g_link.server_url != connection.server_url ||
-           g_link.room_code != sync_session_normalized_room_code(connection.room_code) ||
+           g_link.room_code != normalized_room_code(connection.room_code) ||
            g_link.host_secret != connection.host_secret ||
            g_link.local_member_id != connection.local_member_id ||
            !session_contract_equal(g_link.contract, connection.contract);
@@ -51,7 +61,7 @@ void start_connection(const SessionLinkConnection& connection) {
     next.transport_ready = false;
     next.generation += 1;
     next.server_url = connection.server_url;
-    next.room_code = sync_session_normalized_room_code(connection.room_code);
+    next.room_code = normalized_room_code(connection.room_code);
     next.host_secret = connection.host_secret;
     next.local_member_id = connection.local_member_id;
     next.contract = connection.contract;
