@@ -149,7 +149,9 @@ BuiltScreen build_local_players(MenuContext& ctx) {
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
     MenuWidget prev_btn = make_button_widget(kPrevButtonId, LocalPlayersObjectID::PREV, "<", prev_action);
+    prev_btn.role = MenuWidgetRole::PagePrev;
     MenuWidget next_btn = make_button_widget(kNextButtonId, LocalPlayersObjectID::NEXT, ">", next_action);
+    next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next_btn);

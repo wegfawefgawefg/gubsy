@@ -1,13 +1,40 @@
-#include "engine/imgui_debug/windows.hpp"
+#include "game/imgui_debug/register_game_debug_windows.hpp"
 
-#include "engine/session_contract.hpp"
+#include "engine/binds_profiles.hpp"
+#include "engine/globals.hpp"
+#include "engine/imgui_debug/imgui_debug.hpp"
+#include "engine/input_sources.hpp"
+#include "game/actions.hpp"
 #include "game/coop_session.hpp"
 #include "game/coop_sync_runtime.hpp"
+#include "game/input_runtime.hpp"
 #include "game/menu/lobby_state.hpp"
+#include "engine/session_contract.hpp"
 
 #include <imgui.h>
 
+#include <string>
+
 namespace {
+
+struct ActionLabel {
+    int id;
+    const char* label;
+};
+
+constexpr ActionLabel kTrackedActions[] = {
+    {GameAction::MENU_UP, "MENU_UP"},
+    {GameAction::MENU_DOWN, "MENU_DOWN"},
+    {GameAction::MENU_LEFT, "MENU_LEFT"},
+    {GameAction::MENU_RIGHT, "MENU_RIGHT"},
+    {GameAction::MENU_SELECT, "MENU_SELECT"},
+    {GameAction::MENU_BACK, "MENU_BACK"},
+    {GameAction::UP, "UP"},
+    {GameAction::DOWN, "DOWN"},
+    {GameAction::LEFT, "LEFT"},
+    {GameAction::RIGHT, "RIGHT"},
+    {GameAction::USE, "USE"},
+};
 
 void text_or_dash(const char* label, const std::string& value) {
     ImGui::Text("%s: %s", label, value.empty() ? "-" : value.c_str());
@@ -15,6 +42,68 @@ void text_or_dash(const char* label, const std::string& value) {
 
 void bool_text(const char* label, bool value) {
     ImGui::Text("%s: %s", label, value ? "yes" : "no");
+}
+
+void render_players_window(bool* open_flag) {
+    if (!open_flag || !*open_flag)
+        return;
+    if (!ImGui::Begin("Debug: Players & Devices", open_flag)) {
+        ImGui::End();
+        return;
+    }
+    if (!es) {
+        ImGui::TextUnformatted("Engine state unavailable.");
+        ImGui::End();
+        return;
+    }
+    if (es->players.empty())
+        ImGui::TextUnformatted("No players registered.");
+    for (std::size_t i = 0; i < es->players.size(); ++i) {
+        const Player& player = es->players[i];
+        ImGui::Separator();
+        ImGui::Text("Player %zu", i);
+        if (!player.has_active_profile) {
+            ImGui::TextUnformatted("  No active user profile.");
+            continue;
+        }
+        const UserProfile& profile = player.profile;
+        ImGui::Text("  User Profile #%d%s", profile.id, profile.guest ? " (guest)" : "");
+        ImGui::Text("  Name: %s", profile.name.c_str());
+        ImGui::Text("  Binds Profile ID: %d", profile.last_binds_profile_id);
+        ImGui::Text("  Input Settings Profile ID: %d", profile.last_input_settings_profile_id);
+        ImGui::Text("  Game Settings Profile ID: %d", profile.last_game_settings_profile_id);
+
+        const InputFrame& frame = current_input_frame(static_cast<int>(i));
+        ImGui::Text("  Down Bits: 0x%08X", frame.down_bits);
+        ImGui::TextUnformatted("  Active Actions:");
+        ImGui::Indent();
+        bool printed = false;
+        for (const auto& action : kTrackedActions) {
+            if (frame.down_bits & (1u << action.id)) {
+                ImGui::BulletText("%s", action.label);
+                printed = true;
+            }
+        }
+        if (!printed)
+            ImGui::TextDisabled("(none)");
+        ImGui::Unindent();
+    }
+    if (!es->input_sources.empty()) {
+        ImGui::Separator();
+        ImGui::TextUnformatted("Detected Input Sources:");
+        ImGui::Indent();
+        for (const auto& source : es->input_sources) {
+            const char* type = "Unknown";
+            switch (source.type) {
+                case InputSourceType::Keyboard: type = "Keyboard"; break;
+                case InputSourceType::Mouse: type = "Mouse"; break;
+                case InputSourceType::Gamepad: type = "Gamepad"; break;
+            }
+            ImGui::BulletText("%s (ID %d)", type, source.device_id.id);
+        }
+        ImGui::Unindent();
+    }
+    ImGui::End();
 }
 
 void render_required_mods(const SessionContract& contract) {
@@ -62,8 +151,7 @@ void render_realtime_stats() {
     ImGui::Text("Connected for: %.2fs", stats.connected_for_sec);
     ImGui::Text("Packet idle: %.2fs", stats.packet_idle_sec);
     ImGui::Text("Snapshot idle: %.2fs", stats.snapshot_idle_sec);
-    ImGui::Text("Sim frame: %llu",
-                static_cast<unsigned long long>(stats.sim_frame));
+    ImGui::Text("Sim frame: %llu", static_cast<unsigned long long>(stats.sim_frame));
     ImGui::Text("Last snapshot frame: %llu",
                 static_cast<unsigned long long>(stats.last_applied_snapshot_frame));
     ImGui::Text("Last acked local input: %llu",
@@ -73,9 +161,7 @@ void render_realtime_stats() {
     bool_text("Snapshot timed out", stats.snapshot_timed_out);
 }
 
-} // namespace
-
-void imgui_debug_render_session_window(bool* open_flag) {
+void render_session_window(bool* open_flag) {
     if (!open_flag || !*open_flag)
         return;
     if (!ImGui::Begin("Debug: Session", open_flag)) {
@@ -135,4 +221,11 @@ void imgui_debug_render_session_window(bool* open_flag) {
     ImGui::Text("Rooms discovered: %zu", online.discovered_rooms.size());
 
     ImGui::End();
+}
+
+} // namespace
+
+void register_game_debug_windows() {
+    imgui_debug_register_window({"Players", ImGuiKey_F1, "F1", render_players_window});
+    imgui_debug_register_window({"Session", ImGuiKey_F5, "F5", render_session_window});
 }

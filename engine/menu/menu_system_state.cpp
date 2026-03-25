@@ -121,8 +121,6 @@ SDL_FRect* find_widget_rect(WidgetId id) {
 bool is_transient_focus_slot(UILayoutObjectId slot) {
     switch (slot) {
         case SettingsObjectID::BACK:
-        case SettingsObjectID::PREV:
-        case SettingsObjectID::NEXT:
             return true;
         default:
             return false;

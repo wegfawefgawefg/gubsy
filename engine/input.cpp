@@ -4,14 +4,6 @@
 
 #include <algorithm>
 #include "engine/globals.hpp"
-#include "engine/input.hpp"
-#include "engine/player.hpp"
-
-void register_input_frame_builder(BuildInputFrameFn fn) {
-    if (!es)
-        return;
-    es->input_frame_builder = fn;
-}
 
 void update_device_state_from_sdl() {
     if (!es)
@@ -50,55 +42,4 @@ void accumulate_mouse_wheel_delta(int delta) {
     if (!es)
         return;
     es->device_state.mouse_wheel += delta;
-}
-
-namespace {
-
-void ensure_input_frame_capacity() {
-    const std::size_t count = es ? es->players.size() : 0;
-    if (!es)
-        return;
-    if (es->input_frames_current.size() < count) {
-        es->input_frames_current.resize(count);
-        es->input_frames_previous.resize(count);
-    }
-}
-
-const InputFrame& safe_frame(const std::vector<InputFrame>& frames, int player_index) {
-    static InputFrame empty{};
-    if (!es)
-        return empty;
-    if (player_index < 0 || static_cast<std::size_t>(player_index) >= frames.size())
-        return empty;
-    return frames[static_cast<std::size_t>(player_index)];
-}
-
-} // namespace
-
-void build_input_frames_for_step() {
-    if (!es)
-        return;
-
-    ensure_input_frame_capacity();
-
-    const std::size_t player_count = es->players.size();
-    for (std::size_t i = 0; i < player_count; ++i) {
-        InputFrame next{};
-        if (es->input_frame_builder)
-            es->input_frame_builder(static_cast<int>(i), es->device_state, next);
-        es->input_frames_previous[i] = es->input_frames_current[i];
-        es->input_frames_current[i] = next;
-    }
-
-    es->device_state.mouse_wheel = 0;
-    es->device_state.mouse_dx = 0;
-    es->device_state.mouse_dy = 0;
-}
-
-const InputFrame& current_input_frame(int player_index) {
-    return safe_frame(es->input_frames_current, player_index);
-}
-
-const InputFrame& previous_input_frame(int player_index) {
-    return safe_frame(es->input_frames_previous, player_index);
 }

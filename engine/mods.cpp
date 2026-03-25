@@ -3,6 +3,7 @@
 #include "engine/graphics.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/project_paths.hpp"
+#include "engine/runtime_settings.hpp"
 
 #include <algorithm>
 #include <cctype>

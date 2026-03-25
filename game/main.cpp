@@ -8,14 +8,17 @@
 #include "engine/player.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/input.hpp"
+#include "engine/step.hpp"
 #include "game/actions.hpp"
 #include "game/builtin_mods.hpp"
+#include "game/modes.hpp"
+#include "game/state.hpp"
 #include "engine/game_settings.hpp"
 #include "game/ui_layout_ids.hpp"
+#include "game/imgui_debug/register_game_debug_windows.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
 #include "engine/globals.hpp"
-#include "engine/input_system.hpp"
-#include "game/input_frame.hpp"
+#include "game/input_runtime.hpp"
 #include "game/menu/screens/main_menu_screen.hpp"
 #include "game/menu/screens/lobby_screen.hpp"
 #include "game/menu/screens/lobby_mods_screen.hpp"
@@ -64,10 +67,9 @@ int main() {
                      builtin_mod_err.c_str());
     }
 
-    register_input_frame_builder(build_input_frame);
-
     register_game_settings_schema_entries();
     register_game_ui_layouts();
+    register_game_debug_windows();
 
     load_ui_layouts_pool();
 
@@ -86,6 +88,7 @@ int main() {
     register_profile_picker_screen();
     register_session_clients_screen();
     register_input_devices_screen();
+    register_fixed_step_prep(build_input_frames_for_step);
 
     if (es)
         es->mode = modes::TITLE;

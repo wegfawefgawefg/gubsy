@@ -8,8 +8,8 @@
 #include "engine/menu/menu_system.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_types.hpp"
+#include "engine/menu_layout_ids.hpp"
 #include "engine/ui_layouts.hpp"
-#include "game/ui_layout_ids.hpp"
 
 inline constexpr float kSliderOptionButtonWidth = 32.0f;
 inline constexpr float kSliderOptionButtonSpacing = 8.0f;

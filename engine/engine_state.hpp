@@ -15,11 +15,11 @@
 #include "engine/input_settings_profiles.hpp"
 #include "engine/game_settings.hpp"
 #include "engine/top_level_game_settings.hpp"
+#include "engine/device_state.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/ui_layouts.hpp"
 #include "player.hpp"
-#include "engine/input_system.hpp"
 #include "engine/input_sources.hpp"
 
 
@@ -60,9 +60,6 @@ struct EngineState {
     bool draw_input_device_overlay {false};
 
     DeviceState device_state{};
-    BuildInputFrameFn input_frame_builder{nullptr};
-    std::vector<InputFrame> input_frames_current;
-    std::vector<InputFrame> input_frames_previous;
 
     // Game Controller state
     struct GamepadState {

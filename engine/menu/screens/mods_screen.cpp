@@ -3,15 +3,15 @@
 #include "engine/globals.hpp"
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
-#include "engine/menu/menu_screen.hpp"
 #include "engine/menu/menu_ids.hpp"
+#include "engine/menu/menu_screen.hpp"
+#include "engine/menu_layout_ids.hpp"
 #include "engine/alerts.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_install.hpp"
 #include "engine/mod_server_config.hpp"
 #include "engine/mods.hpp"
 #include "engine/project_paths.hpp"
-#include "game/ui_layout_ids.hpp"
 
 #include <algorithm>
 #include <array>
@@ -426,6 +426,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     prev_btn.id = 503;
     prev_btn.slot = ModsObjectID::PREV;
     prev_btn.type = WidgetType::Button;
+    prev_btn.role = MenuWidgetRole::PagePrev;
     prev_btn.label = "<";
     prev_btn.on_select = has_prev_page ? MenuAction::run_command(g_cmd_prev_page)
                                        : MenuAction::none();
@@ -438,6 +439,7 @@ BuiltScreen build_mods_screen(MenuContext& ctx) {
     next_btn.id = 504;
     next_btn.slot = ModsObjectID::NEXT;
     next_btn.type = WidgetType::Button;
+    next_btn.role = MenuWidgetRole::PageNext;
     next_btn.label = ">";
     next_btn.on_select = has_next_page ? MenuAction::run_command(g_cmd_next_page)
                                        : MenuAction::none();

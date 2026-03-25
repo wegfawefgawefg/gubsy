@@ -12,11 +12,10 @@
 #include "engine/menu/menu_commands.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
-#include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/menu_ids.hpp"
+#include "engine/menu/settings_category_registry.hpp"
+#include "engine/menu_layout_ids.hpp"
 #include "engine/settings_catalog.hpp"
-#include "game/menu/menu_ids.hpp"
-#include "game/ui_layout_ids.hpp"
 namespace {
 
 constexpr int kCategoriesPerPage = 4;
@@ -38,7 +37,7 @@ struct CategoryCard {
     std::size_t order_hint{std::numeric_limits<std::size_t>::max()};
 };
 
-constexpr std::array<const char*, 11> kPreferredCategoryOrder = {
+constexpr std::array<const char*, 10> kPreferredCategoryOrder = {
     "Display",
     "Video",
     "Graphics",
@@ -48,7 +47,6 @@ constexpr std::array<const char*, 11> kPreferredCategoryOrder = {
     "Gameplay",
     "Accessibility",
     "Profiles",
-    "Players",
     "Saves",
 };
 
@@ -68,7 +66,6 @@ const std::unordered_map<std::string_view, CategoryOverride> kCategoryOverrides 
     {"Accessibility", {"Accessibility", "Accessibility options"}},
     {"Profiles", {"Profiles", "Profile management"}},
     {"Binds Profiles", {"Binds Profiles", "Manage binds profiles"}},
-    {"Players", {"Players", "Add and Remove Players"}},
     {"Saves", {"Saves", "Save slot management"}},
     {"Cheats", {"Cheats", "Cheats & sandbox"}},
     {"Debug", {"Debug", "Debug & dev tools"}},
@@ -190,17 +187,6 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
     }
-    auto players_it = std::find_if(st.cards.begin(), st.cards.end(), [](const CategoryCard& card) {
-        return card.tag == "Players";
-    });
-    if (players_it == st.cards.end()) {
-        CategoryCard card;
-        card.tag = "Players";
-        card.item_count = 0;
-        card.screen_id = MenuScreenID::LOCAL_PLAYERS;
-        card.order_hint = category_priority(card.tag);
-        st.cards.push_back(std::move(card));
-    }
     auto binds_it = std::find_if(st.cards.begin(), st.cards.end(), [](const CategoryCard& card) {
         return card.tag == "Binds Profiles";
     });
@@ -266,7 +252,9 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     widgets.push_back(page_label);
 
     MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    prev_btn.role = MenuWidgetRole::PagePrev;
     MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next_btn);
@@ -298,11 +286,7 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
                                                             : std::to_string(card.item_count) + " settings";
             std::string subtitle;
             if (override_it != kCategoryOverrides.end() && override_it->second.description) {
-                if (card.screen_id == MenuScreenID::LOCAL_PLAYERS) {
-                    subtitle = override_it->second.description;
-                } else {
-                    subtitle = std::string(override_it->second.description) + " · " + count_text;
-                }
+                subtitle = std::string(override_it->second.description) + " · " + count_text;
             } else {
                 subtitle = dynamic_subtitle(catalog, card.tag);
                 if (!subtitle.empty())

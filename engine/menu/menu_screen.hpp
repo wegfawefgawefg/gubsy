@@ -9,7 +9,6 @@
 #include <vector>
 
 struct EngineState;
-struct State;
 struct MenuManager;
 
 struct MenuActionList {
@@ -52,7 +51,6 @@ constexpr ScreenStateOps screen_state_ops() {
 
 struct MenuContext {
     EngineState& engine;
-    State& game;
     MenuManager& manager;
     int screen_width{0};
     int screen_height{0};

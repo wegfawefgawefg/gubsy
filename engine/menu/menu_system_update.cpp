@@ -18,7 +18,7 @@ void menu_system_set_input(const MenuInputState& input) {
 
 void menu_system_update(float dt, int screen_width, int screen_height) {
     msi::g_active = false;
-    if (!es || !ss)
+    if (!es)
         return;
 
     MenuManager& manager = es->menu_manager;
@@ -45,7 +45,6 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
         if (!inst.def || !inst.def->build)
             break;
         MenuContext ctx{*es,
-                        *ss,
                         manager,
                         screen_width,
                         screen_height,
@@ -262,19 +261,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!needs_rebuild && page_prev_pressed) {
                 msi::lock_mouse_focus_at(mouse_x, mouse_y);
                 MenuAction action = MenuAction::none();
-                auto find_page_widget = [&](std::initializer_list<UILayoutObjectId> slots) -> MenuWidget* {
-                    for (UILayoutObjectId slot : slots) {
-                        if (MenuWidget* widget = msi::find_widget_by_slot(slot))
-                            return widget;
+                auto find_page_widget = [&](MenuWidgetRole role) -> MenuWidget* {
+                    for (auto& widget : msi::g_cache.widgets) {
+                        if (widget.role == role)
+                            return &widget;
                     }
                     return nullptr;
                 };
-                if (MenuWidget* prev_widget = find_page_widget({SettingsObjectID::PREV,
-                                                               ModsObjectID::PREV,
-                                                               LobbyModsObjectID::PREV,
-                                                               LocalPlayersObjectID::PREV,
-                                                               ProfilePickerObjectID::PREV,
-                                                               InputDevicesObjectID::PREV}))
+                if (MenuWidget* prev_widget = find_page_widget(MenuWidgetRole::PagePrev))
                     action = prev_widget->on_select;
                 if (action.type != MenuActionType::None) {
                     msi::play_left_sound();
@@ -287,19 +281,14 @@ void menu_system_update(float dt, int screen_width, int screen_height) {
             if (!needs_rebuild && page_next_pressed) {
                 msi::lock_mouse_focus_at(mouse_x, mouse_y);
                 MenuAction action = MenuAction::none();
-                auto find_page_widget = [&](std::initializer_list<UILayoutObjectId> slots) -> MenuWidget* {
-                    for (UILayoutObjectId slot : slots) {
-                        if (MenuWidget* widget = msi::find_widget_by_slot(slot))
-                            return widget;
+                auto find_page_widget = [&](MenuWidgetRole role) -> MenuWidget* {
+                    for (auto& widget : msi::g_cache.widgets) {
+                        if (widget.role == role)
+                            return &widget;
                     }
                     return nullptr;
                 };
-                if (MenuWidget* next_widget = find_page_widget({SettingsObjectID::NEXT,
-                                                               ModsObjectID::NEXT,
-                                                               LobbyModsObjectID::NEXT,
-                                                               LocalPlayersObjectID::NEXT,
-                                                               ProfilePickerObjectID::NEXT,
-                                                               InputDevicesObjectID::NEXT}))
+                if (MenuWidget* next_widget = find_page_widget(MenuWidgetRole::PageNext))
                     action = next_widget->on_select;
                 if (action.type != MenuActionType::None) {
                     msi::play_right_sound();

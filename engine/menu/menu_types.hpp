@@ -95,9 +95,16 @@ enum class WidgetType : std::uint8_t {
     Card,
 };
 
+enum class MenuWidgetRole : std::uint8_t {
+    None = 0,
+    PagePrev,
+    PageNext,
+};
+
 struct MenuWidget {
     WidgetId id{kMenuIdInvalid};
     WidgetType type{WidgetType::Label};
+    MenuWidgetRole role{MenuWidgetRole::None};
     UILayoutObjectId slot{kMenuIdInvalid};
     MenuStyle style{};
     const char* label{nullptr};

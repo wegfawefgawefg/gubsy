@@ -186,8 +186,12 @@ BuiltScreen build_in_game_session_menu(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages)
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
-    widgets.push_back(make_button_widget(kPrevWidgetId, SettingsObjectID::PREV, "<", prev_action));
-    widgets.push_back(make_button_widget(kNextWidgetId, SettingsObjectID::NEXT, ">", next_action));
+    MenuWidget prev_btn = make_button_widget(kPrevWidgetId, SettingsObjectID::PREV, "<", prev_action);
+    prev_btn.role = MenuWidgetRole::PagePrev;
+    MenuWidget next_btn = make_button_widget(kNextWidgetId, SettingsObjectID::NEXT, ">", next_action);
+    next_btn.role = MenuWidgetRole::PageNext;
+    widgets.push_back(prev_btn);
+    widgets.push_back(next_btn);
 
     const int start_index = st.page * kItemsPerPage;
     std::vector<WidgetId> card_ids;
