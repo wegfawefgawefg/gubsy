@@ -1,11 +1,14 @@
 #include "game/coop_session.hpp"
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "engine/globals.hpp"
+#include "engine/session_link.hpp"
+#include "engine/sync_payload_codec.hpp"
 #include "engine/sync_session.hpp"
 #include "game/coop_correction.hpp"
 #include "game/coop_protocol.hpp"
@@ -21,7 +24,7 @@ namespace {
 
 bool g_sync_configured = false;
 
-bool query_connection(void*, SyncConnectionInfo& out) {
+bool query_connection(void*, SessionLinkConnection& out) {
     const LobbySession& lobby = lobby_state_const();
     if (!lobby.online.in_room ||
         !session_contract_is_in_game(lobby.online.contract) ||
@@ -59,30 +62,45 @@ double query_now(void*) {
     return es ? es->now : 0.0;
 }
 
-bool build_local_input(void*, nlohmann::json& out) {
+bool encode_json_payload(const nlohmann::json& json, std::vector<std::uint8_t>& out) {
+    std::string err;
+    return sync_payload_encode_json(json, out, err);
+}
+
+bool decode_json_payload(const std::vector<std::uint8_t>& bytes, nlohmann::json& out) {
+    std::string err;
+    return sync_payload_decode_json(bytes, out, err);
+}
+
+bool build_local_input(void*, std::vector<std::uint8_t>& out) {
     if (!es)
         return false;
     InputFrame frame;
     if (!in_game_menu_blocks_game_input())
         build_input_frame(0, es->device_state, frame);
-    out = input_frame_to_json(frame);
-    return true;
+    return encode_json_payload(input_frame_to_json(frame), out);
 }
 
 void predict_demo_world(void*,
                         const std::vector<std::string>&,
-                        const std::vector<nlohmann::json>& current_inputs_json,
-                        const std::vector<nlohmann::json>& previous_inputs_json,
+                        const std::vector<std::vector<std::uint8_t>>& current_inputs_bytes,
+                        const std::vector<std::vector<std::uint8_t>>& previous_inputs_bytes,
                         float dt) {
     if (!ss)
         return;
 
-    std::vector<InputFrame> current_inputs(current_inputs_json.size());
-    std::vector<InputFrame> previous_inputs(previous_inputs_json.size());
-    for (std::size_t i = 0; i < current_inputs_json.size(); ++i)
-        input_frame_from_json(current_inputs_json[i], current_inputs[i]);
-    for (std::size_t i = 0; i < previous_inputs_json.size(); ++i)
-        input_frame_from_json(previous_inputs_json[i], previous_inputs[i]);
+    std::vector<InputFrame> current_inputs(current_inputs_bytes.size());
+    std::vector<InputFrame> previous_inputs(previous_inputs_bytes.size());
+    for (std::size_t i = 0; i < current_inputs_bytes.size(); ++i) {
+        nlohmann::json json;
+        if (decode_json_payload(current_inputs_bytes[i], json))
+            input_frame_from_json(json, current_inputs[i]);
+    }
+    for (std::size_t i = 0; i < previous_inputs_bytes.size(); ++i) {
+        nlohmann::json json;
+        if (decode_json_payload(previous_inputs_bytes[i], json))
+            input_frame_from_json(json, previous_inputs[i]);
+    }
 
     ensure_demo_player_count(*ss, current_inputs.size());
     simulate_demo_world(*ss, current_inputs, previous_inputs, dt);
@@ -91,15 +109,19 @@ void predict_demo_world(void*,
 bool capture_demo_snapshot(void*,
                            const std::vector<std::string>& member_ids,
                            std::uint64_t sim_frame,
-                           nlohmann::json& out) {
+                           std::vector<std::uint8_t>& out) {
     if (!ss)
         return false;
-    out = coop_snapshot_to_json(capture_coop_snapshot(*ss, member_ids, sim_frame));
-    return true;
+    return encode_json_payload(coop_snapshot_to_json(capture_coop_snapshot(*ss, member_ids, sim_frame)), out);
 }
 
-bool apply_demo_snapshot(void*, const nlohmann::json& snapshot_json, std::vector<std::string>& member_ids_out) {
+bool apply_demo_snapshot(void*,
+                         const std::vector<std::uint8_t>& snapshot_bytes,
+                         std::vector<std::string>& member_ids_out) {
     if (!ss)
+        return false;
+    nlohmann::json snapshot_json;
+    if (!decode_json_payload(snapshot_bytes, snapshot_json))
         return false;
     CoopStateSnapshot snapshot;
     if (!coop_snapshot_from_json(snapshot_json, snapshot))
@@ -108,8 +130,11 @@ bool apply_demo_snapshot(void*, const nlohmann::json& snapshot_json, std::vector
     return true;
 }
 
-void apply_local_view_input(void*, const nlohmann::json& input_json) {
+void apply_local_view_input(void*, const std::vector<std::uint8_t>& input_bytes) {
     if (!ss)
+        return;
+    nlohmann::json input_json;
+    if (!decode_json_payload(input_bytes, input_json))
         return;
     InputFrame frame;
     if (!input_frame_from_json(input_json, frame))
@@ -152,10 +177,10 @@ void ensure_sync_configured() {
     if (g_sync_configured)
         return;
     SyncSessionHooks hooks;
-    hooks.query_connection = query_connection;
+    hooks.link.query_connection = query_connection;
+    hooks.link.tick_presence = tick_presence;
+    hooks.link.query_now = query_now;
     hooks.query_member_ids = query_member_ids;
-    hooks.tick_presence = tick_presence;
-    hooks.query_now = query_now;
 
     SyncDriver driver;
     driver.build_local_input = build_local_input;

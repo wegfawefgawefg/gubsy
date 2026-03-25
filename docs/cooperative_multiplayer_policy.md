@@ -89,7 +89,8 @@ That means:
 - Steam integration should be a backend for invites, lobbies, and transport, not the entire multiplayer design.
 - The first validation harness should be headless and compare client-applied state against host-authoritative state.
 - The engine should own generic session orchestration, matchmaking/transport backends, compatibility checks, and reconciliation hooks.
-- Individual games should provide their own sync driver for input capture, local prediction, snapshot capture, and snapshot application.
+- Individual games should provide their own sync payload encoding, authority policy, and conflict-resolution rules.
+- Higher-level sync helpers are acceptable, but they should be optional engine utilities rather than the only supported model.
 
 ## Transport Test Hooks
 
@@ -115,6 +116,6 @@ That means:
 
 ## Current Limitation
 
-- The current transport still uses JSON payloads for smoke-friendly validation.
-- That is a backend detail, not the long-term transport goal.
-- If the JSON payload boundary starts getting in the way, it should be replaced with an opaque packet/byte payload interface.
+- The current bundled game still uses CBOR-wrapped JSON for its own sync payloads.
+- That is a game-layer choice, not the engine transport contract.
+- The long-term engine boundary should stay at opaque byte payloads plus minimal session/transport hooks.

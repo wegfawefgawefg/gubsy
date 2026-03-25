@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 #if defined(__GNUC__)
@@ -120,23 +123,125 @@ std::string sync_session_normalized_room_code(std::string room_code) {
     return room_code;
 }
 
-SequencedInput sync_session_parse_input_envelope(const nlohmann::json& json) {
-    SequencedInput input;
-    if (json.is_object() && json.contains("seq") && json.contains("payload")) {
-        input.seq = json.value("seq", std::uint64_t{0});
-        const auto payload_it = json.find("payload");
-        if (payload_it != json.end() && payload_it->is_object())
-            input.payload = *payload_it;
-        return input;
-    }
-    if (json.is_object())
-        input.payload = json;
-    return input;
+namespace {
+
+void append_u16(std::vector<std::uint8_t>& out, std::uint16_t value) {
+    out.push_back(static_cast<std::uint8_t>((value >> 8) & 0xffu));
+    out.push_back(static_cast<std::uint8_t>(value & 0xffu));
 }
 
-nlohmann::json sync_session_make_input_envelope(const SequencedInput& input) {
-    return {
-        {"seq", input.seq},
-        {"payload", input.payload},
-    };
+void append_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+    out.push_back(static_cast<std::uint8_t>((value >> 24) & 0xffu));
+    out.push_back(static_cast<std::uint8_t>((value >> 16) & 0xffu));
+    out.push_back(static_cast<std::uint8_t>((value >> 8) & 0xffu));
+    out.push_back(static_cast<std::uint8_t>(value & 0xffu));
+}
+
+void append_u64(std::vector<std::uint8_t>& out, std::uint64_t value) {
+    for (int shift = 56; shift >= 0; shift -= 8)
+        out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xffu));
+}
+
+bool read_u16(const std::vector<std::uint8_t>& bytes, std::size_t& offset, std::uint16_t& out) {
+    if (offset + 2 > bytes.size())
+        return false;
+    out = static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[offset]) << 8) |
+                                     static_cast<std::uint16_t>(bytes[offset + 1]));
+    offset += 2;
+    return true;
+}
+
+bool read_u32(const std::vector<std::uint8_t>& bytes, std::size_t& offset, std::uint32_t& out) {
+    if (offset + 4 > bytes.size())
+        return false;
+    out = (static_cast<std::uint32_t>(bytes[offset]) << 24) |
+          (static_cast<std::uint32_t>(bytes[offset + 1]) << 16) |
+          (static_cast<std::uint32_t>(bytes[offset + 2]) << 8) |
+          static_cast<std::uint32_t>(bytes[offset + 3]);
+    offset += 4;
+    return true;
+}
+
+bool read_u64(const std::vector<std::uint8_t>& bytes, std::size_t& offset, std::uint64_t& out) {
+    if (offset + 8 > bytes.size())
+        return false;
+    out = 0;
+    for (int i = 0; i < 8; ++i)
+        out = (out << 8) | static_cast<std::uint64_t>(bytes[offset + static_cast<std::size_t>(i)]);
+    offset += 8;
+    return true;
+}
+
+} // namespace
+
+bool sync_session_encode_snapshot_envelope(const SyncSnapshotEnvelope& envelope,
+                                           std::vector<std::uint8_t>& out,
+                                           std::string& err) {
+    err.clear();
+    if (envelope.acked_inputs.size() > std::numeric_limits<std::uint16_t>::max()) {
+        err = "Too many ack entries in snapshot envelope";
+        return false;
+    }
+    if (envelope.driver_snapshot.size() > std::numeric_limits<std::uint32_t>::max()) {
+        err = "Snapshot payload too large";
+        return false;
+    }
+    out.clear();
+    out.reserve(16 + envelope.driver_snapshot.size() + envelope.acked_inputs.size() * 24);
+    append_u64(out, envelope.sim_frame);
+    append_u16(out, static_cast<std::uint16_t>(envelope.acked_inputs.size()));
+    for (const auto& ack : envelope.acked_inputs) {
+        if (ack.first.size() > std::numeric_limits<std::uint16_t>::max()) {
+            err = "Member ID too long in snapshot envelope";
+            out.clear();
+            return false;
+        }
+        append_u16(out, static_cast<std::uint16_t>(ack.first.size()));
+        out.insert(out.end(), ack.first.begin(), ack.first.end());
+        append_u64(out, ack.second);
+    }
+    append_u32(out, static_cast<std::uint32_t>(envelope.driver_snapshot.size()));
+    out.insert(out.end(), envelope.driver_snapshot.begin(), envelope.driver_snapshot.end());
+    return true;
+}
+
+bool sync_session_decode_snapshot_envelope(const std::vector<std::uint8_t>& bytes,
+                                           SyncSnapshotEnvelope& out,
+                                           std::string& err) {
+    err.clear();
+    out = SyncSnapshotEnvelope{};
+    std::size_t offset = 0;
+    std::uint16_t ack_count = 0;
+    if (!read_u64(bytes, offset, out.sim_frame) ||
+        !read_u16(bytes, offset, ack_count)) {
+        err = "Snapshot envelope header is truncated";
+        return false;
+    }
+    out.acked_inputs.reserve(ack_count);
+    for (std::uint16_t i = 0; i < ack_count; ++i) {
+        std::uint16_t member_len = 0;
+        std::uint64_t acked_seq = 0;
+        if (!read_u16(bytes, offset, member_len) ||
+            offset + member_len > bytes.size()) {
+            err = "Snapshot envelope member ID is truncated";
+            return false;
+        }
+        std::string member_id(reinterpret_cast<const char*>(bytes.data() + offset),
+                              static_cast<std::size_t>(member_len));
+        offset += static_cast<std::size_t>(member_len);
+        if (!read_u64(bytes, offset, acked_seq)) {
+            err = "Snapshot envelope ack entry is truncated";
+            return false;
+        }
+        out.acked_inputs.push_back({std::move(member_id), acked_seq});
+    }
+
+    std::uint32_t snapshot_len = 0;
+    if (!read_u32(bytes, offset, snapshot_len) ||
+        offset + snapshot_len != bytes.size()) {
+        err = "Snapshot envelope payload is truncated";
+        return false;
+    }
+    out.driver_snapshot.assign(bytes.begin() + static_cast<std::ptrdiff_t>(offset), bytes.end());
+    return true;
 }

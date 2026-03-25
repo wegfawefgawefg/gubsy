@@ -89,6 +89,7 @@ Docs
 - Engine 0.1 checklist: `docs/engine_0_1_checklist.md`
 - Cooperative multiplayer policy: `docs/cooperative_multiplayer_policy.md`
 - Session contract: `docs/session_contract.md`
+- Networking boundary: `docs/networking_boundary.md`
 - Session browser flow: `docs/session_browser_flow.md`
 - Steam onboarding TODO: `docs/steam_onboarding_todo.md`
 - Menu system notes: `docs/menu.md`

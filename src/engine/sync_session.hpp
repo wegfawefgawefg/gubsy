@@ -4,44 +4,30 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
-
+#include "engine/session_link.hpp"
 #include "engine/session_contract.hpp"
 
-struct SyncConnectionInfo {
-    bool active{false};
-    bool is_host{false};
-    std::string server_url;
-    std::string room_code;
-    std::string host_secret;
-    std::string local_member_id;
-    SessionContract contract{};
-};
-
 struct SyncSessionHooks {
-    void* ctx{nullptr};
-    bool (*query_connection)(void* ctx, SyncConnectionInfo& out){nullptr};
+    SessionLinkHooks link{};
     void (*query_member_ids)(void* ctx, std::vector<std::string>& out){nullptr};
-    void (*tick_presence)(void* ctx){nullptr};
-    double (*query_now)(void* ctx){nullptr};
 };
 
 struct SyncDriver {
     void* ctx{nullptr};
-    bool (*build_local_input)(void* ctx, nlohmann::json& out){nullptr};
+    bool (*build_local_input)(void* ctx, std::vector<std::uint8_t>& out){nullptr};
     void (*predict)(void* ctx,
                     const std::vector<std::string>& member_ids,
-                    const std::vector<nlohmann::json>& current_inputs,
-                    const std::vector<nlohmann::json>& previous_inputs,
+                    const std::vector<std::vector<std::uint8_t>>& current_inputs,
+                    const std::vector<std::vector<std::uint8_t>>& previous_inputs,
                     float dt){nullptr};
     bool (*capture_snapshot)(void* ctx,
                              const std::vector<std::string>& member_ids,
                              std::uint64_t sim_frame,
-                             nlohmann::json& out){nullptr};
+                             std::vector<std::uint8_t>& out){nullptr};
     bool (*apply_snapshot)(void* ctx,
-                           const nlohmann::json& snapshot,
+                           const std::vector<std::uint8_t>& snapshot,
                            std::vector<std::string>& member_ids_out){nullptr};
-    void (*apply_local_view_input)(void* ctx, const nlohmann::json& input){nullptr};
+    void (*apply_local_view_input)(void* ctx, const std::vector<std::uint8_t>& input){nullptr};
     void (*begin_reconcile)(void* ctx){nullptr};
     void (*finish_reconcile)(void* ctx,
                              const std::vector<std::string>& member_ids,

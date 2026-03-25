@@ -57,7 +57,8 @@ Still missing:
 ### 2. Stronger Engine/Game Sync Boundary
 
 - keep engine ownership of transport, session lifecycle, sequencing, acking, replay, and correction hooks
-- keep game ownership of input capture, prediction rules, snapshot capture, snapshot apply, and presentation policy
+- keep game ownership of message schema, payload encoding, authority policy, and presentation policy
+- make the current host-authoritative sync loop clearly optional rather than the only engine path
 - reduce demo-shaped assumptions in the sync path over time
 - make game-defined lobby config and runtime session metadata feel like a normal engine extension point
 
@@ -141,6 +142,7 @@ real first release.
 Gubsy should count as a `0.1` engine when:
 
 - a small game can define its own lobby/config/sync behavior without fighting engine assumptions
+- a small game can define its own multiplayer protocol without inheriting mandatory engine message formats
 - local and online session flow are both reliable enough for normal use
 - transport and session failures are understandable and recoverable
 - mod/version/network compatibility is enforced instead of hand-waved
