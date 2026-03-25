@@ -56,6 +56,14 @@ void playing_step() {
     LobbySession& lobby = lobby_state();
     if (lobby.online.in_room)
         lobby_online_tick(lobby);
+    std::string close_reason;
+    if (lobby_online_consume_session_close(lobby, close_reason)) {
+        coop_session_reset();
+        add_alert(close_reason);
+        if (es)
+            es->mode = modes::TITLE;
+        return;
+    }
 
     if (was_pressed(0, GameAction::MENU_BACK)) {
         return_to_lobby();

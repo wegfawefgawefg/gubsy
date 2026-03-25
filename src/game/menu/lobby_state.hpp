@@ -45,6 +45,11 @@ struct LobbyOnlineState {
     std::uint64_t failed_content_revision{0};
     double next_content_retry_at{0.0};
     std::string content_status_text;
+    int room_failure_count{0};
+    double first_room_failure_at{0.0};
+    bool reconnecting{false};
+    bool session_closed{false};
+    std::string session_close_reason;
     double next_room_poll_at{0.0};
     double next_room_publish_at{0.0};
     double next_rooms_refresh_at{0.0};

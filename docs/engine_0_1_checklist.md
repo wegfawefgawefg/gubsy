@@ -42,6 +42,18 @@ for outside use or for serious internal game work.
 - explicit host migration policy, even if the first answer is “host migration is not supported”
 - better latency behavior under real RTT, not just local testing
 
+Current implemented floor:
+
+- snapshot timeout status exists
+- room-service reconnect attempts exist
+- room closure now exits the session cleanly
+- host migration is explicitly unsupported
+
+Still missing:
+
+- stronger reconnect behavior for the realtime transport itself
+- richer in-game diagnostics around who dropped and why
+
 ### 2. Stronger Engine/Game Sync Boundary
 
 - keep engine ownership of transport, session lifecycle, sequencing, acking, replay, and correction hooks

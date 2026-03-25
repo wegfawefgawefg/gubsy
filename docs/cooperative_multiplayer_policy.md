@@ -73,6 +73,13 @@ That means:
 - Removed mods do not need to be uninstalled from disk immediately; deactivating them for the session is enough.
 - If a live content change cannot be synced cleanly, the session should surface that mismatch clearly instead of silently pretending everything is fine.
 
+## Current Session Failure Policy
+
+- Short room-service failures should be treated as reconnect attempts, not immediate session death.
+- If the room/bootstrap service does not recover within the reconnect grace window, the session should close cleanly.
+- If the host disappears and the room closes, clients should be told the session ended.
+- Host migration is currently not supported and should be stated explicitly in UX and docs.
+
 ## Architectural Consequences
 
 - Lobbies must expose version/mod identity, not just player counts.

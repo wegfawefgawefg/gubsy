@@ -56,6 +56,9 @@ void ensure_menu_ready() {
 void title_step() {
     LobbySession& lobby = lobby_state();
     lobby_online_tick(lobby);
+    std::string close_reason;
+    if (lobby_online_consume_session_close(lobby, close_reason))
+        add_alert(close_reason);
     if (es && lobby_online_ready_to_enter_game(lobby))
         es->mode = modes::PLAYING;
 }

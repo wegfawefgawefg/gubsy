@@ -191,6 +191,16 @@ target_include_directories(room_smoke PRIVATE
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
+add_executable(room_timeout_smoke
+  tools/room_timeout_smoke/main.cpp
+  src/engine/room_matchmaking.cpp
+  src/engine/session_contract.cpp
+)
+target_include_directories(room_timeout_smoke PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/third_party
+)
+
 add_executable(coop_sync_smoke
   tools/coop_sync_smoke/main.cpp
   src/engine/room_matchmaking.cpp

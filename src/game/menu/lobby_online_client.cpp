@@ -23,6 +23,7 @@ constexpr double kRoomPollIntervalSec = 1.0;
 constexpr double kRoomPublishIntervalSec = 1.0;
 constexpr double kRoomsRefreshIntervalSec = 2.0;
 constexpr double kContentRetryIntervalSec = 3.0;
+constexpr double kRoomReconnectGraceSec = 8.0;
 
 RoomServerMatchmaking g_matchmaking;
 
@@ -32,6 +33,91 @@ void normalize_required_mod_ids(std::vector<std::string>& ids) {
               ids.end());
     std::sort(ids.begin(), ids.end());
     ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+}
+
+void clear_room_failure_state(LobbySession& lobby) {
+    lobby.online.room_failure_count = 0;
+    lobby.online.first_room_failure_at = 0.0;
+    lobby.online.reconnecting = false;
+}
+
+void clear_local_room_state(LobbySession& lobby, const char* status_text) {
+    lobby.online.in_room = false;
+    lobby.online.is_host = false;
+    lobby.online.compatibility = SessionCompatibility::Compatible;
+    lobby.online.contract = SessionContract{};
+    lobby.online.contract.net_protocol = session_contract_default_net_protocol();
+    lobby.online.room_code.clear();
+    lobby.online.host_secret.clear();
+    lobby.online.member_id.clear();
+    lobby.online.last_published_contract_key.clear();
+    lobby.online.synced_content_revision = 0;
+    lobby.online.failed_content_revision = 0;
+    lobby.online.next_content_retry_at = 0.0;
+    lobby.online.content_status_text.clear();
+    clear_room_failure_state(lobby);
+    lobby.online.session_closed = false;
+    lobby.online.session_close_reason.clear();
+    lobby.online.members.clear();
+    lobby.online.status_text = status_text;
+}
+
+bool room_server_error_is_room_closed(const std::string& err) {
+    return err.find("room not found") != std::string::npos ||
+           err.find("(404)") != std::string::npos;
+}
+
+void mark_session_closed(LobbySession& lobby, const std::string& reason) {
+    lobby.online.reconnecting = false;
+    lobby.online.session_closed = true;
+    lobby.online.session_close_reason = reason;
+    lobby.online.status_text = reason;
+    lobby.online.last_error = reason;
+}
+
+void note_room_service_failure(LobbySession& lobby, const std::string& err) {
+    if (!lobby.online.in_room || lobby.online.session_closed)
+        return;
+    if (room_server_error_is_room_closed(err)) {
+        const std::string reason = lobby.online.is_host
+                                       ? "Online room closed."
+                                       : "Host left. Host migration is not supported.";
+        mark_session_closed(lobby, reason);
+        return;
+    }
+
+    if (!lobby.online.reconnecting) {
+        lobby.online.reconnecting = true;
+        lobby.online.room_failure_count = 1;
+        lobby.online.first_room_failure_at = es ? es->now : 0.0;
+    } else {
+        lobby.online.room_failure_count += 1;
+    }
+
+    lobby.online.status_text = "Reconnecting to room service...";
+    if (!err.empty())
+        lobby.online.last_error = err;
+
+    if (!es)
+        return;
+    if (es->now - lobby.online.first_room_failure_at < kRoomReconnectGraceSec)
+        return;
+
+    const std::string reason = lobby.online.is_host
+                                   ? "Lost room service. Online room closed."
+                                   : "Lost room service. Host migration is not supported.";
+    mark_session_closed(lobby, reason);
+}
+
+void note_room_service_recovered(LobbySession& lobby) {
+    if (!lobby.online.reconnecting)
+        return;
+    clear_room_failure_state(lobby);
+    if (lobby.online.last_error.find("room server") != std::string::npos ||
+        lobby.online.last_error.find("Reconnecting") != std::string::npos ||
+        lobby.online.last_error.find("Lost room service") != std::string::npos) {
+        lobby.online.last_error.clear();
+    }
 }
 
 std::string content_contract_key(const SessionContract& contract) {
@@ -162,6 +248,7 @@ bool refresh_room_state(LobbySession& lobby, std::string& err) {
     MatchmakingRoom room;
     if (!g_matchmaking.fetch_room(lobby.online.server_url, lobby.online.room_code, room, err))
         return false;
+    note_room_service_recovered(lobby);
     apply_room_to_lobby(room, lobby);
     if (room.contract.game_config.is_object())
         apply_game_lobby_config(room.contract.game_config, lobby);
@@ -265,6 +352,8 @@ bool lobby_online_host_current_room(LobbySession& lobby, std::string& err) {
     lobby.online.content_status_text.clear();
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
+    lobby.online.session_closed = false;
+    lobby.online.session_close_reason.clear();
     err.clear();
     return refresh_room_state(lobby, err);
 }
@@ -292,6 +381,8 @@ bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, s
     lobby.online.content_status_text = "Joining room...";
     lobby.online.next_room_poll_at = 0.0;
     lobby.online.next_room_publish_at = 0.0;
+    lobby.online.session_closed = false;
+    lobby.online.session_close_reason.clear();
     err.clear();
     return refresh_room_state(lobby, err);
 }
@@ -304,21 +395,18 @@ bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
                              lobby.online.member_id,
                              lobby.online.is_host ? lobby.online.host_secret : std::string{},
                              err);
-    lobby.online.in_room = false;
-    lobby.online.is_host = false;
-    lobby.online.compatibility = SessionCompatibility::Compatible;
-    lobby.online.contract = SessionContract{};
-    lobby.online.contract.net_protocol = session_contract_default_net_protocol();
-    lobby.online.room_code.clear();
-    lobby.online.host_secret.clear();
-    lobby.online.member_id.clear();
-    lobby.online.last_published_contract_key.clear();
-    lobby.online.synced_content_revision = 0;
-    lobby.online.failed_content_revision = 0;
-    lobby.online.next_content_retry_at = 0.0;
-    lobby.online.content_status_text.clear();
-    lobby.online.members.clear();
-    lobby.online.status_text = "Offline lobby";
+    clear_local_room_state(lobby, "Offline lobby");
+    lobby.online.last_error.clear();
+    return true;
+}
+
+bool lobby_online_consume_session_close(LobbySession& lobby, std::string& reason_out) {
+    if (!lobby.online.session_closed)
+        return false;
+    reason_out = lobby.online.session_close_reason.empty()
+                     ? std::string("Online session closed.")
+                     : lobby.online.session_close_reason;
+    clear_local_room_state(lobby, "Offline lobby");
     return true;
 }
 
@@ -348,26 +436,34 @@ bool lobby_online_refresh_rooms(LobbySession& lobby, bool force, std::string& er
 void lobby_online_tick(LobbySession& lobby) {
     if (!es)
         return;
+    if (lobby.online.session_closed)
+        return;
     std::string err;
     if (lobby.online.in_room) {
         if (lobby.online.is_host && es->now >= lobby.online.next_room_publish_at) {
             lobby_refresh_mods();
-            if (publish_room_state(lobby, err))
+            if (publish_room_state(lobby, err)) {
+                note_room_service_recovered(lobby);
                 lobby.online.next_room_publish_at = es->now + kRoomPublishIntervalSec;
-            else if (!err.empty())
-                lobby.online.last_error = err;
+            } else if (!err.empty()) {
+                note_room_service_failure(lobby, err);
+            }
         } else if (!lobby.online.is_host && es->now >= lobby.online.next_room_publish_at) {
-            if (heartbeat_member(lobby, err))
+            if (heartbeat_member(lobby, err)) {
+                note_room_service_recovered(lobby);
                 lobby.online.next_room_publish_at = es->now + kRoomPublishIntervalSec;
-            else if (!err.empty())
-                lobby.online.last_error = err;
+            } else if (!err.empty()) {
+                note_room_service_failure(lobby, err);
+            }
         }
 
+        if (lobby.online.session_closed)
+            return;
         if (es->now >= lobby.online.next_room_poll_at) {
             if (refresh_room_state(lobby, err)) {
                 lobby.online.next_room_poll_at = es->now + kRoomPollIntervalSec;
             } else if (!err.empty()) {
-                lobby.online.last_error = err;
+                note_room_service_failure(lobby, err);
             }
         }
     }
