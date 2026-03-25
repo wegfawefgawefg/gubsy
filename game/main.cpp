@@ -33,6 +33,14 @@
 
 namespace {
 constexpr const char* kGameModVersion = "0.1.0";
+
+void on_mods_changed() {
+    finalize_game_mod_apis();
+}
+
+const GubsyAppHooks kAppHooks = {
+    .on_mods_changed = on_mods_changed,
+};
 }
 
 void register_modes(){
@@ -130,7 +138,7 @@ int main() {
 
     register_modes();
    
-    do_the_gubsy();
+    do_the_gubsy(kAppHooks);
 
     cleanup_state();
     stop_doing_the_gubsy();

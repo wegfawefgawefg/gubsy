@@ -22,7 +22,6 @@
 #include "sdl_shim.hpp"
 #include "render.hpp"
 #include "engine/mod_host.hpp"
-#include "game/mod_api/register_game_mod_apis.hpp"
 #include "engine/input_system.hpp"
 #include "engine/mode_registry.hpp"
 #include "engine/imgui_layer.hpp"
@@ -31,8 +30,7 @@
 #include "engine/project_paths.hpp"
 
 
-
-bool do_the_gubsy(){
+bool do_the_gubsy(const GubsyAppHooks& hooks){
     ensure_data_folder_structure();
     std::error_code mods_ec;
     std::filesystem::create_directories(runtime_mods_path(), mods_ec);
@@ -99,7 +97,8 @@ bool do_the_gubsy(){
     load_mod_sounds();
 
     load_enabled_mods_via_host();
-    finalize_game_mod_apis();
+    if (hooks.on_mods_changed)
+        hooks.on_mods_changed();
 
     Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 t_last = SDL_GetPerformanceCounter();
@@ -126,8 +125,8 @@ bool do_the_gubsy(){
         }
 
         bool mods_changed = poll_fs_mods_hot_reload();
-        if (mods_changed)
-            finalize_game_mod_apis();
+        if (mods_changed && hooks.on_mods_changed)
+            hooks.on_mods_changed();
 
         step();
 
