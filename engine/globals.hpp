@@ -9,4 +9,3 @@
 extern EngineState* es;
 extern Graphics* gg;
 extern Audio* aa;
-extern ModManager* mm;

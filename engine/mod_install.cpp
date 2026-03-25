@@ -88,8 +88,9 @@ bool parse_http_endpoint(const std::string& url, EndpointInfo& out, std::string&
 namespace fs = std::filesystem;
 
 fs::path mods_root_path() {
-    if (mm && !mm->root.empty())
-        return fs::path(mm->root);
+    const ModManager* manager = current_mod_manager_const();
+    if (manager && !manager->root.empty())
+        return fs::path(manager->root);
     return runtime_mods_path();
 }
 
@@ -123,9 +124,10 @@ void refresh_runtime(const std::vector<std::string>& previously_active) {
 }
 
 const ModInfo* find_installed_mod(const std::string& id) {
-    if (!mm)
+    const ModManager* manager = current_mod_manager_const();
+    if (!manager)
         return nullptr;
-    for (const auto& mod : mm->mods) {
+    for (const auto& mod : manager->mods) {
         if (mod.name == id)
             return &mod;
     }

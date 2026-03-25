@@ -46,8 +46,9 @@ struct ModsScreenState {
 bool version_compatible(const ModCatalogEntry& entry);
 
 bool path_exists(const ModCatalogEntry& entry) {
-    std::filesystem::path mods_root = mm && !mm->root.empty()
-                                          ? std::filesystem::path(mm->root)
+    const ModManager* manager = current_mod_manager_const();
+    std::filesystem::path mods_root = manager && !manager->root.empty()
+                                          ? std::filesystem::path(manager->root)
                                           : runtime_mods_path();
     std::string folder = entry.folder.empty() ? entry.id : entry.folder;
     std::error_code ec;

@@ -63,9 +63,9 @@ void lobby_reset_defaults() {
 
 void lobby_refresh_mods() {
     std::vector<LobbyModEntry> fresh;
-    if (mm) {
-        fresh.reserve(mm->mods.size());
-        for (const auto& mod : mm->mods) {
+    if (const ModManager* manager = current_mod_manager_const()) {
+        fresh.reserve(manager->mods.size());
+        for (const auto& mod : manager->mods) {
             LobbyModEntry entry;
             entry.id = mod.name;
             entry.title = mod.title.empty() ? mod.name : mod.title;

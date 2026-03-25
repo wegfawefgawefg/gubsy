@@ -82,7 +82,10 @@ struct ModManager {
         std::vector<std::string>& changed_scripts);
 };
 
-// Initialize global Mods manager instance. Returns true on success.
+ModManager* current_mod_manager();
+const ModManager* current_mod_manager_const();
+
+// Initialize engine-owned Mods manager instance. Returns true on success.
 bool init_mods_manager(const std::string& mods_root);
 
 // Discover available mods (non-recursive: `<mods_root>/*/`).
@@ -100,5 +103,5 @@ bool cheap_scan_mods_to_update_sprite_name_registry();
 // Returns true if store was rebuilt.
 bool scan_mods_for_sprite_defs();
 
-// Destroy global ModManager and release memory.
+// Destroy engine-owned ModManager and release memory.
 void cleanup_mods_manager();

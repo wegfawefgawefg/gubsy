@@ -22,6 +22,7 @@
 #include "player.hpp"
 #include "engine/input_sources.hpp"
 
+struct ModManager;
 
 struct EngineState {
     bool running{true};
@@ -84,6 +85,7 @@ struct EngineState {
 
     MenuManager menu_manager;
     MenuCommandRegistry menu_commands;
+    ModManager* mod_manager{nullptr};
 };
 
 bool init_engine_state();

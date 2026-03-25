@@ -3,4 +3,3 @@
 EngineState* es = nullptr;
 Graphics* gg = nullptr;
 Audio* aa = nullptr;
-ModManager* mm = nullptr;

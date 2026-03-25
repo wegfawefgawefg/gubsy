@@ -25,9 +25,10 @@ void rebuild_mod_assets() {
 }
 
 ModInfo* find_mod_info_mutable(const std::string& id) {
-    if (!mm)
+    ModManager* manager = current_mod_manager();
+    if (!manager)
         return nullptr;
-    for (auto& info : mm->mods) {
+    for (auto& info : manager->mods) {
         if (info.name == id)
             return &info;
     }
@@ -141,10 +142,11 @@ const std::string& required_mod_game_version() {
 }
 
 bool load_enabled_mods_via_host() {
-    if (!mm)
+    const ModManager* manager = current_mod_manager_const();
+    if (!manager)
         return false;
     std::vector<std::string> enabled;
-    for (const auto& mod : mm->mods) {
+    for (const auto& mod : manager->mods) {
         if (mod.enabled)
             enabled.push_back(mod.name);
     }
@@ -210,7 +212,8 @@ bool reload_mods(const std::vector<std::string>& ids) {
 }
 
 bool set_active_mods(const std::vector<std::string>& ids) {
-    if (!mm)
+    ModManager* manager = current_mod_manager();
+    if (!manager)
         return false;
     std::unordered_set<std::string> desired(ids.begin(), ids.end());
     bool changed = false;
@@ -226,7 +229,7 @@ bool set_active_mods(const std::vector<std::string>& ids) {
             changed = true;
     }
 
-    for (auto& mod : mm->mods) {
+    for (auto& mod : manager->mods) {
         bool enable = desired.count(mod.name) > 0;
         if (mod.enabled != enable) {
             mod.enabled = enable;
@@ -237,7 +240,7 @@ bool set_active_mods(const std::vector<std::string>& ids) {
     if (changed)
         rebuild_mod_assets();
 
-    for (auto& mod : mm->mods) {
+    for (auto& mod : manager->mods) {
         if (!desired.count(mod.name))
             continue;
         if (!g_active_mods.count(mod.name)) {
@@ -251,13 +254,14 @@ bool set_active_mods(const std::vector<std::string>& ids) {
 
 std::vector<std::string> get_active_mod_ids() {
     std::vector<std::string> ids;
-    if (!mm) {
+    const ModManager* manager = current_mod_manager_const();
+    if (!manager) {
         ids.reserve(g_active_mods.size());
         for (const auto& [id, _] : g_active_mods)
             ids.push_back(id);
         return ids;
     }
-    for (const auto& mod : mm->mods) {
+    for (const auto& mod : manager->mods) {
         if (g_active_mods.count(mod.name))
             ids.push_back(mod.name);
     }

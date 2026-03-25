@@ -173,28 +173,42 @@ std::vector<ModInfo> resolve_mod_order(std::vector<ModInfo> mods) {
 } // namespace
 
 bool init_mods_manager(const std::string& mods_root) {
-    ModManager* m = new ModManager{};
-    m->root = mods_root;
-    mm = m;
+    if (!es)
+        return false;
+    cleanup_mods_manager();
+    ModManager* manager = new ModManager{};
+    manager->root = mods_root;
+    es->mod_manager = manager;
     return true;
 }
 
 void cleanup_mods_manager() {
-    if (mm) {
-        delete mm;
-        mm = nullptr;
+    if (es && es->mod_manager) {
+        delete es->mod_manager;
+        es->mod_manager = nullptr;
     }
+}
+
+ModManager* current_mod_manager() {
+    return es ? es->mod_manager : nullptr;
+}
+
+const ModManager* current_mod_manager_const() {
+    return es ? es->mod_manager : nullptr;
 }
 
 /// Discover available mods by scanning the configured mod root for `info.toml`.
 /// Clears any previously discovered mods.
 void discover_mods() {
-    mm->mods.clear();
+    ModManager* manager = current_mod_manager();
+    if (!manager)
+        return;
+    manager->mods.clear();
     std::vector<ModInfo> discovered;
     std::error_code ec;
-    if (!fs::exists(mm->root, ec) || !fs::is_directory(mm->root, ec))
+    if (!fs::exists(manager->root, ec) || !fs::is_directory(manager->root, ec))
         return;
-    for (auto const& e : fs::directory_iterator(mm->root, ec)) {
+    for (auto const& e : fs::directory_iterator(manager->root, ec)) {
         if (ec) {
             ec.clear();
             continue;
@@ -202,7 +216,7 @@ void discover_mods() {
         if (!e.is_directory())
             continue;
         auto p = e.path();
-        ModInfo mi = mm->parse_info(p.string());
+        ModInfo mi = manager->parse_info(p.string());
         discovered.push_back(std::move(mi));
     }
 
@@ -224,17 +238,17 @@ void discover_mods() {
     }
 
     std::vector<ModInfo> ordered = resolve_mod_order(std::move(discovered));
-    mm->mods = std::move(ordered);
+    manager->mods = std::move(ordered);
 
     // Track initial trees
-    mm->tracked_files.clear();
-    for (auto const& m : mm->mods) {
-        mm->track_tree(m.path + "/graphics");
-        mm->track_tree(m.path + "/scripts");
+    manager->tracked_files.clear();
+    for (auto const& m : manager->mods) {
+        manager->track_tree(m.path + "/graphics");
+        manager->track_tree(m.path + "/scripts");
         if (!m.manifest_path.empty())
-            mm->track_tree(m.manifest_path);
+            manager->track_tree(m.manifest_path);
         else
-            mm->track_tree(m.path + "/info.toml");
+            manager->track_tree(m.path + "/info.toml");
     }
 }
 
@@ -258,9 +272,12 @@ void discover_mods() {
 /// Complexity: O(#files). Call when you need a fast index refresh after add/remove/rename;
 /// use the full store rebuild for manifest/content changes.
 bool cheap_scan_mods_to_update_sprite_name_registry() {
+    ModManager* manager = current_mod_manager();
+    if (!manager)
+        return false;
     std::vector<std::string> names;
     std::error_code ec;
-    for (auto const& m : mm->mods) {
+    for (auto const& m : manager->mods) {
         fs::path gdir = fs::path(m.path) / "graphics";
         if (!fs::exists(gdir, ec) || !fs::is_directory(gdir, ec))
             continue;
@@ -279,7 +296,7 @@ bool cheap_scan_mods_to_update_sprite_name_registry() {
         }
     }
     build_sprite_name_id_mapping(names);
-    mm->registry_built = true;
+    manager->registry_built = true;
     std::printf("[mods] Sprite registry built with %zu entries\n", names.size());
     return true;
 }
@@ -312,7 +329,10 @@ static bool is_image_ext(const std::string& ext) {
 /// O(files + parse). Call on startup and whenever manifests or image content
 /// change. IDs may change if the name set changes.
 bool scan_mods_for_sprite_defs() {
-    auto mod_infos = mm->mods;
+    const ModManager* manager = current_mod_manager_const();
+    if (!manager)
+        return false;
+    auto mod_infos = manager->mods;
     
     // First pass: collect manifests per name (prefer manifests over bare images)
     std::unordered_map<std::string, SpriteDef> defs_by_name;
@@ -408,24 +428,25 @@ bool scan_mods_for_sprite_defs() {
 
 
 bool poll_fs_mods_hot_reload() {
-    if (!mm || !es)
+    ModManager* manager = current_mod_manager();
+    if (!manager || !es)
         return false;
-    mm->accum_poll += es->dt;
-    if (mm->accum_poll < HOT_RELOAD_POLL_INTERVAL)
+    manager->accum_poll += es->dt;
+    if (manager->accum_poll < HOT_RELOAD_POLL_INTERVAL)
         return false;
-    mm->accum_poll = 0.0f;
+    manager->accum_poll = 0.0f;
 
     std::vector<std::string> changed_assets;
     std::vector<std::string> changed_scripts;
-    bool any = mm->check_changes(changed_assets, changed_scripts);
+    bool any = manager->check_changes(changed_assets, changed_scripts);
     if (!any)
         return false;
 
     std::unordered_set<std::string> touched_mods;
     auto consider_path = [&](const std::string& file_path) {
-        if (!mm)
+        if (!manager)
             return;
-        for (const auto& mod : mm->mods) {
+        for (const auto& mod : manager->mods) {
             if (file_path.rfind(mod.path, 0) == 0) {
                 if (active_mod_contexts().count(mod.name))
                     touched_mods.insert(mod.name);

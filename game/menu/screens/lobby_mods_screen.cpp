@@ -95,8 +95,9 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 }
 
 bool path_exists(const ModCatalogEntry& entry) {
-    std::filesystem::path mods_root = mm && !mm->root.empty()
-                                          ? std::filesystem::path(mm->root)
+    const ModManager* manager = current_mod_manager_const();
+    std::filesystem::path mods_root = manager && !manager->root.empty()
+                                          ? std::filesystem::path(manager->root)
                                           : runtime_mods_path();
     std::string folder = entry.folder.empty() ? entry.id : entry.folder;
     if (folder.empty())
@@ -270,8 +271,8 @@ void rebuild_entries(LobbyModsState& st, LobbySession& lobby) {
         }
     }
 
-    if (mm) {
-        for (const auto& mod : mm->mods) {
+    if (const ModManager* manager = current_mod_manager_const()) {
+        for (const auto& mod : manager->mods) {
             if (seen.count(mod.name))
                 continue;
             SessionModEntry entry;

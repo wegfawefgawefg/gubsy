@@ -74,8 +74,9 @@ void load_mod_sounds(const std::filesystem::path& mods_root) {
     std::error_code ec;
     std::filesystem::path mroot = mods_root;
     if (mroot.empty()) {
-        if (mm && !mm->root.empty())
-            mroot = std::filesystem::path(mm->root);
+        const ModManager* manager = current_mod_manager_const();
+        if (manager && !manager->root.empty())
+            mroot = std::filesystem::path(manager->root);
         else
             mroot = runtime_mods_path();
     }

@@ -1,5 +1,6 @@
 #include "engine_state.hpp"
 #include "globals.hpp"
+#include "engine/mods.hpp"
 #include "engine/settings_defaults.hpp"
 #include "engine/menu/screens/settings_hub_screen.hpp"
 #include "engine/menu/screens/profiles_screen.hpp"
@@ -30,6 +31,10 @@ bool init_engine_state() {
 void cleanup_engine_state() {
     if (!es)
         return;
+    if (es->mod_manager) {
+        delete es->mod_manager;
+        es->mod_manager = nullptr;
+    }
     delete es;
     es = nullptr;
 }

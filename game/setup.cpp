@@ -41,8 +41,9 @@ std::string g_status = "Preparing mods...";
 std::string g_error;
 
 std::filesystem::path mods_root_dir() {
-    if (mm && !mm->root.empty())
-        return std::filesystem::path(mm->root);
+    const ModManager* manager = current_mod_manager_const();
+    if (manager && !manager->root.empty())
+        return std::filesystem::path(manager->root);
     return runtime_mods_path();
 }
 
@@ -119,7 +120,7 @@ bool run_setup_once() {
         return false;
     }
     g_status = "Discovering mods...";
-    if (!mm) {
+    if (!current_mod_manager()) {
         g_error = "Mod manager unavailable";
         return false;
     }
