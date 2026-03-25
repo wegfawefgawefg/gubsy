@@ -20,9 +20,11 @@
 #include "game/menu/screens/lobby_mods_screen.hpp"
 #include "game/menu/screens/server_browser_screen.hpp"
 #include "game/menu/screens/game_settings_screen.hpp"
+#include "game/menu/screens/in_game_session_screen.hpp"
 #include "game/menu/screens/local_players_screen.hpp"
 #include "game/menu/screens/player_settings_screen.hpp"
 #include "game/menu/screens/profile_picker_screen.hpp"
+#include "game/menu/screens/session_clients_screen.hpp"
 #include "game/menu/screens/input_devices_screen.hpp"
 #include "game/settings_schema_registry.hpp"
 #include "game/ui_layout_registry.hpp"
@@ -35,7 +37,7 @@ constexpr const char* kGameModVersion = "0.1.0";
 void register_modes(){
     register_mode(modes::TITLE, title_step, title_process_inputs, title_draw);
     register_mode(modes::SETUP, setup_step, nullptr, setup_draw);
-    register_mode(modes::PLAYING, playing_step, nullptr, playing_draw);
+    register_mode(modes::PLAYING, playing_step, playing_process_inputs, playing_draw);
 }
 
 int main() {
@@ -62,9 +64,11 @@ int main() {
     register_lobby_mods_screen();
     register_server_browser_screen();
     register_game_settings_screen();
+    register_in_game_session_screen();
     register_local_players_screen();
     register_player_settings_screen();
     register_profile_picker_screen();
+    register_session_clients_screen();
     register_input_devices_screen();
 
     if (es)

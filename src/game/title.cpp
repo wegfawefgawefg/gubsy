@@ -1,48 +1,27 @@
 #include "game/title.hpp"
 
-#include "engine/globals.hpp"
-#include "engine/binds_profiles.hpp"
-#include "engine/input_binding_utils.hpp"
-#include "engine/menu/menu_system.hpp"
-#include "engine/graphics.hpp"
-#include "game/modes.hpp"
-#include "game/actions.hpp"
-#include "game/menu/lobby_online.hpp"
-#include "game/menu/lobby_state.hpp"
-#include "game/menu/menu_ids.hpp"
+#include <algorithm>
 
 #include <SDL2/SDL_render.h>
+
+#include "engine/alerts.hpp"
+#include "engine/globals.hpp"
+#include "engine/graphics.hpp"
+#include "engine/menu/menu_system.hpp"
+#include "game/menu/lobby_online.hpp"
+#include "game/menu/menu_input.hpp"
+#include "game/menu/lobby_state.hpp"
+#include "game/menu/menu_ids.hpp"
+#include "game/modes.hpp"
 
 namespace {
 
 bool g_menu_initialized = false;
 
-MenuInputState gather_menu_input() {
-    MenuInputState state{};
-    if (!es)
-        return state;
-    BindsProfile* profile = get_player_binds_profile(0);
-    if (!profile)
-        return state;
-    for (const auto& [device_button, action] : profile->button_binds) {
-        bool down = device_button_is_down(es->device_state, device_button);
-        switch (action) {
-            case GameAction::MENU_UP: state.up |= down; break;
-            case GameAction::MENU_DOWN: state.down |= down; break;
-            case GameAction::MENU_LEFT: state.left |= down; break;
-            case GameAction::MENU_RIGHT: state.right |= down; break;
-            case GameAction::MENU_SELECT: state.select |= down; break;
-            case GameAction::MENU_BACK: state.back |= down; break;
-            case GameAction::MENU_PAGE_PREV: state.page_prev |= down; break;
-            case GameAction::MENU_PAGE_NEXT: state.page_next |= down; break;
-            default: break;
-        }
-    }
-    return state;
-}
-
 void ensure_menu_ready() {
-    if (g_menu_initialized || !es)
+    if (!es)
+        return;
+    if (g_menu_initialized && !es->menu_manager.stack().empty())
         return;
     es->menu_manager.clear();
     es->menu_manager.push_screen(MenuScreenID::MAIN);

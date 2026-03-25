@@ -18,6 +18,11 @@ public:
                     const std::string& member_id,
                     const std::string& host_secret,
                     std::string& err) override;
+    bool remove_member(const std::string& server_url,
+                       const std::string& room_code,
+                       const std::string& host_secret,
+                       const std::string& target_member_id,
+                       std::string& err) override;
     bool heartbeat_room(const std::string& server_url,
                         const std::string& room_code,
                         const std::string& member_id,

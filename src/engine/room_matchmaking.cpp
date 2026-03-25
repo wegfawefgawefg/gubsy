@@ -211,6 +211,21 @@ bool RoomServerMatchmaking::leave_room(const std::string& server_url,
                      err).has_value();
 }
 
+bool RoomServerMatchmaking::remove_member(const std::string& server_url,
+                                          const std::string& room_code,
+                                          const std::string& host_secret,
+                                          const std::string& target_member_id,
+                                          std::string& err) {
+    nlohmann::json body{
+        {"host_secret", host_secret},
+        {"member_id", target_member_id},
+    };
+    return post_json(server_url,
+                     "/rooms/" + normalized_room_code(room_code) + "/remove_member",
+                     body,
+                     err).has_value();
+}
+
 bool RoomServerMatchmaking::heartbeat_room(const std::string& server_url,
                                            const std::string& room_code,
                                            const std::string& member_id,

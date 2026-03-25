@@ -409,6 +409,45 @@ int main(int argc, char** argv) {
         res.set_content(R"({"ok":true})", "application/json");
     });
 
+    server.Post(R"(/rooms/([A-Z0-9]+)/remove_member)", [](const httplib::Request& req, httplib::Response& res) {
+        nlohmann::json body;
+        if (!read_body_json(req, body, res))
+            return;
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+
+        auto it = g_registry.rooms.find(req.matches[1].str());
+        if (it == g_registry.rooms.end()) {
+            res.status = 404;
+            res.set_content("room not found", "text/plain");
+            return;
+        }
+        RoomRecord& room = it->second;
+        if (json_string(body, "host_secret") != room.host_secret) {
+            res.status = 403;
+            res.set_content("host secret mismatch", "text/plain");
+            return;
+        }
+
+        const std::string member_id = json_string(body, "member_id");
+        auto member_it = std::find_if(room.members.begin(), room.members.end(),
+                                      [&](const RoomMember& member) { return member.member_id == member_id; });
+        if (member_it == room.members.end()) {
+            res.status = 404;
+            res.set_content("member not found", "text/plain");
+            return;
+        }
+        if (member_it->is_host) {
+            res.status = 409;
+            res.set_content("cannot remove host", "text/plain");
+            return;
+        }
+
+        room.members.erase(member_it);
+        room.updated_at = Clock::now();
+        res.set_content(R"({"ok":true})", "application/json");
+    });
+
     std::cout << "[room_server] Listening on 127.0.0.1:" << port << "\n";
     server.listen("127.0.0.1", port);
     return 0;

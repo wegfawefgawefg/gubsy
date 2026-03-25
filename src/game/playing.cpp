@@ -1,30 +1,28 @@
 #include "game/playing.hpp"
 
+#include <algorithm>
+#include <string>
+
+#include <glm/glm.hpp>
+
+#include "engine/alerts.hpp"
 #include "engine/audio.hpp"
 #include "engine/globals.hpp"
-#include "engine/input_queries.hpp"
-#include "engine/input_binding_utils.hpp"
-#include "engine/render.hpp"
 #include "engine/graphics.hpp"
+#include "engine/input_binding_utils.hpp"
+#include "engine/input_queries.hpp"
+#include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
 #include "game/coop_session.hpp"
+#include "game/in_game_menu.hpp"
 #include "game/menu/lobby_online.hpp"
 #include "game/menu/lobby_state.hpp"
 #include "game/modes.hpp"
-#include "settings.hpp"
-#include "state.hpp"
 #include "demo_items.hpp"
 #include "game/ui_layout_ids.hpp"
-
-#include <algorithm>
-#include <glm/glm.hpp>
-#include <string>
-#include <engine/alerts.hpp>
-#include <game/settings.hpp>
-#include <game/demo_items.hpp>
-#include <engine/globals.hpp>
-#include <engine/render.hpp>
+#include "settings.hpp"
+#include "state.hpp"
 
 
 bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
@@ -33,23 +31,9 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
     return delta.x <= (a_half.x + b_half.x) && delta.y <= (a_half.y + b_half.y);
 }
 
-void return_to_lobby() {
-    LobbySession& lobby = lobby_state();
-    coop_session_reset();
-    if (lobby.online.in_room && !lobby.online.is_host) {
-        std::string err;
-        lobby_online_leave_room(lobby, err);
-        if (!err.empty())
-            add_alert(err);
-    } else {
-        lobby.online.contract.session_phase = "lobby";
-        lobby.online.contract.realtime_endpoint.clear();
-    }
-    if (es)
-        es->mode = modes::TITLE;
+void playing_process_inputs() {
+    in_game_menu_process_inputs();
 }
-
-
 
 void playing_step() {
     const float dt = FIXED_TIMESTEP;
@@ -58,6 +42,7 @@ void playing_step() {
         lobby_online_tick(lobby);
     std::string close_reason;
     if (lobby_online_consume_session_close(lobby, close_reason)) {
+        in_game_menu_reset();
         coop_session_reset();
         add_alert(close_reason);
         if (es)
@@ -65,12 +50,8 @@ void playing_step() {
         return;
     }
 
-    if (was_pressed(0, GameAction::MENU_BACK)) {
-        return_to_lobby();
-        return;
-    }
-
     if (lobby.online.in_room && !session_contract_is_in_game(lobby.online.contract)) {
+        in_game_menu_reset();
         if (es)
             es->mode = modes::TITLE;
         return;
@@ -91,6 +72,9 @@ void playing_step() {
         }
         return;
     }
+
+    if (in_game_menu_open())
+        return;
 
     if (lobby.online.in_room && session_contract_is_in_game(lobby.online.contract))
         return;
@@ -382,6 +366,7 @@ void playing_draw() {
         prompt_text += " | " + lobby.online.last_error;
     if (coop_session_active() && !coop_session_last_error().empty())
         prompt_text += " | " + coop_session_last_error();
-    prompt_text += " | Esc returns to lobby";
+    prompt_text += " | Esc opens session menu";
     render_instructions(renderer, width, height, prompt_text);
+    in_game_menu_render(renderer, width, height);
 }

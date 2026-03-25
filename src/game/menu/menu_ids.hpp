@@ -12,4 +12,6 @@ inline constexpr MenuScreenId LOCAL_PLAYERS = 6;
 inline constexpr MenuScreenId PLAYER_SETTINGS = 7;
 inline constexpr MenuScreenId PROFILE_PICKER = 8;
 inline constexpr MenuScreenId INPUT_DEVICES = 9;
+inline constexpr MenuScreenId IN_GAME_SESSION = 10;
+inline constexpr MenuScreenId SESSION_CLIENTS = 11;
 }

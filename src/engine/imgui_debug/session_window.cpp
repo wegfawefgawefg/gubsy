@@ -1,6 +1,7 @@
 #include "engine/imgui_debug/windows.hpp"
 
 #include "engine/session_contract.hpp"
+#include "engine/sync_session.hpp"
 #include "game/coop_session.hpp"
 #include "game/menu/lobby_state.hpp"
 
@@ -47,6 +48,29 @@ void render_members(const LobbyOnlineState& online) {
             ImGui::TextDisabled("  id: %s", member.member_id.c_str());
     }
     ImGui::TreePop();
+}
+
+void render_realtime_stats() {
+    SyncSessionStats stats;
+    if (!coop_session_query_stats(stats)) {
+        ImGui::TextUnformatted("Runtime stats: offline");
+        return;
+    }
+
+    ImGui::Text("Member count: %zu", stats.member_count);
+    ImGui::Text("Pending local inputs: %zu", stats.pending_local_input_count);
+    ImGui::Text("Connected for: %.2fs", stats.connected_for_sec);
+    ImGui::Text("Packet idle: %.2fs", stats.packet_idle_sec);
+    ImGui::Text("Snapshot idle: %.2fs", stats.snapshot_idle_sec);
+    ImGui::Text("Sim frame: %llu",
+                static_cast<unsigned long long>(stats.sim_frame));
+    ImGui::Text("Last snapshot frame: %llu",
+                static_cast<unsigned long long>(stats.last_applied_snapshot_frame));
+    ImGui::Text("Last acked local input: %llu",
+                static_cast<unsigned long long>(stats.last_acked_local_input_seq));
+    bool_text("Runtime host", stats.is_host);
+    bool_text("Has authoritative snapshot", stats.has_authoritative_snapshot);
+    bool_text("Snapshot timed out", stats.snapshot_timed_out);
 }
 
 } // namespace
@@ -104,6 +128,7 @@ void imgui_debug_render_session_window(bool* open_flag) {
     bool_text("Coop sync active", coop_session_active());
     text_or_dash("Sync status", coop_session_status_text());
     text_or_dash("Sync error", coop_session_last_error());
+    render_realtime_stats();
 
     ImGui::Separator();
     render_members(online);

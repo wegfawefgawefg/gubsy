@@ -400,6 +400,25 @@ bool lobby_online_leave_room(LobbySession& lobby, std::string& err) {
     return true;
 }
 
+bool lobby_online_remove_member(LobbySession& lobby, const std::string& member_id, std::string& err) {
+    if (!lobby.online.in_room || !lobby.online.is_host) {
+        err = "Only the host can remove clients.";
+        return false;
+    }
+    if (member_id.empty() || member_id == lobby.online.member_id) {
+        err = "Cannot remove the local host.";
+        return false;
+    }
+    if (!g_matchmaking.remove_member(lobby.online.server_url,
+                                     lobby.online.room_code,
+                                     lobby.online.host_secret,
+                                     member_id,
+                                     err)) {
+        return false;
+    }
+    return refresh_room_state(lobby, err);
+}
+
 bool lobby_online_consume_session_close(LobbySession& lobby, std::string& reason_out) {
     if (!lobby.online.session_closed)
         return false;

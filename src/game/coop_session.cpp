@@ -10,6 +10,7 @@
 #include "game/coop_correction.hpp"
 #include "game/coop_protocol.hpp"
 #include "game/coop_sim.hpp"
+#include "game/in_game_menu.hpp"
 #include "game/input_frame.hpp"
 #include "game/menu/lobby_online.hpp"
 #include "game/menu/lobby_state.hpp"
@@ -62,7 +63,8 @@ bool build_local_input(void*, nlohmann::json& out) {
     if (!es)
         return false;
     InputFrame frame;
-    build_input_frame(0, es->device_state, frame);
+    if (!in_game_menu_blocks_game_input())
+        build_input_frame(0, es->device_state, frame);
     out = input_frame_to_json(frame);
     return true;
 }
@@ -204,4 +206,9 @@ const std::string& coop_session_status_text() {
 const std::string& coop_session_last_error() {
     ensure_sync_configured();
     return sync_session_last_error();
+}
+
+bool coop_session_query_stats(SyncSessionStats& out) {
+    ensure_sync_configured();
+    return sync_session_query_stats(out);
 }

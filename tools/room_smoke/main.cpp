@@ -57,6 +57,9 @@ int main(int argc, char** argv) {
         std::string guest_member_id;
         if (!matchmaking.join_room(server_url, room_code, "Guest", guest_member_id, err))
             throw std::runtime_error(err);
+        std::string second_guest_member_id;
+        if (!matchmaking.join_room(server_url, room_code, "Guest Two", second_guest_member_id, err))
+            throw std::runtime_error(err);
 
         MatchmakingRoom updated = room;
         updated.room_code = room_code;
@@ -83,7 +86,7 @@ int main(int argc, char** argv) {
             throw std::runtime_error(err);
         if (fetched.session_name != "Smoke Lobby Updated")
             throw std::runtime_error("room session_name did not update");
-        if (fetched.current_players != 2)
+        if (fetched.current_players != 3)
             throw std::runtime_error("room player count mismatch");
         if (fetched.contract.mod_hash != "ccccdddd")
             throw std::runtime_error("room mod hash did not update");
@@ -91,6 +94,14 @@ int main(int argc, char** argv) {
             throw std::runtime_error("room required_mod_ids did not update");
         if (fetched.contract.realtime_endpoint != "udp://127.0.0.1:9000")
             throw std::runtime_error("room realtime endpoint did not update");
+
+        if (!matchmaking.remove_member(server_url, room_code, host_secret, second_guest_member_id, err))
+            throw std::runtime_error(err);
+        MatchmakingRoom after_remove;
+        if (!matchmaking.fetch_room(server_url, room_code, after_remove, err))
+            throw std::runtime_error(err);
+        if (after_remove.current_players != 2)
+            throw std::runtime_error("remove_member did not remove guest");
 
         if (!matchmaking.leave_room(server_url, room_code, guest_member_id, {}, err))
             throw std::runtime_error(err);

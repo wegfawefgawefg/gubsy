@@ -540,3 +540,24 @@ const std::string& sync_session_last_error() {
 const std::string& sync_session_advertised_endpoint() {
     return g_sync.transport.public_endpoint();
 }
+
+bool sync_session_query_stats(SyncSessionStats& out) {
+    out = SyncSessionStats{};
+    if (!g_sync.active)
+        return false;
+
+    const double now = runtime_now();
+    out.active = g_sync.active;
+    out.is_host = g_sync.is_host;
+    out.has_authoritative_snapshot = g_sync.has_authoritative_snapshot;
+    out.snapshot_timed_out = g_sync.snapshot_timed_out;
+    out.member_count = g_sync.member_ids.size();
+    out.pending_local_input_count = g_sync.pending_local_inputs.size();
+    out.sim_frame = g_sync.sim_frame;
+    out.last_applied_snapshot_frame = g_sync.last_applied_snapshot_frame;
+    out.last_acked_local_input_seq = g_sync.last_acked_local_input_seq;
+    out.connected_for_sec = std::max(0.0, now - g_sync.connected_at);
+    out.packet_idle_sec = std::max(0.0, now - g_sync.last_packet_received_at);
+    out.snapshot_idle_sec = std::max(0.0, now - g_sync.last_snapshot_received_at);
+    return true;
+}
