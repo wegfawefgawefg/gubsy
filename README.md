@@ -91,6 +91,7 @@ Docs
 - Code-first engine intent: `docs/code_first_engine_intent.md`
 - Repo layout: `docs/repo_layout.md`
 - Content policy: `docs/content_policy.md`
+- Library consumption: `docs/library_consumption.md`
 - Cooperative multiplayer policy: `docs/cooperative_multiplayer_policy.md`
 - Session contract: `docs/session_contract.md`
 - Networking boundary: `docs/networking_boundary.md`

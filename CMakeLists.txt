@@ -2,9 +2,17 @@ cmake_minimum_required(VERSION 3.20)
 
 project(gubsy LANGUAGES CXX)
 
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  set(GUB_DEFAULT_BUILD_EXTRAS ON)
+else()
+  set(GUB_DEFAULT_BUILD_EXTRAS OFF)
+endif()
+
 option(GUB_REQUIRE_DEPS "Fail CMake configure if deps are missing" ON)
 option(GUB_STRICT "Enable very strict warnings" ON)
 option(GUB_WARN_AS_ERROR "Treat warnings as errors" ON)
+option(GUB_BUILD_SAMPLE "Build bundled sample game consumer" ${GUB_DEFAULT_BUILD_EXTRAS})
+option(GUB_BUILD_TOOLS "Build bundled development tools and smokes" ${GUB_DEFAULT_BUILD_EXTRAS})
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,8 +47,6 @@ file(GLOB_RECURSE GUB_GAME_SOURCES
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
 add_library(gubsy::engine ALIAS gubsy_engine)
 
-add_executable(gubsy ${GUB_GAME_SOURCES})
-
 # Dear ImGui sources
 set(IMGUI_SOURCES
   ${CMAKE_SOURCE_DIR}/imgui/imgui.cpp
@@ -54,14 +60,9 @@ set(IMGUI_SOURCES
 target_sources(gubsy_engine PRIVATE ${IMGUI_SOURCES})
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
 
-# Developer convenience: alias target and CLI symlink 'arti'
-add_executable(arti ALIAS gubsy)
-add_custom_command(
-  TARGET gubsy POST_BUILD
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${CMAKE_COMMAND} -E create_symlink $<TARGET_FILE_NAME:gubsy> arti
-  COMMENT "Creating 'arti' symlink -> gubsy"
-)
+if (GUB_BUILD_SAMPLE)
+  add_executable(gubsy ${GUB_GAME_SOURCES})
+endif()
 
 function(target_enable_strict_warnings tgt)
   if (MSVC)
@@ -92,14 +93,20 @@ endfunction()
 
 if (GUB_STRICT)
   target_enable_strict_warnings(gubsy_engine)
-  target_enable_strict_warnings(gubsy)
+  if (GUB_BUILD_SAMPLE)
+    target_enable_strict_warnings(gubsy)
+  endif()
 else()
   if (MSVC)
     target_compile_options(gubsy_engine PRIVATE /W3)
-    target_compile_options(gubsy PRIVATE /W3)
+    if (GUB_BUILD_SAMPLE)
+      target_compile_options(gubsy PRIVATE /W3)
+    endif()
   else()
     target_compile_options(gubsy_engine PRIVATE -Wall -Wextra)
-    target_compile_options(gubsy PRIVATE -Wall -Wextra)
+    if (GUB_BUILD_SAMPLE)
+      target_compile_options(gubsy PRIVATE -Wall -Wextra)
+    endif()
   endif()
 endif()
 
@@ -181,60 +188,73 @@ target_include_directories(gubsy_engine PUBLIC
   ${CMAKE_SOURCE_DIR}/imgui
   ${CMAKE_SOURCE_DIR}/imgui/backends
 )
-target_include_directories(gubsy PRIVATE
-  ${CMAKE_SOURCE_DIR}
-)
-target_link_libraries(gubsy PRIVATE gubsy_engine)
+if (GUB_BUILD_SAMPLE)
+  target_include_directories(gubsy PRIVATE
+    ${CMAKE_SOURCE_DIR}
+  )
+  target_link_libraries(gubsy PRIVATE gubsy_engine)
 
-add_executable(mod_server
-  tools/mod_server/main.cpp
-  engine/project_paths.cpp
-)
-target_include_directories(mod_server PRIVATE
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party
-)
+  # Developer convenience: alias target and CLI symlink 'arti'
+  add_executable(arti ALIAS gubsy)
+  add_custom_command(
+    TARGET gubsy POST_BUILD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E create_symlink $<TARGET_FILE_NAME:gubsy> arti
+    COMMENT "Creating 'arti' symlink -> gubsy"
+  )
+endif()
 
-add_executable(room_server tools/room_server/main.cpp)
-target_include_directories(room_server PRIVATE
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party
-)
+if (GUB_BUILD_TOOLS)
+  add_executable(mod_server
+    tools/mod_server/main.cpp
+    engine/project_paths.cpp
+  )
+  target_include_directories(mod_server PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
+  )
 
-add_executable(room_smoke
-  tools/room_smoke/main.cpp
-  engine/room_matchmaking.cpp
-  engine/session_contract.cpp
-)
-target_include_directories(room_smoke PRIVATE
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party
-)
+  add_executable(room_server tools/room_server/main.cpp)
+  target_include_directories(room_server PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
+  )
 
-add_executable(room_timeout_smoke
-  tools/room_timeout_smoke/main.cpp
-  engine/room_matchmaking.cpp
-  engine/session_contract.cpp
-)
-target_include_directories(room_timeout_smoke PRIVATE
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party
-)
+  add_executable(room_smoke
+    tools/room_smoke/main.cpp
+    engine/room_matchmaking.cpp
+    engine/session_contract.cpp
+  )
+  target_include_directories(room_smoke PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
+  )
 
-add_executable(coop_sync_smoke
-  tools/coop_sync_smoke/main.cpp
-  engine/room_matchmaking.cpp
-  engine/session_contract.cpp
-  engine/sync_payload_codec.cpp
-  engine/sync_transport_udp.cpp
-  engine/sync_transport_packet_codec.cpp
-  game/coop_protocol.cpp
-  game/coop_sim.cpp
-)
-target_include_directories(coop_sync_smoke PRIVATE
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party
-)
+  add_executable(room_timeout_smoke
+    tools/room_timeout_smoke/main.cpp
+    engine/room_matchmaking.cpp
+    engine/session_contract.cpp
+  )
+  target_include_directories(room_timeout_smoke PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
+  )
+
+  add_executable(coop_sync_smoke
+    tools/coop_sync_smoke/main.cpp
+    engine/room_matchmaking.cpp
+    engine/session_contract.cpp
+    engine/sync_payload_codec.cpp
+    engine/sync_transport_udp.cpp
+    engine/sync_transport_packet_codec.cpp
+    game/coop_protocol.cpp
+    game/coop_sim.cpp
+  )
+  target_include_directories(coop_sync_smoke PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
+  )
+endif()
 
 # Lua 5.4 (required at runtime; build-time optional with stub)
 set(LUA_FOUND_LOCAL OFF)
@@ -343,4 +363,6 @@ endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(gubsy_engine PUBLIC Threads::Threads)
-target_link_libraries(mod_server PRIVATE Threads::Threads)
+if (GUB_BUILD_TOOLS)
+  target_link_libraries(mod_server PRIVATE Threads::Threads)
+endif()
