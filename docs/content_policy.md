@@ -58,14 +58,17 @@ Current repo decision
 ---------------------
 
 - `engine/assets/` stays engine-only.
+- `game/assets/branding/` holds game-owned branding/app identity assets.
 - `game/mods/base` stays a built-in shipped mod on purpose.
   It is intentionally mod-shaped because it exercises manifests, mod APIs,
   hot reload, dependency handling, and content patching.
 - optional demo packs stay in `tools/mod_repo/` unless we explicitly decide to
   ship them as part of the game.
-- `game/assets/` exists conceptually for future direct-loaded game assets, but
-  the current demo leans heavily on the mod pipeline, so most shipped content is
-  still under `game/mods/`.
+- `game/assets/` now exists as the home for non-mod-shaped game content, but
+  the current demo still leans heavily on the mod pipeline, so most shipped
+  runtime content remains under `game/mods/`.
+- repo-only screenshots and social/README images live under `docs/images/`,
+  because they are documentation assets rather than runtime content.
 
 Practical rule
 --------------

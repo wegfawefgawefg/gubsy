@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="gubsy" width="384" />
+  <img src="docs/images/logo.png" alt="gubsy" width="384" />
 </p>
 
 gubsy
@@ -10,7 +10,7 @@ It currently includes SDL2 rendering, audio, input, menu systems, UI layout tool
 state, and Lua-driven mod loading.
 
 <p align="center">
-  <img src="images/lobby.png" alt="gubsy lobby screenshot" width="900" />
+  <img src="docs/images/lobby.png" alt="gubsy lobby screenshot" width="900" />
 </p>
 
 What Is In This Repo
