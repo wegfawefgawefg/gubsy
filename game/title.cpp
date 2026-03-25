@@ -32,7 +32,7 @@ void ensure_menu_ready() {
 
 } // namespace
 
-void title_step() {
+void title_step(void*) {
     LobbySession& lobby = lobby_state();
     lobby_online_tick(lobby);
     std::string close_reason;
@@ -42,7 +42,7 @@ void title_step() {
         es->mode = modes::PLAYING;
 }
 
-void title_process_inputs() {
+void title_process_inputs(void*) {
     ensure_menu_ready();
     if (!gg || !gg->renderer)
         return;
@@ -54,7 +54,7 @@ void title_process_inputs() {
     menu_system_update(es ? es->dt : 0.0f, width, height);
 }
 
-void title_draw() {
+void title_draw(void*) {
     if (!gg || !gg->renderer)
         return;
     SDL_Renderer* renderer = gg->renderer;

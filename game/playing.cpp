@@ -13,6 +13,7 @@
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 #include "game/actions.hpp"
+#include "game/app_context.hpp"
 #include "game/coop_session.hpp"
 #include "game/input_queries.hpp"
 #include "game/in_game_menu.hpp"
@@ -31,11 +32,15 @@ bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
     return delta.x <= (a_half.x + b_half.x) && delta.y <= (a_half.y + b_half.y);
 }
 
-void playing_process_inputs() {
+void playing_process_inputs(void*) {
     in_game_menu_process_inputs();
 }
 
-void playing_step() {
+void playing_step(void* app_context) {
+    State* state = game_state_from_app_context(app_context);
+    if (!state)
+        return;
+
     const float dt = FIXED_TIMESTEP;
     LobbySession& lobby = lobby_state();
     if (lobby.online.in_room)
@@ -57,17 +62,17 @@ void playing_step() {
         return;
     }
 
-    const CoopStepResult coop = coop_session_step();
+    const CoopStepResult coop = coop_session_step(*state);
     if (coop.handled) {
         if (es) {
             glm::vec2 raw_gamepad =
                 sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
-            ss->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
-            ss->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
+            state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
+            state->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
         }
         for (int i = 0; i < coop.bonk_count; ++i) {
             add_alert("bonk!");
-            const std::string sound = ss->bonk.sound_key.empty() ? "base:ui_confirm" : ss->bonk.sound_key;
+            const std::string sound = state->bonk.sound_key.empty() ? "base:ui_confirm" : state->bonk.sound_key;
             play_sound(sound);
         }
         return;
@@ -79,36 +84,36 @@ void playing_step() {
     if (lobby.online.in_room && session_contract_is_in_game(lobby.online.contract))
         return;
 
-    auto& target = ss->bonk;
+    auto& target = state->bonk;
 
     // Update things that happen once per frame
     if (target.cooldown > 0.0f)
         target.cooldown = std::max(0.0f, target.cooldown - dt);
 
     // Update analog inputs (for player 0 for now)
-    if (!ss->players.empty()) {
+    if (!state->players.empty()) {
         float trigger = get_1d_analog(0, GameAnalog1D::BAR_HEIGHT);
-        ss->bar_height = std::clamp(trigger, 0.0f, 1.0f);
+        state->bar_height = std::clamp(trigger, 0.0f, 1.0f);
 
         glm::vec2 stick = get_2d_analog(0, GameAnalog2D::RETICLE_POS);
-        ss->reticle_pos = glm::clamp(stick, glm::vec2(-1.0f), glm::vec2(1.0f));
+        state->reticle_pos = glm::clamp(stick, glm::vec2(-1.0f), glm::vec2(1.0f));
     } else {
-        ss->reticle_pos = glm::vec2(0.0f);
+        state->reticle_pos = glm::vec2(0.0f);
     }
 
     if (es) {
         glm::vec2 raw_gamepad =
             sample_analog_2d(es->device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
-        ss->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
-        ss->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
+        state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
+        state->reticle_pos_mouse = normalized_mouse_coords(es->device_state);
     } else {
-        ss->reticle_pos_gamepad = glm::vec2(0.0f);
-        ss->reticle_pos_mouse = glm::vec2(0.0f);
+        state->reticle_pos_gamepad = glm::vec2(0.0f);
+        state->reticle_pos_mouse = glm::vec2(0.0f);
     }
 
     // Update each player
-    for (std::size_t i = 0; i < ss->players.size(); ++i) {
-        auto& player = ss->players[i];
+    for (std::size_t i = 0; i < state->players.size(); ++i) {
+        auto& player = state->players[i];
         const int player_index = static_cast<int>(i);
         
         // Handle player input and movement
@@ -161,7 +166,7 @@ void playing_step() {
                     std::printf("[playing] player %d triggering '%s' (dist=%.2f)\n",
                                 player_index, def->id.c_str(),
                                 static_cast<double>(dist));
-                    trigger_demo_item_use(inst);
+                    trigger_demo_item_use(inst, *state);
                     triggered = true;
                     break; // One player uses it, break for this player
                 }
@@ -180,8 +185,9 @@ void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, cons
     draw_text(renderer, text, margin, height - 30, SDL_Color{200, 200, 200, 255});
 }
 
-void playing_draw() {
-    if (!gg || !gg->renderer || !ss) {
+void playing_draw(void* app_context) {
+    State* state = game_state_from_app_context(app_context);
+    if (!gg || !gg->renderer || !state) {
         SDL_Delay(16);
         return;
     }
@@ -212,11 +218,11 @@ void playing_draw() {
         SDL_RenderDrawLine(renderer, 0, y, width, y);
     }
 
-    const auto& target = ss->bonk;
+    const auto& target = state->bonk;
 
     // Draw players
-    for (std::size_t i = 0; i < ss->players.size(); ++i) {
-        const auto& player = ss->players[i];
+    for (std::size_t i = 0; i < state->players.size(); ++i) {
+        const auto& player = state->players[i];
         // Cycle through some colors for each player
         SDL_Color player_fill = (i % 2 == 0) ? SDL_Color{80, 200, 255, 255} : SDL_Color{255, 180, 80, 255};
         SDL_Color player_border = (i % 2 == 0) ? SDL_Color{15, 40, 70, 255} : SDL_Color{70, 40, 15, 255};
@@ -247,8 +253,8 @@ void playing_draw() {
 
     std::string nearby_label;
     // TODO: The nearby check only works for player 0 right now.
-    if (!ss->players.empty()) {
-        const auto& player = ss->players[0];
+    if (!state->players.empty()) {
+        const auto& player = state->players[0];
         const float player_radius = glm::length(player.half_size);
         for (const auto& slot : demo_item_instance_slots()) {
             if (!slot.active)
@@ -295,7 +301,7 @@ void playing_draw() {
             float bar_y = bar_obj->y * height_f;
             float bar_width = bar_obj->w * width_f;
             float bar_height = bar_obj->h * height_f;
-            float bar_current_height = bar_height * ss->bar_height;
+            float bar_current_height = bar_height * state->bar_height;
 
             // Background
             SDL_FRect bar_bg{bar_x, bar_y, bar_width, bar_height};
@@ -320,7 +326,7 @@ void playing_draw() {
     // Draw reticles (gamepad crosshair + mouse marker)
     {
         // Gamepad-driven crosshair
-        glm::vec2 gp = ss->reticle_pos_gamepad;
+        glm::vec2 gp = state->reticle_pos_gamepad;
         float reticle_screen_x = (gp.x * 0.5f + 0.5f) * width_span;
         float reticle_screen_y = (gp.y * 0.5f + 0.5f) * height_span;
 
@@ -342,7 +348,7 @@ void playing_draw() {
         SDL_RenderFillRectF(renderer, &center_dot);
 
         // Mouse pointer marker (little green circle)
-        glm::vec2 mouse = ss->reticle_pos_mouse;
+        glm::vec2 mouse = state->reticle_pos_mouse;
         float mouse_screen_x = (mouse.x * 0.5f + 0.5f) * width_span;
         float mouse_screen_y = (mouse.y * 0.5f + 0.5f) * height_span;
         SDL_SetRenderDrawColor(renderer, 120, 255, 120, 200);

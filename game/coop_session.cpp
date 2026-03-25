@@ -23,6 +23,7 @@
 namespace {
 
 bool g_sync_configured = false;
+State* g_state = nullptr;
 
 bool query_connection(void*, SessionLinkConnection& out) {
     const LobbySession& lobby = lobby_state_const();
@@ -81,12 +82,14 @@ bool build_local_input(void*, std::vector<std::uint8_t>& out) {
     return encode_json_payload(input_frame_to_json(frame), out);
 }
 
-void predict_demo_world(void*,
+void predict_demo_world(void* ctx,
                         const std::vector<std::string>&,
                         const std::vector<std::vector<std::uint8_t>>& current_inputs_bytes,
                         const std::vector<std::vector<std::uint8_t>>& previous_inputs_bytes,
                         float dt) {
-    if (!ss)
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return;
 
     std::vector<InputFrame> current_inputs(current_inputs_bytes.size());
@@ -102,23 +105,27 @@ void predict_demo_world(void*,
             input_frame_from_json(json, previous_inputs[i]);
     }
 
-    ensure_demo_player_count(*ss, current_inputs.size());
-    simulate_demo_world(*ss, current_inputs, previous_inputs, dt);
+    ensure_demo_player_count(*state, current_inputs.size());
+    simulate_demo_world(*state, current_inputs, previous_inputs, dt);
 }
 
-bool capture_demo_snapshot(void*,
+bool capture_demo_snapshot(void* ctx,
                            const std::vector<std::string>& member_ids,
                            std::uint64_t sim_frame,
                            std::vector<std::uint8_t>& out) {
-    if (!ss)
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return false;
-    return encode_json_payload(coop_snapshot_to_json(capture_coop_snapshot(*ss, member_ids, sim_frame)), out);
+    return encode_json_payload(coop_snapshot_to_json(capture_coop_snapshot(*state, member_ids, sim_frame)), out);
 }
 
-bool apply_demo_snapshot(void*,
+bool apply_demo_snapshot(void* ctx,
                          const std::vector<std::uint8_t>& snapshot_bytes,
                          std::vector<std::string>& member_ids_out) {
-    if (!ss)
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return false;
     nlohmann::json snapshot_json;
     if (!decode_json_payload(snapshot_bytes, snapshot_json))
@@ -126,12 +133,14 @@ bool apply_demo_snapshot(void*,
     CoopStateSnapshot snapshot;
     if (!coop_snapshot_from_json(snapshot_json, snapshot))
         return false;
-    apply_coop_snapshot(snapshot, *ss, member_ids_out);
+    apply_coop_snapshot(snapshot, *state, member_ids_out);
     return true;
 }
 
-void apply_local_view_input(void*, const std::vector<std::uint8_t>& input_bytes) {
-    if (!ss)
+void apply_local_view_input(void* ctx, const std::vector<std::uint8_t>& input_bytes) {
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return;
     nlohmann::json input_json;
     if (!decode_json_payload(input_bytes, input_json))
@@ -139,41 +148,49 @@ void apply_local_view_input(void*, const std::vector<std::uint8_t>& input_bytes)
     InputFrame frame;
     if (!input_frame_from_json(input_json, frame))
         return;
-    apply_demo_view_input(*ss, frame);
+    apply_demo_view_input(*state, frame);
 }
 
-void begin_reconcile(void*) {
-    if (!ss)
+void begin_reconcile(void* ctx) {
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return;
     std::vector<std::string> member_ids;
     query_member_ids(nullptr, member_ids);
-    demo_sync_correction_begin(*ss, member_ids);
+    demo_sync_correction_begin(*state, member_ids);
 }
 
-void finish_reconcile(void*,
+void finish_reconcile(void* ctx,
                       const std::vector<std::string>& member_ids,
                       const std::string& local_member_id,
                       bool is_host) {
-    if (!ss)
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return;
-    demo_sync_correction_finish(*ss, member_ids, local_member_id, is_host);
+    demo_sync_correction_finish(*state, member_ids, local_member_id, is_host);
 }
 
-void tick_correction(void*,
+void tick_correction(void* ctx,
                      const std::vector<std::string>& member_ids,
                      const std::string& local_member_id,
                      bool is_host,
                      float dt) {
-    if (!ss)
+    (void)ctx;
+    State* state = g_state;
+    if (!state)
         return;
-    demo_sync_correction_tick(*ss, member_ids, local_member_id, is_host, dt);
+    demo_sync_correction_tick(*state, member_ids, local_member_id, is_host, dt);
 }
 
 void reset_runtime(void*) {
     demo_sync_correction_reset();
 }
 
-void ensure_sync_configured() {
+void ensure_sync_configured(State* state = nullptr) {
+    if (state)
+        g_state = state;
     if (g_sync_configured)
         return;
     CoopSyncHooks hooks;
@@ -211,17 +228,15 @@ bool coop_session_active() {
     return coop_sync_active();
 }
 
-CoopStepResult coop_session_step() {
-    ensure_sync_configured();
+CoopStepResult coop_session_step(State& state) {
+    ensure_sync_configured(&state);
     CoopStepResult result;
-    if (!ss)
-        return result;
 
-    const std::uint64_t previous_bonk_serial = ss->bonk_serial;
+    const std::uint64_t previous_bonk_serial = state.bonk_serial;
     CoopSyncStepResult sync_result = coop_sync_step(FIXED_TIMESTEP);
     result.handled = sync_result.handled;
-    if (sync_result.handled && ss->bonk_serial > previous_bonk_serial)
-        result.bonk_count = static_cast<int>(ss->bonk_serial - previous_bonk_serial);
+    if (sync_result.handled && state.bonk_serial > previous_bonk_serial)
+        result.bonk_count = static_cast<int>(state.bonk_serial - previous_bonk_serial);
     return result;
 }
 

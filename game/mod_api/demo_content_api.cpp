@@ -21,6 +21,6 @@ void register_demo_content_api(ModApiRegistry& registry) {
     registry.register_api(std::move(desc));
 }
 
-void finalize_demo_content_from_mods() {
-    demo_content_internal::apply_overrides();
+void finalize_demo_content_from_mods(State& state) {
+    demo_content_internal::apply_overrides(state);
 }

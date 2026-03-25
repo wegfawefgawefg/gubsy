@@ -10,7 +10,7 @@ void register_game_mod_apis() {
     register_demo_items_api(registry);
 }
 
-void finalize_game_mod_apis() {
-    finalize_demo_content_from_mods();
-    finalize_demo_items_from_mods();
+void finalize_game_mod_apis(State& state) {
+    finalize_demo_content_from_mods(state);
+    finalize_demo_items_from_mods(state);
 }

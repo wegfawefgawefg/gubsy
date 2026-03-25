@@ -24,6 +24,6 @@ void register_demo_items_api(ModApiRegistry& registry) {
     registry.register_api(std::move(desc));
 }
 
-void finalize_demo_items_from_mods() {
+void finalize_demo_items_from_mods(State&) {
     demo_items_internal::finalize_items();
 }

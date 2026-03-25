@@ -1,5 +1,6 @@
 #include "game/setup.hpp"
 
+#include "game/app_context.hpp"
 #include "engine/globals.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/mod_server_config.hpp"
@@ -132,20 +133,23 @@ bool run_setup_once() {
     return true;
 }
 
-void finalize_and_enter_play() {
-    finalize_game_mod_apis();
+void finalize_and_enter_play(void* app_context) {
+    State* state = game_state_from_app_context(app_context);
+    if (!state)
+        return;
+    finalize_game_mod_apis(*state);
     es->mode = modes::PLAYING;
 }
 
 } // namespace
 
-void setup_step() {
+void setup_step(void* app_context) {
     if (!es)
         return;
 
     switch (g_state) {
     case SetupState::Ready:
-        finalize_and_enter_play();
+        finalize_and_enter_play(app_context);
         return;
     case SetupState::Failed:
         return;
@@ -162,7 +166,7 @@ void setup_step() {
     }
 }
 
-void setup_draw() {
+void setup_draw(void*) {
     if (!gg || !gg->renderer)
         return;
     SDL_Renderer* renderer = gg->renderer;

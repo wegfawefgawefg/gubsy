@@ -124,9 +124,8 @@ void render() {
         SDL_SetRenderTarget(renderer, target);
 
     if (const ModeDesc* mode = find_mode(es->mode)) {
-        if (mode->render_fn) {
-            mode->render_fn();
-        }
+        if (mode->render_fn)
+            mode->render_fn(es ? es->app_context : nullptr);
     }
 
     if (target)

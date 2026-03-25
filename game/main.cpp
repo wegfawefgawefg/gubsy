@@ -10,6 +10,7 @@
 #include "engine/input.hpp"
 #include "engine/step.hpp"
 #include "game/actions.hpp"
+#include "game/app_context.hpp"
 #include "game/builtin_mods.hpp"
 #include "game/modes.hpp"
 #include "game/state.hpp"
@@ -37,13 +38,12 @@
 namespace {
 constexpr const char* kGameModVersion = "0.1.0";
 
-void on_mods_changed() {
-    finalize_game_mod_apis();
+void on_mods_changed(void* app_context) {
+    State* state = game_state_from_app_context(app_context);
+    if (!state)
+        return;
+    finalize_game_mod_apis(*state);
 }
-
-const GubsyAppHooks kAppHooks = {
-    .on_mods_changed = on_mods_changed,
-};
 }
 
 void register_modes(){
@@ -53,10 +53,11 @@ void register_modes(){
 }
 
 int main() {
+    GameAppContext app{};
     if (!init_engine_state()) {
         return 1;
     }
-    if (!init_state()) {
+    if (!init_game_app_context(app)) {
         cleanup_engine_state();
         return 1;
     }
@@ -141,9 +142,13 @@ int main() {
 
     register_modes();
    
-    do_the_gubsy(kAppHooks);
+    GubsyAppHooks hooks{};
+    hooks.app_context = &app;
+    hooks.on_mods_changed = on_mods_changed;
 
-    cleanup_state();
+    do_the_gubsy(hooks);
+
+    shutdown_game_app_context(app);
     stop_doing_the_gubsy();
     return 0;
 }

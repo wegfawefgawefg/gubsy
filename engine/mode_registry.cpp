@@ -6,9 +6,9 @@
 #include <vector>
 
 void register_mode(const std::string& name,
-                   void (*step_fn)(),
-                   void (*process_inputs_fn)(),
-                   void (*render_fn)()) {
+                   ModeCallbackFn step_fn,
+                   ModeCallbackFn process_inputs_fn,
+                   ModeCallbackFn render_fn) {
     auto it = es->mode_lookup.find(name);
     if (it != es->mode_lookup.end()) {
         es->modes[it->second] = ModeDesc{name, step_fn, process_inputs_fn, render_fn};

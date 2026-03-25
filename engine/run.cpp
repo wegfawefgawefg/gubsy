@@ -45,6 +45,8 @@ bool do_the_gubsy(const GubsyAppHooks& hooks){
         SDL_Quit();
         return 1;
     }
+    if (es)
+        es->app_context = hooks.app_context;
 
     if (!init_imgui_layer(gg->window, gg->renderer)) {
         std::fprintf(stderr, "[imgui] init failed\n");
@@ -98,7 +100,7 @@ bool do_the_gubsy(const GubsyAppHooks& hooks){
 
     load_enabled_mods_via_host();
     if (hooks.on_mods_changed)
-        hooks.on_mods_changed();
+        hooks.on_mods_changed(hooks.app_context);
 
     Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 t_last = SDL_GetPerformanceCounter();
@@ -121,12 +123,12 @@ bool do_the_gubsy(const GubsyAppHooks& hooks){
 
         if (const ModeDesc* mode = find_mode(es->mode)) {
             if (mode->process_inputs_fn)
-                mode->process_inputs_fn();
+                mode->process_inputs_fn(es ? es->app_context : nullptr);
         }
 
         bool mods_changed = poll_fs_mods_hot_reload();
         if (mods_changed && hooks.on_mods_changed)
-            hooks.on_mods_changed();
+            hooks.on_mods_changed(hooks.app_context);
 
         step();
 

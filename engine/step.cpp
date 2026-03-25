@@ -26,12 +26,11 @@ void step() {
         es->now += static_cast<double>(fixed_dt);
 
         if (g_fixed_step_prep)
-            g_fixed_step_prep();
+            g_fixed_step_prep(es ? es->app_context : nullptr);
 
         if (const ModeDesc* mode = find_mode(es->mode)) {
-            if (mode->step_fn) {
-                mode->step_fn();
-            }
+            if (mode->step_fn)
+                mode->step_fn(es ? es->app_context : nullptr);
         }
 
         es->frame += 1;

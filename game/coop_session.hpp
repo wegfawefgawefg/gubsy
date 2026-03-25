@@ -4,6 +4,8 @@
 
 #include "game/coop_sync_runtime.hpp"
 
+struct State;
+
 struct CoopStepResult {
     bool handled{false};
     int bonk_count{0};
@@ -11,7 +13,7 @@ struct CoopStepResult {
 
 void coop_session_reset();
 bool coop_session_active();
-CoopStepResult coop_session_step();
+CoopStepResult coop_session_step(State& state);
 const std::string& coop_session_status_text();
 const std::string& coop_session_last_error();
 const std::string& coop_session_advertised_endpoint();

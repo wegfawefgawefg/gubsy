@@ -31,7 +31,7 @@ const InputFrame& safe_frame(const std::vector<InputFrame>& frames, int player_i
 
 } // namespace
 
-void build_input_frames_for_step() {
+void build_input_frames_for_step(void*) {
     if (!es)
         return;
     ensure_input_frame_capacity();

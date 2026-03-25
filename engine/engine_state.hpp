@@ -25,6 +25,7 @@
 
 struct EngineState {
     bool running{true};
+    void* app_context{nullptr};
     
     double now{0.0};
     float dt{0.0f};

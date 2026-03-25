@@ -5,11 +5,8 @@
 #include "engine/engine_state.hpp"
 #include "engine/mods.hpp"
 
-struct State;
-
 // Shared pointers to systems used across modules.
 extern EngineState* es;
-extern State* ss;
 extern Graphics* gg;
 extern Audio* aa;
 extern ModManager* mm;

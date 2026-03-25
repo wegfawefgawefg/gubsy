@@ -2,7 +2,6 @@
 
 #include "engine/audio.hpp"
 #include "engine/graphics.hpp"
-#include "engine/globals.hpp"
 #include "game/mod_api/demo_items_internal.hpp"
 #include "state.hpp"
 
@@ -14,7 +13,6 @@
 
 #include <sol/sol.hpp>
 #include "engine/alerts.hpp"
-#include <engine/globals.hpp>
 
 namespace {
 
@@ -32,15 +30,15 @@ DemoItemPool g_item_pool{kMaxDemoItemInstances};
 std::unordered_map<std::string, std::size_t> g_lookup;
 bool g_demo_items_active = false;
 
-DemoPlayer* ensure_primary_player() {
-    if (!ss)
-        return nullptr;
-    if (ss->players.empty())
-        ss->players.push_back(DemoPlayer{});
-    return &ss->players[0];
+DemoPlayer* ensure_primary_player(State& state) {
+    if (state.players.empty())
+        state.players.push_back(DemoPlayer{});
+    return &state.players[0];
 }
 
 struct DemoApi {
+    State* state{nullptr};
+
     void alert(const std::string& text) const {
         Alert al;
         al.text = text;
@@ -48,7 +46,9 @@ struct DemoApi {
         add_alert(al.text);
     }
     void set_player_position(float x, float y) const {
-        if (DemoPlayer* player = ensure_primary_player())
+        if (!state)
+            return;
+        if (DemoPlayer* player = ensure_primary_player(*state))
             player->pos = glm::vec2{x, y};
     }
     void play_sound(const std::string& key) const {
@@ -56,10 +56,12 @@ struct DemoApi {
             ::play_sound(key);
     }
     void set_bonk_enabled(bool enabled) const {
-        ss->bonk.enabled = enabled;
+        if (state)
+            state->bonk.enabled = enabled;
     }
     void set_bonk_position(float x, float y) const {
-        ss->bonk.pos = glm::vec2{x, y};
+        if (state)
+            state->bonk.pos = glm::vec2{x, y};
     }
     bool set_item_position(const std::string& def_id, float x, float y) const;
     sol::object get_item_position(const std::string& def_id, sol::this_state state) const;
@@ -103,8 +105,8 @@ bool DemoApi::set_item_position(const std::string& def_id, float x, float y) con
     return false;
 }
 
-sol::object DemoApi::get_item_position(const std::string& def_id, sol::this_state state) const {
-    sol::state_view lua{state};
+sol::object DemoApi::get_item_position(const std::string& def_id, sol::this_state lua_state) const {
+    sol::state_view lua{lua_state};
     if (auto* entry = find_instance_by_def_id(def_id)) {
         sol::table tbl = lua.create_table();
         tbl["x"] = entry->value.position.x;
@@ -304,13 +306,14 @@ const DemoItemDef* demo_item_def(const DemoItemInstance& inst) {
     return &g_public_defs[static_cast<std::size_t>(inst.def_index)];
 }
 
-void trigger_demo_item_use(const DemoItemInstance& inst) {
+void trigger_demo_item_use(const DemoItemInstance& inst, State& state) {
     if (inst.def_index < 0 || static_cast<std::size_t>(inst.def_index) >= g_records.size())
         return;
     DemoItemRecord& rec = g_records[static_cast<std::size_t>(inst.def_index)];
     if (!rec.on_use.valid())
         return;
 
+    g_api.state = &state;
     sol::state_view lua(rec.on_use.lua_state());
     sol::table info = make_item_table(lua, rec.def, &inst);
     sol::protected_function_result r;
@@ -320,6 +323,7 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
         std::fprintf(stderr, "[demo_items] on_use exception (%s): %s\n",
                      rec.def.id.c_str(), e.what());
         add_alert(std::string("Pad failed: ") + rec.def.label);
+        g_api.state = nullptr;
         return;
     }
     if (!r.valid()) {
@@ -331,6 +335,7 @@ void trigger_demo_item_use(const DemoItemInstance& inst) {
         std::printf("[demo_items] triggered '%s' (%s)\n",
                     rec.def.id.c_str(), rec.owner_mod.c_str());
     }
+    g_api.state = nullptr;
 }
 
 bool demo_items_active() {

@@ -40,5 +40,4 @@ struct State {
     glm::vec2 reticle_pos_mouse{0.0f, 0.0f};   // Raw mouse normalized [-1, 1]
 };
 
-bool init_state();
-void cleanup_state();
+void reset_state(State& state);

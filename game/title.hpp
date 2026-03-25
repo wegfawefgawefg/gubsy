@@ -1,6 +1,5 @@
 #pragma once
 
-void title_step();
-void title_process_inputs();
-void title_draw();
-
+void title_step(void* app_context);
+void title_process_inputs(void* app_context);
+void title_draw(void* app_context);

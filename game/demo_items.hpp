@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+struct State;
+
 // DemoItemDef: template metadata registered by Lua mods. Mods call register_item{}
 // to append more defs; gameplay consumes demo_item_defs(). See docs/demo_defs.md.
 struct DemoItemDef {
@@ -28,7 +30,7 @@ using DemoItemPool = VidPool<DemoItemInstance>;
 const std::vector<DemoItemDef>& demo_item_defs();
 const std::vector<DemoItemPool::Entry>& demo_item_instance_slots();
 const DemoItemDef* demo_item_def(const DemoItemInstance& inst);
-void trigger_demo_item_use(const DemoItemInstance& inst);
+void trigger_demo_item_use(const DemoItemInstance& inst, State& state);
 bool demo_items_active();
 bool load_demo_item_defs();
 void unload_demo_item_defs();

@@ -1,6 +1,5 @@
 #include "game/mod_api/demo_content_internal.hpp"
 
-#include "engine/globals.hpp"
 #include "game/state.hpp"
 
 #include <algorithm>
@@ -25,13 +24,13 @@ DemoPlayer g_default_player{};
 BonkTarget g_default_bonk{};
 bool g_defaults_captured = false;
 
-void ensure_defaults_captured() {
-    if (g_defaults_captured || !ss)
+void ensure_defaults_captured(State& state) {
+    if (g_defaults_captured)
         return;
-    if (ss->players.empty())
-        ss->players.push_back(DemoPlayer{});
-    g_default_player = ss->players[0];
-    g_default_bonk = ss->bonk;
+    if (state.players.empty())
+        state.players.push_back(DemoPlayer{});
+    g_default_player = state.players[0];
+    g_default_bonk = state.bonk;
     g_defaults_captured = true;
 }
 
@@ -70,7 +69,6 @@ BonkTarget read_bonk(const sol::table& tbl, const BonkTarget& base) {
 namespace demo_content_internal {
 
 void register_override(const std::string& mod_id, const sol::table& tbl) {
-    ensure_defaults_captured();
     DemoContentEntry entry;
     entry.mod_id = mod_id;
     if (auto player_tbl = tbl.get<sol::optional<sol::table>>("player")) {
@@ -92,10 +90,8 @@ void remove_override(const std::string& mod_id) {
                     g_entries.end());
 }
 
-void apply_overrides() {
-    ensure_defaults_captured();
-    if (!ss)
-        return;
+void apply_overrides(State& state) {
+    ensure_defaults_captured(state);
 
     DemoPlayer player = g_default_player;
     BonkTarget bonk = g_default_bonk;
@@ -106,11 +102,11 @@ void apply_overrides() {
             bonk = entry.bonk;
     }
 
-    if (ss->players.empty())
-        ss->players.push_back(player);
+    if (state.players.empty())
+        state.players.push_back(player);
     else
-        ss->players[0] = player;
-    ss->bonk = bonk;
+        state.players[0] = player;
+    state.bonk = bonk;
 
     if (g_entries.empty())
         std::fprintf(stderr, "[demo] no demo content overrides; using defaults\n");

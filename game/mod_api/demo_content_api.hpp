@@ -1,6 +1,7 @@
 #pragma once
 
 class ModApiRegistry;
+struct State;
 
 void register_demo_content_api(ModApiRegistry& registry);
-void finalize_demo_content_from_mods();
+void finalize_demo_content_from_mods(State& state);
