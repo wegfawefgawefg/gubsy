@@ -7,6 +7,7 @@
 #include "engine/ui_layouts.hpp"
 
 #include <SDL2/SDL_ttf.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -14,42 +15,13 @@
 
 namespace menu_system_internal {
 
-RuntimeCache g_cache;
-WidgetId g_focus{kMenuIdInvalid};
-MenuInputState g_prev_input{};
-MenuInputState g_current_input{};
-bool g_active{false};
-bool g_prev_mouse_down{false};
-std::string* g_active_text_buffer{nullptr};
-int g_active_text_max{0};
-bool g_text_input_enabled{false};
-SDL_FRect g_focus_rect{};
-bool g_has_focus_rect{false};
-SDL_Color g_focus_outline_color{120, 170, 255, 255};
-bool g_has_focus_color{false};
-bool g_text_edit_active{false};
-WidgetId g_text_edit_widget{kMenuIdInvalid};
-float g_caret_time{0.0f};
-bool g_text_edit_using_aux{false};
-std::unordered_map<MenuScreenId, WidgetId> g_last_focus;
-MenuScreenId g_current_screen{kMenuIdInvalid};
-bool g_allow_mouse_focus{true};
-bool g_mouse_focus_locked{false};
-int g_mouse_focus_lock_x{0};
-int g_mouse_focus_lock_y{0};
-int g_last_mouse_x{0};
-int g_last_mouse_y{0};
+MenuRuntimeState& runtime_state(EngineState& engine) {
+    return engine.menu_runtime;
+}
 
-NavRepeatState g_repeat_up{};
-NavRepeatState g_repeat_down{};
-NavRepeatState g_repeat_left{};
-NavRepeatState g_repeat_right{};
-
-WidgetId g_slider_drag_id{kMenuIdInvalid};
-bool g_slider_drag_value_valid{false};
-float g_slider_drag_value{0.0f};
-bool g_slider_commit_pending{false};
-FocusArrowState g_arrows;
+const MenuRuntimeState& runtime_state(const EngineState& engine) {
+    return engine.menu_runtime;
+}
 
 namespace {
 
@@ -67,56 +39,60 @@ void play_cant_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_can
 void play_left_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_left"); }
 void play_right_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_right"); }
 
-void lock_mouse_focus_at(int x, int y) {
-    g_allow_mouse_focus = false;
-    g_mouse_focus_locked = true;
-    g_mouse_focus_lock_x = x;
-    g_mouse_focus_lock_y = y;
+void lock_mouse_focus_at(MenuRuntimeState& state, int x, int y) {
+    state.allow_mouse_focus = false;
+    state.mouse_focus_locked = true;
+    state.mouse_focus_lock_x = x;
+    state.mouse_focus_lock_y = y;
 }
 
-void ensure_mouse_lock(int x, int y) {
-    if (!g_allow_mouse_focus && !g_mouse_focus_locked)
-        lock_mouse_focus_at(x, y);
+void ensure_mouse_lock(MenuRuntimeState& state, int x, int y) {
+    if (!state.allow_mouse_focus && !state.mouse_focus_locked)
+        lock_mouse_focus_at(state, x, y);
 }
 
-void unlock_mouse_focus_if_moved(int x, int y) {
-    if (!g_mouse_focus_locked)
+void unlock_mouse_focus_if_moved(MenuRuntimeState& state, int x, int y) {
+    if (!state.mouse_focus_locked)
         return;
-    if (x != g_mouse_focus_lock_x || y != g_mouse_focus_lock_y) {
-        g_mouse_focus_locked = false;
-        g_allow_mouse_focus = true;
+    if (x != state.mouse_focus_lock_x || y != state.mouse_focus_lock_y) {
+        state.mouse_focus_locked = false;
+        state.allow_mouse_focus = true;
     }
 }
 
-void unlock_mouse_focus_now() {
-    g_allow_mouse_focus = true;
-    g_mouse_focus_locked = false;
+void unlock_mouse_focus_now(MenuRuntimeState& state) {
+    state.allow_mouse_focus = true;
+    state.mouse_focus_locked = false;
 }
 
-MenuWidget* find_widget(WidgetId id) {
+MenuWidget* find_widget(MenuRuntimeState& state, WidgetId id) {
     if (id == kMenuIdInvalid)
         return nullptr;
-    for (auto& widget : g_cache.widgets) {
+    for (auto& widget : state.cache.widgets) {
         if (widget.id == id)
             return &widget;
     }
     return nullptr;
 }
 
-MenuWidget* find_widget_by_slot(UILayoutObjectId slot) {
+const MenuWidget* find_widget(const MenuRuntimeState& state, WidgetId id) {
+    return find_widget(const_cast<MenuRuntimeState&>(state), id);
+}
+
+MenuWidget* find_widget_by_slot(MenuRuntimeState& state, UILayoutObjectId slot) {
     if (slot == kMenuIdInvalid)
         return nullptr;
-    for (auto& widget : g_cache.widgets) {
+    for (auto& widget : state.cache.widgets) {
         if (widget.slot == slot)
             return &widget;
     }
     return nullptr;
 }
 
-SDL_FRect* find_widget_rect(WidgetId id) {
-    for (std::size_t i = 0; i < g_cache.widgets.size() && i < g_cache.rects.size(); ++i) {
-        if (g_cache.widgets[i].id == id)
-            return &g_cache.rects[i];
+SDL_FRect* find_widget_rect(MenuRuntimeState& state, WidgetId id) {
+    for (std::size_t i = 0; i < state.cache.widgets.size() && i < state.cache.rects.size(); ++i) {
+        if (state.cache.widgets[i].id == id)
+            return &state.cache.rects[i];
     }
     return nullptr;
 }
@@ -157,7 +133,8 @@ SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& re
         if (layout.input_rect.x < rect.x + 12.0f)
             layout.input_rect.x = rect.x + 12.0f;
     }
-    float reserved_right = (layout.has_input ? (layout.input_rect.w + 18.0f) : rect.w * 0.1f) + arrow_reserved;
+    float reserved_right =
+        (layout.has_input ? (layout.input_rect.w + 18.0f) : rect.w * 0.1f) + arrow_reserved;
     layout.track_left = rect.x + rect.w * 0.08f;
     layout.track_right = rect.x + rect.w - reserved_right;
     layout.track_y = rect.y + rect.h - 14.0f;
@@ -191,7 +168,8 @@ OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& re
         float input_width = std::min(rect.w * 0.2f, 110.0f);
         float input_height = 24.0f;
         float input_y = rect.y + rect.h * 0.18f;
-        layout.primary_input = SDL_FRect{rect.x + rect.w - input_width - 12.0f, input_y, input_width, input_height};
+        layout.primary_input =
+            SDL_FRect{rect.x + rect.w - input_width - 12.0f, input_y, input_width, input_height};
         if (widget.aux_text_buffer && widget.aux_text_max_len > 0) {
             layout.has_secondary_input = true;
             layout.primary_input.x -= (input_width + 10.0f);
@@ -208,17 +186,16 @@ bool point_in_rect(float x, float y, const SDL_FRect& rect) {
     return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
-
-WidgetId resolve_focus(WidgetId target) {
+WidgetId resolve_focus(const MenuRuntimeState& state, WidgetId target) {
     if (target == kMenuIdInvalid)
         return kMenuIdInvalid;
-    if (find_widget(target))
+    if (find_widget(state, target))
         return target;
     return kMenuIdInvalid;
 }
 
-WidgetId first_selectable_widget() {
-    for (const auto& widget : g_cache.widgets) {
+WidgetId first_selectable_widget(const MenuRuntimeState& state) {
+    for (const auto& widget : state.cache.widgets) {
         if (widget.type != WidgetType::Label)
             return widget.id;
     }
@@ -295,7 +272,7 @@ void draw_text_with_clip(const EngineState&,
     }
 }
 
-void begin_text_edit(MenuWidget& widget, bool use_aux_buffer) {
+void begin_text_edit(MenuRuntimeState& state, MenuWidget& widget, bool use_aux_buffer) {
     std::string* target_buffer = widget.text_buffer;
     int target_len = widget.text_max_len;
     if (use_aux_buffer && widget.aux_text_buffer) {
@@ -304,31 +281,31 @@ void begin_text_edit(MenuWidget& widget, bool use_aux_buffer) {
     }
     if (!target_buffer || target_len <= 0)
         return;
-    g_text_edit_active = true;
-    g_text_edit_widget = widget.id;
-    g_active_text_buffer = target_buffer;
-    g_active_text_max = target_len;
-    g_text_edit_using_aux = use_aux_buffer;
-    g_caret_time = 0.0f;
-    if (!g_text_input_enabled) {
+    state.text_edit_active = true;
+    state.text_edit_widget = widget.id;
+    state.active_text_buffer = target_buffer;
+    state.active_text_max = target_len;
+    state.text_edit_using_aux = use_aux_buffer;
+    state.caret_time = 0.0f;
+    if (!state.text_input_enabled) {
         SDL_StartTextInput();
-        g_text_input_enabled = true;
+        state.text_input_enabled = true;
     }
 }
 
-bool commit_text_edit() {
-    if (!g_text_edit_active || !g_active_text_buffer)
+bool commit_text_edit(MenuRuntimeState& state) {
+    if (!state.text_edit_active || !state.active_text_buffer)
         return false;
-    MenuWidget* widget = find_widget(g_text_edit_widget);
+    MenuWidget* widget = find_widget(state, state.text_edit_widget);
     bool modified = true;
     if (!widget || !widget->bind_ptr)
         return modified;
     if (widget->type == WidgetType::Slider1D) {
         char* end_ptr = nullptr;
-        float parsed = std::strtof(g_active_text_buffer->c_str(), &end_ptr);
-        bool parsed_ok = (end_ptr != g_active_text_buffer->c_str());
+        float parsed = std::strtof(state.active_text_buffer->c_str(), &end_ptr);
+        bool parsed_ok = (end_ptr != state.active_text_buffer->c_str());
         if (!parsed_ok) {
-            std::string lower = *g_active_text_buffer;
+            std::string lower = *state.active_text_buffer;
             std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
                 return static_cast<char>(std::tolower(c));
             });
@@ -353,39 +330,42 @@ bool commit_text_edit() {
     return modified;
 }
 
-bool end_text_edit() {
-    if (!g_text_edit_active)
+bool end_text_edit(MenuRuntimeState& state) {
+    if (!state.text_edit_active)
         return false;
-    bool modified = commit_text_edit();
-    g_text_edit_active = false;
-    g_text_edit_widget = kMenuIdInvalid;
-    g_active_text_buffer = nullptr;
-    g_active_text_max = 0;
-    g_text_edit_using_aux = false;
-    if (g_text_input_enabled) {
+    bool modified = commit_text_edit(state);
+    state.text_edit_active = false;
+    state.text_edit_widget = kMenuIdInvalid;
+    state.active_text_buffer = nullptr;
+    state.active_text_max = 0;
+    state.text_edit_using_aux = false;
+    if (state.text_input_enabled) {
         SDL_StopTextInput();
-        g_text_input_enabled = false;
+        state.text_input_enabled = false;
     }
-    lock_mouse_focus_at(g_last_mouse_x, g_last_mouse_y);
+    lock_mouse_focus_at(state, state.last_mouse_x, state.last_mouse_y);
     return modified;
 }
 
-bool is_text_edit_widget(WidgetId id) {
-    return g_text_edit_active && g_text_edit_widget == id;
+bool is_text_edit_widget(const MenuRuntimeState& state, WidgetId id) {
+    return state.text_edit_active && state.text_edit_widget == id;
 }
 
-void set_active_text_buffer(std::string* buffer, int max_len) {
-    if (!g_text_edit_active)
+void set_active_text_buffer(MenuRuntimeState& state, std::string* buffer, int max_len) {
+    if (!state.text_edit_active)
         return;
-    g_active_text_buffer = buffer;
-    g_active_text_max = max_len;
+    state.active_text_buffer = buffer;
+    state.active_text_max = max_len;
 }
 
-WidgetId current_text_widget() {
-    return g_text_edit_active ? g_text_edit_widget : kMenuIdInvalid;
+WidgetId current_text_widget(const MenuRuntimeState& state) {
+    return state.text_edit_active ? state.text_edit_widget : kMenuIdInvalid;
 }
 
-bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_changed) {
+bool execute_action(MenuRuntimeState& state,
+                    const MenuAction& action,
+                    MenuContext& ctx,
+                    bool& stack_changed) {
     switch (action.type) {
         case MenuActionType::None:
             return false;
@@ -393,19 +373,19 @@ bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_chan
             if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a), ctx.player_index))
                 return false;
             stack_changed = true;
-            g_focus = kMenuIdInvalid;
+            state.focus = kMenuIdInvalid;
             return true;
         }
         case MenuActionType::PopScreen:
             ctx.manager.pop_screen();
             stack_changed = true;
-            g_focus = kMenuIdInvalid;
-            end_text_edit();
+            state.focus = kMenuIdInvalid;
+            end_text_edit(state);
             return true;
         case MenuActionType::RequestFocus: {
-            WidgetId target = resolve_focus(static_cast<WidgetId>(action.a));
+            WidgetId target = resolve_focus(state, static_cast<WidgetId>(action.a));
             if (target != kMenuIdInvalid) {
-                g_focus = target;
+                state.focus = target;
                 return true;
             }
             return false;
@@ -431,73 +411,76 @@ bool execute_action(const MenuAction& action, MenuContext& ctx, bool& stack_chan
     }
 }
 
-void rebuild_cache(MenuManager::ScreenInstance& inst, MenuContext& ctx) {
+void rebuild_cache(MenuRuntimeState& state,
+                   MenuManager::ScreenInstance& inst,
+                   MenuContext& ctx) {
     BuiltScreen built = inst.def->build(ctx);
-    g_cache.layout = (built.layout != kMenuIdInvalid) ? built.layout : inst.def->layout;
-    g_cache.width = ctx.screen_width;
-    g_cache.height = ctx.screen_height;
-    g_cache.widgets.assign(built.widgets.items.begin(), built.widgets.items.end());
-    g_cache.rects.assign(g_cache.widgets.size(), SDL_FRect{});
+    state.cache.layout = (built.layout != kMenuIdInvalid) ? built.layout : inst.def->layout;
+    state.cache.width = ctx.screen_width;
+    state.cache.height = ctx.screen_height;
+    state.cache.widgets.assign(built.widgets.items.begin(), built.widgets.items.end());
+    state.cache.rects.assign(state.cache.widgets.size(), SDL_FRect{});
     WidgetId remembered = kMenuIdInvalid;
-    auto remembered_it = g_last_focus.find(g_current_screen);
-    if (remembered_it != g_last_focus.end())
+    auto remembered_it = state.last_focus.find(state.current_screen);
+    if (remembered_it != state.last_focus.end())
         remembered = remembered_it->second;
     if (remembered != kMenuIdInvalid) {
-        if (MenuWidget* remembered_widget = find_widget(remembered)) {
+        if (MenuWidget* remembered_widget = find_widget(state, remembered)) {
             if (is_transient_focus_slot(remembered_widget->slot))
                 remembered = kMenuIdInvalid;
         }
     }
-    if (g_focus == kMenuIdInvalid && remembered != kMenuIdInvalid)
-        g_focus = remembered;
-    if (g_focus == kMenuIdInvalid) {
+    if (state.focus == kMenuIdInvalid && remembered != kMenuIdInvalid)
+        state.focus = remembered;
+    if (state.focus == kMenuIdInvalid) {
         if (built.default_focus != kMenuIdInvalid)
-            g_focus = built.default_focus;
+            state.focus = built.default_focus;
         else
-            g_focus = first_selectable_widget();
+            state.focus = first_selectable_widget(state);
     }
-    if (!find_widget(g_focus)) {
+    if (!find_widget(state, state.focus)) {
         if (built.default_focus != kMenuIdInvalid)
-            g_focus = built.default_focus;
-        if (!find_widget(g_focus))
-            g_focus = first_selectable_widget();
+            state.focus = built.default_focus;
+        if (!find_widget(state, state.focus))
+            state.focus = first_selectable_widget(state);
     }
-    MenuWidget* focus_widget = find_widget(g_focus);
+    MenuWidget* focus_widget = find_widget(state, state.focus);
     if (!focus_widget || focus_widget->type == WidgetType::Label) {
         if (built.default_focus != kMenuIdInvalid)
-            g_focus = built.default_focus;
-        focus_widget = find_widget(g_focus);
+            state.focus = built.default_focus;
+        focus_widget = find_widget(state, state.focus);
         if (!focus_widget || focus_widget->type == WidgetType::Label)
-            g_focus = first_selectable_widget();
+            state.focus = first_selectable_widget(state);
     }
     for (const MenuAction& act : built.frame_actions.items) {
         bool unused = false;
-        execute_action(act, ctx, unused);
+        execute_action(state, act, ctx, unused);
     }
 }
 
-void update_arrows(float dt) {
-    if (!g_has_focus_rect) {
-        g_arrows.initialized = false;
+void update_arrows(MenuRuntimeState& state, float dt) {
+    if (!state.has_focus_rect) {
+        state.arrows.initialized = false;
         return;
     }
-    g_arrows.left_target = SDL_FPoint{g_focus_rect.x - 28.0f, g_focus_rect.y + g_focus_rect.h * 0.5f};
-    g_arrows.right_target = SDL_FPoint{g_focus_rect.x + g_focus_rect.w + 28.0f,
-                                       g_focus_rect.y + g_focus_rect.h * 0.5f};
-    if (!g_arrows.initialized) {
-        g_arrows.left_pos = g_arrows.left_target;
-        g_arrows.right_pos = g_arrows.right_target;
-        g_arrows.initialized = true;
+    state.arrows.left_target =
+        SDL_FPoint{state.focus_rect.x - 28.0f, state.focus_rect.y + state.focus_rect.h * 0.5f};
+    state.arrows.right_target = SDL_FPoint{state.focus_rect.x + state.focus_rect.w + 28.0f,
+                                           state.focus_rect.y + state.focus_rect.h * 0.5f};
+    if (!state.arrows.initialized) {
+        state.arrows.left_pos = state.arrows.left_target;
+        state.arrows.right_pos = state.arrows.right_target;
+        state.arrows.initialized = true;
     }
     float t = std::clamp(dt * 40.0f, 0.0f, 1.0f);
     auto blend = [t](float current, float target) {
         return current + (target - current) * t;
     };
-    g_arrows.left_pos.x = blend(g_arrows.left_pos.x, g_arrows.left_target.x);
-    g_arrows.left_pos.y = blend(g_arrows.left_pos.y, g_arrows.left_target.y);
-    g_arrows.right_pos.x = blend(g_arrows.right_pos.x, g_arrows.right_target.x);
-    g_arrows.right_pos.y = blend(g_arrows.right_pos.y, g_arrows.right_target.y);
-    g_arrows.time += dt;
+    state.arrows.left_pos.x = blend(state.arrows.left_pos.x, state.arrows.left_target.x);
+    state.arrows.left_pos.y = blend(state.arrows.left_pos.y, state.arrows.left_target.y);
+    state.arrows.right_pos.x = blend(state.arrows.right_pos.x, state.arrows.right_target.x);
+    state.arrows.right_pos.y = blend(state.arrows.right_pos.y, state.arrows.right_target.y);
+    state.arrows.time += dt;
 }
 
 namespace {
@@ -518,14 +501,14 @@ void draw_arrow(SDL_Renderer* renderer, const SDL_FPoint& tip, float dir, SDL_Co
 
 } // namespace
 
-void draw_focus_arrows(SDL_Renderer* renderer) {
-    if (!g_arrows.initialized || !g_has_focus_rect || !g_has_focus_color)
+void draw_focus_arrows(const MenuRuntimeState& state, SDL_Renderer* renderer) {
+    if (!state.arrows.initialized || !state.has_focus_rect || !state.has_focus_color)
         return;
-    float osc = std::sin(g_arrows.time * 6.0f) * 3.0f;
-    SDL_FPoint left_tip{g_arrows.left_pos.x + osc, g_arrows.left_pos.y};
-    SDL_FPoint right_tip{g_arrows.right_pos.x - osc, g_arrows.right_pos.y};
-    draw_arrow(renderer, left_tip, 1.0f, g_focus_outline_color);
-    draw_arrow(renderer, right_tip, -1.0f, g_focus_outline_color);
+    float osc = std::sin(state.arrows.time * 6.0f) * 3.0f;
+    SDL_FPoint left_tip{state.arrows.left_pos.x + osc, state.arrows.left_pos.y};
+    SDL_FPoint right_tip{state.arrows.right_pos.x - osc, state.arrows.right_pos.y};
+    draw_arrow(renderer, left_tip, 1.0f, state.focus_outline_color);
+    draw_arrow(renderer, right_tip, -1.0f, state.focus_outline_color);
 }
 
 } // namespace menu_system_internal

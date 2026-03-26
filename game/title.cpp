@@ -24,7 +24,7 @@ void ensure_menu_ready(EngineState& engine) {
     engine.menu_manager.clear();
     engine.menu_manager.push_screen(MenuScreenID::MAIN);
     engine.menu_manager.push_screen(MenuScreenID::LOBBY);
-    menu_system_reset();
+    menu_system_reset(engine);
     g_menu_initialized = true;
 }
 
@@ -48,7 +48,7 @@ void title_process_inputs(EngineState& engine, void*) {
     int width = std::max(dims.x, 1);
     int height = std::max(dims.y, 1);
     MenuInputState input = gather_menu_input(engine);
-    menu_system_set_input(input);
+    menu_system_set_input(engine, input);
     menu_system_update(engine, engine.dt, width, height);
 }
 

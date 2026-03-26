@@ -251,7 +251,7 @@ void render(EngineState& engine) {
 
     render_alerts(engine, renderer, window_w);
 
-    if (layout_editor_is_active()) {
+    if (layout_editor_is_active(engine)) {
         int overlay_w = std::max(0, static_cast<int>(std::round(drawn_rect.w)));
         int overlay_h = std::max(0, static_cast<int>(std::round(drawn_rect.h)));
         layout_editor_render(engine,

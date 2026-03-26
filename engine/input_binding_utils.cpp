@@ -1,5 +1,7 @@
 #include "engine/input_binding_utils.hpp"
 
+#include "engine/engine_state.hpp"
+
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cstdint>
@@ -278,7 +280,8 @@ int encode_device_analog_2d(DeviceInputKind kind, int device_id, int axis_x_code
            (packed_axes & kCodeMask);
 }
 
-bool device_button_is_down(const DeviceState& state, int encoded_button) {
+bool device_button_is_down(const EngineState& engine, int encoded_button) {
+    const DeviceState& state = engine.device_state;
     DeviceInputKind kind = DeviceInputKind::Keyboard;
     int device_id = kAnyDeviceId;
     int code = 0;
@@ -293,17 +296,17 @@ bool device_button_is_down(const DeviceState& state, int encoded_button) {
 
     switch (kind) {
         case DeviceInputKind::Keyboard:
-            if (imgui_want_capture_keyboard() || layout_editor_is_active())
+            if (imgui_want_capture_keyboard() || layout_editor_is_active(engine))
                 return false;
             if (code >= 0 && code < SDL_NUM_SCANCODES)
                 return state.keyboard[static_cast<std::size_t>(code)] != 0;
             return false;
         case DeviceInputKind::Mouse:
-            if (imgui_want_capture_mouse() || layout_editor_is_active())
+            if (imgui_want_capture_mouse() || layout_editor_is_active(engine))
                 return false;
             return (state.mouse_buttons & static_cast<uint32_t>(code)) != 0;
         case DeviceInputKind::Gamepad:
-            if (layout_editor_is_active())
+            if (layout_editor_is_active(engine))
                 return false;
             if (code < 0 || code >= SDL_CONTROLLER_BUTTON_MAX)
                 return false;
@@ -318,7 +321,8 @@ bool device_button_is_down(const DeviceState& state, int encoded_button) {
     return false;
 }
 
-float sample_analog_1d(const DeviceState& state, int encoded_axis) {
+float sample_analog_1d(const EngineState& engine, int encoded_axis) {
+    const DeviceState& state = engine.device_state;
     DeviceInputKind kind = DeviceInputKind::Keyboard;
     int device_id = kAnyDeviceId;
     int axis = 0;
@@ -344,11 +348,11 @@ float sample_analog_1d(const DeviceState& state, int encoded_axis) {
 
     switch (kind) {
         case DeviceInputKind::Keyboard:
-            if (imgui_want_capture_keyboard() || layout_editor_is_active())
+            if (imgui_want_capture_keyboard() || layout_editor_is_active(engine))
                 return 0.0f;
             return 0.0f;
         case DeviceInputKind::Mouse:
-            if (imgui_want_capture_mouse() || layout_editor_is_active())
+            if (imgui_want_capture_mouse() || layout_editor_is_active(engine))
                 return 0.0f;
             if (axis == kMouseWheelAxis) {
                 float value = static_cast<float>(state.mouse_wheel) * 0.1f;
@@ -356,14 +360,15 @@ float sample_analog_1d(const DeviceState& state, int encoded_axis) {
             }
             return 0.0f;
         case DeviceInputKind::Gamepad:
-            if (layout_editor_is_active())
+            if (layout_editor_is_active(engine))
                 return 0.0f;
             return controller_axis(state, static_cast<SDL_GameControllerAxis>(axis), device_id);
     }
     return 0.0f;
 }
 
-glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis) {
+glm::vec2 sample_analog_2d(const EngineState& engine, int encoded_axis) {
+    const DeviceState& state = engine.device_state;
     DeviceInputKind kind = DeviceInputKind::Keyboard;
     int device_id = kAnyDeviceId;
     int axis_x = 0;
@@ -393,15 +398,15 @@ glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis) {
 
     switch (kind) {
         case DeviceInputKind::Keyboard:
-            if (imgui_want_capture_keyboard() || layout_editor_is_active())
+            if (imgui_want_capture_keyboard() || layout_editor_is_active(engine))
                 return glm::vec2(0.0f);
             return glm::vec2(0.0f);
         case DeviceInputKind::Mouse:
-            if (imgui_want_capture_mouse() || layout_editor_is_active())
+            if (imgui_want_capture_mouse() || layout_editor_is_active(engine))
                 return glm::vec2(0.0f);
             return decode_mouse_axis(axis_x, axis_y, state);
         case DeviceInputKind::Gamepad:
-            if (layout_editor_is_active())
+            if (layout_editor_is_active(engine))
                 return glm::vec2(0.0f);
             return controller_stick(state,
                                     static_cast<SDL_GameControllerAxis>(axis_x),
@@ -415,11 +420,12 @@ glm::vec2 normalized_mouse_coords(const DeviceState& state) {
     return state.mouse_norm;
 }
 
-bool mouse_render_position(const DeviceState& state,
+bool mouse_render_position(const EngineState& engine,
                            float render_width,
                            float render_height,
                            float& out_x,
                            float& out_y) {
+    const DeviceState& state = engine.device_state;
     if (!state.has_mouse_render_pos)
         return false;
     if (render_width <= 1.0f || render_height <= 1.0f)

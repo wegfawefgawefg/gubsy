@@ -38,6 +38,7 @@ void draw_nav_button(SDL_Renderer* renderer,
 }
 
 void draw_text_input(const EngineState& engine,
+                     const msi::MenuRuntimeState& state,
                      SDL_Renderer* renderer,
                      const SDL_FRect& rect,
                      const MenuWidget& widget,
@@ -69,11 +70,11 @@ void draw_text_input(const EngineState& engine,
                                               static_cast<int>(rect.y) + 4,
                                               SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
                                               &input_clip);
-    if (editing && menu_system_internal::g_text_edit_active) {
-        bool editing_this = menu_system_internal::g_text_edit_widget == widget.id &&
-                            ((menu_system_internal::g_text_edit_using_aux && buffer == widget.aux_text_buffer) ||
-                             (!menu_system_internal::g_text_edit_using_aux && buffer == widget.text_buffer));
-        if (editing_this && std::fmod(menu_system_internal::g_caret_time, 1.0f) < 0.5f && buffer) {
+    if (editing && state.text_edit_active) {
+        bool editing_this = state.text_edit_widget == widget.id &&
+                            ((state.text_edit_using_aux && buffer == widget.aux_text_buffer) ||
+                             (!state.text_edit_using_aux && buffer == widget.text_buffer));
+        if (editing_this && std::fmod(state.caret_time, 1.0f) < 0.5f && buffer) {
             int caret_x = static_cast<int>(rect.x) + 6 +
                           menu_system_internal::measure_text_width(engine, buffer->c_str());
             if (caret_x > static_cast<int>(rect.x + rect.w) - 6)
@@ -89,34 +90,35 @@ void draw_text_input(const EngineState& engine,
 } // namespace
 
 void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_width, int screen_height) {
-    if ((msi::g_cache.width != screen_width || msi::g_cache.height != screen_height) &&
+    msi::MenuRuntimeState& state = msi::runtime_state(engine);
+    if ((state.cache.width != screen_width || state.cache.height != screen_height) &&
         screen_width > 0 && screen_height > 0) {
         MenuInputState zero_input{};
-        msi::g_prev_input = msi::g_current_input;
-        msi::g_current_input = zero_input;
+        state.prev_input = state.current_input;
+        state.current_input = zero_input;
         menu_system_update(engine, 0.0f, screen_width, screen_height);
     }
-    if (!renderer || msi::g_cache.widgets.empty())
+    if (!renderer || state.cache.widgets.empty())
         return;
 
     const UILayout* layout = get_ui_layout_for_resolution(engine,
-                                                          static_cast<int>(msi::g_cache.layout),
-                                                          msi::g_cache.width,
-                                                          msi::g_cache.height);
-    for (std::size_t i = 0; i < msi::g_cache.widgets.size(); ++i) {
-        const MenuWidget& widget = msi::g_cache.widgets[i];
+                                                          static_cast<int>(state.cache.layout),
+                                                          state.cache.width,
+                                                          state.cache.height);
+    for (std::size_t i = 0; i < state.cache.widgets.size(); ++i) {
+        const MenuWidget& widget = state.cache.widgets[i];
         SDL_FRect rect;
-        if (i < msi::g_cache.rects.size())
-            rect = msi::g_cache.rects[i];
+        if (i < state.cache.rects.size())
+            rect = state.cache.rects[i];
         else {
             const UIObject* obj = layout ? get_ui_object(*layout, static_cast<int>(widget.slot)) : nullptr;
             if (obj)
-                rect = msi::rect_from_object(*obj, msi::g_cache.width, msi::g_cache.height);
+                rect = msi::rect_from_object(*obj, state.cache.width, state.cache.height);
             else
                 rect = SDL_FRect{
-                    static_cast<float>(msi::g_cache.width) * 0.3f,
-                    static_cast<float>(msi::g_cache.height) * 0.3f,
-                    static_cast<float>(msi::g_cache.width) * 0.4f,
+                    static_cast<float>(state.cache.width) * 0.3f,
+                    static_cast<float>(state.cache.height) * 0.3f,
+                    static_cast<float>(state.cache.width) * 0.4f,
                     60.0f};
         }
 
@@ -130,7 +132,7 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
             SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
             SDL_RenderDrawRectF(renderer, &rect);
 
-            if (widget.id == msi::g_focus) {
+            if (widget.id == state.focus) {
                 SDL_Color focus{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, widget.style.focus_a};
                 auto adjust = [](Uint8 base, int delta) -> Uint8 {
                     return static_cast<Uint8>(std::clamp(static_cast<int>(base) + delta, 0, 255));
@@ -237,9 +239,9 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                 msi::draw_text_with_clip(engine, renderer, widget.tertiary, line_x, line_y, tert_color, clip_ptr);
             }
         }
-        if (is_text_input_widget && msi::g_text_edit_active && widget.id == msi::g_text_edit_widget) {
+        if (is_text_input_widget && state.text_edit_active && widget.id == state.text_edit_widget) {
             int input_y = text_input_value_y > 0 ? text_input_value_y : (static_cast<int>(rect.y) + 6);
-            if (std::fmod(msi::g_caret_time, 1.0f) < 0.5f) {
+            if (std::fmod(state.caret_time, 1.0f) < 0.5f) {
                 int caret_x = line_x + msi::measure_text_width(engine, widget.text_buffer->c_str());
                 int caret_top = input_y - 2;
                 int caret_bottom = caret_top + 18;
@@ -270,13 +272,14 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
 
             if (slider_has_input) {
                 draw_text_input(engine,
+                                state,
                                 renderer,
                                 slider_visual.input_rect,
                                 widget,
                                 widget.text_buffer,
                                 widget.placeholder,
-                                msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
-                                    !msi::g_text_edit_using_aux);
+                                state.text_edit_active && widget.id == state.text_edit_widget &&
+                                    !state.text_edit_using_aux);
             }
             if (slider_visual.has_buttons) {
                 draw_nav_button(renderer, slider_visual.left_btn, true, widget);
@@ -304,23 +307,25 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
             }
             if (opt_layout.has_primary_input) {
                 draw_text_input(engine,
+                                state,
                                 renderer,
                                 opt_layout.primary_input,
                                 widget,
                                 widget.text_buffer,
                                 widget.placeholder,
-                                msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
-                                    !msi::g_text_edit_using_aux);
+                                state.text_edit_active && widget.id == state.text_edit_widget &&
+                                    !state.text_edit_using_aux);
             }
             if (opt_layout.has_secondary_input) {
                 draw_text_input(engine,
+                                state,
                                 renderer,
                                 opt_layout.secondary_input,
                                 widget,
                                 widget.aux_text_buffer,
                                 widget.aux_placeholder,
-                                msi::g_text_edit_active && widget.id == msi::g_text_edit_widget &&
-                                    msi::g_text_edit_using_aux);
+                                state.text_edit_active && widget.id == state.text_edit_widget &&
+                                    state.text_edit_using_aux);
             }
         }
 
@@ -341,5 +346,5 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
         }
     }
 
-    msi::draw_focus_arrows(renderer);
+    msi::draw_focus_arrows(state, renderer);
 }

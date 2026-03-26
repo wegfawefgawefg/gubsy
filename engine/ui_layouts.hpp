@@ -48,7 +48,7 @@ bool save_ui_layout(const UILayout& layout);
  Get best matching UI layout for target resolution
  Finds layout with matching id and closest resolution/aspect ratio
 */
-const UILayout* get_ui_layout_for_resolution(const EngineState& engine, int layout_id, int width, int height);
+const UILayout* get_ui_layout_for_resolution(EngineState& engine, int layout_id, int width, int height);
 
 /*
  Get UI object from layout by id or label

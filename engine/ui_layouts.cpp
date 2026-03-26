@@ -243,7 +243,7 @@ bool save_ui_layout(const UILayout& layout) {
     return write_ui_layouts_file(layouts);
 }
 
-const UILayout* get_ui_layout_for_resolution(const EngineState& engine,
+const UILayout* get_ui_layout_for_resolution(EngineState& engine,
                                              int layout_id,
                                              int width,
                                              int height) {
@@ -292,7 +292,8 @@ const UILayout* get_ui_layout_for_resolution(const EngineState& engine,
     if (!chosen)
         chosen = pick_best(desired, false);
     if (chosen) {
-        layout_editor_notify_active_layout(layout_id,
+        layout_editor_notify_active_layout(engine,
+                                           layout_id,
                                            chosen->resolution_width,
                                            chosen->resolution_height);
     }

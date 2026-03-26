@@ -63,7 +63,7 @@ void playing_step(EngineState& engine, void* app_context) {
     const CoopStepResult coop = coop_session_step(engine, *state);
     if (coop.handled) {
         glm::vec2 raw_gamepad =
-            sample_analog_2d(engine.device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
+            sample_analog_2d(engine, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
         state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
         state->reticle_pos_mouse = normalized_mouse_coords(engine.device_state);
         for (int i = 0; i < coop.bonk_count; ++i) {
@@ -98,7 +98,7 @@ void playing_step(EngineState& engine, void* app_context) {
     }
 
     glm::vec2 raw_gamepad =
-        sample_analog_2d(engine.device_state, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
+        sample_analog_2d(engine, static_cast<int>(Gubsy2DAnalog::GP_LEFT_STICK));
     state->reticle_pos_gamepad = glm::clamp(raw_gamepad, glm::vec2(-1.0f), glm::vec2(1.0f));
     state->reticle_pos_mouse = normalized_mouse_coords(engine.device_state);
 

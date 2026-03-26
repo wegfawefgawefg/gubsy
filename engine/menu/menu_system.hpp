@@ -17,10 +17,10 @@ struct MenuInputState {
 
 struct EngineState;
 
-void menu_system_set_input(const MenuInputState& input);
+void menu_system_set_input(EngineState& engine, const MenuInputState& input);
 void menu_system_update(EngineState& engine, float dt, int screen_width, int screen_height);
 void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_width, int screen_height);
-void menu_system_reset();
-bool menu_system_active();
-void menu_system_handle_text_input(const char* text);
-void menu_system_handle_backspace(bool clear_all = false);
+void menu_system_reset(EngineState& engine);
+bool menu_system_active(const EngineState& engine);
+void menu_system_handle_text_input(EngineState& engine, const char* text);
+void menu_system_handle_backspace(EngineState& engine, bool clear_all = false);

@@ -5,6 +5,8 @@
 #include "engine/device_state.hpp"
 #include "engine/input.hpp"
 
+struct EngineState;
+
 enum class DeviceInputKind : uint8_t {
     Keyboard = 0,
     Mouse = 1,
@@ -21,12 +23,12 @@ int encode_device_analog_2d(DeviceInputKind kind, int device_id, int axis_x_code
 
 // Sampling helpers -----------------------------------------------------------
 
-bool device_button_is_down(const DeviceState& state, int encoded_button);
-float sample_analog_1d(const DeviceState& state, int encoded_axis);
-glm::vec2 sample_analog_2d(const DeviceState& state, int encoded_axis);
+bool device_button_is_down(const EngineState& engine, int encoded_button);
+float sample_analog_1d(const EngineState& engine, int encoded_axis);
+glm::vec2 sample_analog_2d(const EngineState& engine, int encoded_axis);
 glm::vec2 normalized_mouse_coords(const DeviceState& state);
 glm::vec2 normalized_mouse_coords_in_render(const DeviceState& state);
-bool mouse_render_position(const DeviceState& state,
+bool mouse_render_position(const EngineState& engine,
                            float render_width,
                            float render_height,
                            float& out_x,

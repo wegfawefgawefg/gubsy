@@ -16,8 +16,10 @@
 #include "engine/game_settings.hpp"
 #include "engine/top_level_game_settings.hpp"
 #include "engine/device_state.hpp"
+#include "engine/layout_editor/layout_editor_state.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_commands.hpp"
+#include "engine/menu/menu_runtime_state.hpp"
 #include "engine/ui_layouts.hpp"
 #include "player.hpp"
 #include "engine/input_sources.hpp"
@@ -87,6 +89,8 @@ struct EngineState {
 
     MenuManager menu_manager;
     MenuCommandRegistry menu_commands;
+    menu_system_internal::MenuRuntimeState menu_runtime{};
+    layout_editor_internal::LayoutEditorState layout_editor{};
     ModManager* mod_manager{nullptr};
     Audio* audio{nullptr};
     Graphics* graphics{nullptr};

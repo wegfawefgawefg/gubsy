@@ -12,7 +12,7 @@ MenuInputState gather_menu_input(EngineState& engine) {
     if (!profile)
         return state;
     for (const auto& [device_button, action] : profile->button_binds) {
-        const bool down = device_button_is_down(engine.device_state, device_button);
+        const bool down = device_button_is_down(engine, device_button);
         switch (action) {
             case GameAction::MENU_UP: state.up |= down; break;
             case GameAction::MENU_DOWN: state.down |= down; break;

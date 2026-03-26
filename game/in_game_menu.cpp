@@ -28,13 +28,13 @@ void open_in_game_menu(EngineState& engine) {
         return;
     engine.menu_manager.clear();
     engine.menu_manager.push_screen(MenuScreenID::IN_GAME_SESSION);
-    menu_system_reset();
+    menu_system_reset(engine);
     g_in_game_menu_open = true;
 }
 
 void close_in_game_menu(EngineState& engine) {
     engine.menu_manager.clear();
-    menu_system_reset();
+    menu_system_reset(engine);
     g_in_game_menu_open = false;
 }
 
@@ -68,7 +68,7 @@ void in_game_menu_process_inputs(EngineState& engine) {
     glm::ivec2 dims = get_render_dimensions(engine);
     const int width = std::max(dims.x, 1);
     const int height = std::max(dims.y, 1);
-    menu_system_set_input(input);
+    menu_system_set_input(engine, input);
     menu_system_update(engine, engine.dt, width, height);
     if (!menu_stack_is_open(engine))
         close_in_game_menu(engine);

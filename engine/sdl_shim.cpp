@@ -17,7 +17,7 @@ void update_gubsy_device_inputs_system_from_sdl_events(EngineState& engine) {
                 if (ev.key.keysym.sym == SDLK_BACKSPACE &&
                     !imgui_want_capture_keyboard()) {
                     bool ctrl_held = (ev.key.keysym.mod & KMOD_CTRL) != 0;
-                    menu_system_handle_backspace(ctrl_held);
+                    menu_system_handle_backspace(engine, ctrl_held);
                 }
                 break;
             case SDL_KEYUP:
@@ -30,7 +30,7 @@ void update_gubsy_device_inputs_system_from_sdl_events(EngineState& engine) {
                 break;
             case SDL_TEXTINPUT:
                 if (!imgui_want_capture_keyboard() && !imgui_want_text_input())
-                    menu_system_handle_text_input(ev.text.text);
+                    menu_system_handle_text_input(engine, ev.text.text);
                 break;
             case SDL_CONTROLLERDEVICEADDED:
                 on_device_added(engine, ev.cdevice.which);

@@ -36,6 +36,7 @@ void build_input_frame(EngineState& engine,
                        int player_index,
                        const DeviceState& device_state,
                        InputFrame& out) {
+    (void)device_state;
     out = InputFrame{};
 
     const BindsProfile* binds = get_player_binds_profile(engine, player_index);
@@ -45,7 +46,7 @@ void build_input_frame(EngineState& engine,
     for (const auto& [device_button, action] : binds->button_binds) {
         if (action < 0 || action >= 32)
             continue;
-        if (device_button_is_down(device_state, device_button))
+        if (device_button_is_down(engine, device_button))
             out.down_bits |= (1u << action);
     }
 
@@ -54,7 +55,7 @@ void build_input_frame(EngineState& engine,
     for (const auto& [device_axis, analog_id] : binds->analog_1d_binds) {
         if (analog_id < 0 || static_cast<std::size_t>(analog_id) >= analog_1d_values.size())
             continue;
-        float value = sample_analog_1d(device_state, device_axis);
+        float value = sample_analog_1d(engine, device_axis);
         float mag = std::fabs(value);
         if (mag >= analog_1d_mags[static_cast<std::size_t>(analog_id)]) {
             analog_1d_values[static_cast<std::size_t>(analog_id)] = value;
@@ -69,7 +70,7 @@ void build_input_frame(EngineState& engine,
     for (const auto& [device_axis, analog_id] : binds->analog_2d_binds) {
         if (analog_id < 0 || static_cast<std::size_t>(analog_id) >= analog_2d_values.size())
             continue;
-        glm::vec2 value = sample_analog_2d(device_state, device_axis);
+        glm::vec2 value = sample_analog_2d(engine, device_axis);
         float mag = glm::length(value);
         if (mag >= analog_2d_mags[static_cast<std::size_t>(analog_id)]) {
             analog_2d_values[static_cast<std::size_t>(analog_id)] = value;

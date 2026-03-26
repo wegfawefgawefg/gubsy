@@ -1,9 +1,9 @@
 #include "engine/layout_editor/layout_editor_panel.hpp"
 
-#include "engine/layout_editor/layout_editor_internal.hpp"
-#include "engine/layout_editor/layout_editor_history.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
+#include "engine/layout_editor/layout_editor_history.hpp"
 #include "engine/layout_editor/layout_editor_interaction.hpp"
+#include "engine/layout_editor/layout_editor_internal.hpp"
 
 #include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
@@ -21,28 +21,30 @@ using namespace layout_editor_internal;
 
 namespace {
 
-void sync_object_label_buffer(const UILayout& layout, int selected_index) {
-    if (selected_index < 0 ||
-        selected_index >= static_cast<int>(layout.objects.size())) {
-        if (g_object_label_index != -1) {
-            g_object_label_buffer[0] = '\0';
-            g_object_label_index = -1;
+void sync_object_label_buffer(LayoutEditorState& state,
+                              const UILayout& layout,
+                              int selected_index) {
+    if (selected_index < 0 || selected_index >= static_cast<int>(layout.objects.size())) {
+        if (state.object_label_index != -1) {
+            state.object_label_buffer[0] = '\0';
+            state.object_label_index = -1;
         }
         return;
     }
-    if (g_object_label_index == selected_index)
+    if (state.object_label_index == selected_index)
         return;
     const auto& obj = layout.objects[static_cast<std::size_t>(selected_index)];
-    std::snprintf(g_object_label_buffer, sizeof(g_object_label_buffer), "%s",
+    std::snprintf(state.object_label_buffer, sizeof(state.object_label_buffer), "%s",
                   obj.label.c_str());
-    g_object_label_index = selected_index;
+    state.object_label_index = selected_index;
 }
 
 } // namespace
 
 void layout_editor_render_panel(EngineState& engine, float dt) {
+    LayoutEditorState& state = editor_state(engine);
     (void)dt;
-    if (!g_active)
+    if (!state.active)
         return;
     if (!ImGui::GetCurrentContext())
         return;
@@ -50,14 +52,14 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
                              ImGuiWindowFlags_NoSavedSettings;
     ImGui::SetNextWindowPos(ImVec2(18.0f, 18.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.93f);
-    if (!ImGui::Begin("Layout Editor", &g_active, flags)) {
+    if (!ImGui::Begin("Layout Editor", &state.active, flags)) {
         ImGui::End();
         return;
     }
     ImGui::TextUnformatted("Ctrl+L toggle | Ctrl+S save | G snap");
     ImGui::Text("Grid %.3f (%s)",
-                static_cast<double>(g_grid_step),
-                g_snap_enabled ? "snap ON" : "snap OFF");
+                static_cast<double>(state.grid_step),
+                state.snap_enabled ? "snap ON" : "snap OFF");
     if (!has_layouts(engine)) {
         ImGui::TextUnformatted("No layouts loaded.");
         ImGui::End();
@@ -79,10 +81,13 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
     for (const auto& s : label_storage)
         labels.push_back(s.c_str());
 
-    ImGui::Checkbox("Follow active layout", &g_follow_active_layout);
-    if (ImGui::ListBox("Layouts", &g_selected_layout, labels.data(),
-                       static_cast<int>(labels.size()), 6)) {
-        g_follow_active_layout = false;
+    ImGui::Checkbox("Follow active layout", &state.follow_active_layout);
+    if (ImGui::ListBox("Layouts",
+                       &state.selected_layout,
+                       labels.data(),
+                       static_cast<int>(labels.size()),
+                       6)) {
+        state.follow_active_layout = false;
     }
 
     UILayout* layout_mut = selected_layout_mutable(engine);
@@ -99,21 +104,25 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
         bool meta_commit = false;
         if (ImGui::InputInt("Width", &width)) {
             layout_mut->resolution_width = std::max(1, width);
-            g_layout_dirty = true;
+            state.layout_dirty = true;
         }
         if (ImGui::IsItemDeactivatedAfterEdit())
             meta_commit = true;
         ImGui::SetNextItemWidth(160.0f);
         if (ImGui::InputInt("Height", &height)) {
             layout_mut->resolution_height = std::max(1, height);
-            g_layout_dirty = true;
+            state.layout_dirty = true;
         }
         if (ImGui::IsItemDeactivatedAfterEdit())
             meta_commit = true;
         ImGui::SetNextItemWidth(160.0f);
-        if (ImGui::Combo("Form factor", &form_factor, kFactorLabels, IM_ARRAYSIZE(kFactorLabels))) {
-            layout_mut->form_factor = static_cast<UILayoutFormFactor>(std::clamp(form_factor, 0, 2));
-            g_layout_dirty = true;
+        if (ImGui::Combo("Form factor",
+                         &form_factor,
+                         kFactorLabels,
+                         IM_ARRAYSIZE(kFactorLabels))) {
+            layout_mut->form_factor =
+                static_cast<UILayoutFormFactor>(std::clamp(form_factor, 0, 2));
+            state.layout_dirty = true;
         }
         if (ImGui::IsItemDeactivatedAfterEdit())
             meta_commit = true;
@@ -126,8 +135,8 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             engine.ui_layouts_pool.push_back(copy);
             layout_editor_select_single(-1);
             layout_editor_history_reset(engine.ui_layouts_pool.back());
-            g_selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
-            append_status("Layout duplicated");
+            state.selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
+            append_status(engine, "Layout duplicated");
         }
         ImGui::SameLine();
         if (ImGui::Button("New layout")) {
@@ -135,14 +144,16 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             UILayout fresh;
             fresh.id = generate_ui_layout_id();
             fresh.label = "Layout_" + std::to_string(fresh.id);
-            fresh.resolution_width = graphics ? static_cast<int>(graphics->render_dims.x) : 1920;
-            fresh.resolution_height = graphics ? static_cast<int>(graphics->render_dims.y) : 1080;
+            fresh.resolution_width =
+                graphics ? static_cast<int>(graphics->render_dims.x) : 1920;
+            fresh.resolution_height =
+                graphics ? static_cast<int>(graphics->render_dims.y) : 1080;
             fresh.form_factor = UILayoutFormFactor::Desktop;
             engine.ui_layouts_pool.push_back(fresh);
-            g_selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
+            state.selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
             layout_editor_clear_selection();
             layout_editor_history_reset(engine.ui_layouts_pool.back());
-            append_status("Layout created");
+            append_status(engine, "Layout created");
         }
     }
     Graphics* graphics = current_graphics(engine);
@@ -176,13 +187,12 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             obj.h = 0.1f;
             layout_mut->objects.push_back(obj);
             layout_editor_select_single(static_cast<int>(layout_mut->objects.size()) - 1);
-            g_layout_dirty = true;
+            state.layout_dirty = true;
             layout_editor_history_commit(*layout_mut);
         }
 
-        int selected_obj = layout_editor_selection_count() == 1
-                               ? layout_editor_primary_selection()
-                               : -1;
+        int selected_obj =
+            layout_editor_selection_count() == 1 ? layout_editor_primary_selection() : -1;
         if (!layout_mut->objects.empty()) {
             if (selected_obj >= static_cast<int>(layout_mut->objects.size()))
                 selected_obj = -1;
@@ -190,7 +200,7 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             selected_obj = -1;
         }
 
-        sync_object_label_buffer(*layout_mut, selected_obj);
+        sync_object_label_buffer(state, *layout_mut, selected_obj);
         if (selected_obj >= 0 &&
             selected_obj < static_cast<int>(layout_mut->objects.size())) {
             ImGui::SeparatorText("Selected object");
@@ -210,10 +220,10 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             ImGui::SetNextItemWidth(list_width);
             bool label_changed = false;
             if (ImGui::InputText("Label",
-                                 g_object_label_buffer,
-                                 sizeof(g_object_label_buffer))) {
-                obj.label = g_object_label_buffer;
-                g_object_label_index = selected_obj;
+                                 state.object_label_buffer,
+                                 sizeof(state.object_label_buffer))) {
+                obj.label = state.object_label_buffer;
+                state.object_label_index = selected_obj;
                 changed = true;
                 label_changed = true;
             }
@@ -248,13 +258,15 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
                 changed = true;
             }
             if (changed)
-                g_layout_dirty = true;
+                state.layout_dirty = true;
             if (commit_needed)
                 layout_editor_history_commit(*layout_mut);
         } else if (layout_editor_selection_count() > 1) {
             ImGui::SeparatorText("Selected objects");
             ImGui::Text("%d objects selected.", layout_editor_selection_count());
-            if (ImGui::BeginTable("multi_objects", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            if (ImGui::BeginTable("multi_objects",
+                                  5,
+                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                 ImGui::TableSetupColumn("Label");
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Pos");
@@ -288,10 +300,10 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
         }
     }
 
-    if (!g_status_text.empty() && g_status_timer > 0.0f) {
-        g_status_timer = std::max(0.0f, g_status_timer - dt);
+    if (!state.status_text.empty() && state.status_timer > 0.0f) {
+        state.status_timer = std::max(0.0f, state.status_timer - dt);
         ImGui::Separator();
-        ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.7f, 1.0f), "%s", g_status_text.c_str());
+        ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.7f, 1.0f), "%s", state.status_text.c_str());
     }
 
     ImGui::End();

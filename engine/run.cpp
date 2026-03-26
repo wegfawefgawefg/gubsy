@@ -146,7 +146,7 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
 }
 
 bool stop_doing_the_gubsy(EngineState& engine){
-    layout_editor_shutdown();
+    layout_editor_shutdown(engine);
     imgui_debug_shutdown();
     shutdown_imgui_layer();
     unload_all_mods_via_host(engine);

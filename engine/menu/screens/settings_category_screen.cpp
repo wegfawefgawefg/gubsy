@@ -364,13 +364,14 @@ void command_slider_dec(MenuContext& ctx, std::int32_t index) {
 
 void command_slider_set(MenuContext& ctx, std::int32_t index) {
     auto& st = ctx.state<SettingsCategoryState>();
+    auto& menu = menu_system_internal::runtime_state(ctx.engine);
     EntryBinding* binding = get_entry_binding(ctx, index);
     if (!binding || !binding->entry.value || !binding->entry.metadata)
         return;
     float target_value = 0.0f;
     bool have_target = false;
-    if (menu_system_internal::g_slider_drag_value_valid) {
-        target_value = menu_system_internal::g_slider_drag_value;
+    if (menu.slider_drag_value_valid) {
+        target_value = menu.slider_drag_value;
         have_target = true;
     } else if (float* fv = std::get_if<float>(binding->entry.value)) {
         target_value = *fv;
@@ -379,7 +380,7 @@ void command_slider_set(MenuContext& ctx, std::int32_t index) {
     if (!have_target)
         return;
     bool persist_change =
-        !menu_system_internal::g_slider_drag_value_valid || menu_system_internal::g_slider_commit_pending;
+        !menu.slider_drag_value_valid || menu.slider_commit_pending;
     if (apply_slider_value(ctx.engine, st, *binding, target_value, persist_change)) {
         if (binding->entry.metadata)
             st.status_text = "Updated " + binding->entry.metadata->label;
@@ -774,7 +775,8 @@ void refresh_entries(EngineState& engine, SettingsCategoryState& st, const Setti
     st.resolution_entry_index = -1;
 
     int editing_entry_index = -1;
-    WidgetId editing_widget = menu_system_internal::current_text_widget();
+    WidgetId editing_widget =
+        menu_system_internal::current_text_widget(menu_system_internal::runtime_state(engine));
     if (editing_widget != kMenuIdInvalid) {
         if (editing_widget >= kFirstRowWidgetId &&
             editing_widget < kFirstRowWidgetId + kSettingsPerPage) {
@@ -925,14 +927,21 @@ MenuWidget make_setting_widget(EngineState& engine,
                 label_cache.push_back(format_value(*binding.entry.value));
             w.badge = label_cache.back().c_str();
             if (value_buffer && desc.max_text_len > 0) {
-                if (!menu_system_internal::is_text_edit_widget(id))
+                if (!menu_system_internal::is_text_edit_widget(
+                        menu_system_internal::runtime_state(engine), id)) {
                     *value_buffer = label_cache.back();
+                }
                 w.text_buffer = value_buffer;
                 w.text_max_len = desc.max_text_len;
                 w.placeholder = is_frame_cap ? "fps" : "value";
                 w.badge = nullptr;
-                if (menu_system_internal::is_text_edit_widget(id))
-                    menu_system_internal::set_active_text_buffer(value_buffer, desc.max_text_len);
+                if (menu_system_internal::is_text_edit_widget(
+                        menu_system_internal::runtime_state(engine), id)) {
+                    menu_system_internal::set_active_text_buffer(
+                        menu_system_internal::runtime_state(engine),
+                        value_buffer,
+                        desc.max_text_len);
+                }
             }
         if (is_frame_cap)
             w.show_slider_track = false;
@@ -1022,7 +1031,8 @@ MenuWidget make_setting_widget(EngineState& engine,
         case SettingWidgetKind::Text: {
             w.type = WidgetType::TextInput;
             if (value_buffer) {
-                if (value_buffer->empty() && !menu_system_internal::is_text_edit_widget(id)) {
+                if (value_buffer->empty() && !menu_system_internal::is_text_edit_widget(
+                                                menu_system_internal::runtime_state(engine), id)) {
                     if (const std::string* sv = std::get_if<std::string>(binding.entry.value))
                         *value_buffer = *sv;
                 }
