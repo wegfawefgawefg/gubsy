@@ -4,6 +4,7 @@
 
 #include <vector>
 
+struct EngineState;
 struct UILayout;
 
 struct LayoutEditorViewport {
@@ -41,42 +42,46 @@ inline constexpr float kHandleSize = 12.0f;
 inline constexpr float kEdgeHandleLength = 18.0f;
 inline constexpr float kEdgeHandleThickness = 6.0f;
 
-void layout_editor_set_viewport(const LayoutEditorViewport& viewport);
-LayoutEditorViewport layout_editor_get_viewport();
+void layout_editor_set_viewport(EngineState& engine, const LayoutEditorViewport& viewport);
+LayoutEditorViewport layout_editor_get_viewport(const EngineState& engine);
 
-bool layout_editor_hit_test(const UILayout& layout,
+bool layout_editor_hit_test(const EngineState& engine,
+                            const UILayout& layout,
                             const LayoutEditorViewport& viewport,
                             float mouse_x,
                             float mouse_y,
                             HitResult& out_hit);
 
-void layout_editor_begin_drag(const UILayout& layout,
+void layout_editor_begin_drag(EngineState& engine,
+                              const UILayout& layout,
                               const HitResult& hit,
                               float mouse_x,
                               float mouse_y,
                               const LayoutEditorViewport& viewport);
 
-bool layout_editor_update_drag(UILayout& layout,
+bool layout_editor_update_drag(EngineState& engine,
+                               UILayout& layout,
                                float mouse_x,
                                float mouse_y,
                                bool snap_enabled,
                                float grid_step);
 
-void layout_editor_end_drag();
-bool layout_editor_is_dragging();
-int layout_editor_dragging_index();
-HandleType layout_editor_drag_handle();
+void layout_editor_end_drag(EngineState& engine);
+bool layout_editor_is_dragging(const EngineState& engine);
+int layout_editor_dragging_index(const EngineState& engine);
+HandleType layout_editor_drag_handle(const EngineState& engine);
 
 // Selection management
-const std::vector<int>& layout_editor_selection_indices();
-int layout_editor_selection_count();
-bool layout_editor_is_selected(int index);
-int layout_editor_primary_selection();
-void layout_editor_select_single(int index);
-void layout_editor_add_to_selection(int index);
-void layout_editor_remove_from_selection(int index);
-void layout_editor_clear_selection();
-bool layout_editor_selection_bounds(const UILayout& layout,
+const std::vector<int>& layout_editor_selection_indices(const EngineState& engine);
+int layout_editor_selection_count(const EngineState& engine);
+bool layout_editor_is_selected(const EngineState& engine, int index);
+int layout_editor_primary_selection(const EngineState& engine);
+void layout_editor_select_single(EngineState& engine, int index);
+void layout_editor_add_to_selection(EngineState& engine, int index);
+void layout_editor_remove_from_selection(EngineState& engine, int index);
+void layout_editor_clear_selection(EngineState& engine);
+bool layout_editor_selection_bounds(const EngineState& engine,
+                                    const UILayout& layout,
                                     float& min_x,
                                     float& min_y,
                                     float& max_x,

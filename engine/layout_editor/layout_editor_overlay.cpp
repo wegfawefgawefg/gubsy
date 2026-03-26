@@ -1,5 +1,6 @@
 #include "engine/layout_editor/layout_editor_overlay.hpp"
 
+#include "engine/engine_state.hpp"
 #include "engine/layout_editor/layout_editor_interaction.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
@@ -144,7 +145,8 @@ void layout_editor_draw_grid(SDL_Renderer* renderer,
     SDL_SetRenderDrawBlendMode(renderer, old_mode);
 }
 
-void layout_editor_draw_layout(SDL_Renderer* renderer,
+void layout_editor_draw_layout(const EngineState& engine,
+                               SDL_Renderer* renderer,
                                const UILayout& layout,
                                int width,
                                int height,
@@ -154,10 +156,10 @@ void layout_editor_draw_layout(SDL_Renderer* renderer,
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    int selection_count = layout_editor_selection_count();
+    int selection_count = layout_editor_selection_count(engine);
     for (std::size_t idx = 0; idx < layout.objects.size(); ++idx) {
         const auto& obj = layout.objects[idx];
-        const bool is_selected = layout_editor_is_selected(static_cast<int>(idx));
+        const bool is_selected = layout_editor_is_selected(engine, static_cast<int>(idx));
         SDL_FRect rect;
         rect.x = origin_x + obj.x * static_cast<float>(width);
         rect.y = origin_y + obj.y * static_cast<float>(height);
@@ -196,14 +198,14 @@ void layout_editor_draw_layout(SDL_Renderer* renderer,
                   SDL_Color{210, 220, 240, 200});
 
         if (is_selected && selection_count <= 1) {
-            HandleType handle = is_dragging ? layout_editor_drag_handle()
+            HandleType handle = is_dragging ? layout_editor_drag_handle(engine)
                                             : HandleType::Center;
             draw_handles(renderer, rect, handle);
         }
     }
     if (selection_count > 1) {
         float min_x = 0.0f, min_y = 0.0f, max_x = 0.0f, max_y = 0.0f;
-        if (layout_editor_selection_bounds(layout, min_x, min_y, max_x, max_y)) {
+        if (layout_editor_selection_bounds(engine, layout, min_x, min_y, max_x, max_y)) {
             SDL_FRect bounds{
                 origin_x + min_x * static_cast<float>(width),
                 origin_y + min_y * static_cast<float>(height),
@@ -212,7 +214,7 @@ void layout_editor_draw_layout(SDL_Renderer* renderer,
             SDL_Color outline{180, 210, 255, 200};
             SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
             SDL_RenderDrawRectF(renderer, &bounds);
-            draw_handles(renderer, bounds, layout_editor_drag_handle());
+            draw_handles(renderer, bounds, layout_editor_drag_handle(engine));
         }
     }
     SDL_SetRenderDrawBlendMode(renderer, old_mode);

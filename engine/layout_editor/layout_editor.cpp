@@ -79,8 +79,8 @@ void ensure_history_for_selection(EngineState& engine) {
     if (!state.history_initialized || layout->id != state.history_layout_id ||
         layout->resolution_width != state.history_layout_width ||
         layout->resolution_height != state.history_layout_height) {
-        layout_editor_history_reset(*layout);
-        layout_editor_clear_selection();
+        layout_editor_history_reset(engine, *layout);
+        layout_editor_clear_selection(engine);
         state.history_initialized = true;
         state.history_layout_id = layout->id;
         state.history_layout_width = layout->resolution_width;
@@ -92,7 +92,7 @@ void ensure_history_for_selection(EngineState& engine) {
 
 bool copy_selection_to_clipboard(EngineState& engine, const UILayout& layout) {
     LayoutEditorState& state = editor_state(engine);
-    const auto& sel = layout_editor_selection_indices();
+    const auto& sel = layout_editor_selection_indices(engine);
     if (sel.empty())
         return false;
     state.clipboard.objects.clear();
@@ -118,14 +118,14 @@ bool paste_clipboard(EngineState& engine, UILayout& layout) {
         layout.objects.push_back(copy);
         new_indices.push_back(static_cast<int>(layout.objects.size()) - 1);
     }
-    layout_editor_clear_selection();
+    layout_editor_clear_selection(engine);
     for (int idx : new_indices)
-        layout_editor_add_to_selection(idx);
+        layout_editor_add_to_selection(engine, idx);
     return true;
 }
 
-bool delete_selection(UILayout& layout) {
-    const auto& sel = layout_editor_selection_indices();
+bool delete_selection(EngineState& engine, UILayout& layout) {
+    const auto& sel = layout_editor_selection_indices(engine);
     if (sel.empty())
         return false;
     std::vector<int> to_remove = sel;
@@ -135,12 +135,12 @@ bool delete_selection(UILayout& layout) {
             continue;
         layout.objects.erase(layout.objects.begin() + *it);
     }
-    layout_editor_clear_selection();
+    layout_editor_clear_selection(engine);
     return true;
 }
 
-bool translate_selection(UILayout& layout, float dx, float dy) {
-    const auto& sel = layout_editor_selection_indices();
+bool translate_selection(const EngineState& engine, UILayout& layout, float dx, float dy) {
+    const auto& sel = layout_editor_selection_indices(engine);
     if (sel.empty())
         return false;
     float max_dx_positive = std::numeric_limits<float>::max();
@@ -234,7 +234,7 @@ void handle_mouse_input(EngineState& engine) {
             return;
         }
     }
-    LayoutEditorViewport viewport = layout_editor_get_viewport();
+    LayoutEditorViewport viewport = layout_editor_get_viewport(engine);
     if (viewport.width <= 0.0f || viewport.height <= 0.0f)
         return;
     UILayout* layout = selected_layout_mutable(engine);
@@ -256,55 +256,55 @@ void handle_mouse_input(EngineState& engine) {
     if (mouse_down && !state.mouse_was_down) {
         state.drag_dirty = false;
         HitResult hit{};
-        if (layout_editor_hit_test(*layout, viewport, mouse_x, mouse_y, hit)) {
+        if (layout_editor_hit_test(engine, *layout, viewport, mouse_x, mouse_y, hit)) {
             if (hit.target == HitTarget::Object && hit.object_index >= 0) {
-                bool was_selected = layout_editor_is_selected(hit.object_index);
-                int selection_count = layout_editor_selection_count();
+                bool was_selected = layout_editor_is_selected(engine, hit.object_index);
+                int selection_count = layout_editor_selection_count(engine);
                 if (ctrl) {
                     if (was_selected)
-                        layout_editor_remove_from_selection(hit.object_index);
+                        layout_editor_remove_from_selection(engine, hit.object_index);
                     else
-                        layout_editor_add_to_selection(hit.object_index);
+                        layout_editor_add_to_selection(engine, hit.object_index);
                 } else if (shift) {
-                    layout_editor_add_to_selection(hit.object_index);
+                    layout_editor_add_to_selection(engine, hit.object_index);
                 } else if (!was_selected || selection_count <= 1) {
-                    layout_editor_select_single(hit.object_index);
+                    layout_editor_select_single(engine, hit.object_index);
                 }
-                selection_count = layout_editor_selection_count();
+                selection_count = layout_editor_selection_count(engine);
 
-                if (layout_editor_selection_count() > 0) {
+                if (layout_editor_selection_count(engine) > 0) {
                     bool use_group = (!ctrl && !shift &&
-                                      layout_editor_selection_count() > 1 &&
-                                      layout_editor_is_selected(hit.object_index) &&
+                                      layout_editor_selection_count(engine) > 1 &&
+                                      layout_editor_is_selected(engine, hit.object_index) &&
                                       hit.handle == HandleType::Center);
                     HitResult dispatch_hit = hit;
                     if (use_group) {
                         dispatch_hit.target = HitTarget::Group;
                         dispatch_hit.object_index = -1;
                     }
-                    layout_editor_begin_drag(*layout, dispatch_hit, mouse_x, mouse_y, viewport);
+                    layout_editor_begin_drag(engine, *layout, dispatch_hit, mouse_x, mouse_y, viewport);
                 }
             } else if (hit.target == HitTarget::Group) {
-                if (layout_editor_selection_count() > 1)
-                    layout_editor_begin_drag(*layout, hit, mouse_x, mouse_y, viewport);
+                if (layout_editor_selection_count(engine) > 1)
+                    layout_editor_begin_drag(engine, *layout, hit, mouse_x, mouse_y, viewport);
             }
         } else {
             if (!shift && !ctrl)
-                layout_editor_clear_selection();
-            layout_editor_end_drag();
+                layout_editor_clear_selection(engine);
+            layout_editor_end_drag(engine);
         }
-    } else if (mouse_down && layout_editor_is_dragging()) {
-        if (layout_editor_update_drag(*layout, mouse_x, mouse_y, state.snap_enabled,
+    } else if (mouse_down && layout_editor_is_dragging(engine)) {
+        if (layout_editor_update_drag(engine, *layout, mouse_x, mouse_y, state.snap_enabled,
                                       state.grid_step)) {
             state.layout_dirty = true;
             state.drag_dirty = true;
         }
     } else if (!mouse_down && state.mouse_was_down) {
         if (state.drag_dirty) {
-            layout_editor_history_commit(*layout);
+            layout_editor_history_commit(engine, *layout);
             state.drag_dirty = false;
         }
-        layout_editor_end_drag();
+        layout_editor_end_drag(engine);
     }
 
     state.mouse_was_down = mouse_down;
@@ -346,13 +346,13 @@ void handle_hotkeys(EngineState& engine) {
         return;
     bool ctrl = io.KeyCtrl;
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-        if (layout_editor_history_undo(*layout)) {
+        if (layout_editor_history_undo(engine, *layout)) {
             state.layout_dirty = true;
             state.object_label_index = -1;
             append_status(engine, "Undo");
         }
     } else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-        if (layout_editor_history_redo(*layout)) {
+        if (layout_editor_history_redo(engine, *layout)) {
             state.layout_dirty = true;
             state.object_label_index = -1;
             append_status(engine, "Redo");
@@ -362,36 +362,36 @@ void handle_hotkeys(EngineState& engine) {
     } else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_V, false)) {
         if (paste_clipboard(engine, *layout)) {
             state.layout_dirty = true;
-            layout_editor_history_commit(*layout);
+            layout_editor_history_commit(engine, *layout);
         }
     }
 
     float nudge = io.KeyShift ? 0.05f : 0.01f;
     bool nudged = false;
     if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false)) {
-        if (translate_selection(*layout, -nudge, 0.0f))
+        if (translate_selection(engine, *layout, -nudge, 0.0f))
             nudged = true;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_RightArrow, false)) {
-        if (translate_selection(*layout, nudge, 0.0f))
+        if (translate_selection(engine, *layout, nudge, 0.0f))
             nudged = true;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, false)) {
-        if (translate_selection(*layout, 0.0f, -nudge))
+        if (translate_selection(engine, *layout, 0.0f, -nudge))
             nudged = true;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, false)) {
-        if (translate_selection(*layout, 0.0f, nudge))
+        if (translate_selection(engine, *layout, 0.0f, nudge))
             nudged = true;
     }
     if (nudged) {
         state.layout_dirty = true;
-        layout_editor_history_commit(*layout);
+        layout_editor_history_commit(engine, *layout);
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
-        if (delete_selection(*layout)) {
+        if (delete_selection(engine, *layout)) {
             state.layout_dirty = true;
-            layout_editor_history_commit(*layout);
+            layout_editor_history_commit(engine, *layout);
         }
     }
 }
@@ -447,7 +447,8 @@ void layout_editor_render(EngineState& engine,
         return;
     if (!has_layouts(engine))
         return;
-    layout_editor_set_viewport(LayoutEditorViewport{origin_x,
+    layout_editor_set_viewport(engine,
+                               LayoutEditorViewport{origin_x,
                                                     origin_y,
                                                     static_cast<float>(screen_width),
                                                     static_cast<float>(screen_height)});
@@ -458,8 +459,9 @@ void layout_editor_render(EngineState& engine,
                             origin_y,
                             state.grid_step);
     if (const UILayout* layout = selected_layout(engine)) {
-        int dragging_idx = layout_editor_dragging_index();
-        layout_editor_draw_layout(renderer,
+        int dragging_idx = layout_editor_dragging_index(engine);
+        layout_editor_draw_layout(engine,
+                                  renderer,
                                   *layout,
                                   screen_width,
                                   screen_height,
@@ -474,6 +476,6 @@ void layout_editor_shutdown(EngineState& engine) {
     state.active = false;
     state.status_text.clear();
     state.status_timer = 0.0f;
-    layout_editor_history_shutdown();
+    layout_editor_history_shutdown(engine);
     state.history_initialized = false;
 }

@@ -127,14 +127,14 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
         if (ImGui::IsItemDeactivatedAfterEdit())
             meta_commit = true;
         if (meta_commit)
-            layout_editor_history_commit(*layout_mut);
+            layout_editor_history_commit(engine, *layout_mut);
         if (ImGui::Button("Duplicate layout")) {
             UILayout copy = *layout_mut;
             copy.id = generate_ui_layout_id();
             copy.label += "_copy";
             engine.ui_layouts_pool.push_back(copy);
-            layout_editor_select_single(-1);
-            layout_editor_history_reset(engine.ui_layouts_pool.back());
+            layout_editor_select_single(engine, -1);
+            layout_editor_history_reset(engine, engine.ui_layouts_pool.back());
             state.selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
             append_status(engine, "Layout duplicated");
         }
@@ -151,8 +151,8 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             fresh.form_factor = UILayoutFormFactor::Desktop;
             engine.ui_layouts_pool.push_back(fresh);
             state.selected_layout = static_cast<int>(engine.ui_layouts_pool.size()) - 1;
-            layout_editor_clear_selection();
-            layout_editor_history_reset(engine.ui_layouts_pool.back());
+            layout_editor_clear_selection(engine);
+            layout_editor_history_reset(engine, engine.ui_layouts_pool.back());
             append_status(engine, "Layout created");
         }
     }
@@ -171,9 +171,9 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
                 std::string entry = obj.label.empty()
                                         ? ("#" + std::to_string(obj.id))
                                         : (obj.label + " (#" + std::to_string(obj.id) + ")");
-                bool selected = layout_editor_is_selected(i);
+                bool selected = layout_editor_is_selected(engine, i);
                 if (ImGui::Selectable(entry.c_str(), selected))
-                    layout_editor_select_single(i);
+                    layout_editor_select_single(engine, i);
             }
             ImGui::EndListBox();
         }
@@ -186,13 +186,13 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             obj.w = 0.2f;
             obj.h = 0.1f;
             layout_mut->objects.push_back(obj);
-            layout_editor_select_single(static_cast<int>(layout_mut->objects.size()) - 1);
+            layout_editor_select_single(engine, static_cast<int>(layout_mut->objects.size()) - 1);
             state.layout_dirty = true;
-            layout_editor_history_commit(*layout_mut);
+            layout_editor_history_commit(engine, *layout_mut);
         }
 
         int selected_obj =
-            layout_editor_selection_count() == 1 ? layout_editor_primary_selection() : -1;
+            layout_editor_selection_count(engine) == 1 ? layout_editor_primary_selection(engine) : -1;
         if (!layout_mut->objects.empty()) {
             if (selected_obj >= static_cast<int>(layout_mut->objects.size()))
                 selected_obj = -1;
@@ -260,10 +260,10 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
             if (changed)
                 state.layout_dirty = true;
             if (commit_needed)
-                layout_editor_history_commit(*layout_mut);
-        } else if (layout_editor_selection_count() > 1) {
+                layout_editor_history_commit(engine, *layout_mut);
+        } else if (layout_editor_selection_count(engine) > 1) {
             ImGui::SeparatorText("Selected objects");
-            ImGui::Text("%d objects selected.", layout_editor_selection_count());
+            ImGui::Text("%d objects selected.", layout_editor_selection_count(engine));
             if (ImGui::BeginTable("multi_objects",
                                   5,
                                   ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
@@ -273,7 +273,7 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
                 ImGui::TableSetupColumn("Size");
                 ImGui::TableSetupColumn("");
                 ImGui::TableHeadersRow();
-                for (int index : layout_editor_selection_indices()) {
+                for (int index : layout_editor_selection_indices(engine)) {
                     if (index < 0 || index >= static_cast<int>(layout_mut->objects.size()))
                         continue;
                     const auto& obj = layout_mut->objects[static_cast<std::size_t>(index)];
@@ -293,7 +293,7 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
                     ImGui::TableSetColumnIndex(4);
                     std::string btn_label = "Solo##" + std::to_string(index);
                     if (ImGui::SmallButton(btn_label.c_str()))
-                        layout_editor_select_single(index);
+                        layout_editor_select_single(engine, index);
                 }
                 ImGui::EndTable();
             }

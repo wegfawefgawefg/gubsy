@@ -1,23 +1,15 @@
 #include "engine/layout_editor/layout_editor_history.hpp"
 
+#include "engine/engine_state.hpp"
+#include "engine/layout_editor/layout_editor_internal.hpp"
 #include "engine/ui_layouts.hpp"
-
-#include <vector>
 
 namespace {
 
+using layout_editor_internal::LayoutEditorState;
+using layout_editor_internal::LayoutSnapshot;
+
 constexpr std::size_t kMaxHistoryEntries = 64;
-
-struct LayoutSnapshot {
-    int layout_id{0};
-    int width{0};
-    int height{0};
-    std::vector<UIObject> objects;
-};
-
-std::vector<LayoutSnapshot> g_history;
-int g_history_index = -1;
-bool g_restoring = false;
 
 LayoutSnapshot capture_snapshot(const UILayout& layout) {
     LayoutSnapshot snap;
@@ -28,10 +20,10 @@ LayoutSnapshot capture_snapshot(const UILayout& layout) {
     return snap;
 }
 
-bool matches_tracked_layout(const UILayout& layout) {
-    if (g_history.empty())
+bool matches_tracked_layout(const LayoutEditorState& state, const UILayout& layout) {
+    if (state.history.empty())
         return false;
-    const LayoutSnapshot& snap = g_history.front();
+    const LayoutSnapshot& snap = state.history.front();
     return snap.layout_id == layout.id &&
            snap.width == layout.resolution_width &&
            snap.height == layout.resolution_height;
@@ -43,56 +35,61 @@ void apply_snapshot(UILayout& layout, const LayoutSnapshot& snapshot) {
 
 } // namespace
 
-void layout_editor_history_reset(const UILayout& layout) {
-    g_history.clear();
-    g_history.push_back(capture_snapshot(layout));
-    g_history_index = 0;
+void layout_editor_history_reset(EngineState& engine, const UILayout& layout) {
+    LayoutEditorState& state = layout_editor_internal::editor_state(engine);
+    state.history.clear();
+    state.history.push_back(capture_snapshot(layout));
+    state.history_index = 0;
 }
 
-void layout_editor_history_commit(const UILayout& layout) {
-    if (g_restoring)
+void layout_editor_history_commit(EngineState& engine, const UILayout& layout) {
+    LayoutEditorState& state = layout_editor_internal::editor_state(engine);
+    if (state.history_restoring)
         return;
-    if (g_history.empty() || !matches_tracked_layout(layout)) {
-        layout_editor_history_reset(layout);
+    if (state.history.empty() || !matches_tracked_layout(state, layout)) {
+        layout_editor_history_reset(engine, layout);
         return;
     }
-    // Truncate any redo branch.
-    if (static_cast<std::size_t>(g_history_index + 1) < g_history.size())
-        g_history.erase(g_history.begin() + g_history_index + 1, g_history.end());
-    g_history.push_back(capture_snapshot(layout));
-    ++g_history_index;
-    if (g_history.size() > kMaxHistoryEntries) {
-        g_history.erase(g_history.begin());
-        --g_history_index;
+    if (static_cast<std::size_t>(state.history_index + 1) < state.history.size()) {
+        state.history.erase(state.history.begin() + state.history_index + 1, state.history.end());
+    }
+    state.history.push_back(capture_snapshot(layout));
+    ++state.history_index;
+    if (state.history.size() > kMaxHistoryEntries) {
+        state.history.erase(state.history.begin());
+        --state.history_index;
     }
 }
 
-bool layout_editor_history_undo(UILayout& layout) {
-    if (g_history.empty() || !matches_tracked_layout(layout))
+bool layout_editor_history_undo(EngineState& engine, UILayout& layout) {
+    LayoutEditorState& state = layout_editor_internal::editor_state(engine);
+    if (state.history.empty() || !matches_tracked_layout(state, layout))
         return false;
-    if (g_history_index <= 0)
+    if (state.history_index <= 0)
         return false;
-    --g_history_index;
-    g_restoring = true;
-    apply_snapshot(layout, g_history[static_cast<std::size_t>(g_history_index)]);
-    g_restoring = false;
+    --state.history_index;
+    state.history_restoring = true;
+    apply_snapshot(layout, state.history[static_cast<std::size_t>(state.history_index)]);
+    state.history_restoring = false;
     return true;
 }
 
-bool layout_editor_history_redo(UILayout& layout) {
-    if (g_history.empty() || !matches_tracked_layout(layout))
+bool layout_editor_history_redo(EngineState& engine, UILayout& layout) {
+    LayoutEditorState& state = layout_editor_internal::editor_state(engine);
+    if (state.history.empty() || !matches_tracked_layout(state, layout))
         return false;
-    if (static_cast<std::size_t>(g_history_index + 1) >= g_history.size())
+    if (static_cast<std::size_t>(state.history_index + 1) >= state.history.size())
         return false;
-    ++g_history_index;
-    g_restoring = true;
-    apply_snapshot(layout, g_history[static_cast<std::size_t>(g_history_index)]);
-    g_restoring = false;
+    ++state.history_index;
+    state.history_restoring = true;
+    apply_snapshot(layout, state.history[static_cast<std::size_t>(state.history_index)]);
+    state.history_restoring = false;
     return true;
 }
 
-void layout_editor_history_shutdown() {
-    g_history.clear();
-    g_history_index = -1;
-    g_restoring = false;
+void layout_editor_history_shutdown(EngineState& engine) {
+    LayoutEditorState& state = layout_editor_internal::editor_state(engine);
+    state.history.clear();
+    state.history_index = -1;
+    state.history_restoring = false;
 }

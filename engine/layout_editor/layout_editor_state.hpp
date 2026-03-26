@@ -1,11 +1,51 @@
 #pragma once
 
+#include "engine/layout_editor/layout_editor_interaction.hpp"
 #include "engine/ui_layouts.hpp"
 
 #include <string>
 #include <vector>
 
 namespace layout_editor_internal {
+
+struct GroupMember {
+    int index{-1};
+    float start_x{0.0f};
+    float start_y{0.0f};
+    float start_w{0.0f};
+    float start_h{0.0f};
+    float rel_x{0.0f};
+    float rel_y{0.0f};
+    float rel_w{0.0f};
+    float rel_h{0.0f};
+};
+
+struct DragState {
+    bool active{false};
+    int object_index{-1};
+    HandleType handle{HandleType::Center};
+    bool group{false};
+    float offset_x{0.0f};
+    float offset_y{0.0f};
+    float start_x{0.0f};
+    float start_y{0.0f};
+    float start_w{0.0f};
+    float start_h{0.0f};
+    float group_start_x{0.0f};
+    float group_start_y{0.0f};
+    float group_start_w{0.0f};
+    float group_start_h{0.0f};
+    std::vector<GroupMember> members;
+    std::vector<float> snap_edges_x;
+    std::vector<float> snap_edges_y;
+};
+
+struct LayoutSnapshot {
+    int layout_id{0};
+    int width{0};
+    int height{0};
+    std::vector<UIObject> objects;
+};
 
 struct PendingLayoutRequest {
     bool valid{false};
@@ -37,6 +77,13 @@ struct LayoutEditorState {
     bool layout_dirty{false};
     PendingLayoutRequest last_request{};
     LayoutClipboard clipboard{};
+    LayoutEditorViewport viewport{};
+    DragState drag{};
+    std::vector<int> selection{};
+    int primary{-1};
+    std::vector<LayoutSnapshot> history{};
+    int history_index{-1};
+    bool history_restoring{false};
 };
 
 } // namespace layout_editor_internal
