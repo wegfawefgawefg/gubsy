@@ -11,6 +11,7 @@
 #include "engine/mods.hpp"
 #include "game/modes.hpp"
 #include "game/builtin_mods.hpp"
+#include "game/in_game_menu.hpp"
 #include "game/mod_api/register_game_mod_apis.hpp"
 
 #include <SDL2/SDL.h>
@@ -140,6 +141,7 @@ void finalize_and_enter_play(void* app_context) {
     if (!state || !engine)
         return;
     finalize_game_mod_apis(*state);
+    in_game_menu_reset(*engine);
     engine->mode = modes::PLAYING;
 }
 

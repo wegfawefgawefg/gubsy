@@ -8,6 +8,7 @@
 #include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "engine/menu/menu_system.hpp"
+#include "game/in_game_menu.hpp"
 #include "game/menu/lobby_online.hpp"
 #include "game/menu/menu_input.hpp"
 #include "game/menu/lobby_state.hpp"
@@ -36,8 +37,10 @@ void title_step(EngineState& engine, void*) {
     std::string close_reason;
     if (lobby_online_consume_session_close(lobby, close_reason))
         add_alert(engine, close_reason);
-    if (lobby_online_ready_to_enter_game(lobby))
+    if (lobby_online_ready_to_enter_game(lobby)) {
+        in_game_menu_reset(engine);
         engine.mode = modes::PLAYING;
+    }
 }
 
 void title_process_inputs(EngineState& engine, void*) {

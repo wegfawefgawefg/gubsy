@@ -15,6 +15,7 @@
 #include "game/lobby_config.hpp"
 #include "game/menu/lobby_online.hpp"
 #include "game/menu/lobby_state.hpp"
+#include "game/in_game_menu.hpp"
 #include "game/menu/menu_ids.hpp"
 #include "game/modes.hpp"
 #include "game/ui_layout_ids.hpp"
@@ -113,6 +114,7 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
     auto enabled = lobby_enabled_mod_ids();
     set_active_mods(ctx.engine, enabled);
     lobby.online.contract.session_phase = "in_game";
+    in_game_menu_reset(ctx.engine);
     ctx.engine.mode = modes::PLAYING;
 }
 

@@ -47,6 +47,7 @@
     (name "Binds 1")
     (button_binds
       (bind (device_button 0) (gubsy_action 0))
+      (bind (device_button 18) (gubsy_action 1))
     )
     (analog_1d_binds
     )
