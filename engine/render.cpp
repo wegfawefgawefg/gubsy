@@ -7,6 +7,7 @@
 #include "engine/imgui_debug/imgui_debug.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
 #include "engine/input_sources.hpp"
+#include "engine/project_paths.hpp"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -40,6 +41,80 @@ SDL_FRect compute_letterbox_rect(const glm::uvec2& render_dims,
         rect.y = (static_cast<float>(window_dims.y) - rect.h) * 0.5f;
     }
     return rect;
+}
+
+std::filesystem::path find_ui_font_path(const std::filesystem::path& fonts_dir) {
+    std::error_code ec;
+    if (!std::filesystem::exists(fonts_dir, ec) ||
+        !std::filesystem::is_directory(fonts_dir, ec)) {
+        return {};
+    }
+
+    std::filesystem::path fallback_path;
+    for (const auto& entry : std::filesystem::directory_iterator(fonts_dir, ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        if (!entry.is_regular_file())
+            continue;
+        std::filesystem::path path = entry.path();
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (ext != ".ttf" && ext != ".otf")
+            continue;
+        if (ext == ".ttf")
+            return path;
+        if (fallback_path.empty())
+            fallback_path = path;
+    }
+    return fallback_path;
+}
+
+TTF_Font* fallback_draw_font() {
+    static TTF_Font* font = []() -> TTF_Font* {
+        if (!TTF_WasInit() && TTF_Init() != 0) {
+            std::fprintf(stderr, "TTF_Init failed in draw_text: %s\n", TTF_GetError());
+            return nullptr;
+        }
+        std::filesystem::path font_path = find_ui_font_path(engine_assets_path("fonts"));
+        if (font_path.empty()) {
+            std::fprintf(stderr, "No UI font found in %s\n",
+                         engine_assets_path("fonts").string().c_str());
+            return nullptr;
+        }
+        TTF_Font* loaded = TTF_OpenFont(font_path.string().c_str(), 20);
+        if (!loaded) {
+            std::fprintf(stderr, "TTF_OpenFont failed in draw_text: %s\n", TTF_GetError());
+            return nullptr;
+        }
+        return loaded;
+    }();
+    return font;
+}
+
+void draw_text_with_font(TTF_Font* font,
+                         SDL_Renderer* renderer,
+                         const std::string& text,
+                         int x,
+                         int y,
+                         SDL_Color color) {
+    if (!font || !renderer || text.empty())
+        return;
+    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+    if (!surf)
+        return;
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+    SDL_FreeSurface(surf);
+    if (!tex)
+        return;
+    int w = 0;
+    int h = 0;
+    SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
+    SDL_Rect dst{x, y, w, h};
+    SDL_RenderCopy(renderer, tex, nullptr, &dst);
+    SDL_DestroyTexture(tex);
 }
 
 } // namespace
@@ -82,38 +157,8 @@ glm::vec3 brighten(const glm::vec3& base, float amount) {
 }
 
 void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SDL_Color color) {
-    (void)renderer;
-    (void)text;
-    (void)x;
-    (void)y;
-    (void)color;
+    draw_text_with_font(fallback_draw_font(), renderer, text, x, y, color);
 }
-
-namespace {
-
-void draw_text_with_font(Graphics& graphics,
-                         SDL_Renderer* renderer,
-                         const std::string& text,
-                         int x,
-                         int y,
-                         SDL_Color color) {
-    if (!graphics.ui_font || text.empty())
-        return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(graphics.ui_font, text.c_str(), color);
-    if (!surf)
-        return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_FreeSurface(surf);
-    if (!tex)
-        return;
-    int w = 0, h = 0;
-    SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
-    SDL_Rect dst{x, y, w, h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-}
-
-} // namespace
 
 void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width) {
     if (engine.alerts.empty())
@@ -123,7 +168,12 @@ void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width)
     if (!graphics)
         return;
     for (const auto& alert : engine.alerts) {
-        draw_text_with_font(*graphics, renderer, alert.text, 24, y, SDL_Color{255, 235, 160, 255});
+        draw_text_with_font(graphics->ui_font ? graphics->ui_font : fallback_draw_font(),
+                            renderer,
+                            alert.text,
+                            24,
+                            y,
+                            SDL_Color{255, 235, 160, 255});
         y += 22;
         if (y > 200)
             break;
@@ -131,7 +181,12 @@ void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width)
 
     // Mode label
     std::string mode = "Mode: " + engine.mode;
-    draw_text_with_font(*graphics, renderer, mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
+    draw_text_with_font(graphics->ui_font ? graphics->ui_font : fallback_draw_font(),
+                        renderer,
+                        mode,
+                        width - 220,
+                        20,
+                        SDL_Color{180, 180, 200, 255});
 }
 
 void render(EngineState& engine) {

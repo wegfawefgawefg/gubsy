@@ -41,14 +41,22 @@ bool init_font_for_graphics(Graphics& graphics,
     std::error_code ec;
     std::filesystem::path fdir = fonts_dir.empty() ? engine_assets_path("fonts") : fonts_dir;
     if (std::filesystem::exists(fdir, ec) && std::filesystem::is_directory(fdir, ec)) {
+        std::filesystem::path fallback_path;
         for (auto const& de : std::filesystem::directory_iterator(fdir, ec)) {
             if (ec) { ec.clear(); continue; }
             if (!de.is_regular_file()) continue;
             auto p = de.path();
             auto ext = p.extension().string();
             for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
-            if (ext == ".ttf") { font_path = p.string(); break; }
+            if (ext == ".ttf") {
+                font_path = p.string();
+                break;
+            }
+            if (ext == ".otf" && fallback_path.empty())
+                fallback_path = p;
         }
+        if (font_path.empty() && !fallback_path.empty())
+            font_path = fallback_path.string();
     }
     if (!font_path.empty()) {
         graphics.ui_font = TTF_OpenFont(font_path.c_str(), pt_size);
@@ -58,7 +66,7 @@ bool init_font_for_graphics(Graphics& graphics,
         }
         return true;
     } else {
-        std::fprintf(stderr, "No .ttf found in %s. Numeric countdown will be hidden.\n",
+        std::fprintf(stderr, "No .ttf/.otf found in %s. Numeric countdown will be hidden.\n",
                      fdir.string().c_str());
         return false;
     }
