@@ -1,0 +1,11 @@
+{
+  "id": "base",
+  "title": "Base Demo Content",
+  "version": "0.1.0",
+  "author": "Gubsy",
+  "description": "Core demo pad interactions used for showcasing Gubsy engine features.",
+  "dependencies": [],
+  "required": true,
+  "game_version": "0.1.0",
+  "apis": ["demo_content", "demo_items"]
+}
