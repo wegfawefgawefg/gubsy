@@ -1,75 +1,41 @@
 #include "engine/top_level_game_settings.hpp"
 
 #include "engine/engine_state.hpp"
-#include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
+#include "engine/sexp_helpers.hpp"
 #include "engine/utils.hpp"
 
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 
 namespace {
 
-TopLevelGameSettings parse_top_level_settings_tree(const std::vector<sexp::SValue>& roots) {
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : roots) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "top_level_game_settings")) {
-            root = &node;
-            break;
-        }
-    }
+TopLevelGameSettings parse_top_level_settings_tree(const gsexp::ParseResult& parsed) {
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "top_level_game_settings");
 
     TopLevelGameSettings settings{};
-    if (!root)
+    if (!root.valid())
         return settings;
 
-    // Parse key-value pairs
-    const sexp::SValue* values_node = sexp::find_child(*root, "values");
-    if (values_node && values_node->type == sexp::SValue::Type::List) {
-        for (size_t j = 1; j < values_node->list.size(); ++j) {
-            const sexp::SValue& kv = values_node->list[j];
-            if (kv.type != sexp::SValue::Type::List || kv.list.size() < 3)
+    gsexp::Node values_node = gsexp::FormView(root).find("values");
+    if (values_node.valid()) {
+        for (std::size_t j = 1; j < values_node.child_count(); ++j) {
+            gsexp::Node kv = values_node.child_at(j);
+            if (!kv.is_list() || kv.child_count() < 3)
+                continue;
+            if (!kv.head().is_atom("key"))
                 continue;
 
-            // Format: (key "key_name" value)
-            if (!sexp::is_symbol(kv.list[0], "key"))
+            gsexp::Node key_node = kv.child_at(1);
+            if (!key_node.is_string())
                 continue;
 
-            if (kv.list[1].type != sexp::SValue::Type::String)
+            auto value = gubsy_sexp::node_to_settings_value(kv.child_at(2));
+            if (!value)
                 continue;
 
-            std::string key = kv.list[1].text;
-            const sexp::SValue& value = kv.list[2];
-
-            // Determine type and store
-            if (value.type == sexp::SValue::Type::Int) {
-                settings.settings[key] = static_cast<int>(value.int_value);
-            } else if (value.type == sexp::SValue::Type::Float) {
-                settings.settings[key] = static_cast<float>(value.float_value);
-            } else if (value.type == sexp::SValue::Type::String) {
-                settings.settings[key] = value.text;
-            } else if (value.type == sexp::SValue::Type::List && value.list.size() >= 3 &&
-                       sexp::is_symbol(value.list[0], "vec2")) {
-                float x = 0.0f, y = 0.0f;
-                const sexp::SValue& x_val = value.list[1];
-                const sexp::SValue& y_val = value.list[2];
-
-                if (x_val.type == sexp::SValue::Type::Float)
-                    x = static_cast<float>(x_val.float_value);
-                else if (x_val.type == sexp::SValue::Type::Int)
-                    x = static_cast<float>(x_val.int_value);
-
-                if (y_val.type == sexp::SValue::Type::Float)
-                    y = static_cast<float>(y_val.float_value);
-                else if (y_val.type == sexp::SValue::Type::Int)
-                    y = static_cast<float>(y_val.int_value);
-
-                settings.settings[key] = SettingsVec2{x, y};
-            }
+            settings.settings[std::string(key_node.text())] = std::move(*value);
         }
     }
 
@@ -78,18 +44,15 @@ TopLevelGameSettings parse_top_level_settings_tree(const std::vector<sexp::SValu
 
 TopLevelGameSettings read_top_level_settings_from_disk() {
     std::filesystem::path path = data_path("settings_profiles/top_level_game_settings.lisp");
-    std::ifstream f(path);
-    if (!f.is_open())
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
         return {};
-    std::ostringstream oss;
-    oss << f.rdbuf();
-    auto parsed = sexp::parse_s_expressions(oss.str());
-    if (!parsed) {
-        std::fprintf(stderr, "[top_level_settings] Failed to parse %s\n",
-                     path.string().c_str());
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok) {
+        std::fprintf(stderr, "[top_level_settings] Failed to parse %s\n", path.string().c_str());
         return {};
     }
-    return parse_top_level_settings_tree(*parsed);
+    return parse_top_level_settings_tree(parsed);
 }
 
 bool write_top_level_settings_file(const TopLevelGameSettings& settings) {
@@ -107,20 +70,22 @@ bool write_top_level_settings_file(const TopLevelGameSettings& settings) {
     out << "  (values\n";
 
     for (const auto& [key, value] : settings.settings) {
-        out << "    (key " << sexp::quote_string(key) << " ";
+        out << "    (key " << gsexp::quote_string(key) << " ";
 
-        std::visit([&out](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, int>) {
-                out << arg;
-            } else if constexpr (std::is_same_v<T, float>) {
-                out << arg;
-            } else if constexpr (std::is_same_v<T, std::string>) {
-                out << sexp::quote_string(arg);
-            } else if constexpr (std::is_same_v<T, SettingsVec2>) {
-                out << "(vec2 " << arg.x << " " << arg.y << ")";
-            }
-        }, value);
+        std::visit(
+            [&out](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, int>) {
+                    out << arg;
+                } else if constexpr (std::is_same_v<T, float>) {
+                    out << arg;
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    out << gsexp::quote_string(arg);
+                } else if constexpr (std::is_same_v<T, SettingsVec2>) {
+                    out << "(vec2 " << arg.x << " " << arg.y << ")";
+                }
+            },
+            value);
 
         out << ")\n";
     }
@@ -149,15 +114,18 @@ void set_top_level_setting_int(TopLevelGameSettings& settings, const std::string
     settings.settings[key] = value;
 }
 
-void set_top_level_setting_float(TopLevelGameSettings& settings, const std::string& key, float value) {
+void set_top_level_setting_float(TopLevelGameSettings& settings, const std::string& key,
+                                 float value) {
     settings.settings[key] = value;
 }
 
-void set_top_level_setting_string(TopLevelGameSettings& settings, const std::string& key, const std::string& value) {
+void set_top_level_setting_string(TopLevelGameSettings& settings, const std::string& key,
+                                  const std::string& value) {
     settings.settings[key] = value;
 }
 
-int get_top_level_setting_int(const TopLevelGameSettings& settings, const std::string& key, int default_value) {
+int get_top_level_setting_int(const TopLevelGameSettings& settings, const std::string& key,
+                              int default_value) {
     auto it = settings.settings.find(key);
     if (it == settings.settings.end())
         return default_value;
@@ -166,7 +134,8 @@ int get_top_level_setting_int(const TopLevelGameSettings& settings, const std::s
     return default_value;
 }
 
-float get_top_level_setting_float(const TopLevelGameSettings& settings, const std::string& key, float default_value) {
+float get_top_level_setting_float(const TopLevelGameSettings& settings, const std::string& key,
+                                  float default_value) {
     auto it = settings.settings.find(key);
     if (it == settings.settings.end())
         return default_value;
@@ -175,7 +144,8 @@ float get_top_level_setting_float(const TopLevelGameSettings& settings, const st
     return default_value;
 }
 
-std::string get_top_level_setting_string(const TopLevelGameSettings& settings, const std::string& key, const std::string& default_value) {
+std::string get_top_level_setting_string(const TopLevelGameSettings& settings,
+                                         const std::string& key, const std::string& default_value) {
     auto it = settings.settings.find(key);
     if (it == settings.settings.end())
         return default_value;

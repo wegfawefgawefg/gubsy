@@ -1,9 +1,9 @@
 #include "engine/game_settings.hpp"
 
 #include "engine/engine_state.hpp"
-#include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
 #include "engine/settings_schema.hpp"
+#include "engine/sexp_helpers.hpp"
 #include "engine/utils.hpp"
 
 #include <algorithm>
@@ -11,34 +11,26 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
-#include <sstream>
 #include <unordered_set>
 
 namespace {
 
-std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValue>& roots) {
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : roots) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "game_settings_list")) {
-            root = &node;
-            break;
-        }
-    }
+std::vector<GameSettings> parse_game_settings_tree(const gsexp::ParseResult& parsed) {
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "game_settings_list");
     std::vector<GameSettings> settings_list;
-    if (!root)
+    if (!root.valid())
         return settings_list;
 
-    for (size_t i = 1; i < root->list.size(); ++i) {
-        const sexp::SValue& entry = root->list[i];
-        if (entry.type != sexp::SValue::Type::List || entry.list.empty())
+    for (std::size_t i = 1; i < root.child_count(); ++i) {
+        gsexp::Node entry = root.child_at(i);
+        if (!entry.is_list())
             continue;
-        if (!sexp::is_symbol(entry.list.front(), "settings"))
+        if (!entry.head().is_atom("settings"))
             continue;
 
-        auto id = sexp::extract_int(entry, "id");
-        auto name = sexp::extract_string(entry, "name");
+        gsexp::FormView entry_view(entry);
+        auto id = gubsy_sexp::field_to_int(entry_view, "id");
+        auto name = gubsy_sexp::field_to_string(entry_view, "name");
         if (!id || !name)
             continue;
 
@@ -46,50 +38,24 @@ std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValu
         settings.id = *id;
         settings.name = *name;
 
-        // Parse key-value pairs
-        const sexp::SValue* values_node = sexp::find_child(entry, "values");
-        if (values_node && values_node->type == sexp::SValue::Type::List) {
-            for (size_t j = 1; j < values_node->list.size(); ++j) {
-                const sexp::SValue& kv = values_node->list[j];
-                if (kv.type != sexp::SValue::Type::List || kv.list.size() < 3)
+        gsexp::Node values_node = entry_view.find("values");
+        if (values_node.valid()) {
+            for (std::size_t j = 1; j < values_node.child_count(); ++j) {
+                gsexp::Node kv = values_node.child_at(j);
+                if (!kv.is_list() || kv.child_count() < 3)
+                    continue;
+                if (!kv.head().is_atom("key"))
                     continue;
 
-                // Format: (key "key_name" value)
-                if (!sexp::is_symbol(kv.list[0], "key"))
+                gsexp::Node key_node = kv.child_at(1);
+                if (!key_node.is_string())
                     continue;
 
-                if (kv.list[1].type != sexp::SValue::Type::String)
+                auto value = gubsy_sexp::node_to_settings_value(kv.child_at(2));
+                if (!value)
                     continue;
 
-                std::string key = kv.list[1].text;
-                const sexp::SValue& value = kv.list[2];
-
-                // Determine type and store
-                if (value.type == sexp::SValue::Type::Int) {
-                    settings.settings[key] = static_cast<int>(value.int_value);
-                } else if (value.type == sexp::SValue::Type::Float) {
-                    settings.settings[key] = static_cast<float>(value.float_value);
-                } else if (value.type == sexp::SValue::Type::String) {
-                    settings.settings[key] = value.text;
-                } else if (value.type == sexp::SValue::Type::List && value.list.size() >= 3 &&
-                           sexp::is_symbol(value.list[0], "vec2")) {
-                    // Format: (vec2 x y)
-                    float x = 0.0f, y = 0.0f;
-                    const sexp::SValue& x_val = value.list[1];
-                    const sexp::SValue& y_val = value.list[2];
-
-                    if (x_val.type == sexp::SValue::Type::Float)
-                        x = static_cast<float>(x_val.float_value);
-                    else if (x_val.type == sexp::SValue::Type::Int)
-                        x = static_cast<float>(x_val.int_value);
-
-                    if (y_val.type == sexp::SValue::Type::Float)
-                        y = static_cast<float>(y_val.float_value);
-                    else if (y_val.type == sexp::SValue::Type::Int)
-                        y = static_cast<float>(y_val.int_value);
-
-                    settings.settings[key] = SettingsVec2{x, y};
-                }
+                settings.settings[std::string(key_node.text())] = std::move(*value);
             }
         }
 
@@ -100,17 +66,15 @@ std::vector<GameSettings> parse_game_settings_tree(const std::vector<sexp::SValu
 
 std::vector<GameSettings> read_game_settings_from_disk() {
     std::filesystem::path path = data_path("settings_profiles/game_settings.lisp");
-    std::ifstream f(path);
-    if (!f.is_open())
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
         return {};
-    std::ostringstream oss;
-    oss << f.rdbuf();
-    auto parsed = sexp::parse_s_expressions(oss.str());
-    if (!parsed) {
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok) {
         std::fprintf(stderr, "[game_settings] Failed to parse %s\n", path.string().c_str());
         return {};
     }
-    return parse_game_settings_tree(*parsed);
+    return parse_game_settings_tree(parsed);
 }
 
 bool write_game_settings_file(const std::vector<GameSettings>& settings_list) {
@@ -128,24 +92,26 @@ bool write_game_settings_file(const std::vector<GameSettings>& settings_list) {
     for (const auto& settings : settings_list) {
         out << "  (settings\n";
         out << "    (id " << settings.id << ")\n";
-        out << "    (name " << sexp::quote_string(settings.name) << ")\n";
+        out << "    (name " << gsexp::quote_string(settings.name) << ")\n";
         out << "    (values\n";
 
         for (const auto& [key, value] : settings.settings) {
-            out << "      (key " << sexp::quote_string(key) << " ";
+            out << "      (key " << gsexp::quote_string(key) << " ";
 
-            std::visit([&out](auto&& arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, int>) {
-                    out << arg;
-                } else if constexpr (std::is_same_v<T, float>) {
-                    out << arg;
-                } else if constexpr (std::is_same_v<T, std::string>) {
-                    out << sexp::quote_string(arg);
-                } else if constexpr (std::is_same_v<T, SettingsVec2>) {
-                    out << "(vec2 " << arg.x << " " << arg.y << ")";
-                }
-            }, value);
+            std::visit(
+                [&out](auto&& arg) {
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, int>) {
+                        out << arg;
+                    } else if constexpr (std::is_same_v<T, float>) {
+                        out << arg;
+                    } else if constexpr (std::is_same_v<T, std::string>) {
+                        out << gsexp::quote_string(arg);
+                    } else if constexpr (std::is_same_v<T, SettingsVec2>) {
+                        out << "(vec2 " << arg.x << " " << arg.y << ")";
+                    }
+                },
+                value);
 
             out << ")\n";
         }
@@ -166,7 +132,7 @@ std::vector<GameSettings> load_all_game_settings() {
 GameSettings load_game_settings(int settings_id) {
     auto settings_list = read_game_settings_from_disk();
     auto it = std::find_if(settings_list.begin(), settings_list.end(),
-                          [&](const GameSettings& s) { return s.id == settings_id; });
+                           [&](const GameSettings& s) { return s.id == settings_id; });
     if (it != settings_list.end())
         return *it;
     GameSettings empty{};
@@ -246,7 +212,8 @@ void set_game_setting_float(GameSettings& settings, const std::string& key, floa
     settings.settings[key] = value;
 }
 
-void set_game_setting_string(GameSettings& settings, const std::string& key, const std::string& value) {
+void set_game_setting_string(GameSettings& settings, const std::string& key,
+                             const std::string& value) {
     settings.settings[key] = value;
 }
 
@@ -263,7 +230,8 @@ int get_game_setting_int(const GameSettings& settings, const std::string& key, i
     return default_value;
 }
 
-float get_game_setting_float(const GameSettings& settings, const std::string& key, float default_value) {
+float get_game_setting_float(const GameSettings& settings, const std::string& key,
+                             float default_value) {
     auto it = settings.settings.find(key);
     if (it == settings.settings.end())
         return default_value;
@@ -272,7 +240,8 @@ float get_game_setting_float(const GameSettings& settings, const std::string& ke
     return default_value;
 }
 
-std::string get_game_setting_string(const GameSettings& settings, const std::string& key, const std::string& default_value) {
+std::string get_game_setting_string(const GameSettings& settings, const std::string& key,
+                                    const std::string& default_value) {
     auto it = settings.settings.find(key);
     if (it == settings.settings.end())
         return default_value;
@@ -281,7 +250,8 @@ std::string get_game_setting_string(const GameSettings& settings, const std::str
     return default_value;
 }
 
-SettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::string& key, float default_x, float default_y) {
+SettingsVec2 get_game_setting_vec2(const GameSettings& settings, const std::string& key,
+                                   float default_x, float default_y) {
     auto it = settings.settings.find(key);
     if (it == settings.settings.end())
         return SettingsVec2{default_x, default_y};

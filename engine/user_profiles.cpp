@@ -1,49 +1,45 @@
 #include "engine/user_profiles.hpp"
 
 #include "engine/engine_state.hpp"
-#include "engine/utils.hpp"
-#include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
+#include "engine/sexp_helpers.hpp"
+#include "engine/utils.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <random>
-#include <sstream>
 #include <unordered_set>
 
 namespace {
 
-std::vector<UserProfile> parse_profiles_tree(const std::vector<sexp::SValue>& roots) {
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : roots) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "user_profiles")) {
-            root = &node;
-            break;
-        }
-    }
+std::vector<UserProfile> parse_profiles_tree(const gsexp::ParseResult& parsed) {
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "user_profiles");
     std::vector<UserProfile> profiles;
-    if (!root)
+    if (!root.valid())
         return profiles;
-    for (size_t i = 1; i < root->list.size(); ++i) {
-        const sexp::SValue& entry = root->list[i];
-        if (entry.type != sexp::SValue::Type::List || entry.list.empty())
+    for (std::size_t i = 1; i < root.child_count(); ++i) {
+        gsexp::Node entry = root.child_at(i);
+        if (!entry.is_list())
             continue;
-        if (!sexp::is_symbol(entry.list.front(), "profile"))
+        if (!entry.head().is_atom("profile"))
             continue;
-        auto id = sexp::extract_int(entry, "id");
-        auto name = sexp::extract_string(entry, "name");
+
+        gsexp::FormView entry_view(entry);
+        auto id = gubsy_sexp::field_to_int(entry_view, "id");
+        auto name = gubsy_sexp::field_to_string(entry_view, "name");
         if (!id || !name)
             continue;
         UserProfile profile{};
         profile.id = *id;
         profile.name = *name;
-        profile.last_binds_profile_id = sexp::extract_int(entry, "last_binds_profile").value_or(-1);
-        profile.last_input_settings_profile_id = sexp::extract_int(entry, "last_input_settings_profile_id").value_or(-1);
-        profile.last_game_settings_profile_id = sexp::extract_int(entry, "last_game_settings").value_or(-1);
+        profile.last_binds_profile_id =
+            gubsy_sexp::field_to_int(entry_view, "last_binds_profile").value_or(-1);
+        profile.last_input_settings_profile_id =
+            gubsy_sexp::field_to_int(entry_view, "last_input_settings_profile_id").value_or(-1);
+        profile.last_game_settings_profile_id =
+            gubsy_sexp::field_to_int(entry_view, "last_game_settings").value_or(-1);
         profiles.push_back(std::move(profile));
     }
     return profiles;
@@ -51,17 +47,15 @@ std::vector<UserProfile> parse_profiles_tree(const std::vector<sexp::SValue>& ro
 
 std::vector<UserProfile> read_profiles_from_disk() {
     std::filesystem::path path = data_path("player_profiles/user_profiles.lisp");
-    std::ifstream f(path);
-    if (!f.is_open())
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
         return {};
-    std::ostringstream oss;
-    oss << f.rdbuf();
-    auto parsed = sexp::parse_s_expressions(oss.str());
-    if (!parsed) {
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok) {
         std::fprintf(stderr, "[profiles] Failed to parse %s\n", path.string().c_str());
         return {};
     }
-    return parse_profiles_tree(*parsed);
+    return parse_profiles_tree(parsed);
 }
 
 bool write_profiles_file(const std::vector<UserProfile>& profiles) {
@@ -78,9 +72,10 @@ bool write_profiles_file(const std::vector<UserProfile>& profiles) {
     for (const auto& profile : profiles) {
         out << "  (profile\n";
         out << "    (id " << profile.id << ")\n";
-        out << "    (name " << sexp::quote_string(profile.name) << ")\n";
+        out << "    (name " << gsexp::quote_string(profile.name) << ")\n";
         out << "    (last_binds_profile " << profile.last_binds_profile_id << ")\n";
-        out << "    (last_input_settings_profile_id " << profile.last_input_settings_profile_id << ")\n";
+        out << "    (last_input_settings_profile_id " << profile.last_input_settings_profile_id
+            << ")\n";
         out << "    (last_game_settings " << profile.last_game_settings_profile_id << ")\n";
         out << "  )\n";
     }

@@ -1,20 +1,17 @@
 #include "engine/audio_settings.hpp"
 
 #include "engine/engine_state.hpp"
-#include "engine/parser.hpp"
+#include "engine/sexp_helpers.hpp"
 #include "engine/utils.hpp"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 
 namespace {
 
-void apply_volume_if_present(const sexp::SValue& root,
-                             const std::string& key,
-                             float& target) {
-    if (auto value = sexp::extract_float(root, key)) {
+void apply_volume_if_present(gsexp::FormView root, std::string_view key, float& target) {
+    if (auto value = gubsy_sexp::field_to_float(root, key)) {
         target = std::clamp(*value, 0.0f, 1.0f);
     }
 }
@@ -22,31 +19,22 @@ void apply_volume_if_present(const sexp::SValue& root,
 } // namespace
 
 bool load_audio_settings(EngineState& engine, const std::string& path) {
-    std::ifstream in(path);
-    if (!in.is_open())
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
         return false;
 
-    std::stringstream buffer;
-    buffer << in.rdbuf();
-    auto parsed = sexp::parse_s_expressions(buffer.str());
-    if (!parsed)
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok)
         return false;
 
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : *parsed) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "audio_settings")) {
-            root = &node;
-            break;
-        }
-    }
-    if (!root)
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "audio_settings");
+    if (!root.valid())
         return false;
 
-    apply_volume_if_present(*root, "master", engine.audio_settings.vol_master);
-    apply_volume_if_present(*root, "music", engine.audio_settings.vol_music);
-    apply_volume_if_present(*root, "sfx", engine.audio_settings.vol_sfx);
+    gsexp::FormView root_view(root);
+    apply_volume_if_present(root_view, "master", engine.audio_settings.vol_master);
+    apply_volume_if_present(root_view, "music", engine.audio_settings.vol_music);
+    apply_volume_if_present(root_view, "sfx", engine.audio_settings.vol_sfx);
     return true;
 }
 
@@ -62,9 +50,7 @@ bool save_audio_settings(const EngineState& engine, const std::string& path) {
     if (!out.is_open())
         return false;
 
-    auto clamp01 = [](float value) {
-        return std::clamp(value, 0.0f, 1.0f);
-    };
+    auto clamp01 = [](float value) { return std::clamp(value, 0.0f, 1.0f); };
 
     out << "(audio_settings\n";
     out << "  (master " << clamp01(engine.audio_settings.vol_master) << ")\n";

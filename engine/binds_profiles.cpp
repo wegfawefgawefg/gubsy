@@ -1,8 +1,8 @@
 #include "engine/binds_profiles.hpp"
 
 #include "engine/engine_state.hpp"
-#include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
+#include "engine/sexp_helpers.hpp"
 #include "engine/utils.hpp"
 
 #include <algorithm>
@@ -10,36 +10,28 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
-#include <sstream>
 #include <unordered_set>
 
 namespace {
 
 static BindsSchema g_schema;
 
-std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SValue>& roots) {
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : roots) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "binds_profiles")) {
-            root = &node;
-            break;
-        }
-    }
+std::vector<BindsProfile> parse_binds_profiles_tree(const gsexp::ParseResult& parsed) {
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "binds_profiles");
     std::vector<BindsProfile> profiles;
-    if (!root)
+    if (!root.valid())
         return profiles;
 
-    for (size_t i = 1; i < root->list.size(); ++i) {
-        const sexp::SValue& entry = root->list[i];
-        if (entry.type != sexp::SValue::Type::List || entry.list.empty())
+    for (std::size_t i = 1; i < root.child_count(); ++i) {
+        gsexp::Node entry = root.child_at(i);
+        if (!entry.is_list())
             continue;
-        if (!sexp::is_symbol(entry.list.front(), "profile"))
+        if (!entry.head().is_atom("profile"))
             continue;
 
-        auto id = sexp::extract_int(entry, "id");
-        auto name = sexp::extract_string(entry, "name");
+        gsexp::FormView entry_view(entry);
+        auto id = gubsy_sexp::field_to_int(entry_view, "id");
+        auto name = gubsy_sexp::field_to_string(entry_view, "name");
         if (!id || !name)
             continue;
 
@@ -47,53 +39,47 @@ std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SVal
         profile.id = *id;
         profile.name = *name;
 
-        // Parse button_binds
-        const sexp::SValue* button_binds_node = sexp::find_child(entry, "button_binds");
-        if (button_binds_node && button_binds_node->type == sexp::SValue::Type::List) {
-            for (size_t j = 1; j < button_binds_node->list.size(); ++j) {
-                const sexp::SValue& bind = button_binds_node->list[j];
-                if (bind.type == sexp::SValue::Type::List && bind.list.size() >= 3) {
-                    if (sexp::is_symbol(bind.list[0], "bind")) {
-                        auto device_btn = sexp::extract_int(bind, "device_button");
-                        auto gubsy_act = sexp::extract_int(bind, "gubsy_action");
-                        if (device_btn && gubsy_act) {
-                            profile.button_binds.push_back({*device_btn, *gubsy_act});
-                        }
-                    }
+        gsexp::Node button_binds_node = entry_view.find("button_binds");
+        if (button_binds_node.valid()) {
+            for (std::size_t j = 1; j < button_binds_node.child_count(); ++j) {
+                gsexp::Node bind = button_binds_node.child_at(j);
+                if (!bind.is_list() || !bind.head().is_atom("bind"))
+                    continue;
+                gsexp::FormView bind_view(bind);
+                auto device_btn = gubsy_sexp::field_to_int(bind_view, "device_button");
+                auto gubsy_act = gubsy_sexp::field_to_int(bind_view, "gubsy_action");
+                if (device_btn && gubsy_act) {
+                    profile.button_binds.push_back({*device_btn, *gubsy_act});
                 }
             }
         }
 
-        // Parse analog_1d_binds
-        const sexp::SValue* analog_1d_node = sexp::find_child(entry, "analog_1d_binds");
-        if (analog_1d_node && analog_1d_node->type == sexp::SValue::Type::List) {
-            for (size_t j = 1; j < analog_1d_node->list.size(); ++j) {
-                const sexp::SValue& bind = analog_1d_node->list[j];
-                if (bind.type == sexp::SValue::Type::List && bind.list.size() >= 3) {
-                    if (sexp::is_symbol(bind.list[0], "bind")) {
-                        auto device_axis = sexp::extract_int(bind, "device_axis");
-                        auto gubsy_analog = sexp::extract_int(bind, "gubsy_analog");
-                        if (device_axis && gubsy_analog) {
-                            profile.analog_1d_binds.push_back({*device_axis, *gubsy_analog});
-                        }
-                    }
+        gsexp::Node analog_1d_node = entry_view.find("analog_1d_binds");
+        if (analog_1d_node.valid()) {
+            for (std::size_t j = 1; j < analog_1d_node.child_count(); ++j) {
+                gsexp::Node bind = analog_1d_node.child_at(j);
+                if (!bind.is_list() || !bind.head().is_atom("bind"))
+                    continue;
+                gsexp::FormView bind_view(bind);
+                auto device_axis = gubsy_sexp::field_to_int(bind_view, "device_axis");
+                auto gubsy_analog = gubsy_sexp::field_to_int(bind_view, "gubsy_analog");
+                if (device_axis && gubsy_analog) {
+                    profile.analog_1d_binds.push_back({*device_axis, *gubsy_analog});
                 }
             }
         }
 
-        // Parse analog_2d_binds
-        const sexp::SValue* analog_2d_node = sexp::find_child(entry, "analog_2d_binds");
-        if (analog_2d_node && analog_2d_node->type == sexp::SValue::Type::List) {
-            for (size_t j = 1; j < analog_2d_node->list.size(); ++j) {
-                const sexp::SValue& bind = analog_2d_node->list[j];
-                if (bind.type == sexp::SValue::Type::List && bind.list.size() >= 3) {
-                    if (sexp::is_symbol(bind.list[0], "bind")) {
-                        auto device_stick = sexp::extract_int(bind, "device_stick");
-                        auto gubsy_stick = sexp::extract_int(bind, "gubsy_stick");
-                        if (device_stick && gubsy_stick) {
-                            profile.analog_2d_binds.push_back({*device_stick, *gubsy_stick});
-                        }
-                    }
+        gsexp::Node analog_2d_node = entry_view.find("analog_2d_binds");
+        if (analog_2d_node.valid()) {
+            for (std::size_t j = 1; j < analog_2d_node.child_count(); ++j) {
+                gsexp::Node bind = analog_2d_node.child_at(j);
+                if (!bind.is_list() || !bind.head().is_atom("bind"))
+                    continue;
+                gsexp::FormView bind_view(bind);
+                auto device_stick = gubsy_sexp::field_to_int(bind_view, "device_stick");
+                auto gubsy_stick = gubsy_sexp::field_to_int(bind_view, "gubsy_stick");
+                if (device_stick && gubsy_stick) {
+                    profile.analog_2d_binds.push_back({*device_stick, *gubsy_stick});
                 }
             }
         }
@@ -105,17 +91,15 @@ std::vector<BindsProfile> parse_binds_profiles_tree(const std::vector<sexp::SVal
 
 std::vector<BindsProfile> read_binds_profiles_from_disk() {
     std::filesystem::path path = data_path("binds_profiles/default.lisp");
-    std::ifstream f(path);
-    if (!f.is_open())
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
         return {};
-    std::ostringstream oss;
-    oss << f.rdbuf();
-    auto parsed = sexp::parse_s_expressions(oss.str());
-    if (!parsed) {
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok) {
         std::fprintf(stderr, "[binds] Failed to parse %s\n", path.string().c_str());
         return {};
     }
-    return parse_binds_profiles_tree(*parsed);
+    return parse_binds_profiles_tree(parsed);
 }
 
 bool write_binds_profiles_file(const std::vector<BindsProfile>& profiles) {
@@ -133,26 +117,29 @@ bool write_binds_profiles_file(const std::vector<BindsProfile>& profiles) {
     for (const auto& profile : profiles) {
         out << "  (profile\n";
         out << "    (id " << profile.id << ")\n";
-        out << "    (name " << sexp::quote_string(profile.name) << ")\n";
+        out << "    (name " << gsexp::quote_string(profile.name) << ")\n";
 
         // Write button_binds
         out << "    (button_binds\n";
         for (const auto& [device_btn, gubsy_act] : profile.button_binds) {
-            out << "      (bind (device_button " << device_btn << ") (gubsy_action " << gubsy_act << "))\n";
+            out << "      (bind (device_button " << device_btn << ") (gubsy_action " << gubsy_act
+                << "))\n";
         }
         out << "    )\n";
 
         // Write analog_1d_binds
         out << "    (analog_1d_binds\n";
         for (const auto& [device_axis, gubsy_analog] : profile.analog_1d_binds) {
-            out << "      (bind (device_axis " << device_axis << ") (gubsy_analog " << gubsy_analog << "))\n";
+            out << "      (bind (device_axis " << device_axis << ") (gubsy_analog " << gubsy_analog
+                << "))\n";
         }
         out << "    )\n";
 
         // Write analog_2d_binds
         out << "    (analog_2d_binds\n";
         for (const auto& [device_stick, gubsy_stick] : profile.analog_2d_binds) {
-            out << "      (bind (device_stick " << device_stick << ") (gubsy_stick " << gubsy_stick << "))\n";
+            out << "      (bind (device_stick " << device_stick << ") (gubsy_stick " << gubsy_stick
+                << "))\n";
         }
         out << "    )\n";
 
@@ -171,7 +158,7 @@ std::vector<BindsProfile> load_all_binds_profiles() {
 BindsProfile load_binds_profile(int profile_id) {
     auto profiles = read_binds_profiles_from_disk();
     auto it = std::find_if(profiles.begin(), profiles.end(),
-                          [&](const BindsProfile& profile) { return profile.id == profile_id; });
+                           [&](const BindsProfile& profile) { return profile.id == profile_id; });
     if (it != profiles.end())
         return *it;
     BindsProfile empty{};
@@ -289,15 +276,18 @@ void bind_2d_analog(BindsProfile& profile, Gubsy2DAnalog device_stick, int gubsy
     bind_2d_analog(profile, static_cast<int>(device_stick), gubsy_2d_analog);
 }
 
-void BindsSchema::add_action(int action_id, const std::string& display_name, const std::string& category) {
+void BindsSchema::add_action(int action_id, const std::string& display_name,
+                             const std::string& category) {
     actions.push_back({action_id, display_name, category});
 }
 
-void BindsSchema::add_1d_analog(int analog_id, const std::string& display_name, const std::string& category) {
+void BindsSchema::add_1d_analog(int analog_id, const std::string& display_name,
+                                const std::string& category) {
     analogs_1d.push_back({analog_id, display_name, category});
 }
 
-void BindsSchema::add_2d_analog(int analog_id, const std::string& display_name, const std::string& category) {
+void BindsSchema::add_2d_analog(int analog_id, const std::string& display_name,
+                                const std::string& category) {
     analogs_2d.push_back({analog_id, display_name, category});
 }
 

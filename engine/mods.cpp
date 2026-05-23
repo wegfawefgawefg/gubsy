@@ -1,9 +1,11 @@
 #include "mods.hpp"
+
 #include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
 #include "engine/mod_host.hpp"
 #include "engine/project_paths.hpp"
 #include "engine/runtime_settings.hpp"
+#include "engine/sexp_helpers.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -11,13 +13,11 @@
 #include <fstream>
 #include <optional>
 #include <queue>
-#include <sstream>
 #include <system_error>
 #include <unordered_set>
 
 namespace fs = std::filesystem;
 
-#include "engine/parser.hpp"
 namespace {
 
 struct ModsConfig {
@@ -28,41 +28,35 @@ struct ModsConfig {
 
 std::optional<ModsConfig> read_mods_config() {
     fs::path path = data_path("mods_enabled.lisp");
-    std::ifstream f(path);
-    if (!f.good())
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
         return std::nullopt;
-    std::stringstream buffer;
-    buffer << f.rdbuf();
-    auto parsed = sexp::parse_s_expressions(buffer.str());
-    if (!parsed)
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok)
         return std::nullopt;
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : *parsed) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "mods_config")) {
-            root = &node;
-            break;
-        }
-    }
-    if (!root)
+
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "mods_config");
+    if (!root.valid())
         return ModsConfig{};
 
     ModsConfig cfg;
-    if (const sexp::SValue* enabled = sexp::find_child(*root, "enabled")) {
-        if (enabled->list.size() > 1)
+    gsexp::FormView root_view(root);
+    gsexp::Node enabled = root_view.find("enabled");
+    if (enabled.valid()) {
+        if (enabled.child_count() > 1)
             cfg.has_enabled_list = true;
-        for (size_t i = 1; i < enabled->list.size(); ++i) {
-            const auto& val = enabled->list[i];
-            if (val.type == sexp::SValue::Type::String || val.type == sexp::SValue::Type::Symbol)
-                cfg.enabled.insert(val.text);
+        for (std::size_t i = 1; i < enabled.child_count(); ++i) {
+            if (auto value = gubsy_sexp::node_to_string(enabled.child_at(i))) {
+                cfg.enabled.insert(*value);
+            }
         }
     }
-    if (const sexp::SValue* disabled = sexp::find_child(*root, "disabled")) {
-        for (size_t i = 1; i < disabled->list.size(); ++i) {
-            const auto& val = disabled->list[i];
-            if (val.type == sexp::SValue::Type::String || val.type == sexp::SValue::Type::Symbol)
-                cfg.disabled.insert(val.text);
+    gsexp::Node disabled = root_view.find("disabled");
+    if (disabled.valid()) {
+        for (std::size_t i = 1; i < disabled.child_count(); ++i) {
+            if (auto value = gubsy_sexp::node_to_string(disabled.child_at(i))) {
+                cfg.disabled.insert(*value);
+            }
         }
     }
     return cfg;
@@ -98,8 +92,8 @@ std::vector<ModInfo> resolve_mod_order(std::vector<ModInfo> mods) {
             m.version = "0.0.0";
         auto [it, inserted] = id_to_index.emplace(m.name, i);
         if (!inserted) {
-            std::printf("[mods] Duplicate mod id '%s' (skipping %s)\n",
-                        m.name.c_str(), m.path.c_str());
+            std::printf("[mods] Duplicate mod id '%s' (skipping %s)\n", m.name.c_str(),
+                        m.path.c_str());
             valid[i] = false;
             mods[i].enabled = false;
         }
@@ -162,8 +156,7 @@ std::vector<ModInfo> resolve_mod_order(std::vector<ModInfo> mods) {
 
     for (size_t i = 0; i < mods.size(); ++i) {
         if (active[i] && !visited[i]) {
-            std::printf("[mods] Dependency cycle involving '%s'; skipping\n",
-                        mods[i].name.c_str());
+            std::printf("[mods] Dependency cycle involving '%s'; skipping\n", mods[i].name.c_str());
         }
     }
 
@@ -250,7 +243,6 @@ void discover_mods(EngineState& engine) {
     }
 }
 
-
 /// Re-scan mods and rebuild the sprite name↔id registry.
 ///
 /// Walks each `<mod.path>/graphics` recursively, collects file stems, and
@@ -331,7 +323,7 @@ bool scan_mods_for_sprite_defs(EngineState& engine) {
     if (!manager)
         return false;
     auto mod_infos = manager->mods;
-    
+
     // First pass: collect manifests per name (prefer manifests over bare images)
     std::unordered_map<std::string, SpriteDef> defs_by_name;
     std::unordered_map<std::string, std::string>
@@ -418,12 +410,11 @@ bool scan_mods_for_sprite_defs(EngineState& engine) {
     defs.reserve(sorted.size());
     for (auto& kv : sorted)
         defs.push_back(std::move(kv.second));
- 
+
     rebuild_sprite_mapping(engine, defs);
     std::printf("[mods] Sprite store built with %zu entries\n", defs.size());
     return true;
 }
-
 
 bool poll_fs_mods_hot_reload(EngineState& engine) {
     ModManager* manager = current_mod_manager(engine);
