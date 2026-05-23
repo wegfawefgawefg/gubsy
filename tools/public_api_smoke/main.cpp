@@ -1,4 +1,5 @@
 #include <gubsy/app.hpp>
+#include <gubsy/engine_state.hpp>
 #include <gubsy/input/binds.hpp>
 #include <gubsy/layout/layout.hpp>
 #include <gubsy/lobby/session.hpp>
@@ -8,6 +9,7 @@
 #include <gubsy/settings/settings.hpp>
 
 int main() {
+    EngineState engine{};
     GubsyAppHooks hooks{};
     if (hooks.config.enable_mods ||
         hooks.config.enable_mod_browser ||
@@ -31,5 +33,16 @@ int main() {
         normalized.enable_lua_mod_host) {
         return 3;
     }
+    if (!init_engine_state(engine, hooks.config)) {
+        return 4;
+    }
+    if (engine.app_config.enable_mods ||
+        engine.app_config.enable_mod_browser ||
+        engine.app_config.enable_mod_hot_reload ||
+        engine.app_config.enable_lua_mod_host) {
+        cleanup_engine_state(engine);
+        return 5;
+    }
+    cleanup_engine_state(engine);
     return 0;
 }

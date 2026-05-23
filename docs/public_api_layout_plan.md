@@ -123,12 +123,13 @@ Start with the APIs needed by a Splonks-style consumer:
 
 1. `include/gubsy/app.hpp`
 2. `include/gubsy/run.hpp`
-3. `include/gubsy/input/binds.hpp`
-4. `include/gubsy/profiles/profiles.hpp`
-5. `include/gubsy/settings/settings.hpp`
-6. `include/gubsy/menu/menu.hpp`
-7. `include/gubsy/layout/layout.hpp`
-8. `include/gubsy/lobby/session.hpp`
+3. `include/gubsy/engine_state.hpp`
+4. `include/gubsy/input/binds.hpp`
+5. `include/gubsy/profiles/profiles.hpp`
+6. `include/gubsy/settings/settings.hpp`
+7. `include/gubsy/menu/menu.hpp`
+8. `include/gubsy/layout/layout.hpp`
+9. `include/gubsy/lobby/session.hpp`
 
 Do not expose everything at once. Expose only APIs that are ready to be used by
 a game importing Gubsy.
