@@ -117,13 +117,13 @@ already clean.
 
 The boot path used to assume mods were always part of the app:
 
-1. `engine/run.cpp` creates runtime mod directories.
-2. `engine/run.cpp` initializes `ModManager`.
-3. `engine/run.cpp` discovers mods, scans sprite defs, loads mod sounds, and
+1. `src/run.cpp` creates runtime mod directories.
+2. `src/run.cpp` initializes `ModManager`.
+3. `src/run.cpp` discovers mods, scans sprite defs, loads mod sounds, and
    activates Lua-hosted mods.
-4. `engine/run.cpp` polls mod hot reload every frame.
-5. `engine/engine_state.hpp` stores `ModManager*` directly.
-6. `engine/engine_state.cpp` registers the mods menu screen during base engine
+4. `src/run.cpp` polls mod hot reload every frame.
+5. `src/engine_state.hpp` stores `ModManager*` directly.
+6. `src/engine_state.cpp` registers the mods menu screen during base engine
    init.
 
 These steps are now optional subsystem work controlled by `GubsyAppConfig`.
@@ -223,7 +223,7 @@ This stage is done when:
 
 ## Next Step
 
-Continue moving implementation files from `engine/` into boring private module
+Continue moving implementation files from `src/` into boring private module
 folders when it improves ownership. Runtime optionality and the public consumer
 facade are in place; do not start unrelated `gassets`, `gaudio`, or `ganim`
 work as part of this stage.

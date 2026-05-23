@@ -135,17 +135,17 @@ Priority: high.
 
 Source areas:
 
-- `engine/settings_types.hpp`
-- `engine/settings_schema.*`
-- `engine/settings_catalog.*`
-- `engine/settings_defaults.*`
-- `engine/game_settings.*`
-- `engine/top_level_game_settings.*`
-- `engine/user_profiles.*`
-- `engine/input_settings_profiles.*`
-- `engine/audio_settings.*`
-- `engine/device_settings.hpp`
-- `engine/runtime_settings.hpp`
+- `src/settings_types.hpp`
+- `src/settings_schema.*`
+- `src/settings_catalog.*`
+- `src/settings_defaults.*`
+- `src/game_settings.*`
+- `src/top_level_game_settings.*`
+- `src/user_profiles.*`
+- `src/input_settings_profiles.*`
+- `src/audio_settings.*`
+- `src/device_settings.hpp`
+- `src/runtime_settings.hpp`
 
 Why it is a candidate:
 
@@ -163,7 +163,7 @@ Extraction boundary:
 Before ripout:
 
 - Remove direct `EngineState` dependence.
-- Replace `engine/parser.*` use with `gsexp`.
+- Replace old parser use with `gsexp`.
 - Separate schema/value logic from built-in Gubsy setting lists.
 - Decide whether profiles are part of the core library or a small companion
   layer.
@@ -174,16 +174,16 @@ Priority: high, but after `glayout` integration is cleaner.
 
 Source areas:
 
-- `engine/menu/menu_manager.*`
-- `engine/menu/menu_screen.hpp`
-- `engine/menu/menu_types.hpp`
-- `engine/menu/menu_commands.*`
-- `engine/menu/menu_runtime_state.hpp`
-- `engine/menu/menu_system.*`
-- `engine/menu/menu_system_state.*`
-- `engine/menu/menu_system_update.cpp`
-- `engine/menu/menu_system_render.cpp`
-- `engine/menu/screens/*`
+- `src/menu/menu_manager.*`
+- `src/menu/menu_screen.hpp`
+- `src/menu/menu_types.hpp`
+- `src/menu/menu_commands.*`
+- `src/menu/menu_runtime_state.hpp`
+- `src/menu/menu_system.*`
+- `src/menu/menu_system_state.*`
+- `src/menu/menu_system_update.cpp`
+- `src/menu/menu_system_render.cpp`
+- `src/menu/screens/*`
 
 Why it is a candidate:
 
@@ -211,13 +211,13 @@ Priority: medium-high.
 
 Source areas:
 
-- `engine/mods.*`
-- `engine/mods_helpers.cpp`
-- `engine/mod_install.*`
-- `engine/mod_server_config.*`
-- `engine/mod_host.*`
-- `engine/mod_api_registry.*`
-- `engine/menu/screens/mods_screen.*`
+- `src/mods.*`
+- `src/mods_helpers.cpp`
+- `src/mod_install.*`
+- `src/mod_server_config.*`
+- `src/mod_host.*`
+- `src/mod_api_registry.*`
+- `src/menu/screens/mods_screen.*`
 
 Why it is a candidate:
 
@@ -246,10 +246,10 @@ Priority: medium.
 
 Source areas:
 
-- `engine/sprites.*`
-- `engine/data.*`
-- `engine/audio.*`
-- `engine/mods.*` content scan pieces
+- `src/sprites.*`
+- `src/data.*`
+- `src/audio.*`
+- `src/mods.*` content scan pieces
 
 Why it is a candidate:
 
@@ -275,14 +275,14 @@ Priority: medium.
 
 Source areas:
 
-- `engine/session_contract.*`
-- `engine/session_link.*`
-- `engine/matchmaking.hpp`
-- `engine/room_matchmaking.*`
-- `engine/net_transport.hpp`
-- `engine/sync_payload_codec.*`
-- `engine/sync_transport_packet_codec.*`
-- `engine/sync_transport_udp.*`
+- `src/session_contract.*`
+- `src/session_link.*`
+- `src/matchmaking.hpp`
+- `src/room_matchmaking.*`
+- `src/net_transport.hpp`
+- `src/sync_payload_codec.*`
+- `src/sync_transport_packet_codec.*`
+- `src/sync_transport_udp.*`
 
 Why it is a candidate:
 
@@ -307,12 +307,12 @@ Priority: medium-high.
 
 Source areas:
 
-- `engine/input_binding_utils.*`
-- `engine/input_settings_profiles.*`
-- `engine/input_sources.*`
-- `engine/input_system.hpp`
-- `engine/binds_profiles.*`
-- `engine/binds_ui_helpers.*`
+- `src/input_binding_utils.*`
+- `src/input_settings_profiles.*`
+- `src/input_sources.*`
+- `src/input_system.hpp`
+- `src/binds_profiles.*`
+- `src/binds_ui_helpers.*`
 
 Why it is a candidate:
 
@@ -342,8 +342,8 @@ Priority: low.
 
 Source areas:
 
-- `engine/vid.hpp`
-- `engine/vid_pool.hpp`
+- `src/vid.hpp`
+- `src/vid_pool.hpp`
 
 Why it is a candidate:
 

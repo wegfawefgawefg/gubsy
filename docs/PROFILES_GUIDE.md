@@ -742,4 +742,5 @@ Check `es->input_sources` after calling `detect_input_sources()`. Remember that 
 
 ---
 
-For more information on s-expression parsing, see [src/engine/parser.hpp](../src/engine/parser.hpp).
+For more information on s-expression parsing, see the Gubsy-owned `gsexp`
+sources under `src/sexp/`.

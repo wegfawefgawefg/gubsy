@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "engine/net_transport.hpp"
-#include "engine/session_link.hpp"
+#include "src/net_transport.hpp"
+#include "src/session_link.hpp"
 #include "demo/coop_sync_wire.hpp"
 
 namespace {

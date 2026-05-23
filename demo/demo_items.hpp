@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/vid_pool.hpp"
+#include "src/vid_pool.hpp"
 
 #include <glm/glm.hpp>
 #include <string>

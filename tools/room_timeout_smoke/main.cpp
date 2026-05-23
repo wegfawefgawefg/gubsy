@@ -4,9 +4,9 @@
 #include <string>
 #include <thread>
 
-#include "engine/matchmaking.hpp"
-#include "engine/room_matchmaking.hpp"
-#include "engine/session_contract.hpp"
+#include "src/matchmaking.hpp"
+#include "src/room_matchmaking.hpp"
+#include "src/session_contract.hpp"
 
 namespace {
 

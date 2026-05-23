@@ -4,8 +4,8 @@
 #include <array>
 #include <vector>
 
-#include "engine/session_contract.hpp"
-#include "engine/mods.hpp"
+#include "src/session_contract.hpp"
+#include "src/mods.hpp"
 
 struct EngineState;
 

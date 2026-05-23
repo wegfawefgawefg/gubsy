@@ -37,10 +37,8 @@ endif()
 # Pkg-config is optional, but used as a fallback for deps.
 find_package(PkgConfig QUIET)
 
-# Auto-discover engine and bundled sample-game sources separately.
+# Auto-discover library and bundled demo sources separately.
 file(GLOB_RECURSE GUB_ENGINE_SOURCES
-  "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.hpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
@@ -261,7 +259,7 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(mod_server
     tools/mod_server/main.cpp
-    engine/project_paths.cpp
+    src/project_paths.cpp
   )
   target_include_directories(mod_server PRIVATE
     ${GUB_SOURCE_DIR}
@@ -276,8 +274,8 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(room_smoke
     tools/room_smoke/main.cpp
-    engine/room_matchmaking.cpp
-    engine/session_contract.cpp
+    src/room_matchmaking.cpp
+    src/session_contract.cpp
   )
   target_include_directories(room_smoke PRIVATE
     ${GUB_SOURCE_DIR}/include
@@ -287,8 +285,8 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(room_timeout_smoke
     tools/room_timeout_smoke/main.cpp
-    engine/room_matchmaking.cpp
-    engine/session_contract.cpp
+    src/room_matchmaking.cpp
+    src/session_contract.cpp
   )
   target_include_directories(room_timeout_smoke PRIVATE
     ${GUB_SOURCE_DIR}/include
@@ -298,11 +296,11 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(coop_sync_smoke
     tools/coop_sync_smoke/main.cpp
-    engine/room_matchmaking.cpp
-    engine/session_contract.cpp
-    engine/sync_payload_codec.cpp
-    engine/sync_transport_udp.cpp
-    engine/sync_transport_packet_codec.cpp
+    src/room_matchmaking.cpp
+    src/session_contract.cpp
+    src/sync_payload_codec.cpp
+    src/sync_transport_udp.cpp
+    src/sync_transport_packet_codec.cpp
     demo/coop_protocol.cpp
     demo/coop_sim.cpp
   )

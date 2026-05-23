@@ -1,7 +1,7 @@
 #include "demo/mod_api/demo_items_api.hpp"
 
-#include "engine/mod_api_registry.hpp"
-#include "engine/mod_host.hpp"
+#include "src/mod_api_registry.hpp"
+#include "src/mod_host.hpp"
 #include "demo/mod_api/demo_items_internal.hpp"
 
 #include <sol/sol.hpp>

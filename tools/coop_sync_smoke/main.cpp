@@ -7,12 +7,12 @@
 #include <thread>
 #include <vector>
 
-#include "engine/matchmaking.hpp"
-#include "engine/net_transport.hpp"
-#include "engine/room_matchmaking.hpp"
-#include "engine/session_contract.hpp"
-#include "engine/sync_payload_codec.hpp"
-#include "engine/sync_transport_udp.hpp"
+#include "src/matchmaking.hpp"
+#include "src/net_transport.hpp"
+#include "src/room_matchmaking.hpp"
+#include "src/session_contract.hpp"
+#include "src/sync_payload_codec.hpp"
+#include "src/sync_transport_udp.hpp"
 #include "demo/actions.hpp"
 #include "demo/coop_protocol.hpp"
 #include "demo/coop_sim.hpp"

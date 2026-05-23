@@ -5,11 +5,11 @@
 #include <string>
 #include <vector>
 
-#include "engine/alerts.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/menu/menu_commands.hpp"
-#include "engine/menu/menu_manager.hpp"
-#include "engine/menu/menu_screen.hpp"
+#include "src/alerts.hpp"
+#include "src/engine_state.hpp"
+#include "src/menu/menu_commands.hpp"
+#include "src/menu/menu_manager.hpp"
+#include "src/menu/menu_screen.hpp"
 #include "demo/coop_session.hpp"
 #include "demo/in_game_menu.hpp"
 #include "demo/menu/lobby_online.hpp"

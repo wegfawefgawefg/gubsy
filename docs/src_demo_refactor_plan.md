@@ -75,7 +75,7 @@ The game does not need to know which internals came from old ripout repos.
    editor behavior unchanged.
 4. Move `libs/ginput` into `src/input` and keep input profile behavior
    unchanged.
-5. Move current `engine/` implementation files into matching `src/` folders by
+5. Move current `src/` implementation files into matching `src/` folders by
    subsystem.
 6. Rename `demo/` to `demo/` after `gubsy::engine` builds cleanly as a library.
 7. Remove temporary forwarding headers and old private include paths only after

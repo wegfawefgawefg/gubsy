@@ -7,10 +7,10 @@
 #include <sstream>
 #include <string_view>
 
-#include "engine/input_sources.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/session_contract.hpp"
-#include "engine/player.hpp"
+#include "src/input_sources.hpp"
+#include "src/engine_state.hpp"
+#include "src/session_contract.hpp"
+#include "src/player.hpp"
 
 namespace {
 

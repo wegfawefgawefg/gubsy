@@ -6,13 +6,13 @@
 
 #include <nlohmann/json.hpp>
 
-#include "engine/engine_state.hpp"
-#include "engine/matchmaking.hpp"
-#include "engine/mod_host.hpp"
-#include "engine/mod_install.hpp"
-#include "engine/mod_server_config.hpp"
-#include "engine/room_matchmaking.hpp"
-#include "engine/session_contract.hpp"
+#include "src/engine_state.hpp"
+#include "src/matchmaking.hpp"
+#include "src/mod_host.hpp"
+#include "src/mod_install.hpp"
+#include "src/mod_server_config.hpp"
+#include "src/room_matchmaking.hpp"
+#include "src/session_contract.hpp"
 #include "demo/coop_session.hpp"
 #include "demo/lobby_config.hpp"
 #include "demo/menu/lobby_state.hpp"

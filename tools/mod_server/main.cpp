@@ -7,7 +7,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include "engine/project_paths.hpp"
+#include "src/project_paths.hpp"
 
 #include <nlohmann/json.hpp>
 

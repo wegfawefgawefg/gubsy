@@ -7,7 +7,7 @@ a plugin ABI or a reflection-heavy framework.
 Top-level directories
 ---------------------
 
-- `engine/`
+- `src/`
   - Reusable runtime and infrastructure code.
   - Engine-owned built-in assets only when they are genuinely generic.
   - Examples: window/input/audio plumbing, menu framework, save/load helpers,
@@ -37,7 +37,7 @@ Ownership rules
 Content vs runtime state
 ------------------------
 
-- `engine/assets/`
+- `src/assets/`
   - Engine-owned fallback assets and generic built-in resources.
 - `demo/assets/`
   - Game-authored shipped assets.
@@ -52,8 +52,8 @@ Content vs runtime state
 Practical rules
 ---------------
 
-- Do not put mutable user/runtime files under `engine/` or `demo/`.
-- Do not put gameplay-specific assets under `engine/assets/`.
+- Do not put mutable user/runtime files under `src/` or `demo/`.
+- Do not put gameplay-specific assets under `src/assets/`.
 - Do not treat `data/` as authored content. It is runtime state.
 - If a file exists only to support a local tool or test harness, keep it under
   `tools/` rather than `demo/` or `data/`.

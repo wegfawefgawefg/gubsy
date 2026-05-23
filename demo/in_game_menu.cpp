@@ -4,9 +4,9 @@
 
 #include <glm/glm.hpp>
 
-#include "engine/engine_state.hpp"
-#include "engine/graphics.hpp"
-#include "engine/menu/menu_system.hpp"
+#include "src/engine_state.hpp"
+#include "src/graphics.hpp"
+#include "src/menu/menu_system.hpp"
 #include "demo/menu/menu_ids.hpp"
 #include "demo/menu/menu_input.hpp"
 

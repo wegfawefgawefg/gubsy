@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "engine/session_link.hpp"
+#include "src/session_link.hpp"
 
 struct CoopSyncHooks {
     SessionLinkHooks link{};

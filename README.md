@@ -17,8 +17,7 @@ What Is In This Repo
 --------------------
 
 - `include/gubsy/`: public headers used by games that import Gubsy
-- `engine/`: transitional private implementation code plus engine-owned built-in assets
-- `src/`: private Gubsy-owned modules, including sexp, layout, and input code
+- `src/`: private implementation code, first-party modules, and generic built-in assets
 - `demo/`: current bundled demo layer, shipped demo content, and built-in mods
 - `tools/`: standalone servers and smoke-test binaries
 - `data/`: writable runtime state for this game project
@@ -26,8 +25,8 @@ What Is In This Repo
 - `imgui/`: Dear ImGui sources used by the engine
 - `scripts/`: local build/run helpers
 
-Current Engine Features
------------------------
+Current Game-Kit Features
+-------------------------
 
 - C++20 + CMake build
 - SDL3-based windowing, rendering, image loading, fonts, and audio
@@ -36,7 +35,7 @@ Current Engine Features
 - Player profiles, binds profiles, and game settings persistence
 - UI layout loading/editing support
 - Optional Lua 5.4 mod host with runtime API registration and mod activation/reload
-- ImGui debug/editor tooling in the engine layer
+- ImGui debug/editor tooling in the reusable runtime layer
 
 Build
 -----
@@ -118,7 +117,7 @@ Formatting
 Project Layout Notes
 --------------------
 
-- The engine entrypoints live under `engine/`
+- The engine entrypoints live under `src/`
 - The executable target is defined in `CMakeLists.txt` as `gubsy`
 - The bundled demo layer registers modes, menus, binds, settings schemas, and mod APIs from `demo/main.cpp`
 

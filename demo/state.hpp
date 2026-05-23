@@ -7,7 +7,7 @@
 
 #include "modes.hpp"
 #include "settings.hpp"
-#include "engine/alerts.hpp"
+#include "src/alerts.hpp"
 
 #include <array>
 #include <cstdint>

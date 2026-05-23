@@ -10,7 +10,7 @@ please go read that file. this one may still be nice for context
 - Dear ImGui remains for debug tooling; production menus use SDL + our renderer.
 
 ## Top-Level Architecture
-1. **MenuManager (engine/menu/manager.[hpp|cpp])**
+1. **MenuManager (src/menu/manager.[hpp|cpp])**
    - Owned by `EngineState` (`es->menus`).
    - Tracks active `MenuScreenId`, focus widget id, stacked screens, repeat timers, and text-input mode.
    - Consumes menu actions (`MENU_UP/DOWN/LEFT/RIGHT/SELECT/BACK`, `MENU_PAGE_*`); distributes to active screen.
@@ -19,7 +19,7 @@ please go read that file. this one may still be nice for context
      - `pop_screen()`
      - `set_focus(WidgetId id)`
      - `capture_text(MenuTextCapture& capture)` (struct with buffer, limit, callback)
-2. **MenuScreen interface (engine/menu/screen.hpp)**
+2. **MenuScreen interface (src/menu/screen.hpp)**
    ```cpp
    struct MenuScreen {
        MenuScreenId id;
@@ -32,17 +32,17 @@ please go read that file. this one may still be nice for context
    };
    ```
    - `MenuContext` exposes references to `EngineState`, `State`, `MenuManager`, and the screen’s local state struct.
-3. **Screens registry (engine/menu/screens.cpp)**
+3. **Screens registry (src/menu/screens.cpp)**
    - Holds `constexpr MenuScreen` definitions for built-in pages: `Main`, `SettingsHub`, `VideoSettings`, `AudioSettings`, `ControlsSettings`, `Binds`, `ModsBrowser`, `Lobby`, etc.
    - Provides `register_screen(const MenuScreen&)` so games can add custom ones at startup.
-4. **Widget definitions (engine/menu/widgets.[hpp|cpp])**
+4. **Widget definitions (src/menu/widgets.[hpp|cpp])**
    - `struct MenuWidget { WidgetId id; WidgetType type; UILayoutObjectId slot; MenuStyle style; WidgetState state; }`
    - Types: `Label`, `Button`, `Toggle`, `Slider1D`, `OptionCycle`, `List`, `TextInput`, `Card`.
    - Each widget carries callbacks:
      - `on_activate(MenuContext&)`
      - `on_adjust(MenuContext&, WidgetAdjust dir)` for sliders/cycles.
    - `WidgetState` stores per-widget runtime info (e.g., slider value pointer, text buffer pointer).
-5. **Renderer (engine/menu/render.cpp)**
+5. **Renderer (src/menu/render.cpp)**
    - Loops widgets, samples layout rects via `UILayout::get_object_rect(screen.layout, widget.slot, width, height)`.
    - Draws each widget using SDL (simple shapes + fonts); styles pulled from `MenuStyle`.
    - Handles focus/hover visuals via `MenuManager` focus id.
@@ -50,12 +50,12 @@ please go read that file. this one may still be nice for context
 ## Files & Responsibilities
 | File | Responsibility |
 | --- | --- |
-| `engine/menu/manager.hpp/cpp` | MenuManager core loop, input dispatch, screen stack, text capture. |
-| `engine/menu/screen.hpp/cpp` | Screen definitions, registry, helpers for entering/exiting. |
-| `engine/menu/widgets.hpp/cpp` | Widget structs, factory helpers, event dispatch (activate/adjust). |
-| `engine/menu/layout_helpers.hpp` | Functions to query `UILayout` objects and fallback defaults. |
-| `engine/menu/render.hpp/cpp` | Rendering of widgets, focus indicators, page headers, hints. |
-| `engine/menu/screens/*.cpp` | Built-in screens (e.g., `main_screen.cpp`, `mods_screen.cpp`). |
+| `src/menu/manager.hpp/cpp` | MenuManager core loop, input dispatch, screen stack, text capture. |
+| `src/menu/screen.hpp/cpp` | Screen definitions, registry, helpers for entering/exiting. |
+| `src/menu/widgets.hpp/cpp` | Widget structs, factory helpers, event dispatch (activate/adjust). |
+| `src/menu/layout_helpers.hpp` | Functions to query `UILayout` objects and fallback defaults. |
+| `src/menu/render.hpp/cpp` | Rendering of widgets, focus indicators, page headers, hints. |
+| `src/menu/screens/*.cpp` | Built-in screens (e.g., `main_screen.cpp`, `mods_screen.cpp`). |
 | `demo/menu/screens/*.cpp` | Optional game-specific screens registered from game code. |
 
 ## Data Flow
@@ -119,8 +119,8 @@ please go read that file. this one may still be nice for context
 ## Developer API
 From game code (e.g., `demo/main.cpp`):
 ```cpp
-#include "engine/menu/manager.hpp"
-#include "engine/menu/screens.hpp"
+#include "src/menu/manager.hpp"
+#include "src/menu/screens.hpp"
 
 void register_custom_menus() {
     MenuScreen custom{
@@ -141,7 +141,7 @@ void enter_title_flow() {
 }
 ```
 
-**Widget creation helpers** (engine/menu/widgets.hpp):
+**Widget creation helpers** (src/menu/widgets.hpp):
 ```cpp
 MenuWidget make_button(WidgetId id, UILayoutObjectId slot,
                        const char* label,
@@ -177,6 +177,6 @@ MenuWidget make_text_input(WidgetId id, UILayoutObjectId slot,
 6. Keep old `ui/menu/` directory around temporarily for reference; delete once new system covers feature parity.
 
 ## Notes
-- Screens and widgets stay <500 LOC by splitting each screen into its own file under `engine/menu/screens/`.
+- Screens and widgets stay <500 LOC by splitting each screen into its own file under `src/menu/screens/`.
 - `ss->menu` legacy struct will be replaced by per-screen states + small shared structs (e.g., audio slider preview). During migration, we can wrap legacy state inside new state structs.
 - Mods browser continues to rely on existing mod install helpers; we only swap out the UI layer.

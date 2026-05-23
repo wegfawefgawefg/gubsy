@@ -1,6 +1,6 @@
 #include "demo/builtin_mods.hpp"
 
-#include "engine/project_paths.hpp"
+#include "src/project_paths.hpp"
 
 #include <filesystem>
 

@@ -1,6 +1,6 @@
 #include "demo/mod_api/register_game_mod_apis.hpp"
 
-#include "engine/mod_api_registry.hpp"
+#include "src/mod_api_registry.hpp"
 #include "demo/mod_api/demo_content_api.hpp"
 #include "demo/mod_api/demo_items_api.hpp"
 

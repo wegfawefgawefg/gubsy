@@ -1,8 +1,8 @@
 #include "demo_items.hpp"
 
-#include "engine/audio.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/graphics.hpp"
+#include "src/audio.hpp"
+#include "src/engine_state.hpp"
+#include "src/graphics.hpp"
 #include "demo/mod_api/demo_items_internal.hpp"
 #include "state.hpp"
 
@@ -13,7 +13,7 @@
 #include <vector>
 
 #include <sol/sol.hpp>
-#include "engine/alerts.hpp"
+#include "src/alerts.hpp"
 
 namespace {
 

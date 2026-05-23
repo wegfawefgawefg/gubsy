@@ -38,7 +38,7 @@ src/
 
 ## Why Not Expose `src/` Directly
 
-It is technically possible to put public headers in `src/` or `engine/` and add
+It is technically possible to put public headers in `src/` or `src/` and add
 that directory as a public include path.
 
 Example:
@@ -74,12 +74,12 @@ Consumers should not include private implementation headers.
 
 ## Current State
 
-The repo still has most reusable implementation code under `engine/`, but public
-headers now live under `include/gubsy/` and do not include `engine/...` headers.
+The repo still has most reusable implementation code under `src/`, but public
+headers now live under `include/gubsy/` and do not include `src/...` headers.
 Old engine headers forward to the public headers where needed so existing
 implementation code can keep compiling during migration.
 
-`engine/` remains a private implementation include path. It is not the
+`src/` remains a private implementation include path. It is not the
 consumer-facing API.
 
 ## Target Consumer Shape
@@ -142,21 +142,21 @@ The older `init_engine_state` and `cleanup_engine_state` names remain internal
 migration details. Consumer smoke tests should avoid them.
 
 `GubsyRuntime` is an owning public wrapper around the internal `EngineState`.
-Consumers should not include or depend on `engine/engine_state.hpp`.
+Consumers should not include or depend on `src/engine_state.hpp`.
 
 ## Migration Order
 
 1. Done: create `include/gubsy/` facade headers for the APIs Splonks would use first.
-2. Done: keep the existing `engine/` implementation compiling underneath.
+2. Done: keep the existing `src/` implementation compiling underneath.
 3. Done: add `include/` as the public include directory for `gubsy_engine`.
 4. Done: add public runtime init/cleanup/query helpers so consumer examples do
    not call `init_engine_state` directly.
-5. Done: keep `engine/` as a private include directory.
-6. Move implementation files from `engine/` to `src/` by subsystem.
+5. Done: keep `src/` as a private include directory.
+6. Move implementation files from `src/` to `src/` by subsystem.
 7. Move current first-party `libs/` code into `src/sexp`, `src/layout`, and
    `src/input` as part of the subsystem migrations. The detailed plan is
    `docs/src_demo_refactor_plan.md`.
-8. Done: stop documenting `engine/...` includes as consumer-facing API.
+8. Done: stop documenting `src/...` includes as consumer-facing API.
 9. Remove direct consumer reliance on standalone glib targets.
 
 ## First Facade Headers To Add
@@ -209,10 +209,10 @@ Private headers should not be included by consumers. If a private header becomes
 useful to a game, promote a small public header intentionally instead of making
 the private path public.
 
-## Relationship To `engine/`
+## Relationship To `src/`
 
-`engine/` is a transitional implementation folder. It can stay while the public
-API takes shape. The long-term goal is not to make games include `engine/...`;
+`src/` is a transitional implementation folder. It can stay while the public
+API takes shape. The long-term goal is not to make games include `src/...`;
 the long-term goal is to let games include `gubsy/...`.
 
 ## Definition Of Done
@@ -221,7 +221,7 @@ This migration is done when:
 
 1. A downstream game can build against `gubsy::engine` using only
    `#include <gubsy/...>` headers.
-2. `engine/` is no longer a public include path.
+2. `src/` is no longer a public include path.
 3. Private helpers live under `src/` or another private-only path.
 4. The bundled sample still builds as a normal consumer.
 5. Splonks can use Gubsy menu/profile/input/lobby APIs without cloning or

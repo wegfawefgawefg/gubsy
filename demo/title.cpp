@@ -4,10 +4,10 @@
 
 #include <SDL2/SDL_render.h>
 
-#include "engine/alerts.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/graphics.hpp"
-#include "engine/menu/menu_system.hpp"
+#include "src/alerts.hpp"
+#include "src/engine_state.hpp"
+#include "src/graphics.hpp"
+#include "src/menu/menu_system.hpp"
 #include "demo/in_game_menu.hpp"
 #include "demo/menu/lobby_online.hpp"
 #include "demo/menu/menu_input.hpp"

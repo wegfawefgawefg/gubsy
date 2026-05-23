@@ -1,6 +1,6 @@
 #include "demo/ui_layout_registry.hpp"
 
-#include "engine/ui_layouts.hpp"
+#include "src/ui_layouts.hpp"
 #include "demo/ui_layout_ids.hpp"
 
 void register_game_ui_layouts() {

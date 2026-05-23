@@ -1,6 +1,6 @@
 #include "demo/binds_schema_registry.hpp"
 
-#include "engine/binds_profiles.hpp"
+#include "src/binds_profiles.hpp"
 #include "demo/actions.hpp"
 
 void register_binds_schema_entries(EngineState& engine) {

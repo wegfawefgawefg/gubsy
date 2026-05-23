@@ -91,7 +91,7 @@ Each section below details specific behaviors.
 
 ### Binds (`BINDS`)
 * Five visible actions per page (IDs 700-704). `ss->menu.binds_keys_page` indexes additional actions.
-* Selecting an action opens capture mode (handled in `menu_binds.cpp` / `engine/input.cpp`). `Esc` cancels capture.
+* Selecting an action opens capture mode (handled in `menu_binds.cpp` / `src/input.cpp`). `Esc` cancels capture.
 * Footer buttons:
   * Back (799)
   * Reset to Defaults (791) → `apply_default_bindings_to_active()`

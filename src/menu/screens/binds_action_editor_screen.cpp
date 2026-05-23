@@ -1,0 +1,378 @@
+#include "src/menu/screens/binds_action_editor_screen.hpp"
+
+#include "src/alerts.hpp"
+#include "src/binds_profiles.hpp"
+#include "src/binds_ui_helpers.hpp"
+#include "src/engine_state.hpp"
+#include "src/menu/menu_commands.hpp"
+#include "src/menu/menu_ids.hpp"
+#include "src/menu/menu_manager.hpp"
+#include "src/menu/menu_screen.hpp"
+#include "src/menu_layout_ids.hpp"
+
+#include <algorithm>
+#include <string>
+#include <vector>
+
+namespace {
+
+constexpr int kItemsPerPage = 4;
+constexpr WidgetId kTitleWidgetId = 1700;
+constexpr WidgetId kStatusWidgetId = 1701;
+constexpr WidgetId kPageLabelWidgetId = 1702;
+constexpr WidgetId kPrevButtonId = 1703;
+constexpr WidgetId kNextButtonId = 1704;
+constexpr WidgetId kResetButtonId = 1705;
+constexpr WidgetId kBackButtonId = 1730;
+constexpr WidgetId kFirstCardWidgetId = 1720;
+
+MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
+MenuCommandId g_cmd_edit_mapping = kMenuIdInvalid;
+MenuCommandId g_cmd_reset_action = kMenuIdInvalid;
+
+struct MappingSlot {
+    bool empty{true};
+    int bind_index{-1};
+    int device_code{0};
+    std::string label;
+};
+
+struct BindsActionEditorState {
+    int page = 0;
+    int total_pages = 1;
+    std::string page_text;
+    std::string status_text;
+    std::string title_text;
+    std::vector<MappingSlot> slots;
+    int action_id{-1};
+    BindsActionType action_type{BindsActionType::Button};
+};
+
+MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* label) {
+    MenuWidget w;
+    w.id = id;
+    w.slot = slot;
+    w.type = WidgetType::Label;
+    w.label = label;
+    return w;
+}
+
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label,
+                              MenuAction action) {
+    MenuWidget w;
+    w.id = id;
+    w.slot = slot;
+    w.type = WidgetType::Button;
+    w.label = label;
+    w.on_select = action;
+    return w;
+}
+
+MenuStyle yellow_style() {
+    MenuStyle style;
+    style.bg_r = 88;
+    style.bg_g = 70;
+    style.bg_b = 28;
+    style.focus_r = 255;
+    style.focus_g = 210;
+    style.focus_b = 120;
+    return style;
+}
+
+MenuStyle green_style() {
+    MenuStyle style;
+    style.bg_r = 30;
+    style.bg_g = 60;
+    style.bg_b = 42;
+    style.focus_r = 120;
+    style.focus_g = 230;
+    style.focus_b = 170;
+    return style;
+}
+
+BindsProfile* find_profile(EngineState& engine, int profile_id) {
+    for (auto& profile : engine.binds_profiles) {
+        if (profile.id == profile_id)
+            return &profile;
+    }
+    return nullptr;
+}
+
+bool find_action_label(BindsActionType type, int action_id, std::string& label,
+                       std::string& category) {
+    const BindsSchema& schema = get_binds_schema();
+    if (type == BindsActionType::Button) {
+        for (const auto& action : schema.actions()) {
+            if (action.id == action_id) {
+                label = action.label;
+                category = action.category;
+                return true;
+            }
+        }
+    } else if (type == BindsActionType::Analog1D) {
+        for (const auto& action : schema.axes_1d()) {
+            if (action.id == action_id) {
+                label = action.label;
+                category = action.category;
+                return true;
+            }
+        }
+    } else if (type == BindsActionType::Analog2D) {
+        for (const auto& action : schema.axes_2d()) {
+            if (action.id == action_id) {
+                label = action.label;
+                category = action.category;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void rebuild_slots(BindsActionEditorState& st, const BindsProfile& profile) {
+    st.slots.clear();
+    if (st.action_type == BindsActionType::Button) {
+        const auto& binds = profile.button_binds();
+        for (std::size_t i = 0; i < binds.size(); ++i) {
+            const auto& bind = binds[i];
+            if (bind.action != st.action_id)
+                continue;
+            MappingSlot slot;
+            slot.empty = false;
+            slot.bind_index = static_cast<int>(i);
+            slot.device_code = bind.device_button;
+            slot.label = binds_input_label(st.action_type, bind.device_button);
+            st.slots.push_back(std::move(slot));
+        }
+    } else if (st.action_type == BindsActionType::Analog1D) {
+        const auto& binds = profile.axis_1d_binds();
+        for (std::size_t i = 0; i < binds.size(); ++i) {
+            const auto& bind = binds[i];
+            if (bind.axis_1d != st.action_id)
+                continue;
+            MappingSlot slot;
+            slot.empty = false;
+            slot.bind_index = static_cast<int>(i);
+            slot.device_code = bind.device_axis;
+            slot.label = binds_input_label(st.action_type, bind.device_axis);
+            st.slots.push_back(std::move(slot));
+        }
+    } else {
+        const auto& binds = profile.axis_2d_binds();
+        for (std::size_t i = 0; i < binds.size(); ++i) {
+            const auto& bind = binds[i];
+            if (bind.axis_2d != st.action_id)
+                continue;
+            MappingSlot slot;
+            slot.empty = false;
+            slot.bind_index = static_cast<int>(i);
+            slot.device_code = bind.device_stick;
+            slot.label = binds_input_label(st.action_type, bind.device_stick);
+            st.slots.push_back(std::move(slot));
+        }
+    }
+
+    int mapping_count = static_cast<int>(st.slots.size());
+    int total_slots = (mapping_count / kItemsPerPage + 1) * kItemsPerPage;
+    for (int i = mapping_count; i < total_slots; ++i)
+        st.slots.push_back(MappingSlot{});
+
+    st.total_pages = std::max(1, total_slots / kItemsPerPage);
+    st.page = std::clamp(st.page, 0, st.total_pages - 1);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+}
+
+void command_page_delta(MenuContext& ctx, std::int32_t delta) {
+    auto& st = ctx.state<BindsActionEditorState>();
+    int max_page = std::max(0, st.total_pages - 1);
+    st.page = std::clamp(st.page + delta, 0, max_page);
+    if (st.total_pages <= 0) {
+        st.page_text = "Page 0 / 0";
+    } else {
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+    }
+}
+
+void command_edit_mapping(MenuContext& ctx, std::int32_t slot_index) {
+    auto& st = ctx.state<BindsActionEditorState>();
+    if (slot_index < 0 || slot_index >= static_cast<int>(st.slots.size()))
+        return;
+    const MappingSlot& slot = st.slots[static_cast<std::size_t>(slot_index)];
+    ctx.engine.selected_binds_action_type = static_cast<int>(st.action_type);
+    ctx.engine.selected_binds_action_id = st.action_id;
+    ctx.engine.selected_binds_mapping_index = slot.empty ? -1 : slot.bind_index;
+    ctx.manager.push_screen(MenuScreenID::BINDS_CHOOSE_INPUT, ctx.player_index);
+}
+
+void command_reset_action(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<BindsActionEditorState>();
+    BindsProfile* profile = find_profile(ctx.engine, ctx.engine.selected_binds_profile_id);
+    if (!profile)
+        return;
+    remove_binds_for_action(*profile, st.action_type, st.action_id);
+    save_binds_profile(*profile);
+    add_alert(ctx.engine, "Bindings reset");
+}
+
+BuiltScreen build_binds_action_editor(MenuContext& ctx) {
+    auto& st = ctx.state<BindsActionEditorState>();
+    st.action_id = ctx.engine.selected_binds_action_id;
+    st.action_type = static_cast<BindsActionType>(ctx.engine.selected_binds_action_type);
+
+    int profile_id = ctx.engine.selected_binds_profile_id;
+    BindsProfile* profile = find_profile(ctx.engine, profile_id);
+    if (!profile)
+        return BuiltScreen{};
+
+    std::string action_label;
+    std::string action_category;
+    bool found = find_action_label(st.action_type, st.action_id, action_label, action_category);
+    if (!found) {
+        action_label = "Unknown";
+        action_category.clear();
+    }
+    st.status_text = action_label;
+    if (!action_category.empty())
+        st.status_text += " | " + action_category;
+    st.title_text = std::string("Edit ") + binds_action_type_label(st.action_type);
+
+    rebuild_slots(st, *profile);
+
+    static std::vector<MenuWidget> widgets;
+    static std::vector<std::string> text_cache;
+    widgets.clear();
+    text_cache.clear();
+
+    widgets.push_back(
+        make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, st.title_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
+
+    MenuWidget reset_btn =
+        make_button_widget(kResetButtonId, SettingsObjectID::SEARCH, "Reset Bindings",
+                           MenuAction::run_command(g_cmd_reset_action));
+    reset_btn.secondary = "Clear all mappings for this action.";
+    reset_btn.style = yellow_style();
+    widgets.push_back(reset_btn);
+    std::size_t reset_idx = widgets.size() - 1;
+
+    MenuAction prev_action = MenuAction::none();
+    MenuAction next_action = MenuAction::none();
+    if (st.page > 0 && g_cmd_page_delta != kMenuIdInvalid)
+        prev_action = MenuAction::run_command(g_cmd_page_delta, -1);
+    if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
+        next_action = MenuAction::run_command(g_cmd_page_delta, +1);
+
+    MenuWidget prev_btn =
+        make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    prev_btn.role = MenuWidgetRole::PagePrev;
+    MenuWidget next_btn =
+        make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    next_btn.role = MenuWidgetRole::PageNext;
+    widgets.push_back(prev_btn);
+    std::size_t prev_idx = widgets.size() - 1;
+    widgets.push_back(next_btn);
+    std::size_t next_idx = widgets.size() - 1;
+
+    std::vector<WidgetId> row_ids;
+    row_ids.reserve(kItemsPerPage);
+    std::size_t rows_offset = widgets.size();
+    int start_index = st.page * kItemsPerPage;
+    for (int i = 0; i < kItemsPerPage; ++i) {
+        int slot_index = start_index + i;
+        UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
+        WidgetId widget_id = static_cast<WidgetId>(kFirstCardWidgetId + static_cast<WidgetId>(i));
+        if (slot_index < static_cast<int>(st.slots.size())) {
+            const MappingSlot& mapping = st.slots[static_cast<std::size_t>(slot_index)];
+            MenuWidget row;
+            row.id = widget_id;
+            row.slot = slot;
+            row.type = WidgetType::Card;
+            if (mapping.empty) {
+                row.label = "New Mapping";
+                row.secondary = "Press to choose input.";
+                row.style = green_style();
+            } else {
+                text_cache.emplace_back("Input: " + mapping.label);
+                row.label = text_cache.back().c_str();
+                row.secondary = "Press to change or clear.";
+            }
+            row.on_select = MenuAction::run_command(g_cmd_edit_mapping, slot_index);
+            row.on_left = prev_action;
+            row.on_right = next_action;
+            widgets.push_back(row);
+            row_ids.push_back(widget_id);
+        } else {
+            widgets.push_back(make_label_widget(widget_id, slot, ""));
+        }
+    }
+
+    MenuWidget back_btn =
+        make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    widgets.push_back(back_btn);
+    std::size_t back_idx = widgets.size() - 1;
+
+    MenuWidget& reset_ref = widgets[reset_idx];
+    MenuWidget& prev_ref = widgets[prev_idx];
+    MenuWidget& next_ref = widgets[next_idx];
+    MenuWidget& back_ref = widgets[back_idx];
+
+    WidgetId first_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.front();
+    WidgetId last_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.back();
+    WidgetId rows_start = first_row_id != kMenuIdInvalid ? first_row_id : back_ref.id;
+
+    reset_ref.nav_left = reset_ref.id;
+    reset_ref.nav_right = prev_ref.id;
+    reset_ref.nav_up = reset_ref.id;
+    reset_ref.nav_down = rows_start;
+
+    prev_ref.nav_left = prev_ref.id;
+    prev_ref.nav_right = next_ref.id;
+    prev_ref.nav_up = reset_ref.id;
+    prev_ref.nav_down = rows_start;
+
+    next_ref.nav_left = prev_ref.id;
+    next_ref.nav_right = next_ref.id;
+    next_ref.nav_up = reset_ref.id;
+    next_ref.nav_down = rows_start;
+
+    for (std::size_t i = 0; i < row_ids.size(); ++i) {
+        MenuWidget& row = widgets[rows_offset + i];
+        row.nav_left = prev_ref.id;
+        row.nav_right = next_ref.id;
+        row.nav_up = (i == 0) ? reset_ref.id : row_ids[i - 1];
+        row.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
+    }
+
+    back_ref.nav_up = (last_row_id != kMenuIdInvalid) ? last_row_id : prev_ref.id;
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
+    back_ref.nav_down = back_ref.id;
+
+    BuiltScreen built;
+    built.layout = UILayoutID::SETTINGS_SCREEN;
+    built.widgets = MenuWidgetList{widgets};
+    built.default_focus = rows_start;
+    return built;
+}
+
+} // namespace
+
+void register_binds_action_editor_screen(EngineState& engine) {
+    if (g_cmd_page_delta == kMenuIdInvalid)
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    if (g_cmd_edit_mapping == kMenuIdInvalid)
+        g_cmd_edit_mapping = engine.menu_commands.register_command(command_edit_mapping);
+    if (g_cmd_reset_action == kMenuIdInvalid)
+        g_cmd_reset_action = engine.menu_commands.register_command(command_reset_action);
+
+    MenuScreenDef def;
+    def.id = MenuScreenID::BINDS_ACTION_EDITOR;
+    def.layout = UILayoutID::SETTINGS_SCREEN;
+    def.state_ops = screen_state_ops<BindsActionEditorState>();
+    def.build = build_binds_action_editor;
+    engine.menu_manager.register_screen(def);
+}

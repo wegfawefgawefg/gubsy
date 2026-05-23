@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/runtime_settings.hpp"
+#include "src/runtime_settings.hpp"
 
 inline constexpr float PLAYER_MOVE_SPEED_UNITS = 4.5f;
 inline constexpr float PLAYER_HALF_SIZE_UNITS = 0.5f;

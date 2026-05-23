@@ -1,0 +1,461 @@
+#include "mods.hpp"
+
+#include "src/engine_state.hpp"
+#include "src/graphics.hpp"
+#include "src/mod_host.hpp"
+#include "src/project_paths.hpp"
+#include "src/runtime_settings.hpp"
+#include "src/sexp_helpers.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <fstream>
+#include <optional>
+#include <queue>
+#include <system_error>
+#include <unordered_set>
+
+namespace fs = std::filesystem;
+
+namespace {
+
+struct ModsConfig {
+    bool has_enabled_list{false};
+    std::unordered_set<std::string> enabled;
+    std::unordered_set<std::string> disabled;
+};
+
+std::optional<ModsConfig> read_mods_config() {
+    fs::path path = data_path("mods_enabled.lisp");
+    auto text = gubsy_sexp::read_text_file(path);
+    if (!text)
+        return std::nullopt;
+    gsexp::ParseResult parsed = gsexp::parse_owned(std::move(*text));
+    if (!parsed.ok)
+        return std::nullopt;
+
+    gsexp::Node root = gubsy_sexp::find_root(parsed, "mods_config");
+    if (!root.valid())
+        return ModsConfig{};
+
+    ModsConfig cfg;
+    gsexp::FormView root_view(root);
+    gsexp::Node enabled = root_view.find("enabled");
+    if (enabled.valid()) {
+        if (enabled.child_count() > 1)
+            cfg.has_enabled_list = true;
+        for (std::size_t i = 1; i < enabled.child_count(); ++i) {
+            if (auto value = gubsy_sexp::node_to_string(enabled.child_at(i))) {
+                cfg.enabled.insert(*value);
+            }
+        }
+    }
+    gsexp::Node disabled = root_view.find("disabled");
+    if (disabled.valid()) {
+        for (std::size_t i = 1; i < disabled.child_count(); ++i) {
+            if (auto value = gubsy_sexp::node_to_string(disabled.child_at(i))) {
+                cfg.disabled.insert(*value);
+            }
+        }
+    }
+    return cfg;
+}
+
+void ensure_mods_config_exists() {
+    fs::path path = data_path("mods_enabled.lisp");
+    std::error_code ec;
+    if (fs::exists(path, ec))
+        return;
+    if (!path.parent_path().empty())
+        fs::create_directories(path.parent_path(), ec);
+    std::ofstream out(path);
+    if (!out.good()) {
+        std::printf("[mods] Failed to write %s\n", path.string().c_str());
+        return;
+    }
+    out << "(mods_config\n";
+    out << "  (disabled)\n";
+    out << ")\n";
+}
+
+std::vector<ModInfo> resolve_mod_order(std::vector<ModInfo> mods) {
+    std::unordered_map<std::string, size_t> id_to_index;
+    std::vector<bool> valid(mods.size(), true);
+    for (size_t i = 0; i < mods.size(); ++i) {
+        auto& m = mods[i];
+        if (m.name.empty())
+            m.name = fs::path(m.path).filename().string();
+        if (m.title.empty())
+            m.title = m.name;
+        if (m.version.empty())
+            m.version = "0.0.0";
+        auto [it, inserted] = id_to_index.emplace(m.name, i);
+        if (!inserted) {
+            std::printf("[mods] Duplicate mod id '%s' (skipping %s)\n", m.name.c_str(),
+                        m.path.c_str());
+            valid[i] = false;
+            mods[i].enabled = false;
+        }
+    }
+
+    std::vector<std::vector<size_t>> graph(mods.size());
+    std::vector<int> indegree(mods.size(), 0);
+    std::vector<bool> active(mods.size(), false);
+
+    for (size_t i = 0; i < mods.size(); ++i) {
+        if (!valid[i] || !mods[i].enabled)
+            continue;
+        bool deps_ok = true;
+        for (const auto& dep : mods[i].deps) {
+            auto dit = id_to_index.find(dep);
+            if (dit == id_to_index.end()) {
+                std::printf("[mods] %s depends on missing mod '%s'; skipping\n",
+                            mods[i].name.c_str(), dep.c_str());
+                deps_ok = false;
+                break;
+            }
+            if (!mods[dit->second].enabled) {
+                std::printf("[mods] %s depends on disabled mod '%s'; skipping\n",
+                            mods[i].name.c_str(), dep.c_str());
+                deps_ok = false;
+                break;
+            }
+        }
+        if (!deps_ok) {
+            mods[i].enabled = false;
+            continue;
+        }
+        active[i] = true;
+        for (const auto& dep : mods[i].deps) {
+            size_t dep_idx = id_to_index[dep];
+            graph[dep_idx].push_back(i);
+            indegree[i] += 1;
+        }
+    }
+
+    std::queue<size_t> q;
+    std::vector<bool> visited(mods.size(), false);
+    for (size_t i = 0; i < mods.size(); ++i) {
+        if (active[i] && indegree[i] == 0)
+            q.push(i);
+    }
+
+    std::vector<ModInfo> ordered;
+    ordered.reserve(mods.size());
+    while (!q.empty()) {
+        size_t idx = q.front();
+        q.pop();
+        visited[idx] = true;
+        ordered.push_back(std::move(mods[idx]));
+        for (size_t next : graph[idx]) {
+            if (--indegree[next] == 0)
+                q.push(next);
+        }
+    }
+
+    for (size_t i = 0; i < mods.size(); ++i) {
+        if (active[i] && !visited[i]) {
+            std::printf("[mods] Dependency cycle involving '%s'; skipping\n", mods[i].name.c_str());
+        }
+    }
+
+    return ordered;
+}
+
+} // namespace
+
+bool init_mods_manager(EngineState& engine, const std::string& mods_root) {
+    cleanup_mods_manager(engine);
+    ModManager* manager = new ModManager{};
+    manager->root = mods_root;
+    engine.mod_manager = manager;
+    return true;
+}
+
+void cleanup_mods_manager(EngineState& engine) {
+    if (engine.mod_manager) {
+        delete engine.mod_manager;
+        engine.mod_manager = nullptr;
+    }
+}
+
+ModManager* current_mod_manager(EngineState& engine) {
+    return engine.mod_manager;
+}
+
+const ModManager* current_mod_manager_const(const EngineState& engine) {
+    return engine.mod_manager;
+}
+
+/// Discover available mods by scanning the configured mod root for `info.toml`.
+/// Clears any previously discovered mods.
+void discover_mods(EngineState& engine) {
+    ModManager* manager = current_mod_manager(engine);
+    if (!manager)
+        return;
+    manager->mods.clear();
+    std::vector<ModInfo> discovered;
+    std::error_code ec;
+    if (!fs::exists(manager->root, ec) || !fs::is_directory(manager->root, ec))
+        return;
+    for (auto const& e : fs::directory_iterator(manager->root, ec)) {
+        if (ec) {
+            ec.clear();
+            continue;
+        }
+        if (!e.is_directory())
+            continue;
+        auto p = e.path();
+        ModInfo mi = manager->parse_info(p.string());
+        discovered.push_back(std::move(mi));
+    }
+
+    ensure_mods_config_exists();
+    auto cfg = read_mods_config();
+    if (cfg) {
+        for (auto& mod : discovered) {
+            bool enabled = true;
+            if (cfg->has_enabled_list) {
+                enabled = cfg->enabled.find(mod.name) != cfg->enabled.end();
+            } else if (!cfg->disabled.empty()) {
+                enabled = cfg->disabled.find(mod.name) == cfg->disabled.end();
+            }
+            mod.enabled = enabled;
+        }
+    } else {
+        for (auto& mod : discovered)
+            mod.enabled = true;
+    }
+
+    std::vector<ModInfo> ordered = resolve_mod_order(std::move(discovered));
+    manager->mods = std::move(ordered);
+
+    // Track initial trees
+    manager->tracked_files.clear();
+    for (auto const& m : manager->mods) {
+        manager->track_tree(m.path + "/graphics");
+        manager->track_tree(m.path + "/scripts");
+        if (!m.manifest_path.empty())
+            manager->track_tree(m.manifest_path);
+        else
+            manager->track_tree(m.path + "/info.toml");
+    }
+}
+
+/// Re-scan mods and rebuild the sprite name↔id registry.
+///
+/// Walks each `<mod.path>/graphics` recursively, collects file stems, and
+/// namespaces them as `<mod.name>:<stem>`. Skips non-regular files. Clears and
+/// ignores transient `std::error_code`s during traversal.
+///
+/// Calls `rebuild_sprite_registry(names)`, which nukes and replaces:
+///   - Graphics::sprite_name_to_id
+///   - Graphics::sprite_id_to_name
+///
+/// Does NOT parse manifests, build SpriteDef data, or load textures.
+/// Sets `registry_built = true`.
+///
+/// ⚠ ID stability: IDs are reassigned based on the collected order, so they may change.
+///
+/// Returns `true` on completion (does not signal whether anything changed).
+/// Complexity: O(#files). Call when you need a fast index refresh after add/remove/rename;
+/// use the full store rebuild for manifest/content changes.
+bool cheap_scan_mods_to_update_sprite_name_registry(EngineState& engine) {
+    ModManager* manager = current_mod_manager(engine);
+    if (!manager)
+        return false;
+    std::vector<std::string> names;
+    std::error_code ec;
+    for (auto const& m : manager->mods) {
+        fs::path gdir = fs::path(m.path) / "graphics";
+        if (!fs::exists(gdir, ec) || !fs::is_directory(gdir, ec))
+            continue;
+        for (auto const& entry : fs::recursive_directory_iterator(gdir, ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!entry.is_regular_file())
+                continue;
+            auto stem = entry.path().stem().string();
+            if (!stem.empty()) {
+                std::string ns = m.name + ":" + stem;
+                names.push_back(ns);
+            }
+        }
+    }
+    build_sprite_name_id_mapping(engine, names);
+    manager->registry_built = true;
+    std::printf("[mods] Sprite registry built with %zu entries\n", names.size());
+    return true;
+}
+
+static bool is_manifest_ext(const std::string& ext) {
+    return ext == ".sprite" || ext == ".sprite.toml";
+}
+
+static bool is_image_ext(const std::string& ext) {
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif" ||
+           ext == ".webp" || ext == ".tga";
+}
+
+/// Rebuild the full sprite store from all mods.
+///
+/// Scans each `<mod.path>/graphics` recursively. Prefers manifests
+/// (`.sprite`, `.sprite.toml`) over bare images. For each entry:
+///   - Parses manifest into `SpriteDef` (namespaced as `<mod.name>:<name>`).
+///   - Resolves relative `image_path` against `<mod.path>/graphics/`.
+///   - If no manifest exists, synthesizes a default `SpriteDef` from the image.
+///
+/// Uses first definition per name (later duplicates ignored). Sorts by name
+/// for deterministic IDs, then calls `rebuild_sprite_mapping(defs)` which
+/// replaces:
+///   - `Graphics::sprite_defs_by_id`
+///   - `Graphics::sprite_id_to_name`
+///   - `Graphics::sprite_name_to_id`
+///
+/// Does NOT load textures. Log-and-continue on parse errors. Complexity
+/// O(files + parse). Call on startup and whenever manifests or image content
+/// change. IDs may change if the name set changes.
+bool scan_mods_for_sprite_defs(EngineState& engine) {
+    const ModManager* manager = current_mod_manager_const(engine);
+    if (!manager)
+        return false;
+    auto mod_infos = manager->mods;
+
+    // First pass: collect manifests per name (prefer manifests over bare images)
+    std::unordered_map<std::string, SpriteDef> defs_by_name;
+    std::unordered_map<std::string, std::string>
+        name_to_modroot; // for resolving relative image paths
+    std::error_code ec;
+    for (auto const& m : mod_infos) {
+        fs::path gdir = fs::path(m.path) / "graphics";
+        if (!fs::exists(gdir, ec) || !fs::is_directory(gdir, ec))
+            continue;
+        for (auto const& entry : fs::recursive_directory_iterator(gdir, ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!entry.is_regular_file())
+                continue;
+            auto p = entry.path();
+            std::string ext = p.extension().string();
+            for (auto& c : ext)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (is_manifest_ext(ext)) {
+                SpriteDef def{};
+                std::string err;
+                if (parse_sprite_manifest_file(p.string(), def, err)) {
+                    // Namespace the sprite name if missing a prefix
+                    if (def.name.find(':') == std::string::npos) {
+                        def.name = m.name + ":" + def.name;
+                    }
+                    // Resolve image path relative to mod root if not absolute
+                    if (!def.image_path.empty() && !fs::path(def.image_path).is_absolute()) {
+                        def.image_path = (fs::path(m.path) / "graphics" / def.image_path)
+                                             .lexically_normal()
+                                             .string();
+                    }
+                    // Keep first definition for a name; later mods can override if desired (could
+                    // be policy)
+                    if (defs_by_name.find(def.name) == defs_by_name.end()) {
+                        defs_by_name.emplace(def.name, std::move(def));
+                        name_to_modroot[defs_by_name.find(def.name)->first] = m.path;
+                    }
+                } else {
+                    std::printf("[mods] Sprite manifest parse failed: %s (%s)\n",
+                                p.string().c_str(), err.c_str());
+                }
+            }
+        }
+    }
+    // Second pass: images without manifests become default single-frame sprites
+    for (auto const& m : mod_infos) {
+        fs::path gdir = fs::path(m.path) / "graphics";
+        if (!fs::exists(gdir, ec) || !fs::is_directory(gdir, ec))
+            continue;
+        for (auto const& entry : fs::recursive_directory_iterator(gdir, ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!entry.is_regular_file())
+                continue;
+            auto p = entry.path();
+            std::string ext = p.extension().string();
+            for (auto& c : ext)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (!is_image_ext(ext))
+                continue;
+            std::string stem = p.stem().string();
+            std::string nsname = m.name + ":" + stem;
+            if (defs_by_name.find(nsname) != defs_by_name.end())
+                continue; // manifest already defined
+            SpriteDef d = make_default_sprite_from_image(nsname, p.string());
+            defs_by_name.emplace(nsname, std::move(d));
+            name_to_modroot[nsname] = m.path;
+        }
+    }
+
+    // Deterministic ordering: sort by name before rebuilding
+    std::vector<std::pair<std::string, SpriteDef>> sorted;
+    sorted.reserve(defs_by_name.size());
+    for (auto& kv : defs_by_name)
+        sorted.emplace_back(kv.first, std::move(kv.second));
+    std::sort(sorted.begin(), sorted.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<SpriteDef> defs;
+    defs.reserve(sorted.size());
+    for (auto& kv : sorted)
+        defs.push_back(std::move(kv.second));
+
+    rebuild_sprite_mapping(engine, defs);
+    std::printf("[mods] Sprite store built with %zu entries\n", defs.size());
+    return true;
+}
+
+bool poll_fs_mods_hot_reload(EngineState& engine) {
+    ModManager* manager = current_mod_manager(engine);
+    if (!manager)
+        return false;
+    manager->accum_poll += engine.dt;
+    if (manager->accum_poll < HOT_RELOAD_POLL_INTERVAL)
+        return false;
+    manager->accum_poll = 0.0f;
+
+    std::vector<std::string> changed_assets;
+    std::vector<std::string> changed_scripts;
+    bool any = manager->check_changes(changed_assets, changed_scripts);
+    if (!any)
+        return false;
+
+    std::unordered_set<std::string> touched_mods;
+    auto consider_path = [&](const std::string& file_path) {
+        if (!manager)
+            return;
+        for (const auto& mod : manager->mods) {
+            if (file_path.rfind(mod.path, 0) == 0) {
+                if (active_mod_contexts().count(mod.name))
+                    touched_mods.insert(mod.name);
+                break;
+            }
+        }
+    };
+    for (const auto& path : changed_assets)
+        consider_path(path);
+    for (const auto& path : changed_scripts)
+        consider_path(path);
+
+    if (touched_mods.empty())
+        return false;
+
+    std::vector<std::string> reload_ids(touched_mods.begin(), touched_mods.end());
+    std::printf("[mods] Reloading %zu mod(s) due to changes.\n", reload_ids.size());
+    if (reload_mods(engine, reload_ids)) {
+        engine.alerts.push_back({"Mods reloaded", 0.0f, 1.5f, false});
+        return true;
+    }
+    return false;
+}

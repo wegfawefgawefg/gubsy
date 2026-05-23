@@ -1,6 +1,6 @@
 #pragma once
 
-#include "engine/engine_state.hpp"
+#include "src/engine_state.hpp"
 #include "demo/input_frame.hpp"
 
 void build_input_frames_for_step(EngineState& engine, void* app_context);

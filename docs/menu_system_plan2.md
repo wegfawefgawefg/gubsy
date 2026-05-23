@@ -1,10 +1,10 @@
 # Menu System Plan (Variant 2)
 
-Design goals stay the same: data-driven menus, no Dear ImGui in ship builds, 300–500 LOC per file, engine/game boundaries respected even though everything is compiled together. This revision focuses on a fully data-oriented design that avoids per-widget callbacks and lets the engine stay ignorant of game-specific state types.
+Design goals stay the same: data-driven menus, no Dear ImGui in ship builds, 300–500 LOC per file, engine/game boundaries respected even though everything is compiled together. This revision focuses on a fully data-oriented design that avoids per-widget callbacks and lets the engine stay ignorant of game-specific state types.
 
 ## 1. Architecture Overview
 
-### 1.1 MenuManager (engine/menu/manager.[hpp|cpp])
+### 1.1 MenuManager (src/menu/manager.[hpp|cpp])
 - Owned by `EngineState` (`es->menu_manager`).
 - Responsibilities:
   - Maintain screen stack (`std::vector<ScreenInstance>`).
@@ -19,7 +19,7 @@ Design goals stay the same: data-driven menus, no Dear ImGui in ship builds, 300
   - `void update(float dt);`
   - `void render(SDL_Renderer* renderer);`
 
-### 1.2 MenuScreenDef (engine/menu/screen.hpp)
+### 1.2 MenuScreenDef (src/menu/screen.hpp)
 ```cpp
 struct ScreenStateOps {
     uint32_t size;
@@ -65,7 +65,7 @@ struct ModsScreenState {
 
 ## 2. Widgets & Actions
 
-### 2.1 Widget definition (engine/menu/widgets.hpp)
+### 2.1 Widget definition (src/menu/widgets.hpp)
 ```cpp
 enum class WidgetType : uint8_t { Label, Button, Toggle, Slider1D, OptionCycle, TextInput, Card };
 
@@ -90,7 +90,7 @@ struct MenuWidget {
 };
 ```
 
-### 2.2 MenuAction (engine/menu/actions.hpp)
+### 2.2 MenuAction (src/menu/actions.hpp)
 ```cpp
 enum class MenuActionType : uint8_t {
     None,
@@ -135,13 +135,13 @@ RectPixels rect = get_layout_rect(screen.layout, widget.slot, width, height);
 - Layouts live in `data/ui_layouts/*.lisp` and are created with the same tool as other UI surfaces.
 
 ## 4. Rendering
-- `engine/menu/render.cpp`:
+- `src/menu/render.cpp`:
   - For each widget: fetch rect, draw background, label, focus indicator.
   - Styles are simple: colors, border thickness, fonts (maybe we reuse `gg->ui_font`).
   - Optional overlay hooks: built-in screens can push extra draw commands (e.g., mod card details) after main widget pass.
 
 ## 5. Built-in screens & files
-All under `engine/menu/screens/`, each ≤300–500 LOC:
+All under `src/menu/screens/`, each ≤300–500 LOC:
 1. `main_screen.cpp`: Play / Mods / Settings / Quit.
 2. `settings_hub.cpp`: Buttons to Video, Audio, Controls, Binds, Players.
 3. `video_screen.cpp`, `audio_screen.cpp`, `controls_screen.cpp`: schema-driven widgets.
@@ -153,7 +153,7 @@ Game-specific menu screens live in `demo/menu/screens/...` and call `register_me
 
 ## 6. Developer API (game side)
 ```cpp
-#include "engine/menu/manager.hpp"
+#include "src/menu/manager.hpp"
 
 struct MyScreenState {
     int selection = 0;

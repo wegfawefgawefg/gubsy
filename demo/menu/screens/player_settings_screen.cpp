@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "engine/engine_state.hpp"
-#include "engine/menu/menu_manager.hpp"
-#include "engine/menu/menu_screen.hpp"
+#include "src/engine_state.hpp"
+#include "src/menu/menu_manager.hpp"
+#include "src/menu/menu_screen.hpp"
 #include "demo/menu/lobby_state.hpp"
 #include "demo/menu/menu_ids.hpp"
 #include "demo/ui_layout_ids.hpp"

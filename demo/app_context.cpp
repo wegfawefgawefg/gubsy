@@ -1,7 +1,7 @@
 #include "demo/app_context.hpp"
 
-#include "engine/binds_profiles.hpp"
-#include "engine/user_profiles.hpp"
+#include "src/binds_profiles.hpp"
+#include "src/user_profiles.hpp"
 
 bool init_game_app_context(GameAppContext& app) {
     reset_state(app.state);

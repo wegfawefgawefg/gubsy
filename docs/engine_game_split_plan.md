@@ -45,7 +45,7 @@ The game must own semantics and policy:
 Hard rule
 ---------
 
-`engine/` must not include headers from `demo/`.
+`src/` must not include headers from `demo/`.
 
 If a feature needs game data, the engine should get that data through an
 explicit registration point, callback, app context, or public interface.
@@ -57,22 +57,22 @@ The main violations today are:
 
 1. Engine runtime types depend on game types.
    Examples:
-   - `engine/globals.hpp`
-   - `engine/engine_state.hpp`
-   - `engine/input_system.hpp`
-   - `engine/input_queries.cpp`
+   - `src/globals.hpp`
+   - `src/engine_state.hpp`
+   - `src/input_system.hpp`
+   - `src/input_queries.cpp`
 2. Engine boot performs sample/game registration.
    Example:
-   - `engine/run.cpp`
+   - `src/run.cpp`
 3. Engine menu code depends on game ids and game state.
    Examples:
-   - `engine/menu/menu_system_state.hpp`
-   - `engine/menu/menu_render.cpp`
-   - `engine/menu/screens/settings_hub_screen.cpp`
-   - `engine/menu/screens/settings_category_screen.cpp`
+   - `src/menu/menu_system_state.hpp`
+   - `src/menu/menu_render.cpp`
+   - `src/menu/screens/settings_hub_screen.cpp`
+   - `src/menu/screens/settings_category_screen.cpp`
 4. Engine debug code depends on sample/game state.
    Example:
-   - `engine/imgui_debug/session_window.cpp`
+   - `src/imgui_debug/session_window.cpp`
 
 Cut categories
 --------------
@@ -91,11 +91,11 @@ Cut categories
 3. Menu boundary
    - Engine menu framework should only know about engine ids/types and optional
      app context pointers.
-   - Sample screens and sample layout ids should live outside `engine/`.
+   - Sample screens and sample layout ids should live outside `src/`.
 
 4. Debug boundary
    - Engine debug infrastructure should allow registering app panels.
-   - Sample-specific windows should move out of `engine/`.
+   - Sample-specific windows should move out of `src/`.
 
 5. State boundary
    - Engine state should be engine-only.
@@ -123,7 +123,7 @@ Build policy
 Next implementation steps
 -------------------------
 
-1. Remove game includes from `engine/globals.hpp` and `engine/engine_state.hpp`.
-2. Replace sample registration in `engine/run.cpp` with app hooks.
-3. Move sample-specific menu/debug pieces out of `engine/`.
+1. Remove game includes from `src/globals.hpp` and `src/engine_state.hpp`.
+2. Replace sample registration in `src/run.cpp` with app hooks.
+3. Move sample-specific menu/debug pieces out of `src/`.
 4. Make `gubsy_engine` compile with no `demo/` includes at all.

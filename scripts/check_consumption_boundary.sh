@@ -19,20 +19,20 @@ check_no_matches() {
 }
 
 check_no_matches \
-  "engine/include code must not include game headers" \
+  "src/include code must not include game headers" \
   '#include[[:space:]]+[<"]demo/' \
-  "${repo_root}/engine" \
+  "${repo_root}/src" \
   "${repo_root}/include"
 
 check_no_matches \
-  "consumer smoke sources must not include private engine headers" \
-  '#include[[:space:]]+[<"]engine/' \
+  "consumer smoke sources must not include private src headers" \
+  '#include[[:space:]]+[<"]src/' \
   "${repo_root}/tools/public_api_smoke" \
   "${repo_root}/tools/consumer_smoke"
 
 check_no_matches \
-  "public gubsy headers must not include private engine headers" \
-  '#include[[:space:]]+[<"]engine/' \
+  "public gubsy headers must not include private src headers" \
+  '#include[[:space:]]+[<"]src/' \
   "${repo_root}/include/gubsy"
 
 check_no_matches \

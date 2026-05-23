@@ -3,7 +3,7 @@
 `gubsy` is a code-first engine. That means not all game-owned content should be
 forced through the mod system.
 
-What belongs in `engine/assets/`
+What belongs in `src/assets/`
 --------------------------------
 
 Only generic engine-owned runtime assets:
@@ -57,7 +57,7 @@ Tool-side catalog content:
 Current repo decision
 ---------------------
 
-- `engine/assets/` stays engine-only.
+- `src/assets/` stays engine-only.
 - `demo/assets/branding/` holds game-owned branding/app identity assets.
 - `demo/mods/base` stays a built-in shipped mod on purpose.
   It is intentionally mod-shaped because it exercises manifests, mod APIs,

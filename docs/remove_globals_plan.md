@@ -86,7 +86,7 @@ Suggested order
 ---------------
 
 1. Remove `ss` from engine globals.
-2. Replace sample boot registration in `engine/run.cpp` with app hooks/context.
+2. Replace sample boot registration in `src/run.cpp` with app hooks/context.
 3. Separate engine runtime state from game runtime state.
 4. Convert menu/debug systems to take explicit context instead of reading shared
    globals.

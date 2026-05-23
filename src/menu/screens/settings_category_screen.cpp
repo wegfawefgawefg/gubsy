@@ -1,0 +1,1277 @@
+#include "src/menu/settings_category_registry.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include "src/alerts.hpp"
+#include "src/engine_state.hpp"
+#include "src/game_settings.hpp"
+#include "src/graphics.hpp"
+#include "src/menu/menu_commands.hpp"
+#include "src/menu/menu_manager.hpp"
+#include "src/menu/menu_ids.hpp"
+#include "src/menu/menu_screen.hpp"
+#include "src/menu/menu_system_state.hpp"
+#include "src/menu_layout_ids.hpp"
+#include "src/player.hpp"
+#include "src/settings_catalog.hpp"
+#include "src/top_level_game_settings.hpp"
+#include "src/user_profiles.hpp"
+
+namespace {
+namespace msi = menu_system_internal;
+
+constexpr std::size_t kMaxCategoryScreens = 48;
+constexpr int kSettingsPerPage = 4;
+constexpr WidgetId kTitleWidgetId = 400;
+constexpr WidgetId kStatusWidgetId = 401;
+constexpr WidgetId kSearchWidgetId = 402;
+constexpr WidgetId kPageLabelWidgetId = 403;
+constexpr WidgetId kPrevButtonId = 404;
+constexpr WidgetId kNextButtonId = 405;
+constexpr WidgetId kBackButtonId = 430;
+constexpr WidgetId kFirstRowWidgetId = 500;
+constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
+constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
+constexpr const char* kRenderResolutionSettingKey = "gubsy.video.render_resolution";
+constexpr const char* kProfileOwnerNameSettingKey = "__gubsy.profile.owner_name";
+constexpr const char* kSettingsProfileNameSettingKey = "__gubsy.settings_profile_name";
+constexpr const char* kProfileDeleteSettingKey = "__gubsy.profile.delete";
+constexpr const char* kProfileResetSettingKey = "__gubsy.profile.reset";
+constexpr int kDangerConfirmPresses = 5;
+
+const char* window_mode_to_value(WindowDisplayMode mode);
+bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
+bool parse_slider_option_value(const SettingOption& opt, float& out);
+bool parse_resolution_value(const std::string& text, int& out_w, int& out_h);
+std::string make_resolution_string(int w, int h);
+int parse_int_or(const std::string& text, int fallback);
+float snap_slider_value(const SettingWidgetDesc& desc, float value);
+
+const SettingMetadata& profile_owner_name_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kProfileOwnerNameSettingKey;
+        m.label = "Player Name";
+        m.description = "Name shown for this user profile.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Text;
+        m.widget.max_text_len = 24;
+        m.order = -200;
+        return m;
+    }();
+    return meta;
+}
+
+const SettingMetadata& settings_profile_name_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kSettingsProfileNameSettingKey;
+        m.label = "Settings Profile Name";
+        m.description = "Label for the active settings profile.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Text;
+        m.widget.max_text_len = 32;
+        m.order = -190;
+        return m;
+    }();
+    return meta;
+}
+
+const SettingMetadata& profile_delete_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kProfileDeleteSettingKey;
+        m.label = "Delete Profile";
+        m.description = "Permanently delete this profile.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Button;
+        m.widget.custom_id = "profile_delete";
+        m.order = 900;
+        return m;
+    }();
+    return meta;
+}
+
+const SettingMetadata& profile_reset_metadata() {
+    static SettingMetadata meta = [] {
+        SettingMetadata m{};
+        m.scope = SettingScope::Profile;
+        m.key = kProfileResetSettingKey;
+        m.label = "Reset Profile";
+        m.description = "Reset this profile to defaults.";
+        m.categories.emplace_back("Profiles");
+        m.widget.kind = SettingWidgetKind::Button;
+        m.widget.custom_id = "profile_reset";
+        m.order = 910;
+        return m;
+    }();
+    return meta;
+}
+
+MenuCommandId g_cmd_toggle_setting = kMenuIdInvalid;
+MenuCommandId g_cmd_slider_inc = kMenuIdInvalid;
+MenuCommandId g_cmd_slider_dec = kMenuIdInvalid;
+MenuCommandId g_cmd_option_prev = kMenuIdInvalid;
+MenuCommandId g_cmd_option_next = kMenuIdInvalid;
+MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_render_resolution = kMenuIdInvalid;
+MenuCommandId g_cmd_profile_delete = kMenuIdInvalid;
+MenuCommandId g_cmd_profile_reset = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_text_setting = kMenuIdInvalid;
+MenuCommandId g_cmd_slider_set = kMenuIdInvalid;
+
+std::unordered_map<std::string, MenuScreenId> g_tag_to_screen;
+std::unordered_map<MenuScreenId, std::string> g_screen_to_tag;
+
+struct EntryBinding {
+    SettingsCatalogEntry entry;
+};
+
+struct SettingsCategoryState {
+    int page = 0;
+    int total_pages = 1;
+    std::string page_text;
+    std::string status_text;
+    std::vector<EntryBinding> entries;
+    std::vector<int> filtered_indices;
+    std::string search_query;
+    std::string prev_search;
+    GameSettings* profile_settings = nullptr;
+    UserProfile* profile_owner = nullptr;
+    std::string profile_owner_name;
+    SettingsValue profile_owner_value;
+    SettingsValue settings_profile_value;
+    std::string tag;
+    std::vector<std::string> value_buffers;
+    int delete_confirm_remaining{0};
+    int reset_confirm_remaining{0};
+    struct ResolutionEditState {
+        std::string width_text{"1920"};
+        std::string height_text{"1080"};
+        bool dirty{false};
+    } resolution_edit;
+    int resolution_entry_index{-1};
+};
+
+MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* label) {
+    MenuWidget w;
+    w.id = id;
+    w.slot = slot;
+    w.type = WidgetType::Label;
+    w.label = label;
+    return w;
+}
+
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
+    MenuWidget w;
+    w.id = id;
+    w.slot = slot;
+    w.type = WidgetType::Button;
+    w.label = label;
+    w.on_select = action;
+    return w;
+}
+
+int profile_count(const EngineState& engine) {
+    return static_cast<int>(engine.user_profiles_pool.size());
+}
+
+bool is_profile_delete(const SettingMetadata* meta) {
+    return meta && meta->key == kProfileDeleteSettingKey;
+}
+
+bool is_profile_reset(const SettingMetadata* meta) {
+    return meta && meta->key == kProfileResetSettingKey;
+}
+
+MenuStyle danger_style(bool enabled) {
+    MenuStyle style;
+    style.bg_r = 70;
+    style.bg_g = 18;
+    style.bg_b = 18;
+    style.fg_r = 230;
+    style.fg_g = 210;
+    style.fg_b = 210;
+    style.focus_r = 200;
+    style.focus_g = 90;
+    style.focus_b = 90;
+    if (!enabled) {
+        style.bg_r = 50;
+        style.bg_g = 20;
+        style.bg_b = 20;
+        style.fg_r = 150;
+        style.fg_g = 140;
+        style.fg_b = 140;
+        style.focus_r = 120;
+        style.focus_g = 90;
+        style.focus_b = 90;
+    }
+    return style;
+}
+
+bool confirm_danger_action(EngineState& engine, int& remaining, const char* label) {
+    if (remaining <= 0)
+        remaining = kDangerConfirmPresses;
+    remaining -= 1;
+    if (remaining > 0) {
+        add_alert(engine, std::string(label) + " (" + std::to_string(remaining) + " presses remaining)");
+        return false;
+    }
+    remaining = 0;
+    return true;
+}
+
+void rebuild_filter(SettingsCategoryState& st) {
+    st.filtered_indices.clear();
+    std::string needle = st.search_query;
+    std::transform(needle.begin(), needle.end(), needle.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    for (std::size_t i = 0; i < st.entries.size(); ++i) {
+        if (!needle.empty()) {
+            const auto& entry = st.entries[i].entry;
+            std::string hay;
+            if (entry.metadata)
+                hay = entry.metadata->label + " " + entry.metadata->description;
+            std::transform(hay.begin(), hay.end(), hay.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (hay.find(needle) == std::string::npos)
+                continue;
+        }
+        st.filtered_indices.push_back(static_cast<int>(i));
+    }
+
+    int filtered = static_cast<int>(st.filtered_indices.size());
+    if (filtered == 0) {
+        st.page = 0;
+        st.total_pages = 1;
+        st.page_text = "Page 0 / 0";
+        return;
+    }
+    st.total_pages = std::max(1, (filtered + kSettingsPerPage - 1) / kSettingsPerPage);
+    st.page = std::clamp(st.page, 0, st.total_pages - 1);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+}
+
+EntryBinding* get_entry_binding(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (index < 0 || index >= static_cast<int>(st.entries.size()))
+        return nullptr;
+    return &st.entries[static_cast<std::size_t>(index)];
+}
+
+void persist_binding(EngineState& engine, const EntryBinding& binding, GameSettings* profile_settings) {
+    if (binding.entry.install_scope) {
+        save_top_level_game_settings(engine.top_level_game_settings);
+        sync_graphics_from_settings(engine);
+    } else if (profile_settings) {
+        save_game_settings(*profile_settings);
+    }
+}
+
+bool apply_slider_value(EngineState& engine,
+                        SettingsCategoryState& st,
+                        EntryBinding& binding,
+                        float target_value,
+                        bool persist_change) {
+    if (!binding.entry.metadata)
+        return false;
+    const SettingWidgetDesc& desc = binding.entry.metadata->widget;
+    float snapped = snap_slider_value(desc, target_value);
+    if (float* fv = std::get_if<float>(binding.entry.value)) {
+        bool changed = std::fabs(*fv - snapped) > 1e-4f;
+        if (changed)
+            *fv = snapped;
+        if (persist_change && changed)
+            persist_binding(engine, binding, st.profile_settings);
+        return changed;
+    }
+    return false;
+}
+
+void command_toggle_setting(MenuContext& ctx, std::int32_t index) {
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value)
+        return;
+    if (int* iv = std::get_if<int>(binding->entry.value)) {
+        *iv = (*iv == 0) ? 1 : 0;
+    } else if (float* fv = std::get_if<float>(binding->entry.value)) {
+        *fv = (*fv >= 0.5f) ? 0.0f : 1.0f;
+    }
+    persist_binding(ctx.engine, *binding, ctx.state<SettingsCategoryState>().profile_settings);
+}
+
+void adjust_slider(MenuContext& ctx, std::int32_t index, float direction) {
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value || !binding->entry.metadata)
+        return;
+    const SettingWidgetDesc& desc = binding->entry.metadata->widget;
+    float min = desc.min;
+    float max = desc.max;
+    float step = desc.step > 0.0f ? desc.step : (max - min) * 0.05f;
+    if (float* fv = std::get_if<float>(binding->entry.value)) {
+        if (!desc.options.empty()) {
+            std::vector<float> discrete;
+            discrete.reserve(desc.options.size());
+            for (const auto& opt : desc.options) {
+                float parsed = 0.0f;
+                if (parse_slider_option_value(opt, parsed))
+                    discrete.push_back(parsed);
+            }
+            if (!discrete.empty()) {
+                int closest = 0;
+                float best_diff = std::numeric_limits<float>::max();
+                for (int i = 0; i < static_cast<int>(discrete.size()); ++i) {
+                    float diff = std::fabs(discrete[static_cast<std::size_t>(i)] - *fv);
+                    if (diff < best_diff) {
+                        best_diff = diff;
+                        closest = i;
+                    }
+                }
+                int target = closest + (direction > 0.0f ? 1 : -1);
+                target = std::clamp(target, 0, static_cast<int>(discrete.size()) - 1);
+                if (target != closest) {
+                    *fv = discrete[static_cast<std::size_t>(target)];
+                    persist_binding(ctx.engine, *binding, ctx.state<SettingsCategoryState>().profile_settings);
+                }
+                return;
+            }
+        }
+        *fv = std::clamp(*fv + step * direction, min, max);
+        persist_binding(ctx.engine, *binding, ctx.state<SettingsCategoryState>().profile_settings);
+    }
+}
+
+void command_slider_inc(MenuContext& ctx, std::int32_t index) {
+    adjust_slider(ctx, index, +1.0f);
+}
+
+void command_slider_dec(MenuContext& ctx, std::int32_t index) {
+    adjust_slider(ctx, index, -1.0f);
+}
+
+void command_slider_set(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    auto& menu = menu_system_internal::runtime_state(ctx.engine);
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value || !binding->entry.metadata)
+        return;
+    float target_value = 0.0f;
+    bool have_target = false;
+    if (menu.slider_drag_value_valid) {
+        target_value = menu.slider_drag_value;
+        have_target = true;
+    } else if (float* fv = std::get_if<float>(binding->entry.value)) {
+        target_value = *fv;
+        have_target = true;
+    }
+    if (!have_target)
+        return;
+    bool persist_change =
+        !menu.slider_drag_value_valid || menu.slider_commit_pending;
+    if (apply_slider_value(ctx.engine, st, *binding, target_value, persist_change)) {
+        if (binding->entry.metadata)
+            st.status_text = "Updated " + binding->entry.metadata->label;
+    }
+}
+
+void cycle_option(MenuContext& ctx, std::int32_t index, int direction) {
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value || !binding->entry.metadata)
+        return;
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (std::string* sv = std::get_if<std::string>(binding->entry.value)) {
+        const auto& options = binding->entry.metadata->widget.options;
+        if (options.empty())
+            return;
+        int current = 0;
+        for (std::size_t i = 0; i < options.size(); ++i) {
+            if (options[i].value == *sv) {
+                current = static_cast<int>(i);
+                break;
+            }
+        }
+        current = (current + direction + static_cast<int>(options.size())) % static_cast<int>(options.size());
+        *sv = options[static_cast<std::size_t>(current)].value;
+        persist_binding(ctx.engine, *binding, st.profile_settings);
+        if (binding->entry.metadata->key == kRenderResolutionSettingKey &&
+            st.resolution_entry_index == index) {
+            int rw = 0;
+            int rh = 0;
+            if (parse_resolution_value(*sv, rw, rh)) {
+                st.resolution_edit.width_text = std::to_string(rw);
+                st.resolution_edit.height_text = std::to_string(rh);
+                glm::ivec2 dims = get_render_dimensions(ctx.engine);
+                st.resolution_edit.dirty = (rw != dims.x || rh != dims.y);
+            }
+        }
+    }
+}
+
+void command_option_prev(MenuContext& ctx, std::int32_t index) {
+    cycle_option(ctx, index, -1);
+}
+
+void command_option_next(MenuContext& ctx, std::int32_t index) {
+    cycle_option(ctx, index, +1);
+}
+
+void command_page_delta(MenuContext& ctx, std::int32_t delta) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    int max_page = std::max(0, st.total_pages - 1);
+    st.page = std::clamp(st.page + delta, 0, max_page);
+    if (st.filtered_indices.empty()) {
+        st.page_text = "Page 0 / 0";
+    } else {
+        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+    }
+}
+
+void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.metadata || binding->entry.metadata->key != kWindowModeSettingKey)
+        return;
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (std::string* sv = std::get_if<std::string>(binding->entry.value)) {
+        WindowDisplayMode mode;
+        if (!value_to_window_mode(*sv, mode)) {
+            st.status_text = "Unknown display mode";
+            return;
+        }
+        if (set_window_display_mode(ctx.engine, mode)) {
+            st.status_text = "Display mode applied";
+            if (current_graphics(ctx.engine))
+                current_graphics(ctx.engine)->window_mode = mode;
+        } else {
+            st.status_text = "Failed to apply display mode";
+        }
+    }
+}
+
+void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (index < 0 || index >= static_cast<int>(st.entries.size()))
+        return;
+    if (st.resolution_entry_index != index)
+        return;
+    int width = std::clamp(parse_int_or(st.resolution_edit.width_text, 0), 320, 16384);
+    int height = std::clamp(parse_int_or(st.resolution_edit.height_text, 0), 240, 9216);
+    std::string value = make_resolution_string(width, height);
+    EntryBinding& binding = st.entries[static_cast<std::size_t>(index)];
+    if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+        *sv = value;
+        persist_binding(ctx.engine, binding, st.profile_settings);
+        if (set_render_resolution(ctx.engine, width, height)) {
+            msi::play_confirm_sound(ctx.engine);
+            st.status_text = "Render resolution set to " + value;
+            st.resolution_edit.width_text = std::to_string(width);
+            st.resolution_edit.height_text = std::to_string(height);
+            st.resolution_edit.dirty = false;
+        } else {
+            st.status_text = "Failed to set render resolution";
+        }
+    }
+}
+
+bool update_profile_in_pool(EngineState& engine, const UserProfile& profile) {
+    for (auto& existing : engine.user_profiles_pool) {
+        if (existing.id == profile.id) {
+            existing = profile;
+            return true;
+        }
+    }
+    return false;
+}
+
+void command_profile_delete(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (!st.profile_owner)
+        return;
+    if (profile_count(ctx.engine) <= 1) {
+        add_alert(ctx.engine, "Cannot delete the last profile.");
+        return;
+    }
+    st.reset_confirm_remaining = 0;
+    if (!confirm_danger_action(ctx.engine, st.delete_confirm_remaining, "Delete profile"))
+        return;
+
+    int deleted_id = st.profile_owner->id;
+    delete_user_profile(deleted_id);
+    ctx.engine.user_profiles_pool.erase(
+        std::remove_if(ctx.engine.user_profiles_pool.begin(), ctx.engine.user_profiles_pool.end(),
+                       [&](const UserProfile& profile) { return profile.id == deleted_id; }),
+        ctx.engine.user_profiles_pool.end());
+
+    if (ctx.engine.user_profiles_pool.empty()) {
+        UserProfile fallback = create_default_user_profile();
+        ctx.engine.user_profiles_pool.push_back(fallback);
+    }
+    int fallback_id = ctx.engine.user_profiles_pool.front().id;
+    for (int i = 0; i < static_cast<int>(ctx.engine.players.size()); ++i) {
+        const Player& player = ctx.engine.players[static_cast<std::size_t>(i)];
+        if (player.has_active_profile && player.profile.id == deleted_id)
+            set_user_profile_for_player(ctx.engine, i, fallback_id);
+    }
+    add_alert(ctx.engine, "Profile deleted.");
+    st.delete_confirm_remaining = 0;
+    ctx.manager.pop_screen();
+}
+
+void command_profile_reset(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (!st.profile_owner)
+        return;
+    st.delete_confirm_remaining = 0;
+    if (!confirm_danger_action(ctx.engine, st.reset_confirm_remaining, "Reset profile"))
+        return;
+
+    UserProfile reset = *st.profile_owner;
+    reset.last_binds_profile_id = -1;
+    reset.last_input_settings_profile_id = -1;
+    reset.last_game_settings_profile_id = -1;
+    if (reset.name.empty())
+        reset.name = "Profile";
+    save_user_profile(reset);
+    update_profile_in_pool(ctx.engine, reset);
+    for (int i = 0; i < static_cast<int>(ctx.engine.players.size()); ++i) {
+        const Player& player = ctx.engine.players[static_cast<std::size_t>(i)];
+        if (player.has_active_profile && player.profile.id == reset.id)
+            set_user_profile_for_player(ctx.engine, i, reset.id);
+    }
+    st.profile_owner_name = reset.name;
+    add_alert(ctx.engine, "Profile reset to defaults.");
+    st.reset_confirm_remaining = 0;
+}
+
+void command_apply_text_setting(MenuContext& ctx, std::int32_t index) {
+    auto& st = ctx.state<SettingsCategoryState>();
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.value || index < 0 ||
+        index >= static_cast<int>(st.value_buffers.size()) || !binding->entry.metadata)
+        return;
+    std::string new_value = st.value_buffers[static_cast<std::size_t>(index)];
+    std::string* sv = std::get_if<std::string>(binding->entry.value);
+    if (!sv)
+        return;
+
+    if (binding->entry.metadata->key == kProfileOwnerNameSettingKey) {
+        if (st.profile_owner && !new_value.empty() && *sv != new_value) {
+            *sv = new_value;
+            st.profile_owner->name = new_value;
+            st.profile_owner_name = new_value;
+            st.status_text = "Updated player name";
+            save_user_profile(*st.profile_owner);
+        }
+        return;
+    }
+
+    if (binding->entry.metadata->key == kSettingsProfileNameSettingKey) {
+        if (st.profile_settings && !new_value.empty() && *sv != new_value) {
+            *sv = new_value;
+            st.profile_settings->name = new_value;
+            st.status_text = "Updated settings profile name";
+            save_game_settings(*st.profile_settings);
+        }
+        return;
+    }
+
+    if (*sv != new_value) {
+        *sv = new_value;
+        persist_binding(ctx.engine, *binding, st.profile_settings);
+        st.status_text = "Updated " + binding->entry.metadata->label;
+    }
+}
+
+std::string format_value(const SettingsValue& value) {
+    if (const int* iv = std::get_if<int>(&value))
+        return *iv != 0 ? "On" : "Off";
+    if (const float* fv = std::get_if<float>(&value)) {
+        char buffer[32];
+        std::snprintf(buffer, sizeof(buffer), "%.2f", static_cast<double>(*fv));
+        return buffer;
+    }
+    if (const std::string* sv = std::get_if<std::string>(&value))
+        return *sv;
+    return {};
+}
+
+std::string format_slider_display(const SettingWidgetDesc& desc, float value) {
+    float shown = value * desc.display_scale + desc.display_offset;
+    int precision = std::max(0, desc.display_precision);
+    char buffer[64];
+    if (precision == 0)
+        std::snprintf(buffer, sizeof(buffer), "%.0f", static_cast<double>(shown));
+    else
+        std::snprintf(buffer, sizeof(buffer), "%.*f", precision, static_cast<double>(shown));
+    return buffer;
+}
+
+const char* window_mode_to_value(WindowDisplayMode mode) {
+    switch (mode) {
+        case WindowDisplayMode::Windowed:
+            return "windowed";
+        case WindowDisplayMode::Borderless:
+            return "borderless";
+        case WindowDisplayMode::Fullscreen:
+            return "fullscreen";
+        default:
+            return "windowed";
+    }
+}
+
+bool value_to_window_mode(const std::string& value, WindowDisplayMode& out) {
+    if (value == "windowed") {
+        out = WindowDisplayMode::Windowed;
+        return true;
+    }
+    if (value == "borderless") {
+        out = WindowDisplayMode::Borderless;
+        return true;
+    }
+    if (value == "fullscreen") {
+        out = WindowDisplayMode::Fullscreen;
+        return true;
+    }
+    return false;
+}
+
+bool parse_resolution_value(const std::string& text, int& out_w, int& out_h) {
+    auto xpos = text.find('x');
+    if (xpos == std::string::npos)
+        return false;
+    std::string wstr = text.substr(0, xpos);
+    std::string hstr = text.substr(xpos + 1);
+    try {
+        int w = std::stoi(wstr);
+        int h = std::stoi(hstr);
+        if (w <= 0 || h <= 0)
+            return false;
+        out_w = w;
+        out_h = h;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+std::string make_resolution_string(int w, int h) {
+    return std::to_string(w) + "x" + std::to_string(h);
+}
+
+int parse_int_or(const std::string& text, int fallback) {
+    try {
+        if (text.empty())
+            return fallback;
+        return std::stoi(text);
+    } catch (...) {
+        return fallback;
+    }
+}
+
+bool parse_slider_option_value(const SettingOption& opt, float& out) {
+    if (opt.value.empty())
+        return false;
+    char* end_ptr = nullptr;
+    float parsed = std::strtof(opt.value.c_str(), &end_ptr);
+    if (end_ptr && end_ptr != opt.value.c_str()) {
+        out = parsed;
+        return true;
+    }
+    std::string lower = opt.value;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (lower == "unlimited" || lower == "none" || lower == "off") {
+        out = 0.0f;
+        return true;
+    }
+    return false;
+}
+
+float snap_slider_value(const SettingWidgetDesc& desc, float value) {
+    float clamped = std::clamp(value, desc.min, desc.max);
+    if (desc.options.empty())
+        return clamped;
+    std::vector<float> discrete;
+    discrete.reserve(desc.options.size());
+    for (const auto& opt : desc.options) {
+        float parsed = 0.0f;
+        if (parse_slider_option_value(opt, parsed))
+            discrete.push_back(parsed);
+    }
+    if (discrete.empty())
+        return clamped;
+    int closest = 0;
+    float best_diff = std::numeric_limits<float>::max();
+    for (int i = 0; i < static_cast<int>(discrete.size()); ++i) {
+        float diff = std::fabs(discrete[static_cast<std::size_t>(i)] - clamped);
+        if (diff < best_diff) {
+            best_diff = diff;
+            closest = i;
+        }
+    }
+    return discrete[static_cast<std::size_t>(closest)];
+}
+
+void refresh_entries(EngineState& engine, SettingsCategoryState& st, const SettingsCatalog& catalog) {
+    st.entries.clear();
+    bool profiles_section = (st.tag == "Profiles");
+    auto it = catalog.categories.find(st.tag);
+    if (it != catalog.categories.end()) {
+        for (const auto& entry : it->second) {
+            if (entry.metadata)
+                st.entries.push_back({entry});
+        }
+    } else if (!profiles_section) {
+        return;
+    }
+
+    if (profiles_section) {
+        std::string owner_name = st.profile_owner_name.empty() ? "Player" : st.profile_owner_name;
+        st.profile_owner_value = owner_name;
+        std::string settings_name = (st.profile_settings && !st.profile_settings->name.empty())
+                                        ? st.profile_settings->name
+                                        : std::string("Settings");
+        st.settings_profile_value = settings_name;
+        EntryBinding owner_binding;
+        owner_binding.entry.metadata = &profile_owner_name_metadata();
+        owner_binding.entry.value = &st.profile_owner_value;
+        st.entries.push_back(owner_binding);
+        EntryBinding settings_binding;
+        settings_binding.entry.metadata = &settings_profile_name_metadata();
+        settings_binding.entry.value = &st.settings_profile_value;
+        st.entries.push_back(settings_binding);
+
+        EntryBinding reset_binding;
+        reset_binding.entry.metadata = &profile_reset_metadata();
+        reset_binding.entry.value = nullptr;
+        st.entries.push_back(reset_binding);
+
+        EntryBinding delete_binding;
+        delete_binding.entry.metadata = &profile_delete_metadata();
+        delete_binding.entry.value = nullptr;
+        st.entries.push_back(delete_binding);
+    }
+
+    std::sort(st.entries.begin(), st.entries.end(), [](const EntryBinding& a, const EntryBinding& b) {
+        if (a.entry.metadata->order != b.entry.metadata->order)
+            return a.entry.metadata->order < b.entry.metadata->order;
+        return a.entry.metadata->label < b.entry.metadata->label;
+    });
+
+    st.value_buffers.resize(st.entries.size());
+    st.resolution_entry_index = -1;
+
+    int editing_entry_index = -1;
+    WidgetId editing_widget =
+        menu_system_internal::current_text_widget(menu_system_internal::runtime_state(engine));
+    if (editing_widget != kMenuIdInvalid) {
+        if (editing_widget >= kFirstRowWidgetId &&
+            editing_widget < kFirstRowWidgetId + kSettingsPerPage) {
+            int row = static_cast<int>(editing_widget - kFirstRowWidgetId);
+            editing_entry_index = st.page * kSettingsPerPage + row;
+        }
+    }
+    for (std::size_t i = 0; i < st.entries.size(); ++i) {
+        const SettingMetadata* meta = st.entries[i].entry.metadata;
+        bool is_editing_entry = (editing_entry_index == static_cast<int>(i));
+        if (meta && meta->key == kRenderResolutionSettingKey)
+            st.resolution_entry_index = static_cast<int>(i);
+        if (is_editing_entry) {
+            continue;
+        }
+        if (meta && meta->widget.kind == SettingWidgetKind::Slider && meta->widget.max_text_len > 0 &&
+            st.entries[i].entry.value) {
+            if (const float* fv = std::get_if<float>(st.entries[i].entry.value))
+                st.value_buffers[i] = format_slider_display(meta->widget, *fv);
+            else
+                st.value_buffers[i].clear();
+        } else if (meta && meta->widget.kind == SettingWidgetKind::Text &&
+                   st.entries[i].entry.value) {
+            if (const std::string* sv = std::get_if<std::string>(st.entries[i].entry.value))
+                st.value_buffers[i] = *sv;
+            else
+                st.value_buffers[i].clear();
+        } else {
+            st.value_buffers[i].clear();
+        }
+    }
+    if (st.resolution_entry_index >= 0 && st.resolution_entry_index < static_cast<int>(st.entries.size())) {
+        EntryBinding& binding = st.entries[static_cast<std::size_t>(st.resolution_entry_index)];
+        bool editing_resolution = (editing_entry_index == st.resolution_entry_index);
+        int desired_w = 0;
+        int desired_h = 0;
+        if (const std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+            if (!editing_resolution && parse_resolution_value(*sv, desired_w, desired_h)) {
+                st.resolution_edit.width_text = std::to_string(desired_w);
+                st.resolution_edit.height_text = std::to_string(desired_h);
+            } else if (!editing_resolution) {
+                glm::ivec2 dims = get_render_dimensions(engine);
+                desired_w = dims.x;
+                desired_h = dims.y;
+                st.resolution_edit.width_text = std::to_string(desired_w);
+                st.resolution_edit.height_text = std::to_string(desired_h);
+            }
+        }
+        glm::ivec2 dims = get_render_dimensions(engine);
+        int pending_w = std::clamp(parse_int_or(st.resolution_edit.width_text, dims.x), 320, 16384);
+        int pending_h = std::clamp(parse_int_or(st.resolution_edit.height_text, dims.y), 240, 9216);
+        st.resolution_edit.dirty = (pending_w != dims.x || pending_h != dims.y);
+    }
+}
+
+MenuWidget make_setting_widget(EngineState& engine,
+                               const EntryBinding& binding,
+                               WidgetId id,
+                               UILayoutObjectId slot,
+                               int entry_index,
+                               std::vector<std::string>& label_cache,
+                               std::string* value_buffer,
+                               SettingsCategoryState& state) {
+    MenuWidget w;
+    w.id = id;
+    w.slot = slot;
+    w.type = WidgetType::Card;
+    w.label = binding.entry.metadata ? binding.entry.metadata->label.c_str() : "";
+    w.secondary = binding.entry.metadata ? binding.entry.metadata->description.c_str() : "";
+    if (binding.entry.metadata && binding.entry.metadata->widget.kind == SettingWidgetKind::Button) {
+        const SettingMetadata* meta = binding.entry.metadata;
+        bool delete_btn = is_profile_delete(meta);
+        bool reset_btn = is_profile_reset(meta);
+        int presses_left = kDangerConfirmPresses;
+        if (delete_btn && state.delete_confirm_remaining > 0)
+            presses_left = state.delete_confirm_remaining;
+        if (reset_btn && state.reset_confirm_remaining > 0)
+            presses_left = state.reset_confirm_remaining;
+        label_cache.emplace_back(meta->label + " (" + std::to_string(presses_left) + ")");
+        w.label = label_cache.back().c_str();
+        w.type = WidgetType::Button;
+        bool enabled = true;
+        if (delete_btn && profile_count(engine) <= 1)
+            enabled = false;
+        if (delete_btn) {
+            w.on_select = MenuAction::run_command(g_cmd_profile_delete);
+            if (!enabled)
+                w.play_select_sound = false;
+        } else if (reset_btn) {
+            w.on_select = MenuAction::run_command(g_cmd_profile_reset);
+        }
+        w.style = danger_style(enabled);
+        return w;
+    }
+    if (binding.entry.metadata &&
+        binding.entry.metadata->scope == SettingScope::Profile &&
+        state.profile_settings) {
+        std::string owner = state.profile_owner_name.empty() ? "Player" : state.profile_owner_name;
+        std::string overlay = "For: " + owner;
+        if (!state.profile_settings->name.empty())
+            overlay += " | " + state.profile_settings->name;
+        label_cache.emplace_back(std::move(overlay));
+        w.tertiary = label_cache.back().c_str();
+        w.tertiary_overlay = true;
+    }
+    if (!binding.entry.value || !binding.entry.metadata)
+        return w;
+
+    const SettingWidgetDesc& desc = binding.entry.metadata->widget;
+    switch (desc.kind) {
+        case SettingWidgetKind::Toggle: {
+            w.type = WidgetType::Toggle;
+            bool on = false;
+            if (const int* iv = std::get_if<int>(binding.entry.value))
+                on = (*iv != 0);
+            else if (const float* fv = std::get_if<float>(binding.entry.value))
+                on = (*fv >= 0.5f);
+            label_cache.emplace_back(on ? "On" : "Off");
+            w.tertiary = label_cache.back().c_str();
+            w.tertiary_overlay = false;
+            MenuAction toggle = MenuAction::run_command(g_cmd_toggle_setting, entry_index);
+            w.on_select = toggle;
+            w.on_left = toggle;
+            w.on_right = toggle;
+            break;
+        }
+        case SettingWidgetKind::Slider: {
+            w.type = WidgetType::Slider1D;
+            w.min = desc.min;
+            w.max = desc.max;
+            if (float* fv = std::get_if<float>(binding.entry.value))
+                w.bind_ptr = fv;
+            float range = w.max - w.min;
+            w.step = desc.step > 0.0f ? desc.step : (range > 0.0f ? range * 0.01f : 0.01f);
+            w.display_scale = desc.display_scale;
+            w.display_offset = desc.display_offset;
+            w.display_precision = desc.display_precision;
+            w.on_left = MenuAction::run_command(g_cmd_slider_dec, entry_index);
+            w.on_right = MenuAction::run_command(g_cmd_slider_inc, entry_index);
+            w.has_discrete_options = !desc.options.empty();
+            bool is_frame_cap = binding.entry.metadata &&
+                                binding.entry.metadata->key == kFrameCapSettingKey;
+            if (const float* fv = std::get_if<float>(binding.entry.value)) {
+                label_cache.push_back(format_slider_display(desc, *fv));
+                if (is_frame_cap && *fv <= 0.0f)
+                    label_cache.back() = "Unlimited";
+            } else
+                label_cache.push_back(format_value(*binding.entry.value));
+            w.badge = label_cache.back().c_str();
+            if (value_buffer && desc.max_text_len > 0) {
+                if (!menu_system_internal::is_text_edit_widget(
+                        menu_system_internal::runtime_state(engine), id)) {
+                    *value_buffer = label_cache.back();
+                }
+                w.text_buffer = value_buffer;
+                w.text_max_len = desc.max_text_len;
+                w.placeholder = is_frame_cap ? "fps" : "value";
+                w.badge = nullptr;
+                if (menu_system_internal::is_text_edit_widget(
+                        menu_system_internal::runtime_state(engine), id)) {
+                    menu_system_internal::set_active_text_buffer(
+                        menu_system_internal::runtime_state(engine),
+                        value_buffer,
+                        desc.max_text_len);
+                }
+            }
+        if (is_frame_cap)
+            w.show_slider_track = false;
+        if (g_cmd_slider_set != kMenuIdInvalid)
+            w.on_select = MenuAction::run_command(g_cmd_slider_set, entry_index);
+        break;
+        }
+        case SettingWidgetKind::Option: {
+            w.type = WidgetType::OptionCycle;
+            label_cache.push_back(format_value(*binding.entry.value));
+            w.badge = label_cache.back().c_str();
+            if (std::string* sv = std::get_if<std::string>(binding.entry.value))
+                w.bind_ptr = sv;
+            if (binding.entry.metadata && binding.entry.metadata->key == kWindowModeSettingKey) {
+                const Graphics* graphics = current_graphics(engine);
+                const char* applied = graphics ? window_mode_to_value(graphics->window_mode) : nullptr;
+                bool matches = true;
+                if (applied && w.bind_ptr)
+                    matches = (*static_cast<std::string*>(w.bind_ptr) == applied);
+                if (matches) {
+                    w.style.bg_r = 22;
+                    w.style.bg_g = 36;
+                    w.style.bg_b = 26;
+                    w.style.focus_r = 100;
+                    w.style.focus_g = 210;
+                    w.style.focus_b = 150;
+                    w.badge_color = SDL_Color{140, 220, 150, 255};
+                } else {
+                    w.style.bg_r = 40;
+                    w.style.bg_g = 32;
+                    w.style.bg_b = 18;
+                    w.style.focus_r = 230;
+                    w.style.focus_g = 200;
+                    w.style.focus_b = 90;
+                    w.badge_color = SDL_Color{240, 205, 120, 255};
+                }
+                w.on_select = MenuAction::run_command(g_cmd_apply_window_mode, entry_index);
+            } else if (binding.entry.metadata && binding.entry.metadata->key == kRenderResolutionSettingKey) {
+                if (state.resolution_entry_index == entry_index) {
+                    auto apply_dirty_style = [&](bool dirty) {
+                        if (dirty) {
+                            w.style.bg_r = 48;
+                            w.style.bg_g = 34;
+                            w.style.bg_b = 18;
+                            w.style.focus_r = 230;
+                            w.style.focus_g = 200;
+                            w.style.focus_b = 90;
+                            w.badge_color = SDL_Color{240, 205, 120, 255};
+                        } else {
+                            w.style.bg_r = 22;
+                            w.style.bg_g = 36;
+                            w.style.bg_b = 26;
+                            w.style.focus_r = 100;
+                            w.style.focus_g = 210;
+                            w.style.focus_b = 150;
+                            w.badge_color = SDL_Color{140, 220, 150, 255};
+                        }
+                    };
+                    apply_dirty_style(state.resolution_edit.dirty);
+                    w.text_buffer = &state.resolution_edit.width_text;
+                    w.text_max_len = 5;
+                    w.placeholder = "Width";
+                    w.aux_text_buffer = &state.resolution_edit.height_text;
+                    w.aux_text_max_len = 5;
+                    w.aux_placeholder = "Height";
+                w.select_enters_text = false;
+                w.play_select_sound = false;
+                w.has_discrete_options = true;
+                    std::string badge_text = binding.entry.metadata->label;
+                    if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+                        for (const auto& opt : binding.entry.metadata->widget.options) {
+                            if (opt.value == *sv && !opt.label.empty()) {
+                                badge_text = opt.label;
+                                break;
+                            }
+                        }
+                    }
+                    label_cache.push_back(badge_text);
+                    w.badge = label_cache.back().c_str();
+                    w.on_select = MenuAction::run_command(g_cmd_apply_render_resolution, entry_index);
+                }
+            }
+            w.on_left = MenuAction::run_command(g_cmd_option_prev, entry_index);
+            w.on_right = MenuAction::run_command(g_cmd_option_next, entry_index);
+            break;
+        }
+        case SettingWidgetKind::Text: {
+            w.type = WidgetType::TextInput;
+            if (value_buffer) {
+                if (value_buffer->empty() && !menu_system_internal::is_text_edit_widget(
+                                                menu_system_internal::runtime_state(engine), id)) {
+                    if (const std::string* sv = std::get_if<std::string>(binding.entry.value))
+                        *value_buffer = *sv;
+                }
+                w.text_buffer = value_buffer;
+            }
+            w.text_max_len = desc.max_text_len > 0 ? desc.max_text_len : 64;
+            w.placeholder = "Enter text";
+            w.play_select_sound = false;
+            w.on_select = MenuAction::run_command(g_cmd_apply_text_setting, entry_index);
+            break;
+        }
+        default:
+            label_cache.push_back(format_value(*binding.entry.value));
+            w.badge = label_cache.back().c_str();
+            break;
+    }
+    return w;
+}
+
+BuiltScreen build_settings_category(MenuContext& ctx) {
+    auto tag_it = g_screen_to_tag.find(ctx.screen_id);
+    if (tag_it == g_screen_to_tag.end()) {
+        BuiltScreen built;
+        built.layout = UILayoutID::SETTINGS_SCREEN;
+        return built;
+    }
+
+    SettingsCatalog catalog = build_settings_catalog(ctx.engine, ctx.player_index);
+    auto& st = ctx.state<SettingsCategoryState>();
+    st.tag = tag_it->second;
+    st.profile_settings = catalog.profile_settings;
+    st.profile_owner = catalog.user_profile;
+    st.profile_owner_name = st.profile_owner ? st.profile_owner->name : "Player";
+    st.profile_owner_value = st.profile_owner_name;
+    st.settings_profile_value =
+        (st.profile_settings && !st.profile_settings->name.empty()) ? st.profile_settings->name : std::string{};
+
+    refresh_entries(ctx.engine, st, catalog);
+
+    if (st.search_query != st.prev_search) {
+        st.prev_search = st.search_query;
+        rebuild_filter(st);
+    } else if (st.filtered_indices.empty() || st.filtered_indices.size() != st.entries.size()) {
+        rebuild_filter(st);
+    }
+    if (st.filtered_indices.empty()) {
+        st.page_text = "Page 0 / 0";
+    } else {
+        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+    }
+
+    static std::vector<MenuWidget> widgets;
+    static std::vector<MenuAction> frame_actions;
+    static std::vector<std::string> label_cache;
+    widgets.clear();
+    frame_actions.clear();
+    label_cache.clear();
+
+    widgets.reserve(kSettingsPerPage + 8);
+    widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, st.tag.c_str()));
+
+    st.status_text = std::to_string(st.filtered_indices.size()) + (st.filtered_indices.size() == 1 ? " item" : " items");
+    MenuWidget status_label = make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
+    status_label.label = st.status_text.c_str();
+    widgets.push_back(status_label);
+
+    MenuWidget search;
+    search.id = kSearchWidgetId;
+    search.slot = SettingsObjectID::SEARCH;
+    search.type = WidgetType::TextInput;
+    search.text_buffer = &st.search_query;
+    search.text_max_len = 48;
+    search.placeholder = "Search settings...";
+    widgets.push_back(search);
+    std::size_t search_idx = widgets.size() - 1;
+
+    MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
+    page_label.label = st.page_text.c_str();
+    widgets.push_back(page_label);
+
+    MenuAction prev_action = MenuAction::none();
+    MenuAction next_action = MenuAction::none();
+    if (st.page > 0 && g_cmd_page_delta != kMenuIdInvalid)
+        prev_action = MenuAction::run_command(g_cmd_page_delta, -1);
+    if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
+        next_action = MenuAction::run_command(g_cmd_page_delta, +1);
+
+    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    prev_btn.role = MenuWidgetRole::PagePrev;
+    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    next_btn.role = MenuWidgetRole::PageNext;
+    widgets.push_back(prev_btn);
+    std::size_t prev_idx = widgets.size() - 1;
+    widgets.push_back(next_btn);
+    std::size_t next_idx = widgets.size() - 1;
+
+    std::vector<WidgetId> row_ids;
+    row_ids.reserve(kSettingsPerPage);
+    std::size_t rows_offset = widgets.size();
+    int start_index = st.page * kSettingsPerPage;
+    for (int i = 0; i < kSettingsPerPage; ++i) {
+        int filtered_idx = start_index + i;
+        UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
+        WidgetId widget_id = static_cast<WidgetId>(kFirstRowWidgetId + static_cast<WidgetId>(i));
+        if (filtered_idx < static_cast<int>(st.filtered_indices.size())) {
+            int entry_index = st.filtered_indices[static_cast<std::size_t>(filtered_idx)];
+            MenuWidget row =
+                make_setting_widget(ctx.engine,
+                                    st.entries[static_cast<std::size_t>(entry_index)],
+                                    widget_id,
+                                    slot,
+                                    entry_index,
+                                    label_cache,
+                                    (entry_index < static_cast<int>(st.value_buffers.size())
+                                         ? &st.value_buffers[static_cast<std::size_t>(entry_index)]
+                                         : nullptr),
+                                    st);
+            row.nav_left = row.id;
+            row.nav_right = row.id;
+            widgets.push_back(row);
+            row_ids.push_back(widget_id);
+        } else {
+            widgets.push_back(make_label_widget(widget_id, slot, ""));
+        }
+    }
+
+    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    widgets.push_back(back_btn);
+    std::size_t back_idx = widgets.size() - 1;
+
+    MenuWidget& search_ref = widgets[search_idx];
+    MenuWidget& prev_ref = widgets[prev_idx];
+    MenuWidget& next_ref = widgets[next_idx];
+    MenuWidget& back_ref = widgets[back_idx];
+
+    WidgetId first_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.front();
+    WidgetId last_row_id = row_ids.empty() ? kMenuIdInvalid : row_ids.back();
+    WidgetId rows_start = first_row_id != kMenuIdInvalid ? first_row_id : back_ref.id;
+
+    // Search widget navigation
+    search_ref.nav_down = rows_start;
+    search_ref.nav_left = search_ref.id;
+    search_ref.nav_right = prev_ref.id;
+    search_ref.nav_up = search_ref.id;
+
+    // Page button navigation
+    prev_ref.nav_left = search_ref.id;
+    prev_ref.nav_right = next_ref.id;
+    prev_ref.nav_up = search_ref.id;
+    prev_ref.nav_down = rows_start;
+
+    next_ref.nav_left = prev_ref.id;
+    next_ref.nav_right = next_ref.id;
+    next_ref.nav_up = search_ref.id;
+    next_ref.nav_down = rows_start;
+
+    // Row navigation
+    for (std::size_t i = 0; i < row_ids.size(); ++i) {
+        MenuWidget& row = widgets[rows_offset + i];
+        row.nav_left = prev_ref.id;
+        row.nav_right = next_ref.id;
+        row.nav_up = (i == 0) ? search_ref.id : row_ids[i - 1];
+        row.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
+    }
+
+    // Back button navigation
+    back_ref.nav_up = (last_row_id != kMenuIdInvalid) ? last_row_id : search_ref.id;
+    back_ref.nav_left = prev_ref.id;
+    back_ref.nav_right = next_ref.id;
+    back_ref.nav_down = back_ref.id;
+
+    BuiltScreen built;
+    built.layout = UILayoutID::SETTINGS_SCREEN;
+    built.widgets = MenuWidgetList{widgets};
+    built.frame_actions = MenuActionList{frame_actions};
+    built.default_focus = !row_ids.empty()
+                              ? row_ids.front()
+                              : (prev_action.type != MenuActionType::None ? prev_btn.id
+                                                                          : (next_action.type != MenuActionType::None ? next_btn.id
+                                                                                                                       : back_btn.id));
+    return built;
+}
+
+void register_screen_for_tag(EngineState& engine, MenuScreenId id) {
+    MenuScreenDef def;
+    def.id = id;
+    def.layout = UILayoutID::SETTINGS_SCREEN;
+    def.state_ops = screen_state_ops<SettingsCategoryState>();
+    def.build = build_settings_category;
+    engine.menu_manager.register_screen(def);
+}
+
+} // namespace
+
+MenuScreenId ensure_settings_category_screen(EngineState& engine, const std::string& tag) {
+    auto it = g_tag_to_screen.find(tag);
+    if (it != g_tag_to_screen.end())
+        return it->second;
+    if (g_tag_to_screen.size() >= kMaxCategoryScreens) {
+        return g_tag_to_screen.begin()->second;
+    }
+    MenuScreenId id = MenuScreenID::SETTINGS_CATEGORY_BASE + static_cast<MenuScreenId>(g_tag_to_screen.size());
+    g_tag_to_screen.emplace(tag, id);
+    g_screen_to_tag.emplace(id, tag);
+    register_screen_for_tag(engine, id);
+    return id;
+}
+
+const std::string* tag_for_settings_screen(MenuScreenId id) {
+    auto it = g_screen_to_tag.find(id);
+    if (it == g_screen_to_tag.end())
+        return nullptr;
+    return &it->second;
+}
+
+void register_settings_category_screens(EngineState& engine) {
+    if (g_cmd_toggle_setting == kMenuIdInvalid)
+        g_cmd_toggle_setting = engine.menu_commands.register_command(command_toggle_setting);
+    if (g_cmd_slider_inc == kMenuIdInvalid)
+        g_cmd_slider_inc = engine.menu_commands.register_command(command_slider_inc);
+    if (g_cmd_slider_dec == kMenuIdInvalid)
+        g_cmd_slider_dec = engine.menu_commands.register_command(command_slider_dec);
+    if (g_cmd_option_prev == kMenuIdInvalid)
+        g_cmd_option_prev = engine.menu_commands.register_command(command_option_prev);
+    if (g_cmd_option_next == kMenuIdInvalid)
+        g_cmd_option_next = engine.menu_commands.register_command(command_option_next);
+    if (g_cmd_page_delta == kMenuIdInvalid)
+        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    if (g_cmd_apply_window_mode == kMenuIdInvalid)
+        g_cmd_apply_window_mode = engine.menu_commands.register_command(command_apply_window_mode);
+    if (g_cmd_apply_render_resolution == kMenuIdInvalid)
+        g_cmd_apply_render_resolution = engine.menu_commands.register_command(command_apply_render_resolution);
+    if (g_cmd_profile_delete == kMenuIdInvalid)
+        g_cmd_profile_delete = engine.menu_commands.register_command(command_profile_delete);
+    if (g_cmd_profile_reset == kMenuIdInvalid)
+        g_cmd_profile_reset = engine.menu_commands.register_command(command_profile_reset);
+    if (g_cmd_apply_text_setting == kMenuIdInvalid) {
+        g_cmd_apply_text_setting = engine.menu_commands.register_command(command_apply_text_setting);
+    }
+    if (g_cmd_slider_set == kMenuIdInvalid)
+        g_cmd_slider_set = engine.menu_commands.register_command(command_slider_set);
+}

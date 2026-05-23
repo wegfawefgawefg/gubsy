@@ -1,9 +1,9 @@
 #include "demo/menu/menu_input.hpp"
 
-#include "engine/binds_profiles.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/input_binding_utils.hpp"
-#include "engine/player.hpp"
+#include "src/binds_profiles.hpp"
+#include "src/engine_state.hpp"
+#include "src/input_binding_utils.hpp"
+#include "src/player.hpp"
 #include "demo/actions.hpp"
 
 MenuInputState gather_menu_input(EngineState& engine) {

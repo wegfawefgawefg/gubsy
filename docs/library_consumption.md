@@ -37,13 +37,13 @@ Build policy
 Current boundary violations
 ---------------------------
 
-The engine no longer has direct `engine/ -> demo/` includes in the current tree,
+The engine no longer has direct `src/ -> demo/` includes in the current tree,
 but it is not yet a clean imported library boundary. The main violations are:
 
-1. Public `include/gubsy/...` headers are still mostly thin facades over
-   `engine/...` headers, so the repo root remains a public include path.
-2. `GubsyRuntime` now owns an internal `EngineState`, but most subsystem
-   facade headers still include implementation headers directly.
+1. Some public `include/gubsy/...` headers still expose old first-party helper
+   namespaces such as `glayout` and `ginput` through type aliases.
+2. `GubsyRuntime` now owns an internal `EngineState`, but some subsystem
+   facades still expose types that are too close to implementation details.
 3. Engine boot flow still assumes the built-in menu/profile/settings shell is
    always registered. Mods are runtime-optional now, but broader app-owned
    registration hooks are still incomplete.
@@ -54,10 +54,10 @@ but it is not yet a clean imported library boundary. The main violations are:
 Cut plan
 --------
 
-1. Keep `engine -> game` includes at zero and add checks if this regresses.
+1. Keep `src -> demo` includes at zero and add checks if this regresses.
 2. Promote stable public headers under `include/gubsy/...` instead of exposing
-   every `engine/...` header.
-3. Move repo-root/`engine/` from public to private include paths once the public
+   every `src/...` header.
+3. Move repo-root/`src/` from public to private include paths once the public
    headers no longer need implementation headers.
 4. Replace sample registration in engine boot with explicit app/bootstrap hooks.
 5. Move sample-specific menu screens, layout ids, and debug windows out of the
@@ -77,8 +77,8 @@ Current verification
   `add_subdirectory`, links only `gubsy::engine`, and includes only
   `gubsy/...` headers.
 - `scripts/check_consumption_boundary.sh` checks the current import boundary:
-  no `engine/ -> demo/` includes, no smoke-test includes of private
-  `engine/...` headers, and no sibling glib checkout requirement in CMake/docs.
+  no `src/ -> demo/` includes, no smoke-test includes of private
+  `src/...` headers, and no sibling glib checkout requirement in CMake/docs.
 - `ctest --test-dir build --output-on-failure` runs the public API smoke,
   consumption boundary check, and external consumer smoke when tools/tests are
   enabled.

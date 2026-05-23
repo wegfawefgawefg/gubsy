@@ -110,10 +110,10 @@ This way the current manual wiring isn’t invalidated, but new dynamically gene
 ## Files & Structure
 - `docs/settings_menu_plan.md` (this doc)
 - Engine code additions (future PRs):
-    * `engine/settings_catalog.hpp/cpp` – merges schemas, stores metadata, exposes buckets.
-    * `engine/menu/screens/settings_hub.cpp`, `settings_category_screen.cpp` – build widgets from catalog.
-    * `engine/menu/nav_builder.hpp` – shared nav auto-generation (used by settings + mods + future menus).
-    * Schema metadata updates in `engine/game_settings.hpp`, `engine/top_level_game_settings.hpp`, `engine/input_settings.hpp`.
+    * `src/settings_catalog.hpp/cpp` – merges schemas, stores metadata, exposes buckets.
+    * `src/menu/screens/settings_hub.cpp`, `settings_category_screen.cpp` – build widgets from catalog.
+    * `src/menu/nav_builder.hpp` – shared nav auto-generation (used by settings + mods + future menus).
+    * Schema metadata updates in `src/game_settings.hpp`, `src/top_level_game_settings.hpp`, `src/input_settings.hpp`.
 
 ## Open Questions / Next Steps
 1. Define the exact metadata API (C++ helpers) and migrate existing schema registration code.

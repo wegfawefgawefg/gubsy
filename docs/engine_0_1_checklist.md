@@ -10,7 +10,7 @@ to build on.
 
 Gubsy already has:
 
-- engine/runtime code split from a bundled game layer
+- engine/runtime code split from a bundled demo layer
 - rendering, input, audio, and menu framework
 - profile/settings persistence
 - Lua-based mod loading and mod menu groundwork

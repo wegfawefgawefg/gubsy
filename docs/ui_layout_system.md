@@ -28,7 +28,7 @@ Layouts live in `data/ui_layouts/layouts.lisp` as an S-expression tree:
 `save_ui_layout()` rewrites this file (creating the directory if necessary). Layout definitions should therefore be deterministic/idempotent – updating an existing `(layout id+resolution)` rewrites it in place rather than duplicating it.
 
 ## Core API
-Declared in `engine/ui_layouts.hpp`:
+Declared in `src/ui_layouts.hpp`:
 
 ```c++
 struct UIObject { int id; std::string label; float x, y, w, h; };
@@ -80,4 +80,4 @@ Each player can then fetch objects within their layout and render relative to th
 - See `demo/main.cpp` for how we define and save the Play screen layouts for 1080p, 720p, and 2560x1080, using shared ID constants.
 - See `demo/playing.cpp` for how the Play mode now loads `UILayoutID::PLAY_SCREEN`, pulls out the `UIObjectID::BAR_HEIGHT_INDICATOR`, and renders that UI element using normalized rectangles.
 
-This doc should stay in sync with the APIs in `engine/ui_layouts.*`. Update both whenever new capabilities (e.g., alignment hints, nested containers) are added so designers know how to author future HUDs.
+This doc should stay in sync with the APIs in `src/ui_layouts.*`. Update both whenever new capabilities (e.g., alignment hints, nested containers) are added so designers know how to author future HUDs.

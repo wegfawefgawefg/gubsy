@@ -1,15 +1,15 @@
 #include "demo/imgui_debug/register_game_debug_windows.hpp"
 
-#include "engine/binds_profiles.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/imgui_debug/imgui_debug.hpp"
-#include "engine/input_sources.hpp"
+#include "src/binds_profiles.hpp"
+#include "src/engine_state.hpp"
+#include "src/imgui_debug/imgui_debug.hpp"
+#include "src/input_sources.hpp"
 #include "demo/actions.hpp"
 #include "demo/coop_session.hpp"
 #include "demo/coop_sync_runtime.hpp"
 #include "demo/input_runtime.hpp"
 #include "demo/menu/lobby_state.hpp"
-#include "engine/session_contract.hpp"
+#include "src/session_contract.hpp"
 
 #include <imgui.h>
 

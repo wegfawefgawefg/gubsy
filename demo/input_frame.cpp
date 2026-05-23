@@ -1,11 +1,11 @@
 #include "demo/input_frame.hpp"
 
-#include "engine/binds_profiles.hpp"
-#include "engine/device_state.hpp"
-#include "engine/engine_state.hpp"
-#include "engine/input.hpp"
-#include "engine/input_binding_utils.hpp"
-#include "engine/player.hpp"
+#include "src/binds_profiles.hpp"
+#include "src/device_state.hpp"
+#include "src/engine_state.hpp"
+#include "src/input.hpp"
+#include "src/input_binding_utils.hpp"
+#include "src/player.hpp"
 
 #include <algorithm>
 #include <array>

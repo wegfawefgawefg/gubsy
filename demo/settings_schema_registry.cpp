@@ -1,6 +1,6 @@
 #include "demo/settings_schema_registry.hpp"
 
-#include "engine/settings_schema.hpp"
+#include "src/settings_schema.hpp"
 
 #include <initializer_list>
 

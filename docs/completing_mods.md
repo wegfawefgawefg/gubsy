@@ -46,7 +46,7 @@ We have the foundational ModHost/registry in place, but a few critical features 
 ## 7. Code Organization
 - Keep implementation files under ~300–400 LoC; split helpers if needed:
   * `ModHost` may need submodules (activation, asset refresh, persistence) to stay readable.
-  * Installer/downloader logic should remain separate from UI (e.g., `engine/mod_install.hpp/.cpp`).
+  * Installer/downloader logic should remain separate from UI (e.g., `src/mod_install.hpp/.cpp`).
 
 Once these pieces land, we’ll have the core engine-level support needed for:
 - Browsing/installing mods from the main menu.

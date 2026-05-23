@@ -6,9 +6,9 @@
 
 #include <nlohmann/json.hpp>
 
-#include "engine/engine_state.hpp"
-#include "engine/session_link.hpp"
-#include "engine/sync_payload_codec.hpp"
+#include "src/engine_state.hpp"
+#include "src/session_link.hpp"
+#include "src/sync_payload_codec.hpp"
 #include "demo/coop_correction.hpp"
 #include "demo/coop_protocol.hpp"
 #include "demo/coop_sync_runtime.hpp"

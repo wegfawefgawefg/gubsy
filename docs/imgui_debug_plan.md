@@ -6,7 +6,7 @@
 - Keep windows movable/dockable so developers can organize their workspace.
 
 ## Toggle Strategy
-- Render engine-owned overlay controls (no game deps) from a new `engine/imgui_debug` module.
+- Render engine-owned overlay controls (no game deps) from a new `src/imgui_debug` module.
 - Add a slim “Debug HUD” bar that can be hidden entirely (master toggle + hotkey).
 - Provide hotkeys (default: `F1–F4`) to toggle individual windows even when the bar is hidden.
 - Persist visibility flags and “bar hidden” state in `data/debug_overlays.lisp` (ImGui still handles window positions).
@@ -40,9 +40,9 @@
 - Leave room for additional panels (mod loader status, network sync, etc.). Add placeholder toggles but keep them disabled until implemented.
 
 ## Implementation Notes
-- Create `engine/imgui_debug.hpp/.cpp` to own state + rendering. This module ships with the engine; game-specific overlays can live in game code without touching it.
-- Provide an initialization hook from `engine/render.cpp` after ImGui layer setup.
-- Keep module files small (< ~400 lines each) and group functionality under `engine/imgui_debug/`.
+- Create `src/imgui_debug.hpp/.cpp` to own state + rendering. This module ships with the engine; game-specific overlays can live in game code without touching it.
+- Provide an initialization hook from `src/render.cpp` after ImGui layer setup.
+- Keep module files small (< ~400 lines each) and group functionality under `src/imgui_debug/`.
 - Use ECS/global state accessors but keep drawing code read-only; no mutations inside ImGui except toggles and highlight requests.
 - Guard all data access with `if (!es || !ss)` to avoid crashes when the engine is booting or shutting down.
 
