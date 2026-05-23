@@ -316,6 +316,7 @@ if (GUB_BUILD_TOOLS)
     engine/session_contract.cpp
   )
   target_include_directories(room_smoke PRIVATE
+    ${GUB_SOURCE_DIR}/include
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
@@ -326,6 +327,7 @@ if (GUB_BUILD_TOOLS)
     engine/session_contract.cpp
   )
   target_include_directories(room_timeout_smoke PRIVATE
+    ${GUB_SOURCE_DIR}/include
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
@@ -341,6 +343,7 @@ if (GUB_BUILD_TOOLS)
     game/coop_sim.cpp
   )
   target_include_directories(coop_sync_smoke PRIVATE
+    ${GUB_SOURCE_DIR}/include
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
