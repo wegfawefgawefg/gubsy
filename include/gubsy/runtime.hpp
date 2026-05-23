@@ -1,7 +1,7 @@
 #pragma once
 
 #include "gubsy/engine_state.hpp"
-#include "gubsy/menu/menu.hpp"
+#include "gubsy/menu/ids.hpp"
 
 using GubsyRuntime = EngineState;
 

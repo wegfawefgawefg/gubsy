@@ -1,5 +1,5 @@
 #include <gubsy/app.hpp>
-#include <gubsy/menu/menu.hpp>
+#include <gubsy/menu/ids.hpp>
 #include <gubsy/run.hpp>
 #include <gubsy/runtime.hpp>
 
