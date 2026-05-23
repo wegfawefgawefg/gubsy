@@ -5,8 +5,8 @@
 gubsy
 =====
 
-`gubsy` is a small C++20 game kit/runtime with a bundled game layer used to exercise the kit.
-It currently includes SDL2 rendering, audio, input, menu systems, UI layout tooling, player/profile
+`gubsy` is a small C++20 game kit/runtime with a bundled demo layer used to exercise the kit.
+It currently includes SDL3 rendering, audio, input, menu systems, UI layout tooling, player/profile
 state, and optional Lua-driven mod loading.
 
 <p align="center">
@@ -16,9 +16,10 @@ state, and optional Lua-driven mod loading.
 What Is In This Repo
 --------------------
 
-- `engine/`: reusable engine/runtime code plus engine-owned built-in assets
-- `game/`: the current game-specific layer, shipped game content, and built-in mods
-- `libs/`: temporary first-party library snapshots being migrated into engine modules
+- `include/gubsy/`: public headers used by games that import Gubsy
+- `engine/`: transitional private implementation code plus engine-owned built-in assets
+- `src/`: private Gubsy-owned modules, including sexp, layout, and input code
+- `game/`: current bundled demo layer, shipped demo content, and built-in mods
 - `tools/`: standalone servers and smoke-test binaries
 - `data/`: writable runtime state for this game project
 - `third_party/`: external dependency source vendored with the repo
@@ -29,7 +30,7 @@ Current Engine Features
 -----------------------
 
 - C++20 + CMake build
-- SDL2-based windowing, rendering, image loading, fonts, and audio
+- SDL3-based windowing, rendering, image loading, fonts, and audio
 - Input system for keyboard, mouse, and gamepad bindings
 - Menu framework with screen registration, command routing, and per-screen state
 - Player profiles, binds profiles, and game settings persistence
@@ -43,12 +44,12 @@ Build
 Requirements:
 - CMake 3.20+
 - A C++20 compiler
-- SDL2
+- SDL3
 - GLM
 - Lua 5.4
-- SDL2_image
-- SDL2_ttf
-- SDL2_mixer
+- SDL3_image
+- SDL3_ttf
+- SDL3_mixer
 
 Linux (Debian/Ubuntu):
 - `bash scripts/setup_debian.sh`

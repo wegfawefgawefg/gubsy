@@ -5,30 +5,6 @@ include(CTest)
 
 set(GUB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
-set(GUB_BUNDLED_GSEXP_DIR "${GUB_SOURCE_DIR}/libs/gsexp")
-if (NOT TARGET gsexp::gsexp AND EXISTS "${GUB_BUNDLED_GSEXP_DIR}/CMakeLists.txt")
-  set(GSEXP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(GSEXP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  set(GSEXP_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
-  add_subdirectory("${GUB_BUNDLED_GSEXP_DIR}" "${CMAKE_BINARY_DIR}/_deps/gsexp")
-endif()
-
-set(GUB_BUNDLED_GLAYOUT_DIR "${GUB_SOURCE_DIR}/libs/glayout")
-if (NOT TARGET glayout::core AND EXISTS "${GUB_BUNDLED_GLAYOUT_DIR}/CMakeLists.txt")
-  set(GLAYOUT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(GLAYOUT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  set(GLAYOUT_BUILD_SDL_DEMO OFF CACHE BOOL "" FORCE)
-  set(GLAYOUT_WITH_IMGUI OFF CACHE BOOL "" FORCE)
-  add_subdirectory("${GUB_BUNDLED_GLAYOUT_DIR}" "${CMAKE_BINARY_DIR}/_deps/glayout")
-endif()
-
-set(GUB_BUNDLED_GINPUT_DIR "${GUB_SOURCE_DIR}/libs/ginput")
-if (NOT TARGET ginput::ginput AND EXISTS "${GUB_BUNDLED_GINPUT_DIR}/CMakeLists.txt")
-  set(GINPUT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-  set(GINPUT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-  add_subdirectory("${GUB_BUNDLED_GINPUT_DIR}" "${CMAKE_BINARY_DIR}/_deps/ginput")
-endif()
-
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(GUB_DEFAULT_BUILD_EXTRAS ON)
 else()
@@ -65,6 +41,8 @@ find_package(PkgConfig QUIET)
 file(GLOB_RECURSE GUB_ENGINE_SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.hpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
 file(GLOB_RECURSE GUB_GAME_SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/game/*.cpp"
@@ -73,24 +51,6 @@ file(GLOB_RECURSE GUB_GAME_SOURCES
 
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
 add_library(gubsy::engine ALIAS gubsy_engine)
-
-if (TARGET gsexp::gsexp)
-  target_link_libraries(gubsy_engine PUBLIC gsexp::gsexp)
-else()
-  message(FATAL_ERROR "Bundled gsexp not found at libs/gsexp.")
-endif()
-
-if (TARGET glayout::core)
-  target_link_libraries(gubsy_engine PUBLIC glayout::core)
-else()
-  message(FATAL_ERROR "Bundled glayout not found at libs/glayout.")
-endif()
-
-if (TARGET ginput::ginput)
-  target_link_libraries(gubsy_engine PUBLIC ginput::ginput)
-else()
-  message(FATAL_ERROR "Bundled ginput not found at libs/ginput.")
-endif()
 
 if (EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lua.h")
   file(GLOB GUB_LUA_SOURCES "${GUB_SOURCE_DIR}/third_party/lua/src/*.c")

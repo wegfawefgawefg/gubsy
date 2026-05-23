@@ -125,12 +125,12 @@ Keep the module names and includes shaped around Gubsy.
    `ginput` into `libs/`.
 2. Done: change glib dependency setup in `CMakeLists.txt` to use bundled copies.
 3. Done: change missing-dependency errors to point at `libs/`.
-4. Done: update README to document `libs/` as bundled first-party source.
-5. Next: migrate `libs/gsexp` into `src/sexp`.
-6. Next: migrate `libs/glayout` into `src/layout`.
-7. Next: migrate `libs/ginput` into `src/input`.
+4. Done: update README to document first-party modules.
+5. Done: migrate `libs/gsexp` into `src/sexp`.
+6. Done: migrate `libs/glayout` into `src/layout`.
+7. Done: migrate `libs/ginput` into `src/input`.
 8. Verify this build after each step:
-   - Top-level `gubsy` checkout using bundled glibs.
+   - Top-level `gubsy` checkout without bundled glib subprojects.
 
 ## What This Does Not Change
 
