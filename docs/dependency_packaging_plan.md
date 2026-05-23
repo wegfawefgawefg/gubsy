@@ -7,8 +7,8 @@ the normal build contract.
 ## Goal
 
 Make `gubsy` self-contained by default. The standalone glib repos remain useful
-as upstream homes for reusable code, but `gubsy` should build from bundled,
-pinned copies.
+as upstream homes for reusable code, but `gubsy` should build from bundled
+first-party copies.
 
 The desired user experience is:
 
@@ -40,11 +40,11 @@ The default contract should instead be a single `gubsy` checkout.
 
 ## Repo Layout
 
-Use pinned bundled copies under `third_party/`:
+Use bundled first-party copies under `libs/`:
 
 ```text
 gubsy/
-  third_party/
+  libs/
     gsexp/
     glayout/
     ginput/
@@ -59,9 +59,9 @@ sibling repos.
 
 ## CMake Resolution
 
-Resolve each glib dependency from its bundled copy:
+Resolve each glib dependency from its bundled first-party copy:
 
-1. Use bundled `third_party/` copies.
+1. Use bundled `libs/` copies.
 2. Otherwise fail with a specific message explaining which bundled dependency is
    missing.
 
@@ -85,12 +85,12 @@ This should work without cloning `gsexp`, `glayout`, or `ginput` as siblings.
 Develop glib changes in the standalone repo first. When the change is ready,
 update the bundled copy in `gubsy`.
 
-Copy the updated glib source into `third_party/` and commit it in `gubsy`:
+Copy the updated glib source into `libs/` and commit it in `gubsy`:
 
 ```sh
-rm -rf gubsy/third_party/gsexp
-cp -R gsexp gubsy/third_party/gsexp
-git -C gubsy add third_party/gsexp
+rm -rf gubsy/libs/gsexp
+cp -R gsexp gubsy/libs/gsexp
+git -C gubsy add libs/gsexp
 ```
 
 Ignore the copied glib's `.git` directory if present. The important point is
@@ -98,11 +98,11 @@ that `gubsy` records the exact source it builds against.
 
 ## Implementation Checklist
 
-1. Done: add `third_party/gsexp`, `third_party/glayout`, and `third_party/ginput` as
+1. Done: add `libs/gsexp`, `libs/glayout`, and `libs/ginput` as
    copied bundled source.
 2. Done: change glib dependency setup in `CMakeLists.txt` to use bundled copies.
 3. Done: change missing-dependency errors to point at `third_party/`.
-4. Done: update README to document `third_party/` as bundled dependency source.
+4. Done: update README to document `libs/` as bundled first-party source.
 5. Verify this build:
    - Top-level `gubsy` checkout using bundled glibs.
 

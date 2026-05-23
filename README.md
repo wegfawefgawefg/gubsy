@@ -18,9 +18,10 @@ What Is In This Repo
 
 - `engine/`: reusable engine/runtime code plus engine-owned built-in assets
 - `game/`: the current game-specific layer, shipped game content, and built-in mods
+- `libs/`: bundled first-party Gubsy libraries used by the default build
 - `tools/`: standalone servers and smoke-test binaries
 - `data/`: writable runtime state for this game project
-- `third_party/`: bundled dependency source used by the default build
+- `third_party/`: external dependency source vendored with the repo
 - `imgui/`: Dear ImGui sources used by the engine
 - `scripts/`: local build/run helpers
 
