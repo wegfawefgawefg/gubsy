@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Debug (dev)",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GLAYOUT_STRICT": true,
+        "GLAYOUT_WARN_AS_ERROR": true,
+        "GLAYOUT_BUILD_EXAMPLES": true,
+        "GLAYOUT_BUILD_TESTS": true,
+        "GLAYOUT_BUILD_SDL_DEMO": true,
+        "GLAYOUT_WITH_IMGUI": true,
+        "GLAYOUT_FETCH_DEMO_IMGUI": true,
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "jobs": 0
+    }
+  ]
+}

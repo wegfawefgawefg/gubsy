@@ -20,6 +20,7 @@ What Is In This Repo
 - `game/`: the current game-specific layer, shipped game content, and built-in mods
 - `tools/`: standalone servers and smoke-test binaries
 - `data/`: writable runtime state for this game project
+- `third_party/`: bundled dependency source used by the default build
 - `imgui/`: Dear ImGui sources used by the engine
 - `scripts/`: local build/run helpers
 
@@ -92,6 +93,7 @@ Docs
 - Repo layout: `docs/repo_layout.md`
 - Content policy: `docs/content_policy.md`
 - Library consumption: `docs/library_consumption.md`
+- Dependency packaging plan: `docs/dependency_packaging_plan.md`
 - Engine/game split plan: `docs/engine_game_split_plan.md`
 - Remove globals plan: `docs/remove_globals_plan.md`
 - Cooperative multiplayer policy: `docs/cooperative_multiplayer_policy.md`
