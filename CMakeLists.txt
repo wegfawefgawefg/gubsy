@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.20)
 
 project(gubsy LANGUAGES C CXX)
 
+set(GUB_SIBLING_GSEXP_DIR "${CMAKE_SOURCE_DIR}/../gsexp")
+if (NOT TARGET gsexp::gsexp AND EXISTS "${GUB_SIBLING_GSEXP_DIR}/CMakeLists.txt")
+  set(GSEXP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GSEXP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GSEXP_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+  add_subdirectory("${GUB_SIBLING_GSEXP_DIR}" "${CMAKE_BINARY_DIR}/_deps/gsexp")
+endif()
+
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(GUB_DEFAULT_BUILD_EXTRAS ON)
 else()
@@ -46,6 +54,12 @@ file(GLOB_RECURSE GUB_GAME_SOURCES
 
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
 add_library(gubsy::engine ALIAS gubsy_engine)
+
+if (TARGET gsexp::gsexp)
+  target_link_libraries(gubsy_engine PUBLIC gsexp::gsexp)
+else()
+  message(FATAL_ERROR "gsexp not found. Place gsexp next to gubsy or provide target gsexp::gsexp.")
+endif()
 
 if (EXISTS "${CMAKE_SOURCE_DIR}/third_party/lua/src/lua.h")
   file(GLOB GUB_LUA_SOURCES "${CMAKE_SOURCE_DIR}/third_party/lua/src/*.c")
