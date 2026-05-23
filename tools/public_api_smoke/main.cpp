@@ -25,6 +25,7 @@ int main() {
     }
 
     GubsyAppConfig no_mods{};
+    no_mods.data_root = "data";
     normalized = normalize_gubsy_app_config(no_mods);
     if (normalized.enable_mods ||
         normalized.enable_mod_browser ||
@@ -34,7 +35,7 @@ int main() {
     }
 
     GubsyRuntime no_mod_engine{};
-    if (!init_gubsy_runtime(no_mod_engine, hooks.config)) {
+    if (!init_gubsy_runtime(no_mod_engine, no_mods)) {
         return 4;
     }
     const GubsyAppConfig& no_mod_config = gubsy_runtime_config(no_mod_engine);
@@ -44,6 +45,10 @@ int main() {
         no_mod_config.enable_lua_mod_host) {
         cleanup_gubsy_runtime(no_mod_engine);
         return 5;
+    }
+    if (no_mod_config.data_root != "data") {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 14;
     }
     if (gubsy_runtime_has_menu_screen(no_mod_engine, MenuScreenID::MODS)) {
         cleanup_gubsy_runtime(no_mod_engine);

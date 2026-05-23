@@ -274,6 +274,7 @@ if (GUB_BUILD_TOOLS)
     src/project_paths.cpp
   )
   target_include_directories(mod_server PRIVATE
+    ${GUB_SOURCE_DIR}/include
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )

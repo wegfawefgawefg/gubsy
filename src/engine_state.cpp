@@ -2,6 +2,7 @@
 #include "src/audio.hpp"
 #include "src/graphics.hpp"
 #include "src/mods.hpp"
+#include "src/project_paths.hpp"
 #include "src/settings_defaults.hpp"
 #include "src/data.hpp"
 #include "src/ui_layouts.hpp"
@@ -55,6 +56,7 @@ const EngineState& gubsy_runtime_engine(const GubsyRuntime& runtime) {
 
 bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     engine.app_config = normalize_gubsy_app_config(config);
+    configure_project_paths(engine.app_config);
     engine.menu_manager.set_command_registry(&engine.menu_commands);
     register_engine_settings_schema_entries(engine);
     register_main_menu_screen(engine);

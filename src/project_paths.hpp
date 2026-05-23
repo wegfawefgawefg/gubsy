@@ -2,6 +2,10 @@
 
 #include <filesystem>
 
+struct GubsyAppConfig;
+
+void configure_project_paths(const GubsyAppConfig& config);
+
 std::filesystem::path project_root();
 std::filesystem::path engine_root();
 std::filesystem::path game_root();
