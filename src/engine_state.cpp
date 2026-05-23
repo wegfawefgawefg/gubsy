@@ -8,6 +8,7 @@
 #include "src/graphics.hpp"
 #include "src/menu/menu_system.hpp"
 #include "src/menu/screens/main_menu_screen.hpp"
+#include "src/menu/screens/shell_lobby_screen.hpp"
 #include "src/menu/screens/settings_hub_screen.hpp"
 #include "src/menu/screens/profiles_screen.hpp"
 #include "src/menu/screens/binds_profiles_screen.hpp"
@@ -57,6 +58,7 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     engine.menu_manager.set_command_registry(&engine.menu_commands);
     register_engine_settings_schema_entries(engine);
     register_main_menu_screen(engine);
+    register_shell_lobby_screen(engine);
     register_settings_category_screens(engine);
     register_settings_hub_screen(engine);
     register_profiles_screen(engine);

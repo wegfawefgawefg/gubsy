@@ -10,9 +10,14 @@
 
 namespace {
 
+MenuCommandId g_cmd_open_lobby = kMenuIdInvalid;
 MenuCommandId g_cmd_open_settings = kMenuIdInvalid;
 MenuCommandId g_cmd_open_profiles = kMenuIdInvalid;
 MenuCommandId g_cmd_open_binds = kMenuIdInvalid;
+
+void command_open_lobby(MenuContext& ctx, std::int32_t) {
+    ctx.manager.push_screen(MenuScreenID::SHELL_LOBBY);
+}
 
 void command_open_settings(MenuContext& ctx, std::int32_t) {
     ctx.manager.push_screen(MenuScreenID::SETTINGS);
@@ -37,6 +42,7 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
 }
 
 BuiltScreen build_main_menu(MenuContext& ctx) {
+    (void)ctx;
     static std::vector<MenuWidget> widgets;
     static std::vector<MenuAction> frame_actions;
     widgets.clear();
@@ -51,8 +57,8 @@ BuiltScreen build_main_menu(MenuContext& ctx) {
 
     MenuWidget play = make_button(101,
                                   SettingsObjectID::CARD0,
-                                  "Start Game",
-                                  MenuAction::run_command(ctx.engine.main_menu_commands.start_game));
+                                  "Play",
+                                  MenuAction::run_command(g_cmd_open_lobby));
     MenuWidget settings = make_button(102,
                                       SettingsObjectID::CARD1,
                                       "Settings",
@@ -96,6 +102,8 @@ BuiltScreen build_main_menu(MenuContext& ctx) {
 } // namespace
 
 void register_main_menu_screen(EngineState& engine) {
+    if (g_cmd_open_lobby == kMenuIdInvalid)
+        g_cmd_open_lobby = engine.menu_commands.register_command(command_open_lobby);
     if (g_cmd_open_settings == kMenuIdInvalid)
         g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
     if (g_cmd_open_profiles == kMenuIdInvalid)

@@ -53,6 +53,10 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 10;
     }
+    if (!gubsy_runtime_has_menu_screen(no_mod_engine, MenuScreenID::SHELL_LOBBY)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 13;
+    }
     bool command_called = false;
     MenuCommandId command = gubsy_register_menu_command(
         no_mod_engine,
