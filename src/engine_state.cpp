@@ -135,6 +135,10 @@ MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime,
     return gubsy_runtime_engine(runtime).menu_commands.register_host_command(fn, user_data);
 }
 
+void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schema) {
+    register_binds_schema(gubsy_runtime_engine(runtime), schema);
+}
+
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {
     gubsy_runtime_engine(runtime).main_menu_commands = commands;
 }

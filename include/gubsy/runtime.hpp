@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gubsy/app.hpp"
+#include "gubsy/input/binds_profile.hpp"
 #include "gubsy/menu/commands.hpp"
 #include "gubsy/menu/ids.hpp"
 #include "gubsy/menu/system.hpp"
@@ -42,6 +43,7 @@ bool gubsy_attach_sdl_renderer(GubsyRuntime& runtime,
 MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime,
                                           GubsyHostMenuCommandFn fn,
                                           void* user_data);
+void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schema);
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands);
 bool gubsy_show_main_menu(GubsyRuntime& runtime);
 bool gubsy_push_menu_screen(GubsyRuntime& runtime, MenuScreenId screen_id);
