@@ -255,16 +255,20 @@ if (NOT SDL3_TTF_FOUND_LOCAL)
   message(WARNING "SDL3_ttf not found. Numeric text overlays will be disabled at runtime if initialization fails.")
 endif()
 
-target_include_directories(gubsy_engine BEFORE PUBLIC
-  ${GUB_SOURCE_DIR}/include
-  ${GUB_SOURCE_DIR}
-  ${GUB_SOURCE_DIR}/third_party
-  ${GUB_SOURCE_DIR}/imgui
-  ${GUB_SOURCE_DIR}/imgui/backends
+target_include_directories(gubsy_engine BEFORE
+  PUBLIC
+    ${GUB_SOURCE_DIR}/include
+    ${GUB_SOURCE_DIR}/third_party
+  PRIVATE
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/imgui
+    ${GUB_SOURCE_DIR}/imgui/backends
 )
 if (GUB_BUILD_SAMPLE)
-  target_include_directories(gubsy PRIVATE
+  target_include_directories(gubsy SYSTEM PRIVATE
     ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/imgui
+    ${GUB_SOURCE_DIR}/third_party/lua/src
   )
   target_link_libraries(gubsy PRIVATE gubsy_engine)
 
@@ -354,7 +358,7 @@ endif()
 set(LUA_FOUND_LOCAL OFF)
 if (TARGET gubsy_lua)
   set(LUA_FOUND_LOCAL ON)
-  target_link_libraries(gubsy_engine PUBLIC gubsy_lua)
+  target_link_libraries(gubsy_engine PRIVATE gubsy_lua)
 else()
 find_package(Lua 5.4 QUIET)
 if (Lua_FOUND OR LUA_FOUND)
@@ -439,7 +443,7 @@ find_path(SOL2_INCLUDE_DIR ${SOL2_INCLUDE_DIR} sol/sol.hpp)
 if (SOL2_INCLUDE_DIR)
   target_compile_definitions(gubsy_engine PUBLIC GUB_USE_SOL2=1)
   # Treat sol2 as a system include to avoid third-party warnings-as-errors
-  target_include_directories(gubsy_engine SYSTEM PUBLIC ${SOL2_INCLUDE_DIR})
+  target_include_directories(gubsy_engine SYSTEM PRIVATE ${SOL2_INCLUDE_DIR})
   message(STATUS "Found sol2: ${SOL2_INCLUDE_DIR}")
 else()
   message(STATUS "sol2 not found; using Lua C API path")
