@@ -107,9 +107,9 @@ The game should not need to know whether a subsystem was once a standalone
 
 ## Migration Order
 
-1. Create `include/gubsy/` facade headers for the APIs Splonks would use first.
-2. Keep the existing `engine/` implementation compiling underneath.
-3. Add `include/` as the public include directory for `gubsy_engine`.
+1. Done: create `include/gubsy/` facade headers for the APIs Splonks would use first.
+2. Done: keep the existing `engine/` implementation compiling underneath.
+3. Done: add `include/` as the public include directory for `gubsy_engine`.
 4. Keep `engine/` or later `src/` as a private include directory.
 5. Move implementation files from `engine/` to `src/` by subsystem.
 6. Move current first-party `libs/` code into the matching Gubsy modules as part
@@ -121,15 +121,15 @@ The game should not need to know whether a subsystem was once a standalone
 
 Start with the APIs needed by a Splonks-style consumer:
 
-1. `include/gubsy/app.hpp`
-2. `include/gubsy/run.hpp`
-3. `include/gubsy/engine_state.hpp`
-4. `include/gubsy/input/binds.hpp`
-5. `include/gubsy/profiles/profiles.hpp`
-6. `include/gubsy/settings/settings.hpp`
-7. `include/gubsy/menu/menu.hpp`
-8. `include/gubsy/layout/layout.hpp`
-9. `include/gubsy/lobby/session.hpp`
+1. Done: `include/gubsy/app.hpp`
+2. Done: `include/gubsy/run.hpp`
+3. Done: `include/gubsy/engine_state.hpp`
+4. Done: `include/gubsy/input/binds.hpp`
+5. Done: `include/gubsy/profiles/profiles.hpp`
+6. Done: `include/gubsy/settings/settings.hpp`
+7. Done: `include/gubsy/menu/menu.hpp`
+8. Done: `include/gubsy/layout/layout.hpp`
+9. Done: `include/gubsy/lobby/session.hpp`
 
 Do not expose everything at once. Expose only APIs that are ready to be used by
 a game importing Gubsy.

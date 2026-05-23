@@ -84,7 +84,8 @@ acceptable short-term, but the cleaner end state is Gubsy-owned modules under
 
 ## Required Consumer Switches
 
-Add explicit runtime configuration for optional systems:
+Runtime configuration for optional systems now exists in
+`include/gubsy/app.hpp`:
 
 ```cpp
 struct GubsyAppConfig {
@@ -95,7 +96,7 @@ struct GubsyAppConfig {
 };
 ```
 
-The bundled demo can enable these. Splonks can leave them disabled.
+The bundled demo enables these explicitly. Splonks can leave them disabled.
 
 Build options can come later if needed:
 
@@ -166,12 +167,12 @@ Required behavior:
 
 ## Implementation Order
 
-1. Add `GubsyAppConfig` to the app hooks passed into `do_the_gubsy`.
-2. Default optional mod/Lua systems off for library-style consumers.
-3. Enable the current mod/Lua behavior explicitly from the bundled sample.
-4. Gate mod directory creation, manager initialization, discovery, hot reload,
+1. Done: add `GubsyAppConfig` to the app hooks passed into `do_the_gubsy`.
+2. Done: default optional mod/Lua systems off for library-style consumers.
+3. Done: enable the current mod/Lua behavior explicitly from the bundled sample.
+4. Done: gate mod directory creation, manager initialization, discovery, hot reload,
    Lua activation, and mod asset scanning behind config flags.
-5. Gate mods menu registration behind `enable_mod_browser`.
+5. Done: gate mods menu registration behind `enable_mod_browser`.
 6. Keep `EngineState::mod_manager` nullable short-term, but ensure all users
    check the feature state before touching it.
 7. Move toward an optional `EngineModsState` or subsystem object once the
