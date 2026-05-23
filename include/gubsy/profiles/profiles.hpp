@@ -1,4 +1,4 @@
 #pragma once
 
-#include "engine/player.hpp"
-#include "engine/user_profiles.hpp"
+#include "gubsy/profiles/player.hpp"
+#include "gubsy/profiles/user_profile.hpp"

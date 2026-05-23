@@ -106,11 +106,17 @@ Game code should include Gubsy headers through the `gubsy/` prefix:
 #include <gubsy/runtime.hpp>
 #include <gubsy/layout/layout.hpp>
 #include <gubsy/input/binds.hpp>
+#include <gubsy/input/profile_settings.hpp>
+#include <gubsy/input/sources.hpp>
 #include <gubsy/input/types.hpp>
 #include <gubsy/menu/ids.hpp>
 #include <gubsy/lobby/session_contract.hpp>
 #include <gubsy/lobby/session_link.hpp>
+#include <gubsy/profiles/player.hpp>
+#include <gubsy/profiles/user_profile.hpp>
+#include <gubsy/settings/game_settings.hpp>
 #include <gubsy/settings/schema.hpp>
+#include <gubsy/settings/top_level_settings.hpp>
 #include <gubsy/settings/types.hpp>
 ```
 
@@ -168,6 +174,12 @@ Start with the APIs needed by a Splonks-style consumer:
 16. Done: `include/gubsy/lobby/net_transport.hpp`
 17. Done: `include/gubsy/lobby/matchmaking.hpp`
 18. Done: `include/gubsy/lobby/session_link.hpp`
+19. Done: `include/gubsy/profiles/user_profile.hpp`
+20. Done: `include/gubsy/profiles/player.hpp`
+21. Done: `include/gubsy/settings/game_settings.hpp`
+22. Done: `include/gubsy/settings/top_level_settings.hpp`
+23. Done: `include/gubsy/input/profile_settings.hpp`
+24. Done: `include/gubsy/input/sources.hpp`
 
 Do not expose everything at once. Expose only APIs that are ready to be used by
 a game importing Gubsy.
