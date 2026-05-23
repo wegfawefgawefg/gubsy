@@ -77,6 +77,9 @@ Current verification
 - `tools/consumer_smoke` is a separate CMake project that imports Gubsy through
   `add_subdirectory`, links only `gubsy::engine`, and includes only
   `gubsy/...` headers.
+- `scripts/check_consumption_boundary.sh` checks the current import boundary:
+  no `engine/ -> game/` includes, no smoke-test includes of private
+  `engine/...` headers, and no sibling glib checkout requirement in CMake/docs.
 - `GUB_BUILD_SAMPLE` and `GUB_BUILD_TOOLS` default on for a top-level Gubsy
   checkout and off when Gubsy is imported as a subproject.
 

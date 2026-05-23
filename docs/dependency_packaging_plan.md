@@ -19,11 +19,11 @@ The desired user experience is:
 
 ## Previous Problem
 
-`CMakeLists.txt` previously looked for:
+`CMakeLists.txt` previously looked for sibling checkouts of:
 
-1. `../gsexp`
-2. `../glayout`
-3. `../ginput`
+1. `gsexp`
+2. `glayout`
+3. `ginput`
 
 That was acceptable for local development, but it made the repo layout part of
 the public build contract. A consumer should not need this directory shape:
