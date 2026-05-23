@@ -94,6 +94,10 @@ add_subdirectory(path/to/gubsy)
 target_link_libraries(splonks PRIVATE gubsy::engine)
 ```
 
+The repo has `tools/consumer_smoke` to verify this mode. It is a separate CMake
+project that imports Gubsy with `add_subdirectory`, links only `gubsy::engine`,
+and includes only `gubsy/...` headers.
+
 Game code should include Gubsy headers through the `gubsy/` prefix:
 
 ```cpp

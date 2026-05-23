@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 project(gubsy LANGUAGES C CXX)
 
-set(GUB_BUNDLED_GSEXP_DIR "${CMAKE_SOURCE_DIR}/libs/gsexp")
+set(GUB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+set(GUB_BUNDLED_GSEXP_DIR "${GUB_SOURCE_DIR}/libs/gsexp")
 if (NOT TARGET gsexp::gsexp AND EXISTS "${GUB_BUNDLED_GSEXP_DIR}/CMakeLists.txt")
   set(GSEXP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(GSEXP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -10,7 +12,7 @@ if (NOT TARGET gsexp::gsexp AND EXISTS "${GUB_BUNDLED_GSEXP_DIR}/CMakeLists.txt"
   add_subdirectory("${GUB_BUNDLED_GSEXP_DIR}" "${CMAKE_BINARY_DIR}/_deps/gsexp")
 endif()
 
-set(GUB_BUNDLED_GLAYOUT_DIR "${CMAKE_SOURCE_DIR}/libs/glayout")
+set(GUB_BUNDLED_GLAYOUT_DIR "${GUB_SOURCE_DIR}/libs/glayout")
 if (NOT TARGET glayout::core AND EXISTS "${GUB_BUNDLED_GLAYOUT_DIR}/CMakeLists.txt")
   set(GLAYOUT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(GLAYOUT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -19,7 +21,7 @@ if (NOT TARGET glayout::core AND EXISTS "${GUB_BUNDLED_GLAYOUT_DIR}/CMakeLists.t
   add_subdirectory("${GUB_BUNDLED_GLAYOUT_DIR}" "${CMAKE_BINARY_DIR}/_deps/glayout")
 endif()
 
-set(GUB_BUNDLED_GINPUT_DIR "${CMAKE_SOURCE_DIR}/libs/ginput")
+set(GUB_BUNDLED_GINPUT_DIR "${GUB_SOURCE_DIR}/libs/ginput")
 if (NOT TARGET ginput::ginput AND EXISTS "${GUB_BUNDLED_GINPUT_DIR}/CMakeLists.txt")
   set(GINPUT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(GINPUT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -43,7 +45,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_definitions(GUB_PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_compile_definitions(GUB_PROJECT_SOURCE_DIR="${GUB_SOURCE_DIR}")
 
 # Homebrew defaults; helps find_package locate deps on macOS.
 if (APPLE)
@@ -89,28 +91,28 @@ else()
   message(FATAL_ERROR "Bundled ginput not found at libs/ginput.")
 endif()
 
-if (EXISTS "${CMAKE_SOURCE_DIR}/third_party/lua/src/lua.h")
-  file(GLOB GUB_LUA_SOURCES "${CMAKE_SOURCE_DIR}/third_party/lua/src/*.c")
+if (EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lua.h")
+  file(GLOB GUB_LUA_SOURCES "${GUB_SOURCE_DIR}/third_party/lua/src/*.c")
   list(REMOVE_ITEM GUB_LUA_SOURCES
-    "${CMAKE_SOURCE_DIR}/third_party/lua/src/lua.c"
-    "${CMAKE_SOURCE_DIR}/third_party/lua/src/luac.c"
-    "${CMAKE_SOURCE_DIR}/third_party/lua/src/onelua.c"
+    "${GUB_SOURCE_DIR}/third_party/lua/src/lua.c"
+    "${GUB_SOURCE_DIR}/third_party/lua/src/luac.c"
+    "${GUB_SOURCE_DIR}/third_party/lua/src/onelua.c"
   )
   add_library(gubsy_lua STATIC ${GUB_LUA_SOURCES})
-  target_include_directories(gubsy_lua PUBLIC "${CMAKE_SOURCE_DIR}/third_party/lua/src")
+  target_include_directories(gubsy_lua PUBLIC "${GUB_SOURCE_DIR}/third_party/lua/src")
   target_compile_definitions(gubsy_lua PRIVATE LUA_USE_LINUX)
   target_link_libraries(gubsy_lua PUBLIC ${CMAKE_DL_LIBS} m)
 endif()
 
 # Dear ImGui sources
 set(IMGUI_SOURCES
-  ${CMAKE_SOURCE_DIR}/imgui/imgui.cpp
-  ${CMAKE_SOURCE_DIR}/imgui/imgui_demo.cpp
-  ${CMAKE_SOURCE_DIR}/imgui/imgui_draw.cpp
-  ${CMAKE_SOURCE_DIR}/imgui/imgui_tables.cpp
-  ${CMAKE_SOURCE_DIR}/imgui/imgui_widgets.cpp
-  ${CMAKE_SOURCE_DIR}/imgui/backends/imgui_impl_sdl3.cpp
-  ${CMAKE_SOURCE_DIR}/imgui/backends/imgui_impl_sdlrenderer3.cpp
+  ${GUB_SOURCE_DIR}/imgui/imgui.cpp
+  ${GUB_SOURCE_DIR}/imgui/imgui_demo.cpp
+  ${GUB_SOURCE_DIR}/imgui/imgui_draw.cpp
+  ${GUB_SOURCE_DIR}/imgui/imgui_tables.cpp
+  ${GUB_SOURCE_DIR}/imgui/imgui_widgets.cpp
+  ${GUB_SOURCE_DIR}/imgui/backends/imgui_impl_sdl3.cpp
+  ${GUB_SOURCE_DIR}/imgui/backends/imgui_impl_sdlrenderer3.cpp
 )
 target_sources(gubsy_engine PRIVATE ${IMGUI_SOURCES})
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
@@ -214,7 +216,7 @@ endif()
 if (NOT GLM_FOUND_LOCAL)
   find_path(GLM_INCLUDE_DIR glm/glm.hpp
     PATHS
-      ${CMAKE_SOURCE_DIR}/third_party/glm_upstream
+      ${GUB_SOURCE_DIR}/third_party/glm_upstream
   )
   if (GLM_INCLUDE_DIR)
     set(GLM_FOUND_LOCAL ON)
@@ -253,15 +255,15 @@ if (NOT SDL3_TTF_FOUND_LOCAL)
 endif()
 
 target_include_directories(gubsy_engine BEFORE PUBLIC
-  ${CMAKE_SOURCE_DIR}/include
-  ${CMAKE_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party
-  ${CMAKE_SOURCE_DIR}/imgui
-  ${CMAKE_SOURCE_DIR}/imgui/backends
+  ${GUB_SOURCE_DIR}/include
+  ${GUB_SOURCE_DIR}
+  ${GUB_SOURCE_DIR}/third_party
+  ${GUB_SOURCE_DIR}/imgui
+  ${GUB_SOURCE_DIR}/imgui/backends
 )
 if (GUB_BUILD_SAMPLE)
   target_include_directories(gubsy PRIVATE
-    ${CMAKE_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}
   )
   target_link_libraries(gubsy PRIVATE gubsy_engine)
 
@@ -285,14 +287,14 @@ if (GUB_BUILD_TOOLS)
     engine/project_paths.cpp
   )
   target_include_directories(mod_server PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
   )
 
   add_executable(room_server tools/room_server/main.cpp)
   target_include_directories(room_server PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
   )
 
   add_executable(room_smoke
@@ -301,8 +303,8 @@ if (GUB_BUILD_TOOLS)
     engine/session_contract.cpp
   )
   target_include_directories(room_smoke PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
   )
 
   add_executable(room_timeout_smoke
@@ -311,8 +313,8 @@ if (GUB_BUILD_TOOLS)
     engine/session_contract.cpp
   )
   target_include_directories(room_timeout_smoke PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
   )
 
   add_executable(coop_sync_smoke
@@ -326,10 +328,10 @@ if (GUB_BUILD_TOOLS)
     game/coop_sim.cpp
   )
   target_include_directories(coop_sync_smoke PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
   )
-  target_include_directories(coop_sync_smoke SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/glm_upstream)
+  target_include_directories(coop_sync_smoke SYSTEM PRIVATE ${GUB_SOURCE_DIR}/third_party/glm_upstream)
 endif()
 
 # Lua 5.4 (required at runtime; build-time optional with stub)
@@ -414,8 +416,8 @@ else()
 endif()
 
 # sol2 (optional header-only). If found, enable GUB_USE_SOL2
-if (EXISTS "${CMAKE_SOURCE_DIR}/sol/sol.hpp")
-  set(SOL2_INCLUDE_DIR ${CMAKE_SOURCE_DIR})
+if (EXISTS "${GUB_SOURCE_DIR}/sol/sol.hpp")
+  set(SOL2_INCLUDE_DIR ${GUB_SOURCE_DIR})
 endif()
 find_path(SOL2_INCLUDE_DIR ${SOL2_INCLUDE_DIR} sol/sol.hpp)
 if (SOL2_INCLUDE_DIR)
