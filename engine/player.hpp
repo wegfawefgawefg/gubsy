@@ -1,8 +1,8 @@
 #pragma once
 
+#include "binds_profiles.hpp"
 #include "user_profiles.hpp"
 
-struct BindsProfile; // Forward declaration
 struct EngineState;
 
 struct Player {
@@ -30,7 +30,6 @@ UserProfile* get_player_user_profile(EngineState& engine, int player_index);
  get the binds profile for a given player
 */
 BindsProfile* get_player_binds_profile(EngineState& engine, int player_index);
-
 
 /*
  set the user profile for a given player

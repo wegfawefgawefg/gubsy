@@ -18,7 +18,7 @@ void register_binds_schema_entries(EngineState& engine) {
     schema.add_action(GameAction::LEFT, "Move Left", "Movement");
     schema.add_action(GameAction::RIGHT, "Move Right", "Movement");
     schema.add_action(GameAction::USE, "Use/Interact", "Actions");
-    schema.add_1d_analog(GameAnalog1D::BAR_HEIGHT, "Bar Height", "Demo");
-    schema.add_2d_analog(GameAnalog2D::RETICLE_POS, "Reticle Position", "Demo");
+    schema.add_axis_1d(GameAnalog1D::BAR_HEIGHT, "Bar Height", "Demo");
+    schema.add_axis_2d(GameAnalog2D::RETICLE_POS, "Reticle Position", "Demo");
     register_binds_schema(engine, schema);
 }

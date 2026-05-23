@@ -1,18 +1,18 @@
 #include "engine/menu/screens/binds_action_editor_screen.hpp"
 
-#include <algorithm>
-#include <string>
-#include <vector>
-
 #include "engine/alerts.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/binds_ui_helpers.hpp"
 #include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
+#include "engine/menu/menu_ids.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
-#include "engine/menu/menu_ids.hpp"
 #include "engine/menu_layout_ids.hpp"
+
+#include <algorithm>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -57,7 +57,8 @@ MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* lab
     return w;
 }
 
-MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label,
+                              MenuAction action) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -97,28 +98,29 @@ BindsProfile* find_profile(EngineState& engine, int profile_id) {
     return nullptr;
 }
 
-bool find_action_label(BindsActionType type, int action_id, std::string& label, std::string& category) {
+bool find_action_label(BindsActionType type, int action_id, std::string& label,
+                       std::string& category) {
     const BindsSchema& schema = get_binds_schema();
     if (type == BindsActionType::Button) {
-        for (const auto& action : schema.actions) {
-            if (action.action_id == action_id) {
-                label = action.display_name;
+        for (const auto& action : schema.actions()) {
+            if (action.id == action_id) {
+                label = action.label;
                 category = action.category;
                 return true;
             }
         }
     } else if (type == BindsActionType::Analog1D) {
-        for (const auto& action : schema.analogs_1d) {
-            if (action.analog_id == action_id) {
-                label = action.display_name;
+        for (const auto& action : schema.axes_1d()) {
+            if (action.id == action_id) {
+                label = action.label;
                 category = action.category;
                 return true;
             }
         }
     } else if (type == BindsActionType::Analog2D) {
-        for (const auto& action : schema.analogs_2d) {
-            if (action.analog_id == action_id) {
-                label = action.display_name;
+        for (const auto& action : schema.axes_2d()) {
+            if (action.id == action_id) {
+                label = action.label;
                 category = action.category;
                 return true;
             }
@@ -130,39 +132,42 @@ bool find_action_label(BindsActionType type, int action_id, std::string& label, 
 void rebuild_slots(BindsActionEditorState& st, const BindsProfile& profile) {
     st.slots.clear();
     if (st.action_type == BindsActionType::Button) {
-        for (std::size_t i = 0; i < profile.button_binds.size(); ++i) {
-            const auto& pair = profile.button_binds[i];
-            if (pair.second != st.action_id)
+        const auto& binds = profile.button_binds();
+        for (std::size_t i = 0; i < binds.size(); ++i) {
+            const auto& bind = binds[i];
+            if (bind.action != st.action_id)
                 continue;
             MappingSlot slot;
             slot.empty = false;
             slot.bind_index = static_cast<int>(i);
-            slot.device_code = pair.first;
-            slot.label = binds_input_label(st.action_type, pair.first);
+            slot.device_code = bind.device_button;
+            slot.label = binds_input_label(st.action_type, bind.device_button);
             st.slots.push_back(std::move(slot));
         }
     } else if (st.action_type == BindsActionType::Analog1D) {
-        for (std::size_t i = 0; i < profile.analog_1d_binds.size(); ++i) {
-            const auto& pair = profile.analog_1d_binds[i];
-            if (pair.second != st.action_id)
+        const auto& binds = profile.axis_1d_binds();
+        for (std::size_t i = 0; i < binds.size(); ++i) {
+            const auto& bind = binds[i];
+            if (bind.axis_1d != st.action_id)
                 continue;
             MappingSlot slot;
             slot.empty = false;
             slot.bind_index = static_cast<int>(i);
-            slot.device_code = pair.first;
-            slot.label = binds_input_label(st.action_type, pair.first);
+            slot.device_code = bind.device_axis;
+            slot.label = binds_input_label(st.action_type, bind.device_axis);
             st.slots.push_back(std::move(slot));
         }
     } else {
-        for (std::size_t i = 0; i < profile.analog_2d_binds.size(); ++i) {
-            const auto& pair = profile.analog_2d_binds[i];
-            if (pair.second != st.action_id)
+        const auto& binds = profile.axis_2d_binds();
+        for (std::size_t i = 0; i < binds.size(); ++i) {
+            const auto& bind = binds[i];
+            if (bind.axis_2d != st.action_id)
                 continue;
             MappingSlot slot;
             slot.empty = false;
             slot.bind_index = static_cast<int>(i);
-            slot.device_code = pair.first;
-            slot.label = binds_input_label(st.action_type, pair.first);
+            slot.device_code = bind.device_stick;
+            slot.label = binds_input_label(st.action_type, bind.device_stick);
             st.slots.push_back(std::move(slot));
         }
     }
@@ -184,7 +189,8 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     if (st.total_pages <= 0) {
         st.page_text = "Page 0 / 0";
     } else {
-        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 }
 
@@ -204,22 +210,7 @@ void command_reset_action(MenuContext& ctx, std::int32_t) {
     BindsProfile* profile = find_profile(ctx.engine, ctx.engine.selected_binds_profile_id);
     if (!profile)
         return;
-    if (st.action_type == BindsActionType::Button) {
-        auto& binds = profile->button_binds;
-        binds.erase(std::remove_if(binds.begin(), binds.end(),
-                                   [&](const auto& entry) { return entry.second == st.action_id; }),
-                    binds.end());
-    } else if (st.action_type == BindsActionType::Analog1D) {
-        auto& binds = profile->analog_1d_binds;
-        binds.erase(std::remove_if(binds.begin(), binds.end(),
-                                   [&](const auto& entry) { return entry.second == st.action_id; }),
-                    binds.end());
-    } else {
-        auto& binds = profile->analog_2d_binds;
-        binds.erase(std::remove_if(binds.begin(), binds.end(),
-                                   [&](const auto& entry) { return entry.second == st.action_id; }),
-                    binds.end());
-    }
+    remove_binds_for_action(*profile, st.action_type, st.action_id);
     save_binds_profile(*profile);
     add_alert(ctx.engine, "Bindings reset");
 }
@@ -253,12 +244,16 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     widgets.clear();
     text_cache.clear();
 
-    widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, st.title_text.c_str()));
-    widgets.push_back(make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
-    widgets.push_back(make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, st.title_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
-    MenuWidget reset_btn = make_button_widget(kResetButtonId, SettingsObjectID::SEARCH, "Reset Bindings",
-                                              MenuAction::run_command(g_cmd_reset_action));
+    MenuWidget reset_btn =
+        make_button_widget(kResetButtonId, SettingsObjectID::SEARCH, "Reset Bindings",
+                           MenuAction::run_command(g_cmd_reset_action));
     reset_btn.secondary = "Clear all mappings for this action.";
     reset_btn.style = yellow_style();
     widgets.push_back(reset_btn);
@@ -271,9 +266,11 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
-    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev_btn =
+        make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     prev_btn.role = MenuWidgetRole::PagePrev;
-    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next_btn =
+        make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
     next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
@@ -313,7 +310,8 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
         }
     }
 
-    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget back_btn =
+        make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 

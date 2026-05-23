@@ -19,6 +19,13 @@ if (NOT TARGET glayout::core AND EXISTS "${GUB_SIBLING_GLAYOUT_DIR}/CMakeLists.t
   add_subdirectory("${GUB_SIBLING_GLAYOUT_DIR}" "${CMAKE_BINARY_DIR}/_deps/glayout")
 endif()
 
+set(GUB_SIBLING_GINPUT_DIR "${CMAKE_SOURCE_DIR}/../ginput")
+if (NOT TARGET ginput::ginput AND EXISTS "${GUB_SIBLING_GINPUT_DIR}/CMakeLists.txt")
+  set(GINPUT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GINPUT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  add_subdirectory("${GUB_SIBLING_GINPUT_DIR}" "${CMAKE_BINARY_DIR}/_deps/ginput")
+endif()
+
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(GUB_DEFAULT_BUILD_EXTRAS ON)
 else()
@@ -74,6 +81,12 @@ if (TARGET glayout::core)
   target_link_libraries(gubsy_engine PUBLIC glayout::core)
 else()
   message(FATAL_ERROR "glayout not found. Place glayout next to gubsy or provide target glayout::core.")
+endif()
+
+if (TARGET ginput::ginput)
+  target_link_libraries(gubsy_engine PUBLIC ginput::ginput)
+else()
+  message(FATAL_ERROR "ginput not found. Place ginput next to gubsy or provide target ginput::ginput.")
 endif()
 
 if (EXISTS "${CMAKE_SOURCE_DIR}/third_party/lua/src/lua.h")

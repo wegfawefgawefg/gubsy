@@ -1,19 +1,19 @@
 #include "engine/menu/screens/binds_choose_input_screen.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <string>
-#include <vector>
-
 #include "engine/alerts.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/binds_ui_helpers.hpp"
 #include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
+#include "engine/menu/menu_ids.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
-#include "engine/menu/menu_ids.hpp"
 #include "engine/menu_layout_ids.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -51,7 +51,8 @@ MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* lab
     return w;
 }
 
-MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label,
+                              MenuAction action) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -105,7 +106,8 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     if (st.filtered_indices.empty()) {
         st.page_text = "Page 0 / 0";
     } else {
-        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 }
 
@@ -126,25 +128,7 @@ void command_select_input(MenuContext& ctx, std::int32_t choice_index) {
     if (device_code == -1) {
         bool removed = false;
         if (mapping_index >= 0) {
-            if (st.action_type == BindsActionType::Button) {
-                auto& binds = profile->button_binds;
-                if (mapping_index < static_cast<int>(binds.size())) {
-                    binds.erase(binds.begin() + mapping_index);
-                    removed = true;
-                }
-            } else if (st.action_type == BindsActionType::Analog1D) {
-                auto& binds = profile->analog_1d_binds;
-                if (mapping_index < static_cast<int>(binds.size())) {
-                    binds.erase(binds.begin() + mapping_index);
-                    removed = true;
-                }
-            } else {
-                auto& binds = profile->analog_2d_binds;
-                if (mapping_index < static_cast<int>(binds.size())) {
-                    binds.erase(binds.begin() + mapping_index);
-                    removed = true;
-                }
-            }
+            removed = remove_bind_at(*profile, st.action_type, mapping_index);
         }
         if (removed) {
             save_binds_profile(*profile);
@@ -154,25 +138,7 @@ void command_select_input(MenuContext& ctx, std::int32_t choice_index) {
         return;
     }
 
-    if (st.action_type == BindsActionType::Button) {
-        if (mapping_index >= 0 && mapping_index < static_cast<int>(profile->button_binds.size())) {
-            profile->button_binds[static_cast<std::size_t>(mapping_index)] = {device_code, action_id};
-        } else {
-            profile->button_binds.emplace_back(device_code, action_id);
-        }
-    } else if (st.action_type == BindsActionType::Analog1D) {
-        if (mapping_index >= 0 && mapping_index < static_cast<int>(profile->analog_1d_binds.size())) {
-            profile->analog_1d_binds[static_cast<std::size_t>(mapping_index)] = {device_code, action_id};
-        } else {
-            profile->analog_1d_binds.emplace_back(device_code, action_id);
-        }
-    } else {
-        if (mapping_index >= 0 && mapping_index < static_cast<int>(profile->analog_2d_binds.size())) {
-            profile->analog_2d_binds[static_cast<std::size_t>(mapping_index)] = {device_code, action_id};
-        } else {
-            profile->analog_2d_binds.emplace_back(device_code, action_id);
-        }
-    }
+    (void)replace_bind_at(*profile, st.action_type, mapping_index, device_code, action_id);
 
     save_binds_profile(*profile);
     add_alert(ctx.engine, "Input bound");
@@ -203,7 +169,8 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
     text_cache.clear();
 
     widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, "Choose Input"));
-    widgets.push_back(make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
 
     MenuWidget search;
     search.id = kSearchWidgetId;
@@ -215,7 +182,8 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
     widgets.push_back(search);
     std::size_t search_idx = widgets.size() - 1;
 
-    widgets.push_back(make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
+    widgets.push_back(
+        make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
     MenuAction prev_action = MenuAction::none();
     MenuAction next_action = MenuAction::none();
@@ -224,9 +192,11 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
-    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev_btn =
+        make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     prev_btn.role = MenuWidgetRole::PagePrev;
-    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next_btn =
+        make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
     next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
@@ -260,7 +230,8 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
         }
     }
 
-    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget back_btn =
+        make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 

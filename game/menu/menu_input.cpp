@@ -11,18 +11,37 @@ MenuInputState gather_menu_input(EngineState& engine) {
     BindsProfile* profile = get_player_binds_profile(engine, 0);
     if (!profile)
         return state;
-    for (const auto& [device_button, action] : profile->button_binds) {
+    for (const auto& bind : profile->button_binds()) {
+        int device_button = bind.device_button;
+        int action = bind.action;
         const bool down = device_button_is_down(engine, device_button);
         switch (action) {
-            case GameAction::MENU_UP: state.up |= down; break;
-            case GameAction::MENU_DOWN: state.down |= down; break;
-            case GameAction::MENU_LEFT: state.left |= down; break;
-            case GameAction::MENU_RIGHT: state.right |= down; break;
-            case GameAction::MENU_SELECT: state.select |= down; break;
-            case GameAction::MENU_BACK: state.back |= down; break;
-            case GameAction::MENU_PAGE_PREV: state.page_prev |= down; break;
-            case GameAction::MENU_PAGE_NEXT: state.page_next |= down; break;
-            default: break;
+        case GameAction::MENU_UP:
+            state.up |= down;
+            break;
+        case GameAction::MENU_DOWN:
+            state.down |= down;
+            break;
+        case GameAction::MENU_LEFT:
+            state.left |= down;
+            break;
+        case GameAction::MENU_RIGHT:
+            state.right |= down;
+            break;
+        case GameAction::MENU_SELECT:
+            state.select |= down;
+            break;
+        case GameAction::MENU_BACK:
+            state.back |= down;
+            break;
+        case GameAction::MENU_PAGE_PREV:
+            state.page_prev |= down;
+            break;
+        case GameAction::MENU_PAGE_NEXT:
+            state.page_next |= down;
+            break;
+        default:
+            break;
         }
     }
     return state;

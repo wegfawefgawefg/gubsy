@@ -1,18 +1,18 @@
 #include "engine/menu/screens/binds_profile_editor_screen.hpp"
 
-#include <algorithm>
-#include <string>
-#include <vector>
-
 #include "engine/alerts.hpp"
 #include "engine/binds_profiles.hpp"
 #include "engine/binds_ui_helpers.hpp"
 #include "engine/engine_state.hpp"
 #include "engine/menu/menu_commands.hpp"
+#include "engine/menu/menu_ids.hpp"
 #include "engine/menu/menu_manager.hpp"
 #include "engine/menu/menu_screen.hpp"
-#include "engine/menu/menu_ids.hpp"
 #include "engine/menu_layout_ids.hpp"
+
+#include <algorithm>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -65,7 +65,8 @@ MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* lab
     return w;
 }
 
-MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label,
+                              MenuAction action) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -143,30 +144,30 @@ void rebuild_entries(BindsProfileEditorState& st) {
     st.entries.push_back(std::move(reset_entry));
 
     const BindsSchema& schema = get_binds_schema();
-    for (const auto& action : schema.actions) {
+    for (const auto& action : schema.actions()) {
         EditorEntry entry;
         entry.kind = EntryKind::Binding;
-        entry.id = action.action_id;
+        entry.id = action.id;
         entry.action_type = BindsActionType::Button;
-        entry.label = action.display_name;
+        entry.label = action.label;
         entry.category = action.category;
         st.entries.push_back(std::move(entry));
     }
-    for (const auto& analog : schema.analogs_1d) {
+    for (const auto& analog : schema.axes_1d()) {
         EditorEntry entry;
         entry.kind = EntryKind::Binding;
-        entry.id = analog.analog_id;
+        entry.id = analog.id;
         entry.action_type = BindsActionType::Analog1D;
-        entry.label = analog.display_name;
+        entry.label = analog.label;
         entry.category = analog.category;
         st.entries.push_back(std::move(entry));
     }
-    for (const auto& analog : schema.analogs_2d) {
+    for (const auto& analog : schema.axes_2d()) {
         EditorEntry entry;
         entry.kind = EntryKind::Binding;
-        entry.id = analog.analog_id;
+        entry.id = analog.id;
         entry.action_type = BindsActionType::Analog2D;
-        entry.label = analog.display_name;
+        entry.label = analog.label;
         entry.category = analog.category;
         st.entries.push_back(std::move(entry));
     }
@@ -208,7 +209,8 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     if (st.filtered_indices.empty()) {
         st.page_text = "Page 0 / 0";
     } else {
-        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 }
 
@@ -230,9 +232,7 @@ void command_reset_profile(MenuContext& ctx, std::int32_t) {
     BindsProfile* profile = find_profile(ctx.engine, profile_id);
     if (!profile)
         return;
-    profile->button_binds.clear();
-    profile->analog_1d_binds.clear();
-    profile->analog_2d_binds.clear();
+    clear_binds(*profile);
     save_binds_profile(*profile);
     ctx.state<BindsProfileEditorState>().status_text = "Binds reset to defaults";
     add_alert(ctx.engine, "Binds reset to defaults");
@@ -266,7 +266,8 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
     widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, "Binds Profile"));
 
     st.status_text = profile->name.empty() ? "Unnamed profile" : profile->name;
-    MenuWidget status_label = make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
+    MenuWidget status_label =
+        make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
     widgets.push_back(status_label);
 
     MenuWidget search;
@@ -279,7 +280,8 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
     widgets.push_back(search);
     std::size_t search_idx = widgets.size() - 1;
 
-    MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
+    MenuWidget page_label =
+        make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     widgets.push_back(page_label);
 
     MenuAction prev_action = MenuAction::none();
@@ -289,9 +291,11 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
-    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev_btn =
+        make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     prev_btn.role = MenuWidgetRole::PagePrev;
-    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next_btn =
+        make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
     next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
@@ -332,19 +336,19 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
                         binds_summary += binds_input_label(entry.action_type, code);
                     };
                     if (entry.action_type == BindsActionType::Button) {
-                        for (const auto& bind : profile->button_binds) {
-                            if (bind.second == entry.id)
-                                append_label(bind.first);
+                        for (const auto& bind : profile->button_binds()) {
+                            if (bind.action == entry.id)
+                                append_label(bind.device_button);
                         }
                     } else if (entry.action_type == BindsActionType::Analog1D) {
-                        for (const auto& bind : profile->analog_1d_binds) {
-                            if (bind.second == entry.id)
-                                append_label(bind.first);
+                        for (const auto& bind : profile->axis_1d_binds()) {
+                            if (bind.axis_1d == entry.id)
+                                append_label(bind.device_axis);
                         }
                     } else {
-                        for (const auto& bind : profile->analog_2d_binds) {
-                            if (bind.second == entry.id)
-                                append_label(bind.first);
+                        for (const auto& bind : profile->axis_2d_binds()) {
+                            if (bind.axis_2d == entry.id)
+                                append_label(bind.device_stick);
                         }
                     }
                 }
@@ -375,7 +379,8 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
         save_binds_profile(*profile);
     }
 
-    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget back_btn =
+        make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
