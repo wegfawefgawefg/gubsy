@@ -1,5 +1,6 @@
 #include "engine_state.hpp"
 #include "src/audio.hpp"
+#include "src/audio_settings.hpp"
 #include "src/graphics.hpp"
 #include "src/mods.hpp"
 #include "src/project_paths.hpp"
@@ -19,6 +20,19 @@
 #include "src/menu/settings_category_registry.hpp"
 #include "src/menu/screens/mods_screen.hpp"
 #include "src/gubsy_runtime_internal.hpp"
+
+namespace {
+
+void load_shell_data_pools(EngineState& engine) {
+    load_audio_settings(engine, data_path("settings_profiles/audio.lisp").string());
+
+    load_user_profiles_pool(engine);
+    load_input_settings_profiles_pool(engine);
+    load_game_settings_pool(engine);
+    load_top_level_game_settings_into_state(engine);
+}
+
+} // namespace
 
 GubsyRuntime::GubsyRuntime()
     : engine_(new EngineState()) {
@@ -72,6 +86,7 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
         register_mods_menu_screen(engine);
     ensure_data_folder_structure();
     load_ui_layouts_pool(engine);
+    load_shell_data_pools(engine);
     return true;
 }
 
