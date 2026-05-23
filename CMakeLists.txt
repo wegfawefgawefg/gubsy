@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(gubsy LANGUAGES C CXX)
+include(CTest)
 
 set(GUB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -281,6 +282,18 @@ if (GUB_BUILD_TOOLS)
   add_executable(public_api_smoke tools/public_api_smoke/main.cpp)
   target_link_libraries(public_api_smoke PRIVATE gubsy_engine)
   target_enable_strict_warnings(public_api_smoke)
+
+  if (BUILD_TESTING)
+    add_test(NAME public_api_smoke COMMAND public_api_smoke)
+    add_test(
+      NAME consumption_boundary
+      COMMAND "${GUB_SOURCE_DIR}/scripts/check_consumption_boundary.sh"
+    )
+    add_test(
+      NAME consumer_smoke
+      COMMAND "${GUB_SOURCE_DIR}/scripts/consumer_smoke.sh"
+    )
+  endif()
 
   add_executable(mod_server
     tools/mod_server/main.cpp

@@ -80,6 +80,9 @@ Current verification
 - `scripts/check_consumption_boundary.sh` checks the current import boundary:
   no `engine/ -> game/` includes, no smoke-test includes of private
   `engine/...` headers, and no sibling glib checkout requirement in CMake/docs.
+- `ctest --test-dir build --output-on-failure` runs the public API smoke,
+  consumption boundary check, and external consumer smoke when tools/tests are
+  enabled.
 - `GUB_BUILD_SAMPLE` and `GUB_BUILD_TOOLS` default on for a top-level Gubsy
   checkout and off when Gubsy is imported as a subproject.
 
