@@ -79,7 +79,7 @@ payloads. That is a game-layer choice, not an engine requirement.
 When adding new multiplayer code:
 
 - put transport/session/backend code in `engine/`
-- put game message definitions and serializers in `game/`
+- put game message definitions and serializers in `demo/`
 - only add engine abstractions that are useful to more than one game
 - prefer minimal explicit hooks over a large mandatory netcode framework
 

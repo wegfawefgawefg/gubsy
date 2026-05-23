@@ -13,11 +13,11 @@
 #include "engine/session_contract.hpp"
 #include "engine/sync_payload_codec.hpp"
 #include "engine/sync_transport_udp.hpp"
-#include "game/actions.hpp"
-#include "game/coop_protocol.hpp"
-#include "game/coop_sim.hpp"
-#include "game/settings.hpp"
-#include "game/state.hpp"
+#include "demo/actions.hpp"
+#include "demo/coop_protocol.hpp"
+#include "demo/coop_sim.hpp"
+#include "demo/settings.hpp"
+#include "demo/state.hpp"
 
 namespace {
 

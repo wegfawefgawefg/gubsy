@@ -19,7 +19,7 @@ What Is In This Repo
 - `include/gubsy/`: public headers used by games that import Gubsy
 - `engine/`: transitional private implementation code plus engine-owned built-in assets
 - `src/`: private Gubsy-owned modules, including sexp, layout, and input code
-- `game/`: current bundled demo layer, shipped demo content, and built-in mods
+- `demo/`: current bundled demo layer, shipped demo content, and built-in mods
 - `tools/`: standalone servers and smoke-test binaries
 - `data/`: writable runtime state for this game project
 - `third_party/`: external dependency source vendored with the repo
@@ -120,7 +120,7 @@ Project Layout Notes
 
 - The engine entrypoints live under `engine/`
 - The executable target is defined in `CMakeLists.txt` as `gubsy`
-- The bundled game layer registers modes, menus, binds, settings schemas, and mod APIs from `game/main.cpp`
+- The bundled demo layer registers modes, menus, binds, settings schemas, and mod APIs from `demo/main.cpp`
 
 Docs
 ----

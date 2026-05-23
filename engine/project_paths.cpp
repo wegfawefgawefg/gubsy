@@ -40,7 +40,7 @@ fs::path engine_root() {
 }
 
 fs::path game_root() {
-    return append_relative(project_root(), "game");
+    return append_relative(project_root(), "demo");
 }
 
 fs::path tools_root() {

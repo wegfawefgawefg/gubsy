@@ -54,7 +54,7 @@ struct UILayout {
 - `generate_ui_layout_id()` / `generate_ui_object_id()` are helpers for runtime/builder tools that need unique identifiers but developers can also hardcode constants.
 
 ## Recommended Workflow
-1. **Define IDs** – Add layout/object IDs in a shared header (see `game/ui_layout_ids.hpp`) so rendering and setup code agree on identifiers.
+1. **Define IDs** – Add layout/object IDs in a shared header (see `demo/ui_layout_ids.hpp`) so rendering and setup code agree on identifiers.
 2. **Author Layouts** – During startup or an editor step, create layouts via `create_ui_layout`, add/remove objects, and call `save_ui_layout`.
 3. **Load Pool** – After any saves, call `load_ui_layouts_pool()` so the runtime copy in `es->ui_layouts_pool` reflects the latest disk state.
 4. **Render** – In the draw code, query `get_ui_layout_for_resolution(UILayoutID::PLAY_SCREEN, width, height)` and then fetch objects (by ID or label) to translate normalized coords into pixel rectangles.
@@ -77,7 +77,7 @@ const UILayout* p2 = get_ui_layout_for_resolution(UILayoutID::PLAY_SCREEN, width
 Each player can then fetch objects within their layout and render relative to their viewport dimensions.
 
 ## Example Usage
-- See `game/main.cpp` for how we define and save the Play screen layouts for 1080p, 720p, and 2560x1080, using shared ID constants.
-- See `game/playing.cpp` for how the Play mode now loads `UILayoutID::PLAY_SCREEN`, pulls out the `UIObjectID::BAR_HEIGHT_INDICATOR`, and renders that UI element using normalized rectangles.
+- See `demo/main.cpp` for how we define and save the Play screen layouts for 1080p, 720p, and 2560x1080, using shared ID constants.
+- See `demo/playing.cpp` for how the Play mode now loads `UILayoutID::PLAY_SCREEN`, pulls out the `UIObjectID::BAR_HEIGHT_INDICATOR`, and renders that UI element using normalized rectangles.
 
 This doc should stay in sync with the APIs in `engine/ui_layouts.*`. Update both whenever new capabilities (e.g., alignment hints, nested containers) are added so designers know how to author future HUDs.

@@ -45,7 +45,7 @@ The game must own semantics and policy:
 Hard rule
 ---------
 
-`engine/` must not include headers from `game/`.
+`engine/` must not include headers from `demo/`.
 
 If a feature needs game data, the engine should get that data through an
 explicit registration point, callback, app context, or public interface.
@@ -126,4 +126,4 @@ Next implementation steps
 1. Remove game includes from `engine/globals.hpp` and `engine/engine_state.hpp`.
 2. Replace sample registration in `engine/run.cpp` with app hooks.
 3. Move sample-specific menu/debug pieces out of `engine/`.
-4. Make `gubsy_engine` compile with no `game/` includes at all.
+4. Make `gubsy_engine` compile with no `demo/` includes at all.

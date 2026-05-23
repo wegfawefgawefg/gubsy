@@ -30,7 +30,7 @@ It exists so the engine can answer:
 
 ### `game_version`
 
-The coarse game/content version gate.
+The coarse demo/content version gate.
 
 If this differs, the session should generally be treated as incompatible.
 

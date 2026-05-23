@@ -20,7 +20,7 @@ check_no_matches() {
 
 check_no_matches \
   "engine/include code must not include game headers" \
-  '#include[[:space:]]+[<"]game/' \
+  '#include[[:space:]]+[<"]demo/' \
   "${repo_root}/engine" \
   "${repo_root}/include"
 

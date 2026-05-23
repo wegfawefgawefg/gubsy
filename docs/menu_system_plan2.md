@@ -149,7 +149,7 @@ All under `engine/menu/screens/`, each ≤300–500 LOC:
 5. `mods_screen.cpp`: uses `ModsScreenState`, `install_mod_by_index`, etc.
 6. `lobby_screen.cpp`, `lobby_mods_screen.cpp`: future work, follow same pattern.
 
-Game-specific menu screens live in `game/menu/screens/...` and call `register_menu_screen()` at startup.
+Game-specific menu screens live in `demo/menu/screens/...` and call `register_menu_screen()` at startup.
 
 ## 6. Developer API (game side)
 ```cpp

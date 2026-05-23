@@ -45,7 +45,7 @@ an example consumer, not the intended downstream project structure.
 1. `src/input/` replaces `libs/ginput`.
 2. `src/layout/` replaces `libs/glayout`.
 3. `src/sexp/` replaces `libs/gsexp`.
-4. `game/` should become `demo/` once the library boundary is stable.
+4. `demo/` should become `demo/` once the library boundary is stable.
 5. Consumers link `gubsy::engine` and include `gubsy/...` headers.
 6. Consumers do not link standalone `ginput`, `glayout`, or `gsexp` targets.
 7. The standalone `g*` repos can remain useful as reference projects, but they
@@ -77,7 +77,7 @@ The game does not need to know which internals came from old ripout repos.
    unchanged.
 5. Move current `engine/` implementation files into matching `src/` folders by
    subsystem.
-6. Rename `game/` to `demo/` after `gubsy::engine` builds cleanly as a library.
+6. Rename `demo/` to `demo/` after `gubsy::engine` builds cleanly as a library.
 7. Remove temporary forwarding headers and old private include paths only after
    all internal includes use the new paths.
 
@@ -110,7 +110,7 @@ normal external game can import Gubsy without private include paths.
 1. `libs/gsexp`, `libs/glayout`, and `libs/ginput` are gone from the normal
    build.
 2. Equivalent code lives under `src/sexp`, `src/layout`, and `src/input`.
-3. The bundled example lives under `demo/`, not `game/`.
+3. The bundled example lives under `demo/`, not `demo/`.
 4. `include/gubsy/` remains the only public Gubsy include root.
 5. `gubsy::engine` remains the only normal consumer target.
 6. The demo and consumer smoke test build and run with the same behavior as

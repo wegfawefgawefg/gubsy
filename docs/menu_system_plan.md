@@ -56,7 +56,7 @@ please go read that file. this one may still be nice for context
 | `engine/menu/layout_helpers.hpp` | Functions to query `UILayout` objects and fallback defaults. |
 | `engine/menu/render.hpp/cpp` | Rendering of widgets, focus indicators, page headers, hints. |
 | `engine/menu/screens/*.cpp` | Built-in screens (e.g., `main_screen.cpp`, `mods_screen.cpp`). |
-| `game/menu/screens/*.cpp` | Optional game-specific screens registered from game code. |
+| `demo/menu/screens/*.cpp` | Optional game-specific screens registered from game code. |
 
 ## Data Flow
 1. Game (or engine startup) registers screens and pushes `MenuScreenId::Main`.
@@ -117,7 +117,7 @@ please go read that file. this one may still be nice for context
    - Similar pattern with custom widgets (player slots, mod toggles, etc.).
 
 ## Developer API
-From game code (e.g., `game/main.cpp`):
+From game code (e.g., `demo/main.cpp`):
 ```cpp
 #include "engine/menu/manager.hpp"
 #include "engine/menu/screens.hpp"

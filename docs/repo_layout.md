@@ -12,7 +12,7 @@ Top-level directories
   - Engine-owned built-in assets only when they are genuinely generic.
   - Examples: window/input/audio plumbing, menu framework, save/load helpers,
     matchmaking/transport services, generic debug tooling.
-- `game/`
+- `demo/`
   - The actual game project built on top of the engine.
   - Game-owned code, assets, metadata meaning, gameplay protocol, and built-in
     shipped mods/content packs.
@@ -39,9 +39,9 @@ Content vs runtime state
 
 - `engine/assets/`
   - Engine-owned fallback assets and generic built-in resources.
-- `game/assets/`
+- `demo/assets/`
   - Game-authored shipped assets.
-- `game/mods/`
+- `demo/mods/`
   - Game-shipped built-in mods or content packs.
 - `data/mods/`
   - Installed, downloaded, or otherwise writable runtime mod state.
@@ -52,11 +52,11 @@ Content vs runtime state
 Practical rules
 ---------------
 
-- Do not put mutable user/runtime files under `engine/` or `game/`.
+- Do not put mutable user/runtime files under `engine/` or `demo/`.
 - Do not put gameplay-specific assets under `engine/assets/`.
 - Do not treat `data/` as authored content. It is runtime state.
 - If a file exists only to support a local tool or test harness, keep it under
-  `tools/` rather than `game/` or `data/`.
+  `tools/` rather than `demo/` or `data/`.
 
 Why this split
 --------------

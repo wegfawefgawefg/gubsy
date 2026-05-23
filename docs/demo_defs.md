@@ -19,8 +19,8 @@ Use this pattern when adding your own mod-facing systems:
 - Drive your gameplay using those defs + instance pools (spawn entities, run hooks, etc.) instead of hardcoding data.
 
 Sample mods shipped with the repo demonstrate layering:
-- `game/mods/base` defines the core pads.
+- `demo/mods/base` defines the core pads.
 - `tools/mod_repo/mods/shuffle_pack` adds additional pads that reposition the teleport pad using the per-instance API.
 - `tools/mod_repo/mods/pad_tweaks` patches base defs at load and exposes a “Reset Pads” item that applies more patches at runtime.
 
-When forking the engine, keep these “game” modules in `game/` so you can customize them freely while keeping the engine services (render/input/audio) untouched. This demo is intentionally small; it just demonstrates the canonical pattern.***
+When forking the engine, keep these “game” modules in `demo/` so you can customize them freely while keeping the engine services (render/input/audio) untouched. This demo is intentionally small; it just demonstrates the canonical pattern.***

@@ -1,0 +1,158 @@
+#include "engine/run.hpp"
+#include "demo/title.hpp"
+#include "demo/playing.hpp"
+#include "demo/setup.hpp"
+#include "engine/ui_layouts.hpp"
+#include "engine/mod_host.hpp"
+
+#include "engine/player.hpp"
+#include "engine/binds_profiles.hpp"
+#include "engine/input.hpp"
+#include "engine/step.hpp"
+#include "demo/actions.hpp"
+#include "demo/app_context.hpp"
+#include "demo/builtin_mods.hpp"
+#include "demo/demo_items.hpp"
+#include "demo/modes.hpp"
+#include "demo/state.hpp"
+#include "engine/game_settings.hpp"
+#include "demo/ui_layout_ids.hpp"
+#include "demo/imgui_debug/register_game_debug_windows.hpp"
+#include "demo/mod_api/register_game_mod_apis.hpp"
+#include "demo/input_runtime.hpp"
+#include "demo/menu/screens/main_menu_screen.hpp"
+#include "demo/menu/screens/lobby_screen.hpp"
+#include "demo/menu/screens/lobby_mods_screen.hpp"
+#include "demo/menu/screens/server_browser_screen.hpp"
+#include "demo/menu/screens/game_settings_screen.hpp"
+#include "demo/menu/screens/in_game_session_screen.hpp"
+#include "demo/menu/screens/local_players_screen.hpp"
+#include "demo/menu/screens/player_settings_screen.hpp"
+#include "demo/menu/screens/profile_picker_screen.hpp"
+#include "demo/menu/screens/session_clients_screen.hpp"
+#include "demo/menu/screens/input_devices_screen.hpp"
+#include "demo/menu/lobby_state.hpp"
+#include "demo/settings_schema_registry.hpp"
+#include "demo/ui_layout_registry.hpp"
+#include "demo/binds_schema_registry.hpp"
+
+namespace {
+constexpr const char* kGameModVersion = "0.1.0";
+
+void on_mods_changed(void* app_context) {
+    State* state = game_state_from_app_context(app_context);
+    if (!state)
+        return;
+    finalize_game_mod_apis(*state);
+}
+}
+
+void register_modes(EngineState& engine){
+    register_mode(engine, modes::TITLE, title_step, title_process_inputs, title_draw);
+    register_mode(engine, modes::SETUP, setup_step, nullptr, setup_draw);
+    register_mode(engine, modes::PLAYING, playing_step, playing_process_inputs, playing_draw);
+}
+
+int main() {
+    EngineState engine{};
+    GameAppContext app{};
+    app.engine = &engine;
+    lobby_bind_engine(engine);
+    if (!init_game_app_context(app)) {
+        return 1;
+    }
+
+    std::string builtin_mod_err;
+    if (!sync_builtin_game_mods(builtin_mod_err)) {
+        std::fprintf(stderr, "[game] built-in mod sync failed: %s\n",
+                     builtin_mod_err.c_str());
+    }
+
+    set_demo_items_engine(&engine);
+    register_game_settings_schema_entries(engine);
+    register_game_ui_layouts();
+    register_game_debug_windows(engine);
+
+    load_ui_layouts_pool(engine);
+
+    register_binds_schema_entries(engine);
+
+    register_game_mod_apis();
+    set_required_mod_game_version(kGameModVersion);
+    register_main_menu_screen(engine);
+    register_lobby_screen(engine);
+    register_lobby_mods_screen(engine);
+    register_server_browser_screen(engine);
+    register_game_settings_screen(engine);
+    register_in_game_session_screen(engine);
+    register_local_players_screen(engine);
+    register_player_settings_screen(engine);
+    register_profile_picker_screen(engine);
+    register_session_clients_screen(engine);
+    register_input_devices_screen(engine);
+    register_fixed_step_prep(build_input_frames_for_step);
+
+    engine.mode = modes::TITLE;
+
+    add_player(engine, 0);
+
+    BindsProfile* binds_profile = get_player_binds_profile(engine, 0);
+    if (binds_profile) {
+        // Profile is empty, so populate it with defaults
+        // Set menu binds
+        bind_button(*binds_profile, GubsyButton::KB_UP, GameAction::MENU_UP);
+        bind_button(*binds_profile, GubsyButton::KB_DOWN, GameAction::MENU_DOWN);
+        bind_button(*binds_profile, GubsyButton::KB_LEFT, GameAction::MENU_LEFT);
+        bind_button(*binds_profile, GubsyButton::KB_RIGHT, GameAction::MENU_RIGHT);
+        bind_button(*binds_profile, GubsyButton::KB_ENTER, GameAction::MENU_SELECT);
+        bind_button(*binds_profile, GubsyButton::KB_SPACE, GameAction::MENU_SELECT);
+        bind_button(*binds_profile, GubsyButton::KB_ESCAPE, GameAction::MENU_BACK);
+        bind_button(*binds_profile, GubsyButton::KB_E, GameAction::MENU_PAGE_NEXT);
+        bind_button(*binds_profile, GubsyButton::KB_Q, GameAction::MENU_PAGE_PREV);
+        bind_button(*binds_profile, GubsyButton::KB_W, GameAction::MENU_UP);
+        bind_button(*binds_profile, GubsyButton::KB_S, GameAction::MENU_DOWN);
+        bind_button(*binds_profile, GubsyButton::KB_A, GameAction::MENU_LEFT);
+        bind_button(*binds_profile, GubsyButton::KB_D, GameAction::MENU_RIGHT);
+
+        // Set game action binds
+        bind_button(*binds_profile, GubsyButton::KB_W, GameAction::UP);
+        bind_button(*binds_profile, GubsyButton::KB_S, GameAction::DOWN);
+        bind_button(*binds_profile, GubsyButton::KB_A, GameAction::LEFT);
+        bind_button(*binds_profile, GubsyButton::KB_D, GameAction::RIGHT);
+        bind_button(*binds_profile, GubsyButton::KB_E, GameAction::USE);
+        bind_button(*binds_profile, GubsyButton::KB_SPACE, GameAction::USE);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_UP, GameAction::MENU_UP);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_DOWN, GameAction::MENU_DOWN);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_LEFT, GameAction::MENU_LEFT);
+        bind_button(*binds_profile, GubsyButton::GP_DPAD_RIGHT, GameAction::MENU_RIGHT);
+        bind_button(*binds_profile, GubsyButton::GP_A, GameAction::MENU_SELECT);
+        bind_button(*binds_profile, GubsyButton::GP_RIGHT_SHOULDER, GameAction::MENU_PAGE_NEXT);
+        bind_button(*binds_profile, GubsyButton::GP_LEFT_SHOULDER, GameAction::MENU_PAGE_PREV);
+        bind_button(*binds_profile, GubsyButton::GP_B, GameAction::MENU_BACK);
+
+        // Set analog binds
+        bind_1d_analog(*binds_profile, Gubsy1DAnalog::GP_LEFT_TRIGGER, GameAnalog1D::BAR_HEIGHT);
+        bind_1d_analog(*binds_profile, Gubsy1DAnalog::MOUSE_WHEEL, GameAnalog1D::BAR_HEIGHT);
+        bind_2d_analog(*binds_profile, Gubsy2DAnalog::GP_LEFT_STICK, GameAnalog2D::RETICLE_POS);
+        bind_2d_analog(*binds_profile, Gubsy2DAnalog::MOUSE_XY, GameAnalog2D::RETICLE_POS);
+
+        // Save the now-populated binds profile to disk
+        save_binds_profile(*binds_profile);
+    }
+
+    register_modes(engine);
+   
+    GubsyAppHooks hooks{};
+    hooks.app_context = &app;
+    hooks.config.enable_mods = true;
+    hooks.config.enable_mod_browser = true;
+    hooks.config.enable_mod_hot_reload = true;
+    hooks.config.enable_lua_mod_host = true;
+    hooks.on_mods_changed = on_mods_changed;
+
+    do_the_gubsy(engine, hooks);
+
+    shutdown_game_app_context(app);
+    stop_doing_the_gubsy(engine);
+    return 0;
+}

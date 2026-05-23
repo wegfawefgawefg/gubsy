@@ -13,7 +13,7 @@ Only generic engine-owned runtime assets:
 - engine icons
 - other resources that are not specific to one game's rules or fiction
 
-What belongs in `game/assets/`
+What belongs in `demo/assets/`
 ------------------------------
 
 Game-owned shipped content that does not need mod semantics:
@@ -25,7 +25,7 @@ Game-owned shipped content that does not need mod semantics:
 - content that is always part of the game and is not meant to be enabled,
   disabled, patched, or distributed independently
 
-What belongs in `game/mods/`
+What belongs in `demo/mods/`
 ----------------------------
 
 Game-owned shipped content packs that intentionally use the mod pipeline:
@@ -58,15 +58,15 @@ Current repo decision
 ---------------------
 
 - `engine/assets/` stays engine-only.
-- `game/assets/branding/` holds game-owned branding/app identity assets.
-- `game/mods/base` stays a built-in shipped mod on purpose.
+- `demo/assets/branding/` holds game-owned branding/app identity assets.
+- `demo/mods/base` stays a built-in shipped mod on purpose.
   It is intentionally mod-shaped because it exercises manifests, mod APIs,
   hot reload, dependency handling, and content patching.
 - optional demo packs stay in `tools/mod_repo/` unless we explicitly decide to
   ship them as part of the game.
-- `game/assets/` now exists as the home for non-mod-shaped game content, but
+- `demo/assets/` now exists as the home for non-mod-shaped game content, but
   the current demo still leans heavily on the mod pipeline, so most shipped
-  runtime content remains under `game/mods/`.
+  runtime content remains under `demo/mods/`.
 - repo-only screenshots and social/README images live under `docs/images/`,
   because they are documentation assets rather than runtime content.
 
@@ -75,4 +75,4 @@ Practical rule
 
 Use a mod only when the content benefits from mod behavior. If the content is
 just normal built-in game data with no need for manifests, dependencies, patch
-chains, or independent distribution, keep it in `game/assets/` instead.
+chains, or independent distribution, keep it in `demo/assets/` instead.

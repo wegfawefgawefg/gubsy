@@ -37,7 +37,7 @@ Build policy
 Current boundary violations
 ---------------------------
 
-The engine no longer has direct `engine/ -> game/` includes in the current tree,
+The engine no longer has direct `engine/ -> demo/` includes in the current tree,
 but it is not yet a clean imported library boundary. The main violations are:
 
 1. Public `include/gubsy/...` headers are still mostly thin facades over
@@ -77,7 +77,7 @@ Current verification
   `add_subdirectory`, links only `gubsy::engine`, and includes only
   `gubsy/...` headers.
 - `scripts/check_consumption_boundary.sh` checks the current import boundary:
-  no `engine/ -> game/` includes, no smoke-test includes of private
+  no `engine/ -> demo/` includes, no smoke-test includes of private
   `engine/...` headers, and no sibling glib checkout requirement in CMake/docs.
 - `ctest --test-dir build --output-on-failure` runs the public API smoke,
   consumption boundary check, and external consumer smoke when tools/tests are
@@ -90,7 +90,7 @@ Practical target
 
 The correct end state is:
 
-- `gubsy_engine` builds with no includes from `game/`
+- `gubsy_engine` builds with no includes from `demo/`
 - the sample links the engine through public interfaces only
 - a downstream user can vendor the repo and build only `gubsy_engine`
 - upgrading `gubsy` looks like a normal dependency update instead of a fork

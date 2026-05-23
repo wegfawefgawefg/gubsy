@@ -44,9 +44,9 @@ file(GLOB_RECURSE GUB_ENGINE_SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
-file(GLOB_RECURSE GUB_GAME_SOURCES
-  "${CMAKE_CURRENT_SOURCE_DIR}/game/*.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/game/*.hpp"
+file(GLOB_RECURSE GUB_DEMO_SOURCES
+  "${CMAKE_CURRENT_SOURCE_DIR}/demo/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/demo/*.hpp"
 )
 
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
@@ -79,7 +79,7 @@ target_sources(gubsy_engine PRIVATE ${IMGUI_SOURCES})
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
 
 if (GUB_BUILD_SAMPLE)
-  add_executable(gubsy ${GUB_GAME_SOURCES})
+  add_executable(gubsy ${GUB_DEMO_SOURCES})
 endif()
 
 function(target_enable_strict_warnings tgt)
@@ -303,8 +303,8 @@ if (GUB_BUILD_TOOLS)
     engine/sync_payload_codec.cpp
     engine/sync_transport_udp.cpp
     engine/sync_transport_packet_codec.cpp
-    game/coop_protocol.cpp
-    game/coop_sim.cpp
+    demo/coop_protocol.cpp
+    demo/coop_sim.cpp
   )
   target_include_directories(coop_sync_smoke PRIVATE
     ${GUB_SOURCE_DIR}/include
