@@ -20,6 +20,8 @@
 #include "src/menu/settings_category_registry.hpp"
 #include "src/menu/screens/mods_screen.hpp"
 #include "src/gubsy_runtime_internal.hpp"
+#include "src/imgui_debug/imgui_debug.hpp"
+#include "src/layout_editor/layout_editor.hpp"
 
 namespace {
 
@@ -176,4 +178,27 @@ void gubsy_render_menu(GubsyRuntime& runtime,
                        int screen_width,
                        int screen_height) {
     menu_system_render(gubsy_runtime_engine(runtime), renderer, screen_width, screen_height);
+}
+
+void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    layout_editor_begin_frame(engine, dt);
+    imgui_debug_begin_frame(dt);
+}
+
+void gubsy_render_debug(GubsyRuntime& runtime,
+                        SDL_Renderer* renderer,
+                        int screen_width,
+                        int screen_height) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    if (layout_editor_is_active(engine)) {
+        layout_editor_render(engine, renderer, screen_width, screen_height);
+    }
+    imgui_debug_render(engine);
+}
+
+void gubsy_shutdown_debug(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    layout_editor_shutdown(engine);
+    imgui_debug_shutdown();
 }

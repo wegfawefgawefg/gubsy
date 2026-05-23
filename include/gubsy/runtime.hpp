@@ -52,3 +52,9 @@ void gubsy_clear_menu_stack(GubsyRuntime& runtime);
 void gubsy_set_menu_input(GubsyRuntime& runtime, const MenuInputState& input);
 void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height);
 void gubsy_render_menu(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width, int screen_height);
+void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt);
+void gubsy_render_debug(GubsyRuntime& runtime,
+                        SDL_Renderer* renderer,
+                        int screen_width,
+                        int screen_height);
+void gubsy_shutdown_debug(GubsyRuntime& runtime);
