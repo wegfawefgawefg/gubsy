@@ -1,25 +1,24 @@
 #include "engine/layout_editor/layout_editor.hpp"
-#include "engine/layout_editor/layout_editor_hooks.hpp"
-#include "engine/layout_editor/layout_editor_history.hpp"
-#include "engine/layout_editor/layout_editor_interaction.hpp"
-#include "engine/layout_editor/layout_editor_internal.hpp"
-#include "engine/layout_editor/layout_editor_panel.hpp"
-#include "engine/layout_editor/layout_editor_overlay.hpp"
 
 #include "engine/engine_state.hpp"
 #include "engine/graphics.hpp"
+#include "engine/layout_editor/layout_editor_history.hpp"
+#include "engine/layout_editor/layout_editor_hooks.hpp"
+#include "engine/layout_editor/layout_editor_interaction.hpp"
+#include "engine/layout_editor/layout_editor_internal.hpp"
+#include "engine/layout_editor/layout_editor_overlay.hpp"
+#include "engine/layout_editor/layout_editor_panel.hpp"
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 
-#include <imgui.h>
 #include <SDL2/SDL.h>
-
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cfloat>
 #include <climits>
+#include <cmath>
 #include <cstdio>
+#include <imgui.h>
 #include <limits>
 #include <string>
 #include <vector>
@@ -35,17 +34,16 @@ const LayoutEditorState& editor_state(const EngineState& engine) {
 }
 
 bool has_layouts(const EngineState& engine) {
-    return !engine.ui_layouts_pool.empty();
+    return !engine.ui_layouts.layouts.empty();
 }
 
 UILayout* selected_layout_mutable(EngineState& engine) {
     LayoutEditorState& state = editor_state(engine);
     if (!has_layouts(engine))
         return nullptr;
-    state.selected_layout = std::clamp(state.selected_layout,
-                                       0,
-                                       static_cast<int>(engine.ui_layouts_pool.size()) - 1);
-    return &engine.ui_layouts_pool[static_cast<std::size_t>(state.selected_layout)];
+    state.selected_layout = std::clamp(state.selected_layout, 0,
+                                       static_cast<int>(engine.ui_layouts.layouts.size()) - 1);
+    return &engine.ui_layouts.layouts[static_cast<std::size_t>(state.selected_layout)];
 }
 
 const UILayout* selected_layout(EngineState& engine) {
@@ -77,14 +75,14 @@ void ensure_history_for_selection(EngineState& engine) {
         return;
     }
     if (!state.history_initialized || layout->id != state.history_layout_id ||
-        layout->resolution_width != state.history_layout_width ||
-        layout->resolution_height != state.history_layout_height) {
+        layout->width != state.history_layout_width ||
+        layout->height != state.history_layout_height) {
         layout_editor_history_reset(engine, *layout);
         layout_editor_clear_selection(engine);
         state.history_initialized = true;
         state.history_layout_id = layout->id;
-        state.history_layout_width = layout->resolution_width;
-        state.history_layout_height = layout->resolution_height;
+        state.history_layout_width = layout->width;
+        state.history_layout_height = layout->height;
         state.object_label_index = -1;
         state.object_label_buffer[0] = '\0';
     }
@@ -113,8 +111,8 @@ bool paste_clipboard(EngineState& engine, UILayout& layout) {
     for (const auto& obj : state.clipboard.objects) {
         UIObject copy = obj;
         copy.id = generate_ui_object_id();
-        copy.x = std::clamp(copy.x + kClipboardNudge, 0.0f, 1.0f - copy.w);
-        copy.y = std::clamp(copy.y + kClipboardNudge, 0.0f, 1.0f - copy.h);
+        copy.rect.x = std::clamp(copy.rect.x + kClipboardNudge, 0.0f, 1.0f - copy.rect.w);
+        copy.rect.y = std::clamp(copy.rect.y + kClipboardNudge, 0.0f, 1.0f - copy.rect.h);
         layout.objects.push_back(copy);
         new_indices.push_back(static_cast<int>(layout.objects.size()) - 1);
     }
@@ -151,10 +149,10 @@ bool translate_selection(const EngineState& engine, UILayout& layout, float dx, 
         if (index < 0 || index >= static_cast<int>(layout.objects.size()))
             continue;
         const auto& obj = layout.objects[static_cast<std::size_t>(index)];
-        max_dx_positive = std::min(max_dx_positive, 1.0f - (obj.x + obj.w));
-        max_dx_negative = std::min(max_dx_negative, obj.x);
-        max_dy_positive = std::min(max_dy_positive, 1.0f - (obj.y + obj.h));
-        max_dy_negative = std::min(max_dy_negative, obj.y);
+        max_dx_positive = std::min(max_dx_positive, 1.0f - (obj.rect.x + obj.rect.w));
+        max_dx_negative = std::min(max_dx_negative, obj.rect.x);
+        max_dy_positive = std::min(max_dy_positive, 1.0f - (obj.rect.y + obj.rect.h));
+        max_dy_negative = std::min(max_dy_negative, obj.rect.y);
     }
     if (dx > 0.0f)
         dx = std::min(dx, max_dx_positive);
@@ -170,18 +168,17 @@ bool translate_selection(const EngineState& engine, UILayout& layout, float dx, 
         if (index < 0 || index >= static_cast<int>(layout.objects.size()))
             continue;
         auto& obj = layout.objects[static_cast<std::size_t>(index)];
-        obj.x = std::clamp(obj.x + dx, 0.0f, 1.0f - obj.w);
-        obj.y = std::clamp(obj.y + dy, 0.0f, 1.0f - obj.h);
+        obj.rect.x = std::clamp(obj.rect.x + dx, 0.0f, 1.0f - obj.rect.w);
+        obj.rect.y = std::clamp(obj.rect.y + dy, 0.0f, 1.0f - obj.rect.h);
     }
     return true;
 }
 
 bool select_layout_exact(EngineState& engine, int id, int width, int height) {
     LayoutEditorState& state = editor_state(engine);
-    for (std::size_t i = 0; i < engine.ui_layouts_pool.size(); ++i) {
-        const auto& layout = engine.ui_layouts_pool[i];
-        if (layout.id == id && layout.resolution_width == width &&
-            layout.resolution_height == height) {
+    for (std::size_t i = 0; i < engine.ui_layouts.layouts.size(); ++i) {
+        const auto& layout = engine.ui_layouts.layouts[i];
+        if (layout.id == id && layout.width == width && layout.height == height) {
             state.selected_layout = static_cast<int>(i);
             return true;
         }
@@ -194,9 +191,7 @@ void auto_follow_selection(EngineState& engine) {
     if (!state.follow_active_layout)
         return;
     if (state.last_request.valid) {
-        if (select_layout_exact(engine,
-                                state.last_request.id,
-                                state.last_request.width,
+        if (select_layout_exact(engine, state.last_request.id, state.last_request.width,
                                 state.last_request.height)) {
             return;
         }
@@ -210,10 +205,10 @@ void auto_follow_selection(EngineState& engine) {
         return;
     int best_idx = state.selected_layout;
     int best_score = INT_MAX;
-    for (std::size_t i = 0; i < engine.ui_layouts_pool.size(); ++i) {
-        const auto& layout = engine.ui_layouts_pool[i];
-        int dw = layout.resolution_width - target_w;
-        int dh = layout.resolution_height - target_h;
+    for (std::size_t i = 0; i < engine.ui_layouts.layouts.size(); ++i) {
+        const auto& layout = engine.ui_layouts.layouts[i];
+        int dw = layout.width - target_w;
+        int dh = layout.height - target_h;
         int score = dw * dw + dh * dh;
         if (score < best_score) {
             best_score = score;
@@ -273,16 +268,17 @@ void handle_mouse_input(EngineState& engine) {
                 selection_count = layout_editor_selection_count(engine);
 
                 if (layout_editor_selection_count(engine) > 0) {
-                    bool use_group = (!ctrl && !shift &&
-                                      layout_editor_selection_count(engine) > 1 &&
-                                      layout_editor_is_selected(engine, hit.object_index) &&
-                                      hit.handle == HandleType::Center);
+                    bool use_group =
+                        (!ctrl && !shift && layout_editor_selection_count(engine) > 1 &&
+                         layout_editor_is_selected(engine, hit.object_index) &&
+                         hit.handle == HandleType::Center);
                     HitResult dispatch_hit = hit;
                     if (use_group) {
                         dispatch_hit.target = HitTarget::Group;
                         dispatch_hit.object_index = -1;
                     }
-                    layout_editor_begin_drag(engine, *layout, dispatch_hit, mouse_x, mouse_y, viewport);
+                    layout_editor_begin_drag(engine, *layout, dispatch_hit, mouse_x, mouse_y,
+                                             viewport);
                 }
             } else if (hit.target == HitTarget::Group) {
                 if (layout_editor_selection_count(engine) > 1)
@@ -398,15 +394,12 @@ void handle_hotkeys(EngineState& engine) {
 
 } // namespace
 
-void layout_editor_notify_active_layout(EngineState& engine,
-                                        int layout_id,
-                                        int resolution_width,
-                                        int resolution_height) {
+void layout_editor_notify_active_layout(EngineState& engine, int layout_id, int width, int height) {
     LayoutEditorState& state = editor_state(engine);
     state.last_request.valid = true;
     state.last_request.id = layout_id;
-    state.last_request.width = resolution_width;
-    state.last_request.height = resolution_height;
+    state.last_request.width = width;
+    state.last_request.height = height;
 }
 
 bool layout_editor_consume_dirty_flag(EngineState& engine) {
@@ -436,38 +429,22 @@ bool layout_editor_wants_input(const EngineState& engine) {
     return editor_state(engine).active;
 }
 
-void layout_editor_render(EngineState& engine,
-                          SDL_Renderer* renderer,
-                          int screen_width,
-                          int screen_height,
-                          float origin_x,
-                          float origin_y) {
+void layout_editor_render(EngineState& engine, SDL_Renderer* renderer, int screen_width,
+                          int screen_height, float origin_x, float origin_y) {
     const LayoutEditorState& state = editor_state(engine);
     if (!state.active || !renderer)
         return;
     if (!has_layouts(engine))
         return;
-    layout_editor_set_viewport(engine,
-                               LayoutEditorViewport{origin_x,
-                                                    origin_y,
-                                                    static_cast<float>(screen_width),
-                                                    static_cast<float>(screen_height)});
-    layout_editor_draw_grid(renderer,
-                            screen_width,
-                            screen_height,
-                            origin_x,
-                            origin_y,
+    layout_editor_set_viewport(engine, LayoutEditorViewport{origin_x, origin_y,
+                                                            static_cast<float>(screen_width),
+                                                            static_cast<float>(screen_height)});
+    layout_editor_draw_grid(renderer, screen_width, screen_height, origin_x, origin_y,
                             state.grid_step);
     if (const UILayout* layout = selected_layout(engine)) {
         int dragging_idx = layout_editor_dragging_index(engine);
-        layout_editor_draw_layout(engine,
-                                  renderer,
-                                  *layout,
-                                  screen_width,
-                                  screen_height,
-                                  origin_x,
-                                  origin_y,
-                                  dragging_idx);
+        layout_editor_draw_layout(engine, renderer, *layout, screen_width, screen_height, origin_x,
+                                  origin_y, dragging_idx);
     }
 }
 

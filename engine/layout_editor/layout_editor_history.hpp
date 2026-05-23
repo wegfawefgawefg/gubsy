@@ -1,9 +1,10 @@
 #pragma once
 
+#include "engine/ui_layouts.hpp"
+
 #include <cstddef>
 
 struct EngineState;
-struct UILayout;
 
 // Resets the undo stack to track the provided layout's current state.
 void layout_editor_history_reset(EngineState& engine, const UILayout& layout);

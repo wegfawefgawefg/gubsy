@@ -7,7 +7,6 @@
 #include "engine/ui_layouts.hpp"
 
 #include <SDL2/SDL_ttf.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -33,11 +32,21 @@ void play_menu_sound(EngineState& engine, const char* key) {
 
 } // namespace
 
-void play_focus_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_cursor_move"); }
-void play_confirm_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_confirm"); }
-void play_cant_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_cant"); }
-void play_left_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_left"); }
-void play_right_sound(EngineState& engine) { play_menu_sound(engine, "base:ui_right"); }
+void play_focus_sound(EngineState& engine) {
+    play_menu_sound(engine, "base:ui_cursor_move");
+}
+void play_confirm_sound(EngineState& engine) {
+    play_menu_sound(engine, "base:ui_confirm");
+}
+void play_cant_sound(EngineState& engine) {
+    play_menu_sound(engine, "base:ui_cant");
+}
+void play_left_sound(EngineState& engine) {
+    play_menu_sound(engine, "base:ui_left");
+}
+void play_right_sound(EngineState& engine) {
+    play_menu_sound(engine, "base:ui_right");
+}
 
 void lock_mouse_focus_at(MenuRuntimeState& state, int x, int y) {
     state.allow_mouse_focus = false;
@@ -99,10 +108,10 @@ SDL_FRect* find_widget_rect(MenuRuntimeState& state, WidgetId id) {
 
 bool is_transient_focus_slot(UILayoutObjectId slot) {
     switch (slot) {
-        case SettingsObjectID::BACK:
-            return true;
-        default:
-            return false;
+    case SettingsObjectID::BACK:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -124,8 +133,7 @@ SliderLayout compute_slider_layout(const MenuWidget& widget, const SDL_FRect& re
         float base_y = rect.y + rect.h - btn_height - 8.0f;
         float right_x = rect.x + rect.w - btn_width - 12.0f;
         layout.right_btn = SDL_FRect{right_x, base_y, btn_width, btn_height};
-        layout.left_btn =
-            SDL_FRect{right_x - (btn_width + spacing), base_y, btn_width, btn_height};
+        layout.left_btn = SDL_FRect{right_x - (btn_width + spacing), base_y, btn_width, btn_height};
         arrow_reserved = (btn_width * 2.0f) + spacing + 8.0f;
     }
     if (layout.has_input) {
@@ -173,10 +181,8 @@ OptionLayout compute_option_layout(const MenuWidget& widget, const SDL_FRect& re
         if (widget.aux_text_buffer && widget.aux_text_max_len > 0) {
             layout.has_secondary_input = true;
             layout.primary_input.x -= (input_width + 10.0f);
-            layout.secondary_input = SDL_FRect{rect.x + rect.w - input_width - 12.0f,
-                                               input_y,
-                                               input_width,
-                                               input_height};
+            layout.secondary_input = SDL_FRect{rect.x + rect.w - input_width - 12.0f, input_y,
+                                               input_width, input_height};
         }
     }
     return layout;
@@ -230,10 +236,10 @@ void update_repeat(bool down, NavRepeatState& state, bool& trigger, float dt) {
 
 SDL_FRect rect_from_object(const UIObject& obj, int width, int height) {
     SDL_FRect rect;
-    rect.x = obj.x * static_cast<float>(width);
-    rect.y = obj.y * static_cast<float>(height);
-    rect.w = obj.w * static_cast<float>(width);
-    rect.h = obj.h * static_cast<float>(height);
+    rect.x = obj.rect.x * static_cast<float>(width);
+    rect.y = obj.rect.y * static_cast<float>(height);
+    rect.w = obj.rect.w * static_cast<float>(width);
+    rect.h = obj.rect.h * static_cast<float>(height);
     return rect;
 }
 
@@ -248,13 +254,8 @@ int measure_text_width(const EngineState& engine, const char* text) {
     return w;
 }
 
-void draw_text_with_clip(const EngineState&,
-                         SDL_Renderer* renderer,
-                         const char* text,
-                         int x,
-                         int y,
-                         SDL_Color color,
-                         const SDL_Rect* clip) {
+void draw_text_with_clip(const EngineState&, SDL_Renderer* renderer, const char* text, int x, int y,
+                         SDL_Color color, const SDL_Rect* clip) {
     if (!text)
         return;
     SDL_Rect prev_clip{};
@@ -306,9 +307,8 @@ bool commit_text_edit(MenuRuntimeState& state) {
         bool parsed_ok = (end_ptr != state.active_text_buffer->c_str());
         if (!parsed_ok) {
             std::string lower = *state.active_text_buffer;
-            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
+            std::transform(lower.begin(), lower.end(), lower.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             if (lower == "unlimited") {
                 parsed = 0.0f;
                 parsed_ok = true;
@@ -362,58 +362,54 @@ WidgetId current_text_widget(const MenuRuntimeState& state) {
     return state.text_edit_active ? state.text_edit_widget : kMenuIdInvalid;
 }
 
-bool execute_action(MenuRuntimeState& state,
-                    const MenuAction& action,
-                    MenuContext& ctx,
+bool execute_action(MenuRuntimeState& state, const MenuAction& action, MenuContext& ctx,
                     bool& stack_changed) {
     switch (action.type) {
-        case MenuActionType::None:
+    case MenuActionType::None:
+        return false;
+    case MenuActionType::PushScreen: {
+        if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a), ctx.player_index))
             return false;
-        case MenuActionType::PushScreen: {
-            if (!ctx.manager.push_screen(static_cast<MenuScreenId>(action.a), ctx.player_index))
-                return false;
-            stack_changed = true;
-            state.focus = kMenuIdInvalid;
+        stack_changed = true;
+        state.focus = kMenuIdInvalid;
+        return true;
+    }
+    case MenuActionType::PopScreen:
+        ctx.manager.pop_screen();
+        stack_changed = true;
+        state.focus = kMenuIdInvalid;
+        end_text_edit(state);
+        return true;
+    case MenuActionType::RequestFocus: {
+        WidgetId target = resolve_focus(state, static_cast<WidgetId>(action.a));
+        if (target != kMenuIdInvalid) {
+            state.focus = target;
             return true;
         }
-        case MenuActionType::PopScreen:
-            ctx.manager.pop_screen();
-            stack_changed = true;
-            state.focus = kMenuIdInvalid;
-            end_text_edit(state);
-            return true;
-        case MenuActionType::RequestFocus: {
-            WidgetId target = resolve_focus(state, static_cast<WidgetId>(action.a));
-            if (target != kMenuIdInvalid) {
-                state.focus = target;
-                return true;
-            }
-            return false;
-        }
-        case MenuActionType::ToggleBool:
-            if (action.ptr)
-                *reinterpret_cast<bool*>(action.ptr) = !*reinterpret_cast<bool*>(action.ptr);
-            return true;
-        case MenuActionType::SetFloat:
-            if (action.ptr)
-                *reinterpret_cast<float*>(action.ptr) = action.f;
-            return true;
-        case MenuActionType::DeltaFloat:
-            if (action.ptr)
-                *reinterpret_cast<float*>(action.ptr) += action.f;
-            return true;
-        case MenuActionType::RunCommand:
-            if (MenuCommandRegistry* registry = ctx.manager.commands())
-                registry->invoke(ctx, static_cast<MenuCommandId>(action.a), action.b);
-            return true;
-        default:
-            return false;
+        return false;
+    }
+    case MenuActionType::ToggleBool:
+        if (action.ptr)
+            *reinterpret_cast<bool*>(action.ptr) = !*reinterpret_cast<bool*>(action.ptr);
+        return true;
+    case MenuActionType::SetFloat:
+        if (action.ptr)
+            *reinterpret_cast<float*>(action.ptr) = action.f;
+        return true;
+    case MenuActionType::DeltaFloat:
+        if (action.ptr)
+            *reinterpret_cast<float*>(action.ptr) += action.f;
+        return true;
+    case MenuActionType::RunCommand:
+        if (MenuCommandRegistry* registry = ctx.manager.commands())
+            registry->invoke(ctx, static_cast<MenuCommandId>(action.a), action.b);
+        return true;
+    default:
+        return false;
     }
 }
 
-void rebuild_cache(MenuRuntimeState& state,
-                   MenuManager::ScreenInstance& inst,
-                   MenuContext& ctx) {
+void rebuild_cache(MenuRuntimeState& state, MenuManager::ScreenInstance& inst, MenuContext& ctx) {
     BuiltScreen built = inst.def->build(ctx);
     state.cache.layout = (built.layout != kMenuIdInvalid) ? built.layout : inst.def->layout;
     state.cache.width = ctx.screen_width;
@@ -473,9 +469,7 @@ void update_arrows(MenuRuntimeState& state, float dt) {
         state.arrows.initialized = true;
     }
     float t = std::clamp(dt * 40.0f, 0.0f, 1.0f);
-    auto blend = [t](float current, float target) {
-        return current + (target - current) * t;
-    };
+    auto blend = [t](float current, float target) { return current + (target - current) * t; };
     state.arrows.left_pos.x = blend(state.arrows.left_pos.x, state.arrows.left_target.x);
     state.arrows.left_pos.y = blend(state.arrows.left_pos.y, state.arrows.left_target.y);
     state.arrows.right_pos.x = blend(state.arrows.right_pos.x, state.arrows.right_target.x);

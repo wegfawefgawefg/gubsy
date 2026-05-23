@@ -14,8 +14,8 @@ constexpr std::size_t kMaxHistoryEntries = 64;
 LayoutSnapshot capture_snapshot(const UILayout& layout) {
     LayoutSnapshot snap;
     snap.layout_id = layout.id;
-    snap.width = layout.resolution_width;
-    snap.height = layout.resolution_height;
+    snap.width = layout.width;
+    snap.height = layout.height;
     snap.objects = layout.objects;
     return snap;
 }
@@ -24,9 +24,8 @@ bool matches_tracked_layout(const LayoutEditorState& state, const UILayout& layo
     if (state.history.empty())
         return false;
     const LayoutSnapshot& snap = state.history.front();
-    return snap.layout_id == layout.id &&
-           snap.width == layout.resolution_width &&
-           snap.height == layout.resolution_height;
+    return snap.layout_id == layout.id && snap.width == layout.width &&
+           snap.height == layout.height;
 }
 
 void apply_snapshot(UILayout& layout, const LayoutSnapshot& snapshot) {

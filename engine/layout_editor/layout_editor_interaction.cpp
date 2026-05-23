@@ -37,33 +37,28 @@ std::array<HandleRect, 9> build_handle_rects(const SDL_FRect& rect) {
 
     handles[0] = {HandleType::CornerTopLeft,
                   SDL_FRect{rect.x - half_corner, rect.y - half_corner, kHandleSize, kHandleSize}};
-    handles[1] = {HandleType::CornerTopRight,
-                  SDL_FRect{rect.x + rect.w - half_corner, rect.y - half_corner, kHandleSize, kHandleSize}};
-    handles[2] = {HandleType::CornerBottomLeft,
-                  SDL_FRect{rect.x - half_corner, rect.y + rect.h - half_corner, kHandleSize, kHandleSize}};
+    handles[1] = {
+        HandleType::CornerTopRight,
+        SDL_FRect{rect.x + rect.w - half_corner, rect.y - half_corner, kHandleSize, kHandleSize}};
+    handles[2] = {
+        HandleType::CornerBottomLeft,
+        SDL_FRect{rect.x - half_corner, rect.y + rect.h - half_corner, kHandleSize, kHandleSize}};
     handles[3] = {HandleType::CornerBottomRight,
-                  SDL_FRect{rect.x + rect.w - half_corner, rect.y + rect.h - half_corner, kHandleSize, kHandleSize}};
+                  SDL_FRect{rect.x + rect.w - half_corner, rect.y + rect.h - half_corner,
+                            kHandleSize, kHandleSize}};
 
-    handles[4] = {HandleType::EdgeTop,
-                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
-                            rect.y - kEdgeHandleThickness * 0.5f,
-                            edge_len_h,
-                            kEdgeHandleThickness}};
-    handles[5] = {HandleType::EdgeBottom,
-                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
-                            rect.y + rect.h - kEdgeHandleThickness * 0.5f,
-                            edge_len_h,
-                            kEdgeHandleThickness}};
-    handles[6] = {HandleType::EdgeLeft,
-                  SDL_FRect{rect.x - kEdgeHandleThickness * 0.5f,
-                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
-                            kEdgeHandleThickness,
-                            edge_len_v}};
-    handles[7] = {HandleType::EdgeRight,
-                  SDL_FRect{rect.x + rect.w - kEdgeHandleThickness * 0.5f,
-                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
-                            kEdgeHandleThickness,
-                            edge_len_v}};
+    handles[4] = {HandleType::EdgeTop, SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
+                                                 rect.y - kEdgeHandleThickness * 0.5f, edge_len_h,
+                                                 kEdgeHandleThickness}};
+    handles[5] = {HandleType::EdgeBottom, SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
+                                                    rect.y + rect.h - kEdgeHandleThickness * 0.5f,
+                                                    edge_len_h, kEdgeHandleThickness}};
+    handles[6] = {HandleType::EdgeLeft, SDL_FRect{rect.x - kEdgeHandleThickness * 0.5f,
+                                                  rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
+                                                  kEdgeHandleThickness, edge_len_v}};
+    handles[7] = {HandleType::EdgeRight, SDL_FRect{rect.x + rect.w - kEdgeHandleThickness * 0.5f,
+                                                   rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
+                                                   kEdgeHandleThickness, edge_len_v}};
 
     handles[8] = {HandleType::Center, rect};
     return handles;
@@ -115,9 +110,7 @@ void sync_primary(LayoutEditorState& state) {
     }
 }
 
-float snap_value_to_edges(float value,
-                          const std::vector<float>& edges,
-                          float tolerance,
+float snap_value_to_edges(float value, const std::vector<float>& edges, float tolerance,
                           bool& snapped) {
     float best = value;
     float best_diff = tolerance + 1.0f;
@@ -194,22 +187,18 @@ void layout_editor_clear_selection(EngineState& engine) {
     state.primary = -1;
 }
 
-bool layout_editor_selection_bounds(const EngineState& engine,
-                                    const UILayout& layout,
-                                    float& min_x,
-                                    float& min_y,
-                                    float& max_x,
-                                    float& max_y) {
+bool layout_editor_selection_bounds(const EngineState& engine, const UILayout& layout, float& min_x,
+                                    float& min_y, float& max_x, float& max_y) {
     const auto& selection = editor_state(engine).selection;
     bool initialized = false;
     for (int index : selection) {
         if (index < 0 || index >= static_cast<int>(layout.objects.size()))
             continue;
         const auto& obj = layout.objects[static_cast<std::size_t>(index)];
-        float obj_min_x = obj.x;
-        float obj_min_y = obj.y;
-        float obj_max_x = obj.x + obj.w;
-        float obj_max_y = obj.y + obj.h;
+        float obj_min_x = obj.rect.x;
+        float obj_min_y = obj.rect.y;
+        float obj_max_x = obj.rect.x + obj.rect.w;
+        float obj_max_y = obj.rect.y + obj.rect.h;
         if (!initialized) {
             min_x = obj_min_x;
             min_y = obj_min_y;
@@ -226,18 +215,14 @@ bool layout_editor_selection_bounds(const EngineState& engine,
     return initialized;
 }
 
-bool layout_editor_hit_test(const EngineState& engine,
-                            const UILayout& layout,
-                            const LayoutEditorViewport& viewport,
-                            float mouse_x,
-                            float mouse_y,
+bool layout_editor_hit_test(const EngineState& engine, const UILayout& layout,
+                            const LayoutEditorViewport& viewport, float mouse_x, float mouse_y,
                             HitResult& out_hit) {
     out_hit = HitResult{};
     if (viewport.width <= 0.0f || viewport.height <= 0.0f)
         return false;
     if (!contains(SDL_FRect{viewport.origin_x, viewport.origin_y, viewport.width, viewport.height},
-                  mouse_x,
-                  mouse_y)) {
+                  mouse_x, mouse_y)) {
         return false;
     }
     bool group_bounds_valid = false;
@@ -265,11 +250,9 @@ bool layout_editor_hit_test(const EngineState& engine,
     }
     for (int i = static_cast<int>(layout.objects.size()) - 1; i >= 0; --i) {
         const auto& obj = layout.objects[static_cast<std::size_t>(i)];
-        SDL_FRect rect{
-            viewport.origin_x + obj.x * viewport.width,
-            viewport.origin_y + obj.y * viewport.height,
-            obj.w * viewport.width,
-            obj.h * viewport.height};
+        SDL_FRect rect{viewport.origin_x + obj.rect.x * viewport.width,
+                       viewport.origin_y + obj.rect.y * viewport.height,
+                       obj.rect.w * viewport.width, obj.rect.h * viewport.height};
         auto handles = build_handle_rects(rect);
         for (std::size_t h = 0; h < 8; ++h) {
             if (contains(handles[h].rect, mouse_x, mouse_y)) {
@@ -294,12 +277,8 @@ bool layout_editor_hit_test(const EngineState& engine,
     return false;
 }
 
-void layout_editor_begin_drag(EngineState& engine,
-                              const UILayout& layout,
-                              const HitResult& hit,
-                              float mouse_x,
-                              float mouse_y,
-                              const LayoutEditorViewport& viewport) {
+void layout_editor_begin_drag(EngineState& engine, const UILayout& layout, const HitResult& hit,
+                              float mouse_x, float mouse_y, const LayoutEditorViewport& viewport) {
     LayoutEditorState& state = editor_state(engine);
     DragState& drag = state.drag;
     drag = DragState{};
@@ -332,29 +311,28 @@ void layout_editor_begin_drag(EngineState& engine,
             if (layout_editor_is_selected(engine, i))
                 continue;
             const auto& other = layout.objects[static_cast<std::size_t>(i)];
-            drag.snap_edges_x.push_back(other.x);
-            drag.snap_edges_x.push_back(other.x + other.w);
-            drag.snap_edges_y.push_back(other.y);
-            drag.snap_edges_y.push_back(other.y + other.h);
+            drag.snap_edges_x.push_back(other.rect.x);
+            drag.snap_edges_x.push_back(other.rect.x + other.rect.w);
+            drag.snap_edges_y.push_back(other.rect.y);
+            drag.snap_edges_y.push_back(other.rect.y + other.rect.h);
         }
-        const float inv_width =
-            (drag.group_start_w > 1e-6f) ? 1.0f / drag.group_start_w : 0.0f;
-        const float inv_height =
-            (drag.group_start_h > 1e-6f) ? 1.0f / drag.group_start_h : 0.0f;
+        const float inv_width = (drag.group_start_w > 1e-6f) ? 1.0f / drag.group_start_w : 0.0f;
+        const float inv_height = (drag.group_start_h > 1e-6f) ? 1.0f / drag.group_start_h : 0.0f;
         for (int index : layout_editor_selection_indices(engine)) {
             if (index < 0 || index >= static_cast<int>(layout.objects.size()))
                 continue;
             const auto& obj = layout.objects[static_cast<std::size_t>(index)];
             GroupMember member;
             member.index = index;
-            member.start_x = obj.x;
-            member.start_y = obj.y;
-            member.start_w = obj.w;
-            member.start_h = obj.h;
-            member.rel_x = inv_width > 0.0f ? (obj.x - drag.group_start_x) * inv_width : 0.0f;
-            member.rel_y = inv_height > 0.0f ? (obj.y - drag.group_start_y) * inv_height : 0.0f;
-            member.rel_w = inv_width > 0.0f ? obj.w * inv_width : 0.0f;
-            member.rel_h = inv_height > 0.0f ? obj.h * inv_height : 0.0f;
+            member.start_x = obj.rect.x;
+            member.start_y = obj.rect.y;
+            member.start_w = obj.rect.w;
+            member.start_h = obj.rect.h;
+            member.rel_x = inv_width > 0.0f ? (obj.rect.x - drag.group_start_x) * inv_width : 0.0f;
+            member.rel_y =
+                inv_height > 0.0f ? (obj.rect.y - drag.group_start_y) * inv_height : 0.0f;
+            member.rel_w = inv_width > 0.0f ? obj.rect.w * inv_width : 0.0f;
+            member.rel_h = inv_height > 0.0f ? obj.rect.h * inv_height : 0.0f;
             drag.members.push_back(member);
         }
         if (drag.members.empty())
@@ -367,31 +345,27 @@ void layout_editor_begin_drag(EngineState& engine,
     drag.active = true;
     drag.object_index = hit.object_index;
     drag.group = false;
-    drag.start_x = obj.x;
-    drag.start_y = obj.y;
-    drag.start_w = obj.w;
-    drag.start_h = obj.h;
-    drag.offset_x = local_x - obj.x;
-    drag.offset_y = local_y - obj.y;
+    drag.start_x = obj.rect.x;
+    drag.start_y = obj.rect.y;
+    drag.start_w = obj.rect.w;
+    drag.start_h = obj.rect.h;
+    drag.offset_x = local_x - obj.rect.x;
+    drag.offset_y = local_y - obj.rect.y;
     drag.snap_edges_x.clear();
     drag.snap_edges_y.clear();
     for (int i = 0; i < static_cast<int>(layout.objects.size()); ++i) {
         if (i == hit.object_index)
             continue;
         const auto& other = layout.objects[static_cast<std::size_t>(i)];
-        drag.snap_edges_x.push_back(other.x);
-        drag.snap_edges_x.push_back(other.x + other.w);
-        drag.snap_edges_y.push_back(other.y);
-        drag.snap_edges_y.push_back(other.y + other.h);
+        drag.snap_edges_x.push_back(other.rect.x);
+        drag.snap_edges_x.push_back(other.rect.x + other.rect.w);
+        drag.snap_edges_y.push_back(other.rect.y);
+        drag.snap_edges_y.push_back(other.rect.y + other.rect.h);
     }
 }
 
-bool layout_editor_update_drag(EngineState& engine,
-                               UILayout& layout,
-                               float mouse_x,
-                               float mouse_y,
-                               bool snap_enabled,
-                               float grid_step) {
+bool layout_editor_update_drag(EngineState& engine, UILayout& layout, float mouse_x, float mouse_y,
+                               bool snap_enabled, float grid_step) {
     LayoutEditorState& state = editor_state(engine);
     DragState& drag = state.drag;
     if (!drag.active)
@@ -440,9 +414,7 @@ bool layout_editor_update_drag(EngineState& engine,
         float new_width = drag.group_start_w;
         float new_height = drag.group_start_h;
 
-        auto apply_member_changes = [&](float target_left,
-                                        float target_top,
-                                        float target_width,
+        auto apply_member_changes = [&](float target_left, float target_top, float target_width,
                                         float target_height) {
             const float epsilon = 1e-5f;
             for (const auto& member : drag.members) {
@@ -456,153 +428,154 @@ bool layout_editor_update_drag(EngineState& engine,
                 new_x = std::clamp(new_x, 0.0f, 1.0f - new_w);
                 new_y = std::clamp(new_y, 0.0f, 1.0f - new_h);
 
-                if (std::fabs(obj.x - new_x) > epsilon || std::fabs(obj.y - new_y) > epsilon ||
-                    std::fabs(obj.w - new_w) > epsilon || std::fabs(obj.h - new_h) > epsilon) {
+                if (std::fabs(obj.rect.x - new_x) > epsilon ||
+                    std::fabs(obj.rect.y - new_y) > epsilon ||
+                    std::fabs(obj.rect.w - new_w) > epsilon ||
+                    std::fabs(obj.rect.h - new_h) > epsilon) {
                     changed = true;
                 }
-                obj.x = new_x;
-                obj.y = new_y;
-                obj.w = new_w;
-                obj.h = new_h;
+                obj.rect.x = new_x;
+                obj.rect.y = new_y;
+                obj.rect.w = new_w;
+                obj.rect.h = new_h;
             }
         };
 
         switch (drag.handle) {
-            case HandleType::Center: {
-                new_left = local_x - drag.offset_x;
-                new_top = local_y - drag.offset_y;
-                new_left = std::clamp(new_left, 0.0f, 1.0f - new_width);
-                new_top = std::clamp(new_top, 0.0f, 1.0f - new_height);
-                if (snap_enabled && grid_step > 0.0f) {
-                    new_left = apply_snap_pos(new_left, new_width);
-                    new_top = apply_snap_pos(new_top, new_height);
+        case HandleType::Center: {
+            new_left = local_x - drag.offset_x;
+            new_top = local_y - drag.offset_y;
+            new_left = std::clamp(new_left, 0.0f, 1.0f - new_width);
+            new_top = std::clamp(new_top, 0.0f, 1.0f - new_height);
+            if (snap_enabled && grid_step > 0.0f) {
+                new_left = apply_snap_pos(new_left, new_width);
+                new_top = apply_snap_pos(new_top, new_height);
+            }
+            snap_axis(new_left, new_width, drag.snap_edges_x);
+            snap_axis(new_top, new_height, drag.snap_edges_y);
+            float delta_x = new_left - drag.group_start_x;
+            float delta_y = new_top - drag.group_start_y;
+            const float epsilon = 1e-5f;
+            for (const auto& member : drag.members) {
+                if (member.index < 0 || member.index >= static_cast<int>(layout.objects.size())) {
+                    continue;
                 }
-                snap_axis(new_left, new_width, drag.snap_edges_x);
-                snap_axis(new_top, new_height, drag.snap_edges_y);
-                float delta_x = new_left - drag.group_start_x;
-                float delta_y = new_top - drag.group_start_y;
-                const float epsilon = 1e-5f;
-                for (const auto& member : drag.members) {
-                    if (member.index < 0 ||
-                        member.index >= static_cast<int>(layout.objects.size())) {
-                        continue;
-                    }
-                    auto& obj = layout.objects[static_cast<std::size_t>(member.index)];
-                    float new_x = std::clamp(member.start_x + delta_x, 0.0f, 1.0f - obj.w);
-                    float new_y = std::clamp(member.start_y + delta_y, 0.0f, 1.0f - obj.h);
-                    if (std::fabs(obj.x - new_x) > epsilon ||
-                        std::fabs(obj.y - new_y) > epsilon) {
-                        changed = true;
-                    }
-                    obj.x = new_x;
-                    obj.y = new_y;
+                auto& obj = layout.objects[static_cast<std::size_t>(member.index)];
+                float new_x = std::clamp(member.start_x + delta_x, 0.0f, 1.0f - obj.rect.w);
+                float new_y = std::clamp(member.start_y + delta_y, 0.0f, 1.0f - obj.rect.h);
+                if (std::fabs(obj.rect.x - new_x) > epsilon ||
+                    std::fabs(obj.rect.y - new_y) > epsilon) {
+                    changed = true;
                 }
-                return changed;
+                obj.rect.x = new_x;
+                obj.rect.y = new_y;
             }
-            case HandleType::EdgeLeft: {
-                float anchor = drag.group_start_x + drag.group_start_w;
-                new_left = std::clamp(local_x, 0.0f, anchor - kMinSize);
-                if (snap_enabled)
-                    new_left = snap_single(new_left);
-                snap_edge_value(new_left, drag.snap_edges_x);
-                new_width = std::max(kMinSize, anchor - new_left);
-                apply_member_changes(new_left, drag.group_start_y, new_width, new_height);
-                return changed;
+            return changed;
+        }
+        case HandleType::EdgeLeft: {
+            float anchor = drag.group_start_x + drag.group_start_w;
+            new_left = std::clamp(local_x, 0.0f, anchor - kMinSize);
+            if (snap_enabled)
+                new_left = snap_single(new_left);
+            snap_edge_value(new_left, drag.snap_edges_x);
+            new_width = std::max(kMinSize, anchor - new_left);
+            apply_member_changes(new_left, drag.group_start_y, new_width, new_height);
+            return changed;
+        }
+        case HandleType::EdgeRight: {
+            float anchor = drag.group_start_x;
+            float new_right = std::clamp(local_x, anchor + kMinSize, 1.0f);
+            if (snap_enabled)
+                new_right = snap_single(new_right);
+            snap_edge_value(new_right, drag.snap_edges_x);
+            new_width = std::max(kMinSize, new_right - anchor);
+            apply_member_changes(anchor, drag.group_start_y, new_width, new_height);
+            return changed;
+        }
+        case HandleType::EdgeTop: {
+            float anchor = drag.group_start_y + drag.group_start_h;
+            new_top = std::clamp(local_y, 0.0f, anchor - kMinSize);
+            if (snap_enabled)
+                new_top = snap_single(new_top);
+            snap_edge_value(new_top, drag.snap_edges_y);
+            new_height = std::max(kMinSize, anchor - new_top);
+            apply_member_changes(drag.group_start_x, new_top, new_width, new_height);
+            return changed;
+        }
+        case HandleType::EdgeBottom: {
+            float anchor = drag.group_start_y;
+            float new_bottom = std::clamp(local_y, anchor + kMinSize, 1.0f);
+            if (snap_enabled)
+                new_bottom = snap_single(new_bottom);
+            snap_edge_value(new_bottom, drag.snap_edges_y);
+            new_height = std::max(kMinSize, new_bottom - anchor);
+            apply_member_changes(drag.group_start_x, anchor, new_width, new_height);
+            return changed;
+        }
+        case HandleType::CornerTopLeft: {
+            float anchor_right = drag.group_start_x + drag.group_start_w;
+            float anchor_bottom = drag.group_start_y + drag.group_start_h;
+            new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
+            new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
+            if (snap_enabled) {
+                new_left = snap_single(new_left);
+                new_top = snap_single(new_top);
             }
-            case HandleType::EdgeRight: {
-                float anchor = drag.group_start_x;
-                float new_right = std::clamp(local_x, anchor + kMinSize, 1.0f);
-                if (snap_enabled)
-                    new_right = snap_single(new_right);
-                snap_edge_value(new_right, drag.snap_edges_x);
-                new_width = std::max(kMinSize, new_right - anchor);
-                apply_member_changes(anchor, drag.group_start_y, new_width, new_height);
-                return changed;
+            snap_edge_value(new_left, drag.snap_edges_x);
+            snap_edge_value(new_top, drag.snap_edges_y);
+            new_width = std::max(kMinSize, anchor_right - new_left);
+            new_height = std::max(kMinSize, anchor_bottom - new_top);
+            apply_member_changes(new_left, new_top, new_width, new_height);
+            return changed;
+        }
+        case HandleType::CornerTopRight: {
+            float anchor_left = drag.group_start_x;
+            float anchor_bottom = drag.group_start_y + drag.group_start_h;
+            float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
+            new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
+            if (snap_enabled) {
+                new_right = snap_single(new_right);
+                new_top = snap_single(new_top);
             }
-            case HandleType::EdgeTop: {
-                float anchor = drag.group_start_y + drag.group_start_h;
-                new_top = std::clamp(local_y, 0.0f, anchor - kMinSize);
-                if (snap_enabled)
-                    new_top = snap_single(new_top);
-                snap_edge_value(new_top, drag.snap_edges_y);
-                new_height = std::max(kMinSize, anchor - new_top);
-                apply_member_changes(drag.group_start_x, new_top, new_width, new_height);
-                return changed;
+            snap_edge_value(new_right, drag.snap_edges_x);
+            snap_edge_value(new_top, drag.snap_edges_y);
+            new_width = std::max(kMinSize, new_right - anchor_left);
+            new_height = std::max(kMinSize, anchor_bottom - new_top);
+            apply_member_changes(anchor_left, new_top, new_width, new_height);
+            return changed;
+        }
+        case HandleType::CornerBottomLeft: {
+            float anchor_right = drag.group_start_x + drag.group_start_w;
+            float anchor_top = drag.group_start_y;
+            new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
+            float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
+            if (snap_enabled) {
+                new_left = snap_single(new_left);
+                new_bottom = snap_single(new_bottom);
             }
-            case HandleType::EdgeBottom: {
-                float anchor = drag.group_start_y;
-                float new_bottom = std::clamp(local_y, anchor + kMinSize, 1.0f);
-                if (snap_enabled)
-                    new_bottom = snap_single(new_bottom);
-                snap_edge_value(new_bottom, drag.snap_edges_y);
-                new_height = std::max(kMinSize, new_bottom - anchor);
-                apply_member_changes(drag.group_start_x, anchor, new_width, new_height);
-                return changed;
+            snap_edge_value(new_left, drag.snap_edges_x);
+            snap_edge_value(new_bottom, drag.snap_edges_y);
+            new_width = std::max(kMinSize, anchor_right - new_left);
+            new_height = std::max(kMinSize, new_bottom - anchor_top);
+            apply_member_changes(new_left, anchor_top, new_width, new_height);
+            return changed;
+        }
+        case HandleType::CornerBottomRight: {
+            float anchor_left = drag.group_start_x;
+            float anchor_top = drag.group_start_y;
+            float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
+            float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
+            if (snap_enabled) {
+                new_right = snap_single(new_right);
+                new_bottom = snap_single(new_bottom);
             }
-            case HandleType::CornerTopLeft: {
-                float anchor_right = drag.group_start_x + drag.group_start_w;
-                float anchor_bottom = drag.group_start_y + drag.group_start_h;
-                new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
-                new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
-                if (snap_enabled) {
-                    new_left = snap_single(new_left);
-                    new_top = snap_single(new_top);
-                }
-                snap_edge_value(new_left, drag.snap_edges_x);
-                snap_edge_value(new_top, drag.snap_edges_y);
-                new_width = std::max(kMinSize, anchor_right - new_left);
-                new_height = std::max(kMinSize, anchor_bottom - new_top);
-                apply_member_changes(new_left, new_top, new_width, new_height);
-                return changed;
-            }
-            case HandleType::CornerTopRight: {
-                float anchor_left = drag.group_start_x;
-                float anchor_bottom = drag.group_start_y + drag.group_start_h;
-                float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
-                new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
-                if (snap_enabled) {
-                    new_right = snap_single(new_right);
-                    new_top = snap_single(new_top);
-                }
-                snap_edge_value(new_right, drag.snap_edges_x);
-                snap_edge_value(new_top, drag.snap_edges_y);
-                new_width = std::max(kMinSize, new_right - anchor_left);
-                new_height = std::max(kMinSize, anchor_bottom - new_top);
-                apply_member_changes(anchor_left, new_top, new_width, new_height);
-                return changed;
-            }
-            case HandleType::CornerBottomLeft: {
-                float anchor_right = drag.group_start_x + drag.group_start_w;
-                float anchor_top = drag.group_start_y;
-                new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
-                float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
-                if (snap_enabled) {
-                    new_left = snap_single(new_left);
-                    new_bottom = snap_single(new_bottom);
-                }
-                snap_edge_value(new_left, drag.snap_edges_x);
-                snap_edge_value(new_bottom, drag.snap_edges_y);
-                new_width = std::max(kMinSize, anchor_right - new_left);
-                new_height = std::max(kMinSize, new_bottom - anchor_top);
-                apply_member_changes(new_left, anchor_top, new_width, new_height);
-                return changed;
-            }
-            case HandleType::CornerBottomRight: {
-                float anchor_left = drag.group_start_x;
-                float anchor_top = drag.group_start_y;
-                float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
-                float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
-                if (snap_enabled) {
-                    new_right = snap_single(new_right);
-                    new_bottom = snap_single(new_bottom);
-                }
-                snap_edge_value(new_right, drag.snap_edges_x);
-                snap_edge_value(new_bottom, drag.snap_edges_y);
-                new_width = std::max(kMinSize, new_right - anchor_left);
-                new_height = std::max(kMinSize, new_bottom - anchor_top);
-                apply_member_changes(anchor_left, anchor_top, new_width, new_height);
-                return changed;
-            }
+            snap_edge_value(new_right, drag.snap_edges_x);
+            snap_edge_value(new_bottom, drag.snap_edges_y);
+            new_width = std::max(kMinSize, new_right - anchor_left);
+            new_height = std::max(kMinSize, new_bottom - anchor_top);
+            apply_member_changes(anchor_left, anchor_top, new_width, new_height);
+            return changed;
+        }
         }
         return changed;
     }
@@ -616,161 +589,161 @@ bool layout_editor_update_drag(EngineState& engine,
     bool changed = false;
 
     switch (drag.handle) {
-        case HandleType::Center: {
-            float new_x = local_x - drag.offset_x;
-            float new_y = local_y - drag.offset_y;
-            new_x = std::clamp(new_x, 0.0f, 1.0f - obj.w);
-            new_y = std::clamp(new_y, 0.0f, 1.0f - obj.h);
-            if (snap_enabled && grid_step > 0.0f) {
-                new_x = apply_snap_pos(new_x, obj.w);
-                new_y = apply_snap_pos(new_y, obj.h);
-            }
-            snap_axis(new_x, obj.w, drag.snap_edges_x);
-            snap_axis(new_y, obj.h, drag.snap_edges_y);
-            changed = (std::fabs(obj.x - new_x) > 1e-5f) ||
-                      (std::fabs(obj.y - new_y) > 1e-5f);
-            obj.x = new_x;
-            obj.y = new_y;
-            break;
+    case HandleType::Center: {
+        float new_x = local_x - drag.offset_x;
+        float new_y = local_y - drag.offset_y;
+        new_x = std::clamp(new_x, 0.0f, 1.0f - obj.rect.w);
+        new_y = std::clamp(new_y, 0.0f, 1.0f - obj.rect.h);
+        if (snap_enabled && grid_step > 0.0f) {
+            new_x = apply_snap_pos(new_x, obj.rect.w);
+            new_y = apply_snap_pos(new_y, obj.rect.h);
         }
-        case HandleType::EdgeLeft: {
-            float anchor = drag.start_x + drag.start_w;
-            float new_left = std::clamp(local_x, 0.0f, anchor - kMinSize);
-            if (snap_enabled)
-                new_left = snap_single(new_left);
-            snap_edge_value(new_left, drag.snap_edges_x);
-            float new_width = anchor - new_left;
-            changed = (std::fabs(obj.x - new_left) > 1e-5f) ||
-                      (std::fabs(obj.w - new_width) > 1e-5f);
-            obj.x = new_left;
-            obj.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.x));
-            break;
+        snap_axis(new_x, obj.rect.w, drag.snap_edges_x);
+        snap_axis(new_y, obj.rect.h, drag.snap_edges_y);
+        changed =
+            (std::fabs(obj.rect.x - new_x) > 1e-5f) || (std::fabs(obj.rect.y - new_y) > 1e-5f);
+        obj.rect.x = new_x;
+        obj.rect.y = new_y;
+        break;
+    }
+    case HandleType::EdgeLeft: {
+        float anchor = drag.start_x + drag.start_w;
+        float new_left = std::clamp(local_x, 0.0f, anchor - kMinSize);
+        if (snap_enabled)
+            new_left = snap_single(new_left);
+        snap_edge_value(new_left, drag.snap_edges_x);
+        float new_width = anchor - new_left;
+        changed = (std::fabs(obj.rect.x - new_left) > 1e-5f) ||
+                  (std::fabs(obj.rect.w - new_width) > 1e-5f);
+        obj.rect.x = new_left;
+        obj.rect.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.rect.x));
+        break;
+    }
+    case HandleType::EdgeRight: {
+        float anchor = drag.start_x;
+        float new_right = std::clamp(local_x, anchor + kMinSize, 1.0f);
+        if (snap_enabled)
+            new_right = snap_single(new_right);
+        snap_edge_value(new_right, drag.snap_edges_x);
+        float new_width = new_right - anchor;
+        changed = (std::fabs(obj.rect.w - new_width) > 1e-5f);
+        obj.rect.x = anchor;
+        obj.rect.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.rect.x));
+        break;
+    }
+    case HandleType::EdgeTop: {
+        float anchor = drag.start_y + drag.start_h;
+        float new_top = std::clamp(local_y, 0.0f, anchor - kMinSize);
+        if (snap_enabled)
+            new_top = snap_single(new_top);
+        snap_edge_value(new_top, drag.snap_edges_y);
+        float new_height = anchor - new_top;
+        changed = (std::fabs(obj.rect.y - new_top) > 1e-5f) ||
+                  (std::fabs(obj.rect.h - new_height) > 1e-5f);
+        obj.rect.y = new_top;
+        obj.rect.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.rect.y));
+        break;
+    }
+    case HandleType::EdgeBottom: {
+        float anchor = drag.start_y;
+        float new_bottom = std::clamp(local_y, anchor + kMinSize, 1.0f);
+        if (snap_enabled)
+            new_bottom = snap_single(new_bottom);
+        snap_edge_value(new_bottom, drag.snap_edges_y);
+        float new_height = new_bottom - anchor;
+        changed = (std::fabs(obj.rect.h - new_height) > 1e-5f);
+        obj.rect.y = anchor;
+        obj.rect.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.rect.y));
+        break;
+    }
+    case HandleType::CornerTopLeft: {
+        float anchor_right = drag.start_x + drag.start_w;
+        float anchor_bottom = drag.start_y + drag.start_h;
+        float new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
+        float new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
+        if (snap_enabled) {
+            new_left = snap_single(new_left);
+            new_top = snap_single(new_top);
         }
-        case HandleType::EdgeRight: {
-            float anchor = drag.start_x;
-            float new_right = std::clamp(local_x, anchor + kMinSize, 1.0f);
-            if (snap_enabled)
-                new_right = snap_single(new_right);
-            snap_edge_value(new_right, drag.snap_edges_x);
-            float new_width = new_right - anchor;
-            changed = (std::fabs(obj.w - new_width) > 1e-5f);
-            obj.x = anchor;
-            obj.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.x));
-            break;
+        snap_edge_value(new_left, drag.snap_edges_x);
+        snap_edge_value(new_top, drag.snap_edges_y);
+        float new_width = anchor_right - new_left;
+        float new_height = anchor_bottom - new_top;
+        changed = (std::fabs(obj.rect.x - new_left) > 1e-5f) ||
+                  (std::fabs(obj.rect.y - new_top) > 1e-5f) ||
+                  (std::fabs(obj.rect.w - new_width) > 1e-5f) ||
+                  (std::fabs(obj.rect.h - new_height) > 1e-5f);
+        obj.rect.x = new_left;
+        obj.rect.y = new_top;
+        obj.rect.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.rect.x));
+        obj.rect.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.rect.y));
+        break;
+    }
+    case HandleType::CornerTopRight: {
+        float anchor_left = drag.start_x;
+        float anchor_bottom = drag.start_y + drag.start_h;
+        float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
+        float new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
+        if (snap_enabled) {
+            new_right = snap_single(new_right);
+            new_top = snap_single(new_top);
         }
-        case HandleType::EdgeTop: {
-            float anchor = drag.start_y + drag.start_h;
-            float new_top = std::clamp(local_y, 0.0f, anchor - kMinSize);
-            if (snap_enabled)
-                new_top = snap_single(new_top);
-            snap_edge_value(new_top, drag.snap_edges_y);
-            float new_height = anchor - new_top;
-            changed = (std::fabs(obj.y - new_top) > 1e-5f) ||
-                      (std::fabs(obj.h - new_height) > 1e-5f);
-            obj.y = new_top;
-            obj.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.y));
-            break;
+        snap_edge_value(new_right, drag.snap_edges_x);
+        snap_edge_value(new_top, drag.snap_edges_y);
+        float new_width = new_right - anchor_left;
+        float new_height = anchor_bottom - new_top;
+        changed = (std::fabs(obj.rect.w - new_width) > 1e-5f) ||
+                  (std::fabs(obj.rect.y - new_top) > 1e-5f) ||
+                  (std::fabs(obj.rect.h - new_height) > 1e-5f);
+        obj.rect.x = anchor_left;
+        obj.rect.y = new_top;
+        obj.rect.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.rect.x));
+        obj.rect.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.rect.y));
+        break;
+    }
+    case HandleType::CornerBottomLeft: {
+        float anchor_right = drag.start_x + drag.start_w;
+        float anchor_top = drag.start_y;
+        float new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
+        float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
+        if (snap_enabled) {
+            new_left = snap_single(new_left);
+            new_bottom = snap_single(new_bottom);
         }
-        case HandleType::EdgeBottom: {
-            float anchor = drag.start_y;
-            float new_bottom = std::clamp(local_y, anchor + kMinSize, 1.0f);
-            if (snap_enabled)
-                new_bottom = snap_single(new_bottom);
-            snap_edge_value(new_bottom, drag.snap_edges_y);
-            float new_height = new_bottom - anchor;
-            changed = (std::fabs(obj.h - new_height) > 1e-5f);
-            obj.y = anchor;
-            obj.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.y));
-            break;
+        snap_edge_value(new_left, drag.snap_edges_x);
+        snap_edge_value(new_bottom, drag.snap_edges_y);
+        float new_width = anchor_right - new_left;
+        float new_height = new_bottom - anchor_top;
+        changed = (std::fabs(obj.rect.x - new_left) > 1e-5f) ||
+                  (std::fabs(obj.rect.h - new_height) > 1e-5f) ||
+                  (std::fabs(obj.rect.w - new_width) > 1e-5f);
+        obj.rect.x = new_left;
+        obj.rect.y = anchor_top;
+        obj.rect.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.rect.x));
+        obj.rect.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.rect.y));
+        break;
+    }
+    case HandleType::CornerBottomRight: {
+        float anchor_left = drag.start_x;
+        float anchor_top = drag.start_y;
+        float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
+        float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
+        if (snap_enabled) {
+            new_right = snap_single(new_right);
+            new_bottom = snap_single(new_bottom);
         }
-        case HandleType::CornerTopLeft: {
-            float anchor_right = drag.start_x + drag.start_w;
-            float anchor_bottom = drag.start_y + drag.start_h;
-            float new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
-            float new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
-            if (snap_enabled) {
-                new_left = snap_single(new_left);
-                new_top = snap_single(new_top);
-            }
-            snap_edge_value(new_left, drag.snap_edges_x);
-            snap_edge_value(new_top, drag.snap_edges_y);
-            float new_width = anchor_right - new_left;
-            float new_height = anchor_bottom - new_top;
-            changed = (std::fabs(obj.x - new_left) > 1e-5f) ||
-                      (std::fabs(obj.y - new_top) > 1e-5f) ||
-                      (std::fabs(obj.w - new_width) > 1e-5f) ||
-                      (std::fabs(obj.h - new_height) > 1e-5f);
-            obj.x = new_left;
-            obj.y = new_top;
-            obj.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.x));
-            obj.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.y));
-            break;
-        }
-        case HandleType::CornerTopRight: {
-            float anchor_left = drag.start_x;
-            float anchor_bottom = drag.start_y + drag.start_h;
-            float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
-            float new_top = std::clamp(local_y, 0.0f, anchor_bottom - kMinSize);
-            if (snap_enabled) {
-                new_right = snap_single(new_right);
-                new_top = snap_single(new_top);
-            }
-            snap_edge_value(new_right, drag.snap_edges_x);
-            snap_edge_value(new_top, drag.snap_edges_y);
-            float new_width = new_right - anchor_left;
-            float new_height = anchor_bottom - new_top;
-            changed = (std::fabs(obj.w - new_width) > 1e-5f) ||
-                      (std::fabs(obj.y - new_top) > 1e-5f) ||
-                      (std::fabs(obj.h - new_height) > 1e-5f);
-            obj.x = anchor_left;
-            obj.y = new_top;
-            obj.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.x));
-            obj.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.y));
-            break;
-        }
-        case HandleType::CornerBottomLeft: {
-            float anchor_right = drag.start_x + drag.start_w;
-            float anchor_top = drag.start_y;
-            float new_left = std::clamp(local_x, 0.0f, anchor_right - kMinSize);
-            float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
-            if (snap_enabled) {
-                new_left = snap_single(new_left);
-                new_bottom = snap_single(new_bottom);
-            }
-            snap_edge_value(new_left, drag.snap_edges_x);
-            snap_edge_value(new_bottom, drag.snap_edges_y);
-            float new_width = anchor_right - new_left;
-            float new_height = new_bottom - anchor_top;
-            changed = (std::fabs(obj.x - new_left) > 1e-5f) ||
-                      (std::fabs(obj.h - new_height) > 1e-5f) ||
-                      (std::fabs(obj.w - new_width) > 1e-5f);
-            obj.x = new_left;
-            obj.y = anchor_top;
-            obj.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.x));
-            obj.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.y));
-            break;
-        }
-        case HandleType::CornerBottomRight: {
-            float anchor_left = drag.start_x;
-            float anchor_top = drag.start_y;
-            float new_right = std::clamp(local_x, anchor_left + kMinSize, 1.0f);
-            float new_bottom = std::clamp(local_y, anchor_top + kMinSize, 1.0f);
-            if (snap_enabled) {
-                new_right = snap_single(new_right);
-                new_bottom = snap_single(new_bottom);
-            }
-            snap_edge_value(new_right, drag.snap_edges_x);
-            snap_edge_value(new_bottom, drag.snap_edges_y);
-            float new_width = new_right - anchor_left;
-            float new_height = new_bottom - anchor_top;
-            changed = (std::fabs(obj.w - new_width) > 1e-5f) ||
-                      (std::fabs(obj.h - new_height) > 1e-5f);
-            obj.x = anchor_left;
-            obj.y = anchor_top;
-            obj.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.x));
-            obj.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.y));
-            break;
-        }
+        snap_edge_value(new_right, drag.snap_edges_x);
+        snap_edge_value(new_bottom, drag.snap_edges_y);
+        float new_width = new_right - anchor_left;
+        float new_height = new_bottom - anchor_top;
+        changed = (std::fabs(obj.rect.w - new_width) > 1e-5f) ||
+                  (std::fabs(obj.rect.h - new_height) > 1e-5f);
+        obj.rect.x = anchor_left;
+        obj.rect.y = anchor_top;
+        obj.rect.w = std::max(kMinSize, std::min(new_width, 1.0f - obj.rect.x));
+        obj.rect.h = std::max(kMinSize, std::min(new_height, 1.0f - obj.rect.y));
+        break;
+    }
     }
     return changed;
 }

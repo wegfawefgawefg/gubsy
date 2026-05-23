@@ -1,28 +1,28 @@
 #pragma once
 
 #include "engine/alerts.hpp"
+#include "engine/binds_profiles.hpp"
+#include "engine/device_state.hpp"
+#include "engine/game_settings.hpp"
+#include "engine/input_settings_profiles.hpp"
+#include "engine/input_sources.hpp"
+#include "engine/layout_editor/layout_editor_state.hpp"
+#include "engine/menu/menu_commands.hpp"
+#include "engine/menu/menu_manager.hpp"
+#include "engine/menu/menu_runtime_state.hpp"
+#include "engine/top_level_game_settings.hpp"
+#include "engine/ui_layouts.hpp"
+#include "mode_registry.hpp"
+#include "player.hpp"
+#include "user_profiles.hpp"
 
+#include <SDL2/SDL.h>
 #include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include <SDL2/SDL.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "mode_registry.hpp"
-#include "user_profiles.hpp"
-#include "engine/binds_profiles.hpp"
-#include "engine/input_settings_profiles.hpp"
-#include "engine/game_settings.hpp"
-#include "engine/top_level_game_settings.hpp"
-#include "engine/device_state.hpp"
-#include "engine/layout_editor/layout_editor_state.hpp"
-#include "engine/menu/menu_manager.hpp"
-#include "engine/menu/menu_commands.hpp"
-#include "engine/menu/menu_runtime_state.hpp"
-#include "engine/ui_layouts.hpp"
-#include "player.hpp"
-#include "engine/input_sources.hpp"
 
 struct ModManager;
 struct Audio;
@@ -31,12 +31,12 @@ struct Graphics;
 struct EngineState {
     bool running{true};
     void* app_context{nullptr};
-    
+
     double now{0.0};
     float dt{0.0f};
     float accumulator{0.0f};
     std::uint64_t frame{0};
-    
+
     std::string mode{"none"};
     std::vector<ModeDesc> modes;
     std::unordered_map<std::string, std::size_t> mode_lookup;
@@ -63,7 +63,7 @@ struct EngineState {
     // top-level game settings (singleton, global)
     TopLevelGameSettings top_level_game_settings;
 
-    bool draw_input_device_overlay {false};
+    bool draw_input_device_overlay{false};
 
     DeviceState device_state{};
 
@@ -79,7 +79,7 @@ struct EngineState {
     std::vector<Alert> alerts{};
 
     // UI layout pool loaded from disk
-    std::vector<UILayout> ui_layouts_pool;
+    glayout::LayoutStore ui_layouts;
 
     struct AudioSettings {
         float vol_master{1.0f};

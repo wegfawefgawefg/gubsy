@@ -5,8 +5,8 @@
 #include "engine/render.hpp"
 #include "engine/ui_layouts.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 
 namespace {
 
@@ -22,45 +22,33 @@ std::array<HandleDrawInfo, 8> build_handle_rects(const SDL_FRect& rect) {
     float edge_len_h = std::min(rect.w, kEdgeHandleLength);
 
     handles[0] = {HandleType::CornerTopLeft,
-                  SDL_FRect{rect.x - half_corner, rect.y - half_corner,
-                            kHandleSize, kHandleSize}};
-    handles[1] = {HandleType::CornerTopRight,
-                  SDL_FRect{rect.x + rect.w - half_corner, rect.y - half_corner,
-                            kHandleSize, kHandleSize}};
-    handles[2] = {HandleType::CornerBottomLeft,
-                  SDL_FRect{rect.x - half_corner, rect.y + rect.h - half_corner,
-                            kHandleSize, kHandleSize}};
+                  SDL_FRect{rect.x - half_corner, rect.y - half_corner, kHandleSize, kHandleSize}};
+    handles[1] = {
+        HandleType::CornerTopRight,
+        SDL_FRect{rect.x + rect.w - half_corner, rect.y - half_corner, kHandleSize, kHandleSize}};
+    handles[2] = {
+        HandleType::CornerBottomLeft,
+        SDL_FRect{rect.x - half_corner, rect.y + rect.h - half_corner, kHandleSize, kHandleSize}};
     handles[3] = {HandleType::CornerBottomRight,
-                  SDL_FRect{rect.x + rect.w - half_corner,
-                            rect.y + rect.h - half_corner,
+                  SDL_FRect{rect.x + rect.w - half_corner, rect.y + rect.h - half_corner,
                             kHandleSize, kHandleSize}};
 
-    handles[4] = {HandleType::EdgeTop,
-                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
-                            rect.y - kEdgeHandleThickness * 0.5f,
-                            edge_len_h,
-                            kEdgeHandleThickness}};
-    handles[5] = {HandleType::EdgeBottom,
-                  SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
-                            rect.y + rect.h - kEdgeHandleThickness * 0.5f,
-                            edge_len_h,
-                            kEdgeHandleThickness}};
-    handles[6] = {HandleType::EdgeLeft,
-                  SDL_FRect{rect.x - kEdgeHandleThickness * 0.5f,
-                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
-                            kEdgeHandleThickness,
-                            edge_len_v}};
-    handles[7] = {HandleType::EdgeRight,
-                  SDL_FRect{rect.x + rect.w - kEdgeHandleThickness * 0.5f,
-                            rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
-                            kEdgeHandleThickness,
-                            edge_len_v}};
+    handles[4] = {HandleType::EdgeTop, SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
+                                                 rect.y - kEdgeHandleThickness * 0.5f, edge_len_h,
+                                                 kEdgeHandleThickness}};
+    handles[5] = {HandleType::EdgeBottom, SDL_FRect{rect.x + rect.w * 0.5f - edge_len_h * 0.5f,
+                                                    rect.y + rect.h - kEdgeHandleThickness * 0.5f,
+                                                    edge_len_h, kEdgeHandleThickness}};
+    handles[6] = {HandleType::EdgeLeft, SDL_FRect{rect.x - kEdgeHandleThickness * 0.5f,
+                                                  rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
+                                                  kEdgeHandleThickness, edge_len_v}};
+    handles[7] = {HandleType::EdgeRight, SDL_FRect{rect.x + rect.w - kEdgeHandleThickness * 0.5f,
+                                                   rect.y + rect.h * 0.5f - edge_len_v * 0.5f,
+                                                   kEdgeHandleThickness, edge_len_v}};
     return handles;
 }
 
-void draw_handles(SDL_Renderer* renderer,
-                  const SDL_FRect& rect,
-                  HandleType highlight) {
+void draw_handles(SDL_Renderer* renderer, const SDL_FRect& rect, HandleType highlight) {
     auto handles = build_handle_rects(rect);
     SDL_Color base_fill{110, 170, 255, 140};
     SDL_Color base_border{40, 120, 230, 220};
@@ -68,21 +56,15 @@ void draw_handles(SDL_Renderer* renderer,
     SDL_Color highlight_border{255, 250, 140, 240};
     for (const auto& handle : handles) {
         bool active = (handle.type == highlight);
-        fill_and_outline(renderer,
-                         handle.rect,
-                         active ? highlight_fill : base_fill,
+        fill_and_outline(renderer, handle.rect, active ? highlight_fill : base_fill,
                          active ? highlight_border : base_border);
     }
 }
 
 } // namespace
 
-void layout_editor_draw_grid(SDL_Renderer* renderer,
-                             int width,
-                             int height,
-                             float origin_x,
-                             float origin_y,
-                             float grid_step) {
+void layout_editor_draw_grid(SDL_Renderer* renderer, int width, int height, float origin_x,
+                             float origin_y, float grid_step) {
     if (width <= 0 || height <= 0)
         return;
     const float step = std::clamp(grid_step, 0.01f, 0.5f);
@@ -98,61 +80,42 @@ void layout_editor_draw_grid(SDL_Renderer* renderer,
     for (int i = 0; i <= steps_x; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
         float x = norm * static_cast<float>(width);
-        SDL_RenderDrawLineF(renderer,
-                            origin_x + x,
-                            origin_y,
-                            origin_x + x,
+        SDL_RenderDrawLineF(renderer, origin_x + x, origin_y, origin_x + x,
                             origin_y + static_cast<float>(height));
         char label[16];
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
         int text_x = static_cast<int>(x) - 14;
         text_x = std::clamp(text_x, 0, std::max(0, width - 28));
-        draw_text(renderer, label,
-                  static_cast<int>(origin_x) + text_x,
-                  static_cast<int>(origin_y) + 2,
-                  label_color);
+        draw_text(renderer, label, static_cast<int>(origin_x) + text_x,
+                  static_cast<int>(origin_y) + 2, label_color);
         if (norm > epsilon && norm < 1.0f - epsilon)
-            draw_text(renderer, label,
-                      static_cast<int>(origin_x) + text_x,
-                      static_cast<int>(origin_y) + std::max(height - 18, 0),
-                      label_color);
+            draw_text(renderer, label, static_cast<int>(origin_x) + text_x,
+                      static_cast<int>(origin_y) + std::max(height - 18, 0), label_color);
     }
     const int steps_y = std::max(1, static_cast<int>(std::ceil(1.0f / step)));
     for (int i = 0; i <= steps_y; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
         float y = norm * static_cast<float>(height);
-        SDL_RenderDrawLineF(renderer,
-                            origin_x,
-                            origin_y + y,
-                            origin_x + static_cast<float>(width),
+        SDL_RenderDrawLineF(renderer, origin_x, origin_y + y, origin_x + static_cast<float>(width),
                             origin_y + y);
         char label[16];
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
         int text_y = static_cast<int>(y) - 8;
         text_y = std::clamp(text_y, 0, std::max(0, height - 16));
         if (norm > epsilon && norm < 1.0f - epsilon) {
-            draw_text(renderer, label,
-                      static_cast<int>(origin_x) + 2,
-                      static_cast<int>(origin_y) + text_y,
-                      label_color);
-            draw_text(renderer, label,
-                      static_cast<int>(origin_x) + std::max(width - 60, 2),
-                      static_cast<int>(origin_y) + text_y,
-                      label_color);
+            draw_text(renderer, label, static_cast<int>(origin_x) + 2,
+                      static_cast<int>(origin_y) + text_y, label_color);
+            draw_text(renderer, label, static_cast<int>(origin_x) + std::max(width - 60, 2),
+                      static_cast<int>(origin_y) + text_y, label_color);
         }
     }
 
     SDL_SetRenderDrawBlendMode(renderer, old_mode);
 }
 
-void layout_editor_draw_layout(const EngineState& engine,
-                               SDL_Renderer* renderer,
-                               const UILayout& layout,
-                               int width,
-                               int height,
-                               float origin_x,
-                               float origin_y,
-                               int dragging_index) {
+void layout_editor_draw_layout(const EngineState& engine, SDL_Renderer* renderer,
+                               const UILayout& layout, int width, int height, float origin_x,
+                               float origin_y, int dragging_index) {
     SDL_BlendMode old_mode;
     SDL_GetRenderDrawBlendMode(renderer, &old_mode);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -161,10 +124,10 @@ void layout_editor_draw_layout(const EngineState& engine,
         const auto& obj = layout.objects[idx];
         const bool is_selected = layout_editor_is_selected(engine, static_cast<int>(idx));
         SDL_FRect rect;
-        rect.x = origin_x + obj.x * static_cast<float>(width);
-        rect.y = origin_y + obj.y * static_cast<float>(height);
-        rect.w = obj.w * static_cast<float>(width);
-        rect.h = obj.h * static_cast<float>(height);
+        rect.x = origin_x + obj.rect.x * static_cast<float>(width);
+        rect.y = origin_y + obj.rect.y * static_cast<float>(height);
+        rect.w = obj.rect.w * static_cast<float>(width);
+        rect.h = obj.rect.h * static_cast<float>(height);
 
         const bool is_dragging = static_cast<int>(idx) == dragging_index;
 
@@ -180,37 +143,31 @@ void layout_editor_draw_layout(const EngineState& engine,
         }
         fill_and_outline(renderer, rect, fill, border);
 
-        std::string text = obj.label.empty()
-                               ? std::to_string(obj.id)
-                               : obj.label + " (" + std::to_string(obj.id) + ")";
-        draw_text(renderer, text, static_cast<int>(rect.x) + 6,
-                  static_cast<int>(rect.y) + 6,
+        std::string text = obj.label.empty() ? std::to_string(obj.id)
+                                             : obj.label + " (" + std::to_string(obj.id) + ")";
+        draw_text(renderer, text, static_cast<int>(rect.x) + 6, static_cast<int>(rect.y) + 6,
                   SDL_Color{255, 255, 255, 200});
 
         char coords[64];
         std::snprintf(coords, sizeof(coords), "x%.3f y%.3f w%.3f h%.3f",
-                      static_cast<double>(obj.x),
-                      static_cast<double>(obj.y),
-                      static_cast<double>(obj.w),
-                      static_cast<double>(obj.h));
-        draw_text(renderer, coords, static_cast<int>(rect.x) + 6,
-                  static_cast<int>(rect.y) + 24,
+                      static_cast<double>(obj.rect.x), static_cast<double>(obj.rect.y),
+                      static_cast<double>(obj.rect.w), static_cast<double>(obj.rect.h));
+        draw_text(renderer, coords, static_cast<int>(rect.x) + 6, static_cast<int>(rect.y) + 24,
                   SDL_Color{210, 220, 240, 200});
 
         if (is_selected && selection_count <= 1) {
-            HandleType handle = is_dragging ? layout_editor_drag_handle(engine)
-                                            : HandleType::Center;
+            HandleType handle =
+                is_dragging ? layout_editor_drag_handle(engine) : HandleType::Center;
             draw_handles(renderer, rect, handle);
         }
     }
     if (selection_count > 1) {
         float min_x = 0.0f, min_y = 0.0f, max_x = 0.0f, max_y = 0.0f;
         if (layout_editor_selection_bounds(engine, layout, min_x, min_y, max_x, max_y)) {
-            SDL_FRect bounds{
-                origin_x + min_x * static_cast<float>(width),
-                origin_y + min_y * static_cast<float>(height),
-                std::max(0.0f, (max_x - min_x) * static_cast<float>(width)),
-                std::max(0.0f, (max_y - min_y) * static_cast<float>(height))};
+            SDL_FRect bounds{origin_x + min_x * static_cast<float>(width),
+                             origin_y + min_y * static_cast<float>(height),
+                             std::max(0.0f, (max_x - min_x) * static_cast<float>(width)),
+                             std::max(0.0f, (max_y - min_y) * static_cast<float>(height))};
             SDL_Color outline{180, 210, 255, 200};
             SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
             SDL_RenderDrawRectF(renderer, &bounds);

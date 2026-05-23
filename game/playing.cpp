@@ -1,10 +1,6 @@
 #include "game/playing.hpp"
 
-#include <algorithm>
-#include <string>
-
-#include <glm/glm.hpp>
-
+#include "demo_items.hpp"
 #include "engine/alerts.hpp"
 #include "engine/audio.hpp"
 #include "engine/engine_state.hpp"
@@ -15,19 +11,21 @@
 #include "game/actions.hpp"
 #include "game/app_context.hpp"
 #include "game/coop_session.hpp"
-#include "game/input_queries.hpp"
 #include "game/in_game_menu.hpp"
+#include "game/input_queries.hpp"
 #include "game/menu/lobby_online.hpp"
 #include "game/menu/lobby_state.hpp"
 #include "game/modes.hpp"
-#include "demo_items.hpp"
 #include "game/ui_layout_ids.hpp"
 #include "settings.hpp"
 #include "state.hpp"
 
+#include <algorithm>
+#include <glm/glm.hpp>
+#include <string>
 
-bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half,
-              const glm::vec2& b_pos, const glm::vec2& b_half) {
+bool overlaps(const glm::vec2& a_pos, const glm::vec2& a_half, const glm::vec2& b_pos,
+              const glm::vec2& b_half) {
     glm::vec2 delta = glm::abs(a_pos - b_pos);
     return delta.x <= (a_half.x + b_half.x) && delta.y <= (a_half.y + b_half.y);
 }
@@ -68,7 +66,8 @@ void playing_step(EngineState& engine, void* app_context) {
         state->reticle_pos_mouse = normalized_mouse_coords(engine.device_state);
         for (int i = 0; i < coop.bonk_count; ++i) {
             add_alert(engine, "bonk!");
-            const std::string sound = state->bonk.sound_key.empty() ? "base:ui_confirm" : state->bonk.sound_key;
+            const std::string sound =
+                state->bonk.sound_key.empty() ? "base:ui_confirm" : state->bonk.sound_key;
             play_sound(engine, sound);
         }
         return;
@@ -106,7 +105,7 @@ void playing_step(EngineState& engine, void* app_context) {
     for (std::size_t i = 0; i < state->players.size(); ++i) {
         auto& player = state->players[i];
         const int player_index = static_cast<int>(i);
-        
+
         // Handle player input and movement
         glm::vec2 dir(0.0f);
         if (is_down(player_index, GameAction::UP)) {
@@ -133,7 +132,8 @@ void playing_step(EngineState& engine, void* app_context) {
             target.cooldown <= 0.0f) {
             target.cooldown = BONK_COOLDOWN_SECONDS;
             add_alert(engine, "bonk!");
-            const std::string sound = target.sound_key.empty() ? "base:ui_confirm" : target.sound_key;
+            const std::string sound =
+                target.sound_key.empty() ? "base:ui_confirm" : target.sound_key;
             play_sound(engine, sound);
         }
 
@@ -150,28 +150,26 @@ void playing_step(EngineState& engine, void* app_context) {
                 if (!def)
                     continue;
                 float dist = glm::length(player.pos - inst.position);
-                std::printf("[playing]   candidate '%s' dist=%.2f radius=%.2f\n",
-                            def->id.c_str(), static_cast<double>(dist),
+                std::printf("[playing]   candidate '%s' dist=%.2f radius=%.2f\n", def->id.c_str(),
+                            static_cast<double>(dist),
                             static_cast<double>(player_radius + def->radius));
                 if (dist <= (player_radius + def->radius)) {
-                    std::printf("[playing] player %d triggering '%s' (dist=%.2f)\n",
-                                player_index, def->id.c_str(),
-                                static_cast<double>(dist));
+                    std::printf("[playing] player %d triggering '%s' (dist=%.2f)\n", player_index,
+                                def->id.c_str(), static_cast<double>(dist));
                     trigger_demo_item_use(inst, *state);
                     triggered = true;
                     break; // One player uses it, break for this player
                 }
             }
             if (!triggered) {
-                std::printf("[playing] player %d USE ignored (no pads in range)\n",
-                            player_index);
+                std::printf("[playing] player %d USE ignored (no pads in range)\n", player_index);
             }
         }
     }
 }
 
-
-void render_instructions(SDL_Renderer* renderer, int /*width*/, int height, const std::string& text) {
+void render_instructions(SDL_Renderer* renderer, int /*width*/, int height,
+                         const std::string& text) {
     int margin = 24;
     draw_text(renderer, text, margin, height - 30, SDL_Color{200, 200, 200, 255});
 }
@@ -195,7 +193,8 @@ void playing_draw(EngineState& engine, void* app_context) {
     SDL_RenderClear(renderer);
 
     // Get best matching UI layout for current resolution
-    const UILayout* layout = get_ui_layout_for_resolution(engine, UILayoutID::PLAY_SCREEN, width, height);
+    const UILayout* layout =
+        get_ui_layout_for_resolution(engine, UILayoutID::PLAY_SCREEN, width, height);
 
     ScreenSpace space = make_space(width, height);
 
@@ -215,9 +214,11 @@ void playing_draw(EngineState& engine, void* app_context) {
     for (std::size_t i = 0; i < state->players.size(); ++i) {
         const auto& player = state->players[i];
         // Cycle through some colors for each player
-        SDL_Color player_fill = (i % 2 == 0) ? SDL_Color{80, 200, 255, 255} : SDL_Color{255, 180, 80, 255};
-        SDL_Color player_border = (i % 2 == 0) ? SDL_Color{15, 40, 70, 255} : SDL_Color{70, 40, 15, 255};
-        
+        SDL_Color player_fill =
+            (i % 2 == 0) ? SDL_Color{80, 200, 255, 255} : SDL_Color{255, 180, 80, 255};
+        SDL_Color player_border =
+            (i % 2 == 0) ? SDL_Color{15, 40, 70, 255} : SDL_Color{70, 40, 15, 255};
+
         SDL_FRect player_rect = rect_for(player.render_pos, player.half_size, space);
         fill_and_outline(renderer, player_rect, player_fill, player_border);
     }
@@ -226,11 +227,8 @@ void playing_draw(EngineState& engine, void* app_context) {
     SDL_Color target_fill{230, 190, 90, 255};
     if (target.cooldown > 0.0f) {
         float t = std::clamp(target.cooldown / BONK_COOLDOWN_SECONDS, 0.0f, 1.0f);
-        target_fill = SDL_Color{
-            static_cast<Uint8>(180 + 60 * t),
-            static_cast<Uint8>(90 + 40 * t),
-            static_cast<Uint8>(40 + 50 * t),
-            255};
+        target_fill = SDL_Color{static_cast<Uint8>(180 + 60 * t), static_cast<Uint8>(90 + 40 * t),
+                                static_cast<Uint8>(40 + 50 * t), 255};
     }
 
     SDL_FRect target_rect = rect_for(target.pos, target.half_size, space);
@@ -254,8 +252,8 @@ void playing_draw(EngineState& engine, void* app_context) {
             const DemoItemDef* item = demo_item_def(inst);
             if (!item)
                 continue;
-            SDL_FRect item_rect = rect_for(inst.position,
-                                           glm::vec2(item->radius, item->radius), space);
+            SDL_FRect item_rect =
+                rect_for(inst.position, glm::vec2(item->radius, item->radius), space);
             float dist = glm::length(player.pos - inst.position);
             bool nearby = dist <= (player_radius + item->radius + 0.1f);
             bool drew_sprite = false;
@@ -267,10 +265,9 @@ void playing_draw(EngineState& engine, void* app_context) {
             }
             if (!drew_sprite) {
                 glm::vec3 fill_vec = nearby ? brighten(item->color, 0.15f) : item->color;
-                glm::vec3 border_vec = nearby ? glm::vec3(1.0f, 0.95f, 0.7f)
-                                              : brighten(item->color, 0.05f);
-                fill_and_outline(renderer, item_rect,
-                                 color_from_vec3(fill_vec),
+                glm::vec3 border_vec =
+                    nearby ? glm::vec3(1.0f, 0.95f, 0.7f) : brighten(item->color, 0.05f);
+                fill_and_outline(renderer, item_rect, color_from_vec3(fill_vec),
                                  color_from_vec3(border_vec));
             } else if (nearby) {
                 SDL_Color border{255, 240, 180, 255};
@@ -288,10 +285,10 @@ void playing_draw(EngineState& engine, void* app_context) {
     if (layout) {
         // Draw bar height indicator
         if (const UIObject* bar_obj = get_ui_object(*layout, UIObjectID::BAR_HEIGHT_INDICATOR)) {
-            float bar_x = bar_obj->x * width_f;
-            float bar_y = bar_obj->y * height_f;
-            float bar_width = bar_obj->w * width_f;
-            float bar_height = bar_obj->h * height_f;
+            float bar_x = bar_obj->rect.x * width_f;
+            float bar_y = bar_obj->rect.y * height_f;
+            float bar_width = bar_obj->rect.w * width_f;
+            float bar_height = bar_obj->rect.h * height_f;
             float bar_current_height = bar_height * state->bar_height;
 
             // Background
@@ -300,11 +297,8 @@ void playing_draw(EngineState& engine, void* app_context) {
             SDL_RenderFillRectF(renderer, &bar_bg);
 
             // Filled portion (from bottom)
-            SDL_FRect bar_fill{
-                bar_x,
-                bar_y + bar_height - bar_current_height,
-                bar_width,
-                bar_current_height};
+            SDL_FRect bar_fill{bar_x, bar_y + bar_height - bar_current_height, bar_width,
+                               bar_current_height};
             SDL_SetRenderDrawColor(renderer, 120, 200, 100, 255);
             SDL_RenderFillRectF(renderer, &bar_fill);
 
@@ -325,14 +319,12 @@ void playing_draw(EngineState& engine, void* app_context) {
         SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
 
         // Horizontal line
-        SDL_RenderDrawLineF(renderer,
-            reticle_screen_x - reticle_size, reticle_screen_y,
-            reticle_screen_x + reticle_size, reticle_screen_y);
+        SDL_RenderDrawLineF(renderer, reticle_screen_x - reticle_size, reticle_screen_y,
+                            reticle_screen_x + reticle_size, reticle_screen_y);
 
         // Vertical line
-        SDL_RenderDrawLineF(renderer,
-            reticle_screen_x, reticle_screen_y - reticle_size,
-            reticle_screen_x, reticle_screen_y + reticle_size);
+        SDL_RenderDrawLineF(renderer, reticle_screen_x, reticle_screen_y - reticle_size,
+                            reticle_screen_x, reticle_screen_y + reticle_size);
 
         // Center dot
         SDL_FRect center_dot{reticle_screen_x - 2.0f, reticle_screen_y - 2.0f, 4.0f, 4.0f};

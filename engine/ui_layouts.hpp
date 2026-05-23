@@ -1,43 +1,20 @@
 #pragma once
 
+#include <glayout/layout.hpp>
 #include <string>
 #include <vector>
 struct EngineState;
 
-// UI element with normalized positioning [0.0, 1.0]
-struct UIObject {
-    int id;
-    std::string label;
-    float x, y, w, h;
-};
-
-enum class UILayoutFormFactor {
-    Desktop = 0,
-    Tablet = 1,
-    Phone = 2,
-};
-
-// UI layout for a specific resolution
-struct UILayout {
-    int id;                          // Layout identifier (shared across resolutions)
-    std::string label;               // e.g., "PlayScreen", "MenuScreen"
-    int resolution_width;
-    int resolution_height;
-    UILayoutFormFactor form_factor{UILayoutFormFactor::Desktop};
-    std::vector<UIObject> objects;
-
-    // Idempotent - overwrites if object with same id exists
-    void add_object(int obj_id, const std::string& object_label, float x, float y, float w, float h);
-
-    // Remove object by id or label
-    bool remove_object(int obj_id);
-    bool remove_object(const std::string& object_label);
-};
+using UIObject = glayout::Object;
+using UILayout = glayout::Layout;
+using UILayoutFormFactor = glayout::FormFactor;
 
 /*
  Create a new UI layout for a specific resolution
 */
 UILayout create_ui_layout(int id, const std::string& label, int width, int height);
+void add_ui_object(UILayout& layout, int obj_id, const std::string& label, float x, float y,
+                   float w, float h);
 
 /*
  Save UI layout to disk
@@ -48,7 +25,8 @@ bool save_ui_layout(const UILayout& layout);
  Get best matching UI layout for target resolution
  Finds layout with matching id and closest resolution/aspect ratio
 */
-const UILayout* get_ui_layout_for_resolution(EngineState& engine, int layout_id, int width, int height);
+const UILayout* get_ui_layout_for_resolution(EngineState& engine, int layout_id, int width,
+                                             int height);
 
 /*
  Get UI object from layout by id or label

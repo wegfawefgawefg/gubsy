@@ -1,6 +1,5 @@
-#include "engine/imgui_debug/windows.hpp"
-
 #include "engine/engine_state.hpp"
+#include "engine/imgui_debug/windows.hpp"
 #include "engine/ui_layouts.hpp"
 
 #include <algorithm>
@@ -15,25 +14,23 @@ void imgui_debug_render_layout_window(EngineState& engine, bool* open_flag) {
         ImGui::End();
         return;
     }
-    if (engine.ui_layouts_pool.empty()) {
+    if (engine.ui_layouts.layouts.empty()) {
         ImGui::TextUnformatted("No layouts loaded.");
         ImGui::End();
         return;
     }
     std::vector<const UILayout*> sorted;
-    sorted.reserve(engine.ui_layouts_pool.size());
-    for (const auto& layout : engine.ui_layouts_pool)
+    sorted.reserve(engine.ui_layouts.layouts.size());
+    for (const auto& layout : engine.ui_layouts.layouts)
         sorted.push_back(&layout);
-    std::sort(sorted.begin(), sorted.end(),
-              [](const UILayout* a, const UILayout* b) {
-                  if (a->label == b->label) {
-                      if (a->id == b->id)
-                          return a->resolution_width * a->resolution_height <
-                                 b->resolution_width * b->resolution_height;
-                      return a->id < b->id;
-                  }
-                  return a->label < b->label;
-              });
+    std::sort(sorted.begin(), sorted.end(), [](const UILayout* a, const UILayout* b) {
+        if (a->label == b->label) {
+            if (a->id == b->id)
+                return a->width * a->height < b->width * b->height;
+            return a->id < b->id;
+        }
+        return a->label < b->label;
+    });
 
     const std::string* current_label = nullptr;
     int current_id = -1;
@@ -50,12 +47,12 @@ void imgui_debug_render_layout_window(EngineState& engine, bool* open_flag) {
         }
         if (!group_open)
             continue;
-        if (ImGui::TreeNode(reinterpret_cast<const void*>(layout),
-                            "%dx%d", layout->resolution_width, layout->resolution_height)) {
+        if (ImGui::TreeNode(reinterpret_cast<const void*>(layout), "%dx%d", layout->width,
+                            layout->height)) {
             ImGui::Text("Objects: %zu", layout->objects.size());
             if (ImGui::BeginTable("obj_table", 5,
                                   ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                  ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
                                   ImVec2(0.0f, 160.0f))) {
                 ImGui::TableSetupScrollFreeze(0, 1);
                 ImGui::TableSetupColumn("ID");
@@ -71,13 +68,12 @@ void imgui_debug_render_layout_window(EngineState& engine, bool* open_flag) {
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TextUnformatted(obj.label.c_str());
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%.3f", static_cast<double>(obj.x));
+                    ImGui::Text("%.3f", static_cast<double>(obj.rect.x));
                     ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%.3f", static_cast<double>(obj.y));
+                    ImGui::Text("%.3f", static_cast<double>(obj.rect.y));
                     ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("%.3fx%.3f",
-                                static_cast<double>(obj.w),
-                                static_cast<double>(obj.h));
+                    ImGui::Text("%.3fx%.3f", static_cast<double>(obj.rect.w),
+                                static_cast<double>(obj.rect.h));
                 }
                 ImGui::EndTable();
             }

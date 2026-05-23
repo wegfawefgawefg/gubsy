@@ -2,10 +2,9 @@
 
 #include "engine/engine_state.hpp"
 #include "engine/layout_editor/layout_editor_state.hpp"
+#include "engine/ui_layouts.hpp"
 
 #include <string>
-
-struct UILayout;
 
 namespace layout_editor_internal {
 
