@@ -12,7 +12,7 @@ Animation loading should be able to resolve animation/image records through
 
 1. Define animation ids, clip ids, frame ids, and image/asset references.
 2. Store clips, frames, frame durations, source rectangles, draw offsets, pivot
-   or origin data, loop mode, and tags.
+   or origin data, and loop mode.
 3. Provide animator state: current clip, frame index, time, speed, pause, reset,
    randomize, and completion state.
 4. Load generic animation files.
@@ -50,9 +50,9 @@ The load step validates that sidecar frame order and count match the `ganim`
 clip. Runtime code reads by frame index, not by string or generic metadata map.
 
 Pivot/origin decision: keep generic draw offset, pivot/origin, center, frame
-duration, source rect, loop mode, and frame tags in `ganim`. Keep collision
-boxes, tile flags, entity mappings, and gameplay-specific emit points in
-game-owned sidecar metadata.
+duration, source rect, and loop mode in `ganim`. Keep tags, collision boxes,
+tile flags, entity mappings, gameplay-specific emit points, and editor labels in
+game-owned or tool-owned sidecar metadata.
 
 ## Relationship To Other Libraries
 
@@ -85,8 +85,11 @@ game-owned sidecar metadata.
    dense indices; cross-system references and tools use ids.
 6. Support fixed-fps clip defaults and per-frame duration overrides.
 7. Do not support old Splonks YAML-ish annotations as a runtime format.
+8. Tags are metadata, not runtime animation data. They can be loaded and
+   validated by tools or sidecar loaders, but the hot clip/frame structs should
+   not carry generic tag lists.
 
-## Ambiguities
+## Remaining Questions
 
-1. Should tags stay in runtime clip/frame structs or be stripped into
-   editor/load-time metadata after validation?
+1. Should `ganim` provide a small sidecar metadata validation helper, or should
+   each game/tool own that completely?

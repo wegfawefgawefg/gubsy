@@ -25,7 +25,7 @@ The content/asset/animation/particle libraries should compose without turning
 Preferred dependency shape:
 
 ```text
-gcontent
+gmods
   package/mod manifests, enabled order, roots
 
 gassets
@@ -41,7 +41,7 @@ game or gubsy
   renderer, gameplay metadata, validation, concrete asset application
 ```
 
-`gcontent` and `gassets` are different jobs. `gcontent` decides what packages or
+`gmods` and `gassets` are different jobs. `gmods` decides what packages or
 mods exist, whether they are compatible, and what ordered content roots should
 be active. `gassets` consumes active roots and resolves concrete asset records:
 ids, names, types, source paths, dependencies, and overrides. A non-modded game
@@ -51,7 +51,7 @@ can still use `gassets` by passing a single base content root.
 type it claims to be, where it came from, which package owns it, and which
 record wins after overrides. It should not parse every animation, particle,
 audio, or gameplay format. Typed libraries such as `ganim`, `gparticles`, and
-`gaudioassets` should either load directly from files or use small optional
+`gaudio` should either load directly from files or use small optional
 adapters that read matching records from `gassets`.
 
 `ganim` should not own game-specific frame semantics. It can own clips, frames,
@@ -205,7 +205,7 @@ Before ripout:
   the core menu code.
 - Keep rendering as an adapter or example, not the core.
 
-### 3. `gmods` or `gcontent`
+### 3. `gmods`
 
 Priority: medium-high.
 
@@ -427,7 +427,7 @@ Before ripout:
 - Decide whether content-name mapping belongs here or in `gassets`.
 - Keep renderer-specific frame drawing outside the library.
 
-### 3. `gaudioassets`
+### 3. `gaudio`
 
 Priority: medium.
 

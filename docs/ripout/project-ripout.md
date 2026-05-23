@@ -76,6 +76,9 @@ libraries must not depend on `gubsy`.
 4. Span and Splonks both treat frame duration and offset/center-like fields as
    animation authoring data. Collision boxes, tile flags, and gameplay emit
    points stay game-owned sidecar metadata.
+5. Factorio references:
+   https://lua-api.factorio.com/latest/auxiliary/mod-structure.html and
+   https://lua-api.factorio.com/latest/auxiliary/data-lifecycle.html.
 
 ## Ordered Work
 
@@ -88,7 +91,7 @@ libraries must not depend on `gubsy`.
    Build package/mod identity and policy after `gassets` so content roots can
    feed asset catalogs cleanly. Include local manifests, remote catalog/server
    records, and install/uninstall state in the planned feature set.
-   See [gcontent.md](gcontent.md).
+   See [gmods.md](gmods.md).
 
 3. `ganim`
    Extract animation clips/frames/animator state after `gassets` exists, so the
@@ -111,7 +114,7 @@ libraries must not depend on `gubsy`.
    Audio files start as normal `gassets` records. A later `gaudio` can own the
    directional audio, channels, filtering, emitters, and backend-neutral audio
    policy from Splonks if that boundary proves useful.
-   See [gaudioassets.md](gaudioassets.md).
+   See [gaudio.md](gaudio.md).
 
 7. `gcore`
    Create as the shared boring base for ids, hashing, stable handles, simple
@@ -128,23 +131,28 @@ libraries must not depend on `gubsy`.
 5. Publish to GitHub after the library builds and README is accurate.
 6. Migrate one real caller only after the extracted API survives the demo.
 
-## Open Ambiguity Index
+## Remaining Decision Index
 
 Answer these before the implementation goal starts:
 
-1. `gassets` uses sexpr manifests.
-2. `gmods` should include local manifests, remote catalog/server records, and
-   install/uninstall state in the planned feature set.
-3. Working name is probably `gmods`; confirm whether this should cover both
-   C++-authored content and Lua-authored content.
-4. `ganim` should use asset ids and fit into the `gassets`/`gmods` stack, but
-   the exact atlas/sprite-sheet ownership is still open.
-5. `gparticles` can depend on `ganim`.
-6. `gnetcode` should include UDP-capable real netcode, not only packet structs.
-7. Snapshot data is game-authored. `gnetcode` should use caller/game snapshot
-   structs through a clean interface.
-8. Audio files are `gassets` records first. A later `gaudio` can own directional
-   audio, channels, filtering, and emitters.
-9. `gcore` probably should exist for hashing, ids, stable handles, pools, and
-   common tiny types.
-10. Reuse the interrupted empty `~/Coding/Gamedev/gassets` scaffold.
+1. Should `gassets` support explicit virtual records immediately, or reject them
+   until aliases/groups/generated assets have a concrete caller?
+2. Should `gmods` public stage names be `settings/content/runtime`, or exact
+   Factorio-style `settings/data/control`?
+3. Should `ganim` provide a tiny sidecar metadata validation helper, or should
+   each game/tool own sidecar validation completely?
+4. Should `gparticles` include ribbon and segmented sprite particles in the
+   first implementation pass, or land sprite/scripted first and port the rest
+   after the draw command path is proven?
+5. Should `gparticles` SDL3 renderer helper live as an optional target in the
+   repo, or only in the demo/examples folder?
+6. Should `gnetcode` caller-provided input payloads be fixed maximum byte arrays,
+   a `uint64_t` fast path plus optional bytes, or always byte spans?
+7. Should `gnetcode` UDP transport live in the main target or an optional edge
+   target?
+8. Should `gaudio` channel policy stay as minimal tags/categories, or include
+   mixer-style priority, ducking, and voice limits from the start?
+9. Should positional attenuation curves live in `gaudio`, or should callers
+   compute final gain/filter params before submission?
+10. Should `gcore` be created before `gassets`, or should `gassets` start local
+    and promote shared code once `gmods` needs the same pieces?

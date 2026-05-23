@@ -39,9 +39,9 @@ that cannot run a game session.
 
 1. `ginput` may define input profiles, but `gnetcode` should use caller-provided
    packed input records.
-2. `gcontent` may help ensure peers have compatible content, but `gnetcode` does
+2. `gmods` may help ensure peers have compatible content, but `gnetcode` does
    not install content.
-3. `gassets`/`gcontent` hashes can be included in session compatibility checks.
+3. `gassets`/`gmods` hashes can be included in session compatibility checks.
 4. Games provide their own snapshot structs plus save/restore and deterministic
    step callbacks.
 
@@ -72,10 +72,78 @@ that cannot run a game session.
    hacks.
 7. Input prediction belongs in core. Presentation/render prediction is
    caller-provided and game-specific.
+8. Built-in protocol packets should use fixed binary structs with explicit
+   versioning, sizes, and endian policy. Splonks already uses fixed binary packet
+   structs for join, ping, input frames, hashes, snapshot chunks, barriers, and
+   resume messages. Keep that model, but make game payload bytes caller-owned.
+9. Input records should carry caller-provided packed input bytes or fixed small
+   words. `gnetcode` should not know Splonks button flags.
+10. Snapshot storage is caller-owned through hooks. Core owns retention policy
+    and when to capture/restore/serialize, not the game snapshot type.
+11. Generic lobby/session state belongs in `gnetcode`: peers, assigned players,
+    room/session id, role, session contract, content hash, latency stats, join
+    barriers, and connection state. Game-specific screen flow, scenario choices,
+    menus, and stage semantics stay caller-side.
 
-## Ambiguities
+## Packet Encoding
 
-1. Should packet encoding be fixed binary structs, schema-driven, or caller-owned?
-2. What exact callback shape should game-authored snapshots use?
-3. What is the smallest generic lobby/session state that still avoids every game
-   rewriting join/leave/barrier/session code?
+Splonks currently uses fixed binary packet structs copied into packet payloads.
+That is a good fit for `gnetcode` because lockstep packets are small, stable,
+and performance-sensitive.
+
+1. Use explicit packet headers: magic, protocol version, packet type, and payload
+   byte count.
+2. Use fixed binary structs for built-in protocol packets.
+3. Use caller-owned byte spans for game input payloads and snapshot chunks.
+4. Validate every decode with payload size, protocol version, and range checks.
+5. Keep schema systems out of the core unless a real cross-language requirement
+   appears.
+
+## Snapshot Hook Shape
+
+The game owns the snapshot type. `gnetcode` owns when snapshots are captured,
+retained, restored, serialized, and pruned.
+
+Required hook shape:
+
+1. `capture(frame, user) -> SnapshotHandle`
+2. `restore(frame, handle, user) -> bool`
+3. `destroy(handle, user)`
+4. `serialize(handle, output_bytes, user) -> bool`
+5. `deserialize(input_bytes, user) -> SnapshotHandle`
+6. `step(frame, input_batch, replay_mode, user) -> bool`
+7. `hash(frame, user) -> uint64_t`
+
+The handle can wrap a caller pointer, index, or `shared_ptr`-like object, but the
+core should not depend on the concrete snapshot struct.
+
+## Generic Session State
+
+Gubsy already has session contracts with game version, net protocol, mod hash,
+required mod ids, content revision, and optional realtime endpoint data. Splonks
+has peer roles, lockstep settings, hash history, rollback snapshots, join
+barriers, snapshot resync chunks, ping/jitter, and packet transport state.
+
+The reusable state should include:
+
+1. Session id and protocol version.
+2. Peer ids and player assignments.
+3. Host/client role.
+4. Session compatibility contract.
+5. Content hash and required package/mod ids.
+6. Lockstep delay and scheduled deterministic settings.
+7. Ping, jitter, and timeout tracking.
+8. Join/leave state.
+9. Generic barriers for level loads, shops, lobby ready gates, or other sync
+   pauses.
+10. Snapshot resync transfer state.
+
+It should not include Splonks entities, tools, effects, stage transition hacks,
+or Gubsy menu state.
+
+## Remaining Questions
+
+1. Should the caller-provided input payload be a fixed maximum byte array, a
+   `uint64_t` fast path plus optional bytes, or always a byte span?
+2. Should UDP transport live in the main target or an optional `gnetcode_sdl3`
+   or `gnetcode_udp` edge target?

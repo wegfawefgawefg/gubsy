@@ -34,8 +34,33 @@ or `gparticles` need the same id/hash/handle/pool helpers.
    layout.
 3. Keep the anti-junk-drawer rule: a helper enters `gcore` only when at least
    two repos need the same concrete type or function.
+4. Diagnostics are worth standardizing if the next wave shares parser/manifest
+   behavior. `gassets`, `gmods`, `ganim`, and `gparticles` will all report
+   source-location errors, warnings, unknown fields, duplicate ids, missing
+   dependencies, and invalid references.
 
-## Ambiguities
+## Diagnostics Shape
 
-1. Should diagnostics be standardized across all g-libs immediately, or only
-   after the first two new repos show the same shape?
+If `gcore` owns diagnostics, keep the type tiny:
+
+1. Severity: info, warning, error.
+2. Stable diagnostic code.
+3. Human-readable message.
+4. Optional source name/path.
+5. Optional line and column.
+6. Optional related id/key.
+
+Do not make this a logging framework. A library should return diagnostics to the
+caller; the caller decides whether to print, store, display in ImGui, or fail.
+
+## Creation Guidance
+
+1. If only one repo needs a type, keep it local.
+2. If two repos copy the same id/hash/diagnostic/pool code, move the small shared
+   piece into `gcore`.
+3. Do not move broad helpers into `gcore` just because they are convenient.
+
+## Remaining Questions
+
+1. Should `gcore` be created before `gassets`, or should `gassets` start local
+   and promote shared code once `gmods` needs the same pieces?

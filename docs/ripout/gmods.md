@@ -33,7 +33,7 @@ a concrete use case appears.
 1. No asset record parsing.
 2. No image/audio/animation loading.
 3. No game scripting runtime.
-4. No sandbox policy in v1.
+4. No sandbox policy in the first clean implementation.
 5. No menu UI.
 6. No Gubsy `EngineState`.
 7. No hardcoded Gubsy mod server unless explicitly chosen.
@@ -82,11 +82,75 @@ a concrete use case appears.
 8. Existing Gubsy behavior is a simpler baseline: it reads dependencies,
    optional dependencies, game version, and orders required deps before
    dependents. The new library should be cleaner and more complete.
+9. Use staged Lua/data content. Factorio's `settings/data/control` split is a
+   useful model, but the names should be chosen deliberately for this stack
+   rather than copied blindly.
+10. Remote catalog records should carry all fields needed for install UI,
+    compatibility, verification, and dependency resolution. Do not rely on a
+    second hidden server contract for critical install data.
 
-## Ambiguities
+## Script/Data Stages
 
-1. Should mod script stages copy Factorio's `settings/data/control` split, or
-   use a simpler Gubsy-specific sexpr/Lua stage model?
-2. What remote catalog fields are mandatory for the first clean implementation:
-   download URL, hashes, signatures, changelog, screenshots, dependencies,
-   compatibility, size, author, and tags?
+Factorio uses three broad mod lifecycle areas:
+
+1. `settings`: declare mod settings and setting defaults before content is
+   built.
+2. `data`: define content/prototypes before the game starts.
+3. `control`: run runtime scripts/events after the game is active.
+
+That split is not a universal standard, but it is a proven model for Lua-authored
+mod content. Current Gubsy is less formal: it has mod metadata, dependencies,
+APIs, content/demo Lua files, and mod-server catalog data, but it does not expose
+a clean staged lifecycle.
+
+Recommended `gmods` stage shape:
+
+1. `settings`: declare settings/config options contributed by a package.
+2. `content`: declare assets, prototypes, recipes, items, menus, or other data
+   records.
+3. `runtime`: attach runtime scripts/event handlers if the host enables a Lua
+   runtime.
+
+The stage names are clearer for this codebase than `settings/data/control` while
+still mapping cleanly to the Factorio idea. If we later want Factorio familiarity
+over clarity, this is easy to rename before implementation.
+
+Reference:
+
+1. https://lua-api.factorio.com/latest/auxiliary/mod-structure.html
+2. https://lua-api.factorio.com/latest/auxiliary/data-lifecycle.html
+
+## Remote Catalog Fields
+
+The clean catalog should include:
+
+1. `id`
+2. `title`
+3. `author`
+4. `version`
+5. `summary`
+6. `description`
+7. `dependencies`
+8. `optional_dependencies`
+9. `conflicts`
+10. `game_version` or engine compatibility constraints
+11. `apis`
+12. `download_url`
+13. `files` with path, size, and hash
+14. `total_bytes`
+15. `content_hash`
+16. `signature` when signing is enabled
+17. `changelog`
+18. `screenshots`
+19. `tags`
+20. `license` if packages may be redistributed
+
+Gubsy's current catalog already uses the core of this shape: id, title, author,
+version, summary/description, dependencies, game version, APIs, files, and total
+bytes. The new version should make the compatibility, verification, and optional
+dependency fields explicit.
+
+## Remaining Questions
+
+1. Should the public stage names be `settings/content/runtime` as recommended
+   here, or exact Factorio-style `settings/data/control`?
