@@ -5,9 +5,9 @@
 gubsy
 =====
 
-`gubsy` is a small C++20 game engine/runtime with a bundled game layer used to exercise the engine.
+`gubsy` is a small C++20 game kit/runtime with a bundled game layer used to exercise the kit.
 It currently includes SDL2 rendering, audio, input, menu systems, UI layout tooling, player/profile
-state, and Lua-driven mod loading.
+state, and optional Lua-driven mod loading.
 
 <p align="center">
   <img src="docs/images/lobby.png" alt="gubsy lobby screenshot" width="900" />
@@ -18,7 +18,7 @@ What Is In This Repo
 
 - `engine/`: reusable engine/runtime code plus engine-owned built-in assets
 - `game/`: the current game-specific layer, shipped game content, and built-in mods
-- `libs/`: bundled first-party Gubsy libraries used by the default build
+- `libs/`: temporary first-party library snapshots being migrated into engine modules
 - `tools/`: standalone servers and smoke-test binaries
 - `data/`: writable runtime state for this game project
 - `third_party/`: external dependency source vendored with the repo
@@ -34,7 +34,7 @@ Current Engine Features
 - Menu framework with screen registration, command routing, and per-screen state
 - Player profiles, binds profiles, and game settings persistence
 - UI layout loading/editing support
-- Lua 5.4 mod host with runtime API registration and mod activation/reload
+- Optional Lua 5.4 mod host with runtime API registration and mod activation/reload
 - ImGui debug/editor tooling in the engine layer
 
 Build
@@ -94,6 +94,7 @@ Docs
 - Repo layout: `docs/repo_layout.md`
 - Content policy: `docs/content_policy.md`
 - Library consumption: `docs/library_consumption.md`
+- Gubsy game kit plan: `docs/game_kit_plan.md`
 - Dependency packaging plan: `docs/dependency_packaging_plan.md`
 - Engine/game split plan: `docs/engine_game_split_plan.md`
 - Remove globals plan: `docs/remove_globals_plan.md`

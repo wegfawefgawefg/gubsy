@@ -7,15 +7,15 @@ the normal build contract.
 ## Goal
 
 Make `gubsy` self-contained by default. The standalone glib repos remain useful
-as upstream homes for reusable code, but `gubsy` should build from bundled
-first-party copies.
+as upstream homes, reference projects, and testbeds, but consumer projects
+should import Gubsy rather than individual glibs.
 
 The desired user experience is:
 
 1. A game can vendor or submodule `gubsy`.
 2. `gubsy` can build `gubsy::engine` without requiring sibling directories next
    to the repo.
-3. Updating a glib version inside `gubsy` is explicit and easy.
+3. Moving useful glib code into Gubsy-owned engine modules is explicit and easy.
 
 ## Previous Problem
 
@@ -38,9 +38,9 @@ Gamedev/
 
 The default contract should instead be a single `gubsy` checkout.
 
-## Repo Layout
+## Current Repo Layout
 
-Use bundled first-party copies under `libs/`:
+The current transition state uses bundled first-party copies under `libs/`:
 
 ```text
 gubsy/
@@ -50,23 +50,40 @@ gubsy/
     ginput/
 ```
 
-Use copied source snapshots first. That is the simplest consumer model: `gubsy`
-contains the exact source it builds against.
+This solved the sibling checkout problem, but it is not the final public shape.
+The cleaner target is to move the useful pieces into Gubsy modules under
+`engine/`.
 
-Git submodules or git subtrees can still be considered later if manual copying
-becomes irritating. The important rule is that the normal build does not require
-sibling repos.
+The important rule is that the normal build does not require sibling repos.
 
-## CMake Resolution
+## Target Repo Layout
 
-Resolve each glib dependency from its bundled first-party copy:
+```text
+gubsy/
+  engine/
+    layout/
+    input/
+    config/
+    audio/
+    ...
+```
 
-1. Use bundled `libs/` copies.
-2. Otherwise fail with a specific message explaining which bundled dependency is
-   missing.
+Consumers should link `gubsy::engine` and include Gubsy headers. They should not
+need to know whether a subsystem originally came from `glayout`, `ginput`, or
+another standalone experiment.
 
-Bundled deps should be the default. Do not add extra override paths until there
-is a concrete need.
+## CMake Direction
+
+The final CMake direction is one normal consumer-facing target:
+
+```cmake
+target_link_libraries(splonks PRIVATE gubsy::engine)
+```
+
+Avoid exposing separate glib targets to downstream games as part of the normal
+story. Internal helper targets are fine if they keep Gubsy's build organized,
+but they should not become the consumer contract unless there is a concrete
+reason.
 
 ## Consumer Workflows
 
@@ -80,35 +97,39 @@ cmake --build gubsy/build
 
 This should work without cloning `gsexp`, `glayout`, or `ginput` as siblings.
 
-### Updating A Bundled Glib
+### Updating From A Standalone Glib
 
-Develop glib changes in the standalone repo first. When the change is ready,
-update the bundled copy in `gubsy`.
+Develop ideas in the standalone repo if that is convenient. When the change is
+ready, port the useful source into the matching Gubsy engine module.
 
-Copy the updated glib source into `libs/` and commit it in `gubsy`:
+Example:
 
 ```sh
-rm -rf gubsy/libs/gsexp
-cp -R gsexp gubsy/libs/gsexp
-git -C gubsy add libs/gsexp
+gsexp       -> engine/sexp or engine/config parsing helpers
+glayout     -> engine/layout
+ginput      -> engine/input
 ```
 
-Ignore the copied glib's `.git` directory if present. The important point is
-that `gubsy` records the exact source it builds against.
+Do not blindly copy a repo forever if the target is an internal Gubsy module.
+Keep the module names and includes shaped around Gubsy.
 
 ## Implementation Checklist
 
-1. Done: add `libs/gsexp`, `libs/glayout`, and `libs/ginput` as
-   copied bundled source.
+1. Done: remove sibling checkout requirement by copying `gsexp`, `glayout`, and
+   `ginput` into `libs/`.
 2. Done: change glib dependency setup in `CMakeLists.txt` to use bundled copies.
-3. Done: change missing-dependency errors to point at `third_party/`.
+3. Done: change missing-dependency errors to point at `libs/`.
 4. Done: update README to document `libs/` as bundled first-party source.
-5. Verify this build:
+5. Next: migrate `libs/glayout` into `engine/layout`.
+6. Next: migrate `libs/ginput` into `engine/input`.
+7. Next: decide whether `gsexp` remains a tiny internal target or becomes
+   `engine/sexp` parsing helpers.
+8. Verify this build after each step:
    - Top-level `gubsy` checkout using bundled glibs.
 
 ## What This Does Not Change
 
-This does not undo the glib split.
+This does not throw away the glib work.
 
 The split still gives useful boundaries:
 
@@ -116,10 +137,12 @@ The split still gives useful boundaries:
 2. `glayout` owns layout data and editor mechanics.
 3. `ginput` owns input profile storage and bind lookup.
 
-The change is only about dependency packaging. `gubsy` should consume those
-boundaries without making users manage a pile of sibling checkouts.
+The change is about where the public boundary lives. `gubsy` should consume
+those boundaries internally without making users manage or think about separate
+glib targets.
 
 ## Decision
 
-Default to bundled source. Do not add sibling dependency resolution or parent
-dependency override paths until there is a concrete need.
+Default to one Gubsy-facing API. Do not add sibling dependency resolution,
+parent dependency override paths, or downstream glib target requirements unless
+there is a concrete need.
