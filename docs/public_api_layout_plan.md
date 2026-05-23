@@ -108,6 +108,8 @@ Game code should include Gubsy headers through the `gubsy/` prefix:
 #include <gubsy/input/binds.hpp>
 #include <gubsy/input/types.hpp>
 #include <gubsy/menu/ids.hpp>
+#include <gubsy/settings/schema.hpp>
+#include <gubsy/settings/types.hpp>
 ```
 
 The game should not need to know whether a subsystem was once a standalone
@@ -158,6 +160,8 @@ Start with the APIs needed by a Splonks-style consumer:
 10. Done: `include/gubsy/menu/types.hpp`
 11. Done: `include/gubsy/menu/ids.hpp`
 12. Done: `include/gubsy/input/types.hpp`
+13. Done: `include/gubsy/settings/types.hpp`
+14. Done: `include/gubsy/settings/schema.hpp`
 
 Do not expose everything at once. Expose only APIs that are ready to be used by
 a game importing Gubsy.
