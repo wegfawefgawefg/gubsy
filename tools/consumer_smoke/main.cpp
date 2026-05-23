@@ -14,11 +14,11 @@ int main() {
         return 1;
     }
 
-    if (!init_engine_state(runtime, hooks.config)) {
+    if (!init_gubsy_runtime(runtime, hooks.config)) {
         return 2;
     }
 
-    bool mods_registered = runtime.menu_manager.find_screen(MenuScreenID::MODS) != nullptr;
-    cleanup_engine_state(runtime);
+    bool mods_registered = gubsy_runtime_has_menu_screen(runtime, MenuScreenID::MODS);
+    cleanup_gubsy_runtime(runtime);
     return mods_registered ? 3 : 0;
 }

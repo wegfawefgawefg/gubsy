@@ -11,6 +11,7 @@
 #include "engine/menu/screens/binds_choose_input_screen.hpp"
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/screens/mods_screen.hpp"
+#include "gubsy/runtime.hpp"
 
 bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     engine.app_config = normalize_gubsy_app_config(config);
@@ -37,4 +38,20 @@ void cleanup_engine_state(EngineState& engine) {
         cleanup_audio(engine);
     if (engine.graphics)
         cleanup_graphics(engine);
+}
+
+bool init_gubsy_runtime(GubsyRuntime& runtime, const GubsyAppConfig& config) {
+    return init_engine_state(runtime, config);
+}
+
+void cleanup_gubsy_runtime(GubsyRuntime& runtime) {
+    cleanup_engine_state(runtime);
+}
+
+const GubsyAppConfig& gubsy_runtime_config(const GubsyRuntime& runtime) {
+    return runtime.app_config;
+}
+
+bool gubsy_runtime_has_menu_screen(const GubsyRuntime& runtime, MenuScreenId screen_id) {
+    return runtime.menu_manager.find_screen(screen_id) != nullptr;
 }

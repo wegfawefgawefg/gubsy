@@ -111,17 +111,31 @@ Game code should include Gubsy headers through the `gubsy/` prefix:
 The game should not need to know whether a subsystem was once a standalone
 `glayout`, `ginput`, or `gsexp` repo.
 
+Basic runtime setup should also use public names:
+
+```cpp
+GubsyRuntime runtime{};
+GubsyAppConfig config{};
+init_gubsy_runtime(runtime, config);
+cleanup_gubsy_runtime(runtime);
+```
+
+The older `init_engine_state` and `cleanup_engine_state` names remain internal
+migration details. Consumer smoke tests should avoid them.
+
 ## Migration Order
 
 1. Done: create `include/gubsy/` facade headers for the APIs Splonks would use first.
 2. Done: keep the existing `engine/` implementation compiling underneath.
 3. Done: add `include/` as the public include directory for `gubsy_engine`.
-4. Keep `engine/` or later `src/` as a private include directory.
-5. Move implementation files from `engine/` to `src/` by subsystem.
-6. Move current first-party `libs/` code into the matching Gubsy modules as part
+4. Done: add public runtime init/cleanup/query helpers so consumer examples do
+   not call `init_engine_state` directly.
+5. Keep `engine/` or later `src/` as a private include directory.
+6. Move implementation files from `engine/` to `src/` by subsystem.
+7. Move current first-party `libs/` code into the matching Gubsy modules as part
    of the subsystem migrations.
-7. Stop documenting `engine/...` includes once public `gubsy/...` headers exist.
-8. Remove direct consumer reliance on standalone glib targets.
+8. Stop documenting `engine/...` includes once public `gubsy/...` headers exist.
+9. Remove direct consumer reliance on standalone glib targets.
 
 ## First Facade Headers To Add
 

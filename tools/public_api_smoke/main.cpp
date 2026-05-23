@@ -34,35 +34,37 @@ int main() {
     }
 
     GubsyRuntime no_mod_engine{};
-    if (!init_engine_state(no_mod_engine, hooks.config)) {
+    if (!init_gubsy_runtime(no_mod_engine, hooks.config)) {
         return 4;
     }
-    if (no_mod_engine.app_config.enable_mods ||
-        no_mod_engine.app_config.enable_mod_browser ||
-        no_mod_engine.app_config.enable_mod_hot_reload ||
-        no_mod_engine.app_config.enable_lua_mod_host) {
-        cleanup_engine_state(no_mod_engine);
+    const GubsyAppConfig& no_mod_config = gubsy_runtime_config(no_mod_engine);
+    if (no_mod_config.enable_mods ||
+        no_mod_config.enable_mod_browser ||
+        no_mod_config.enable_mod_hot_reload ||
+        no_mod_config.enable_lua_mod_host) {
+        cleanup_gubsy_runtime(no_mod_engine);
         return 5;
     }
-    if (no_mod_engine.menu_manager.find_screen(MenuScreenID::MODS) != nullptr) {
-        cleanup_engine_state(no_mod_engine);
+    if (gubsy_runtime_has_menu_screen(no_mod_engine, MenuScreenID::MODS)) {
+        cleanup_gubsy_runtime(no_mod_engine);
         return 6;
     }
-    cleanup_engine_state(no_mod_engine);
+    cleanup_gubsy_runtime(no_mod_engine);
 
     GubsyRuntime mod_browser_engine{};
-    if (!init_engine_state(mod_browser_engine, browser_only)) {
+    if (!init_gubsy_runtime(mod_browser_engine, browser_only)) {
         return 7;
     }
-    if (!mod_browser_engine.app_config.enable_mods ||
-        !mod_browser_engine.app_config.enable_mod_browser) {
-        cleanup_engine_state(mod_browser_engine);
+    const GubsyAppConfig& mod_browser_config = gubsy_runtime_config(mod_browser_engine);
+    if (!mod_browser_config.enable_mods ||
+        !mod_browser_config.enable_mod_browser) {
+        cleanup_gubsy_runtime(mod_browser_engine);
         return 8;
     }
-    if (mod_browser_engine.menu_manager.find_screen(MenuScreenID::MODS) == nullptr) {
-        cleanup_engine_state(mod_browser_engine);
+    if (!gubsy_runtime_has_menu_screen(mod_browser_engine, MenuScreenID::MODS)) {
+        cleanup_gubsy_runtime(mod_browser_engine);
         return 9;
     }
-    cleanup_engine_state(mod_browser_engine);
+    cleanup_gubsy_runtime(mod_browser_engine);
     return 0;
 }
