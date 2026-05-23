@@ -12,6 +12,7 @@ Use a normal C++ library layout:
 include/gubsy/
   app.hpp
   run.hpp
+  runtime.hpp
   menu/
   layout/
   input/
@@ -98,6 +99,7 @@ Game code should include Gubsy headers through the `gubsy/` prefix:
 ```cpp
 #include <gubsy/app.hpp>
 #include <gubsy/run.hpp>
+#include <gubsy/runtime.hpp>
 #include <gubsy/layout/layout.hpp>
 #include <gubsy/input/binds.hpp>
 ```
@@ -123,13 +125,14 @@ Start with the APIs needed by a Splonks-style consumer:
 
 1. Done: `include/gubsy/app.hpp`
 2. Done: `include/gubsy/run.hpp`
-3. Done: `include/gubsy/engine_state.hpp`
-4. Done: `include/gubsy/input/binds.hpp`
-5. Done: `include/gubsy/profiles/profiles.hpp`
-6. Done: `include/gubsy/settings/settings.hpp`
-7. Done: `include/gubsy/menu/menu.hpp`
-8. Done: `include/gubsy/layout/layout.hpp`
-9. Done: `include/gubsy/lobby/session.hpp`
+3. Done: `include/gubsy/runtime.hpp`
+4. Done: `include/gubsy/engine_state.hpp`
+5. Done: `include/gubsy/input/binds.hpp`
+6. Done: `include/gubsy/profiles/profiles.hpp`
+7. Done: `include/gubsy/settings/settings.hpp`
+8. Done: `include/gubsy/menu/menu.hpp`
+9. Done: `include/gubsy/layout/layout.hpp`
+10. Done: `include/gubsy/lobby/session.hpp`
 
 Do not expose everything at once. Expose only APIs that are ready to be used by
 a game importing Gubsy.

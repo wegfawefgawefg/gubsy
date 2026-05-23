@@ -1,11 +1,11 @@
 #include <gubsy/app.hpp>
-#include <gubsy/engine_state.hpp>
 #include <gubsy/input/binds.hpp>
 #include <gubsy/layout/layout.hpp>
 #include <gubsy/lobby/session.hpp>
 #include <gubsy/menu/menu.hpp>
 #include <gubsy/profiles/profiles.hpp>
 #include <gubsy/run.hpp>
+#include <gubsy/runtime.hpp>
 #include <gubsy/settings/settings.hpp>
 
 int main() {
@@ -33,7 +33,7 @@ int main() {
         return 3;
     }
 
-    EngineState no_mod_engine{};
+    GubsyRuntime no_mod_engine{};
     if (!init_engine_state(no_mod_engine, hooks.config)) {
         return 4;
     }
@@ -50,7 +50,7 @@ int main() {
     }
     cleanup_engine_state(no_mod_engine);
 
-    EngineState mod_browser_engine{};
+    GubsyRuntime mod_browser_engine{};
     if (!init_engine_state(mod_browser_engine, browser_only)) {
         return 7;
     }

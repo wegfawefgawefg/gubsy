@@ -190,6 +190,7 @@ Required behavior:
 A future Splonks bootstrap should look roughly like this:
 
 ```cpp
+GubsyRuntime runtime{};
 GubsyAppHooks hooks{};
 hooks.app_context = &splonks;
 hooks.config.enable_mods = false;
@@ -197,7 +198,7 @@ hooks.config.enable_mod_browser = false;
 hooks.config.enable_mod_hot_reload = false;
 hooks.config.enable_lua_mod_host = false;
 
-do_the_gubsy(engine, hooks);
+do_the_gubsy(runtime, hooks);
 ```
 
 Splonks then registers its own modes, menu screens, settings schema, binds
