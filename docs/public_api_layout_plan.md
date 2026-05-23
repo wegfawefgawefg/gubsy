@@ -74,15 +74,12 @@ Consumers should not include private implementation headers.
 
 ## Current State
 
-The repo still has most reusable code under `engine/`, and many headers include
-other headers as:
+The repo still has most reusable implementation code under `engine/`, but public
+headers now live under `include/gubsy/` and do not include `engine/...` headers.
+Old engine headers forward to the public headers where needed so existing
+implementation code can keep compiling during migration.
 
-```cpp
-#include "engine/run.hpp"
-#include "engine/menu/menu_manager.hpp"
-```
-
-That is acceptable during migration, but it should not become the long-term
+`engine/` remains a private implementation include path. It is not the
 consumer-facing API.
 
 ## Target Consumer Shape
@@ -154,11 +151,11 @@ Consumers should not include or depend on `engine/engine_state.hpp`.
 3. Done: add `include/` as the public include directory for `gubsy_engine`.
 4. Done: add public runtime init/cleanup/query helpers so consumer examples do
    not call `init_engine_state` directly.
-5. Keep `engine/` or later `src/` as a private include directory.
+5. Done: keep `engine/` as a private include directory.
 6. Move implementation files from `engine/` to `src/` by subsystem.
 7. Move current first-party `libs/` code into the matching Gubsy modules as part
    of the subsystem migrations.
-8. Stop documenting `engine/...` includes once public `gubsy/...` headers exist.
+8. Done: stop documenting `engine/...` includes as consumer-facing API.
 9. Remove direct consumer reliance on standalone glib targets.
 
 ## First Facade Headers To Add

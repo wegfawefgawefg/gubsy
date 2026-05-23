@@ -108,9 +108,9 @@ option(GUB_ENABLE_LUA_MODS "Build Lua mod host support" ON)
 Do runtime separation first. Build-time separation is easier once behavior is
 already clean.
 
-## Current Coupling To Remove
+## Mod Coupling Removed
 
-The current boot path assumes mods are always part of the app:
+The boot path used to assume mods were always part of the app:
 
 1. `engine/run.cpp` creates runtime mod directories.
 2. `engine/run.cpp` initializes `ModManager`.
@@ -121,7 +121,7 @@ The current boot path assumes mods are always part of the app:
 6. `engine/engine_state.cpp` registers the mods menu screen during base engine
    init.
 
-These should become optional subsystem steps controlled by app config.
+These steps are now optional subsystem work controlled by `GubsyAppConfig`.
 
 ## Core Always-On Systems
 
@@ -179,8 +179,8 @@ Required behavior:
    runtime gates are proven.
 8. Audit engine screens and debug panels for demo-specific assumptions.
 9. Keep menu/profile/binds/lobby features enabled without mods.
-10. Add a minimal consumer smoke app or sample mode that starts Gubsy with mods
-    disabled.
+10. Done: add public and external consumer smoke checks that start Gubsy with
+    mods disabled.
 11. Move current first-party `libs/` code into Gubsy engine modules in small
     steps, starting with layout and input because those are already actively
     used by the engine.
@@ -219,6 +219,7 @@ This stage is done when:
 
 ## Next Step
 
-Implement runtime optionality first. Do not start with a large CMake split.
-After runtime behavior is clean, decide whether compile-time options are worth
-adding.
+Continue moving implementation files from `engine/` into boring private module
+folders when it improves ownership. Runtime optionality and the public consumer
+facade are in place; do not start unrelated `gassets`, `gaudio`, or `ganim`
+work as part of this stage.
