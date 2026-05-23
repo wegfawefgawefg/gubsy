@@ -51,8 +51,9 @@ gubsy/
 ```
 
 This solved the sibling checkout problem, but it is not the final public shape.
-The cleaner target is to move the useful pieces into Gubsy modules under
-`engine/`.
+The cleaner target is to move the useful pieces into Gubsy private modules
+under `src/`. The concrete migration plan lives in
+`docs/src_demo_refactor_plan.md`.
 
 The important rule is that the normal build does not require sibling repos.
 
@@ -60,12 +61,17 @@ The important rule is that the normal build does not require sibling repos.
 
 ```text
 gubsy/
-  engine/
+  include/gubsy/
+    public consumer headers
+  src/
     layout/
     input/
-    config/
+    sexp/
+    settings/
     audio/
     ...
+  demo/
+    bundled example consumer
 ```
 
 Consumers should link `gubsy::engine` and include Gubsy headers. They should not
@@ -105,9 +111,9 @@ ready, port the useful source into the matching Gubsy engine module.
 Example:
 
 ```sh
-gsexp       -> engine/sexp or engine/config parsing helpers
-glayout     -> engine/layout
-ginput      -> engine/input
+gsexp       -> src/sexp
+glayout     -> src/layout
+ginput      -> src/input
 ```
 
 Do not blindly copy a repo forever if the target is an internal Gubsy module.
@@ -120,10 +126,9 @@ Keep the module names and includes shaped around Gubsy.
 2. Done: change glib dependency setup in `CMakeLists.txt` to use bundled copies.
 3. Done: change missing-dependency errors to point at `libs/`.
 4. Done: update README to document `libs/` as bundled first-party source.
-5. Next: migrate `libs/glayout` into `engine/layout`.
-6. Next: migrate `libs/ginput` into `engine/input`.
-7. Next: decide whether `gsexp` remains a tiny internal target or becomes
-   `engine/sexp` parsing helpers.
+5. Next: migrate `libs/gsexp` into `src/sexp`.
+6. Next: migrate `libs/glayout` into `src/layout`.
+7. Next: migrate `libs/ginput` into `src/input`.
 8. Verify this build after each step:
    - Top-level `gubsy` checkout using bundled glibs.
 

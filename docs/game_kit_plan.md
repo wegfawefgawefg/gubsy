@@ -33,15 +33,19 @@ Lua mod host, mod server, demo content, or sample game assumptions.
 ## Target Shape
 
 ```text
-gubsy/engine/
+gubsy/include/gubsy/
+  public API consumed by games
+
+gubsy/src/
   reusable game-kit systems and app lifecycle helpers
   layout/
   input/
-  config/
+  sexp/
+  settings/
   audio/
   ...
 
-gubsy/game/
+gubsy/demo/
   bundled sample/demo consumer used to exercise the kit
 
 splonks-cpp/
@@ -63,24 +67,25 @@ The target direction is:
 2. Consumer projects link/import `gubsy::engine`.
 3. Consumer projects include Gubsy headers, not standalone glib headers.
 4. Gubsy does not create pass-through wrapper APIs around separate libs.
-5. If a subsystem belongs to the game kit, it lives under `engine/`.
+5. If a subsystem belongs to the game kit, it lives under `src/` with a public
+   facade under `include/gubsy/` only when consumers need it.
 
 Examples:
 
 ```text
-engine/layout/
+src/layout/
   layout data, layout store, layout editor core, layout debug UI
 
-engine/input/
+src/input/
   raw input collection, bind profiles, input profile persistence
 
-engine/config/
+src/settings/ and src/profiles/
   settings/profile/save config helpers
 ```
 
 The current `libs/` folder is a migration artifact from the ripout work. It is
 acceptable short-term, but the cleaner end state is Gubsy-owned modules under
-`engine/`.
+`src/`. See `docs/src_demo_refactor_plan.md` for the concrete file move plan.
 
 ## Required Consumer Switches
 
@@ -181,9 +186,8 @@ Required behavior:
 9. Keep menu/profile/binds/lobby features enabled without mods.
 10. Done: add public and external consumer smoke checks that start Gubsy with
     mods disabled.
-11. Move current first-party `libs/` code into Gubsy engine modules in small
-    steps, starting with layout and input because those are already actively
-    used by the engine.
+11. Move current first-party `libs/` code into Gubsy `src/` modules in small
+    steps, starting with `src/sexp`, then layout and input.
 
 ## Splonks Import Target
 

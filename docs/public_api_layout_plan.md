@@ -153,8 +153,9 @@ Consumers should not include or depend on `engine/engine_state.hpp`.
    not call `init_engine_state` directly.
 5. Done: keep `engine/` as a private include directory.
 6. Move implementation files from `engine/` to `src/` by subsystem.
-7. Move current first-party `libs/` code into the matching Gubsy modules as part
-   of the subsystem migrations.
+7. Move current first-party `libs/` code into `src/sexp`, `src/layout`, and
+   `src/input` as part of the subsystem migrations. The detailed plan is
+   `docs/src_demo_refactor_plan.md`.
 8. Done: stop documenting `engine/...` includes as consumer-facing API.
 9. Remove direct consumer reliance on standalone glib targets.
 
