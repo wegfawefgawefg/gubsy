@@ -1,4 +1,4 @@
 #pragma once
 
-#include "engine/layout_editor/layout_editor.hpp"
-#include "engine/ui_layouts.hpp"
+#include "gubsy/layout/editor.hpp"
+#include "gubsy/layout/layout_types.hpp"
