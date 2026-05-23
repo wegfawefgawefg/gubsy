@@ -10,6 +10,15 @@ if (NOT TARGET gsexp::gsexp AND EXISTS "${GUB_SIBLING_GSEXP_DIR}/CMakeLists.txt"
   add_subdirectory("${GUB_SIBLING_GSEXP_DIR}" "${CMAKE_BINARY_DIR}/_deps/gsexp")
 endif()
 
+set(GUB_SIBLING_GLAYOUT_DIR "${CMAKE_SOURCE_DIR}/../glayout")
+if (NOT TARGET glayout::core AND EXISTS "${GUB_SIBLING_GLAYOUT_DIR}/CMakeLists.txt")
+  set(GLAYOUT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GLAYOUT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GLAYOUT_BUILD_SDL_DEMO OFF CACHE BOOL "" FORCE)
+  set(GLAYOUT_WITH_IMGUI OFF CACHE BOOL "" FORCE)
+  add_subdirectory("${GUB_SIBLING_GLAYOUT_DIR}" "${CMAKE_BINARY_DIR}/_deps/glayout")
+endif()
+
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(GUB_DEFAULT_BUILD_EXTRAS ON)
 else()
@@ -59,6 +68,12 @@ if (TARGET gsexp::gsexp)
   target_link_libraries(gubsy_engine PUBLIC gsexp::gsexp)
 else()
   message(FATAL_ERROR "gsexp not found. Place gsexp next to gubsy or provide target gsexp::gsexp.")
+endif()
+
+if (TARGET glayout::core)
+  target_link_libraries(gubsy_engine PUBLIC glayout::core)
+else()
+  message(FATAL_ERROR "glayout not found. Place glayout next to gubsy or provide target glayout::core.")
 endif()
 
 if (EXISTS "${CMAKE_SOURCE_DIR}/third_party/lua/src/lua.h")

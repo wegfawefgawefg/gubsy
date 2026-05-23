@@ -2,174 +2,116 @@
 
 #include "engine/engine_state.hpp"
 #include "engine/layout_editor/layout_editor_hooks.hpp"
-#include "engine/parser.hpp"
 #include "engine/project_paths.hpp"
-#include "engine/utils.hpp"
 
 #include <algorithm>
-#include <cmath>
-#include <cstdio>
 #include <filesystem>
-#include <fstream>
-#include <limits>
+#include <glayout/layout.hpp>
 #include <random>
-#include <sstream>
 #include <unordered_set>
 
 namespace {
 
-const char* form_factor_to_string(UILayoutFormFactor factor) {
+UILayoutFormFactor g_current_form_factor = UILayoutFormFactor::Desktop;
+
+glayout::FormFactor to_glayout_form_factor(UILayoutFormFactor factor) {
     switch (factor) {
-        case UILayoutFormFactor::Desktop: return "desktop";
-        case UILayoutFormFactor::Tablet: return "tablet";
-        case UILayoutFormFactor::Phone: return "phone";
+    case UILayoutFormFactor::Desktop:
+        return glayout::FormFactor::Desktop;
+    case UILayoutFormFactor::Tablet:
+        return glayout::FormFactor::Tablet;
+    case UILayoutFormFactor::Phone:
+        return glayout::FormFactor::Phone;
     }
-    return "desktop";
+    return glayout::FormFactor::Desktop;
 }
 
-UILayoutFormFactor form_factor_from_string(const std::string& value) {
-    if (value == "tablet") return UILayoutFormFactor::Tablet;
-    if (value == "phone") return UILayoutFormFactor::Phone;
+UILayoutFormFactor from_glayout_form_factor(glayout::FormFactor factor) {
+    switch (factor) {
+    case glayout::FormFactor::Desktop:
+        return UILayoutFormFactor::Desktop;
+    case glayout::FormFactor::Tablet:
+        return UILayoutFormFactor::Tablet;
+    case glayout::FormFactor::Phone:
+        return UILayoutFormFactor::Phone;
+    }
     return UILayoutFormFactor::Desktop;
 }
 
-UILayoutFormFactor g_current_form_factor = UILayoutFormFactor::Desktop;
-
-std::vector<UILayout> parse_ui_layouts_tree(const std::vector<sexp::SValue>& roots) {
-    const sexp::SValue* root = nullptr;
-    for (const auto& node : roots) {
-        if (node.type != sexp::SValue::Type::List || node.list.empty())
-            continue;
-        if (sexp::is_symbol(node.list.front(), "ui_layouts")) {
-            root = &node;
-            break;
-        }
+glayout::Layout to_glayout_layout(const UILayout& layout) {
+    glayout::Layout out;
+    out.id = layout.id;
+    out.label = layout.label;
+    out.width = layout.resolution_width;
+    out.height = layout.resolution_height;
+    out.form_factor = to_glayout_form_factor(layout.form_factor);
+    out.objects.reserve(layout.objects.size());
+    for (const UIObject& object : layout.objects) {
+        out.objects.push_back(glayout::Object{
+            object.id,
+            object.label,
+            glayout::Rect{object.x, object.y, object.w, object.h},
+        });
     }
-    std::vector<UILayout> layouts;
-    if (!root)
-        return layouts;
+    return out;
+}
 
-    for (size_t i = 1; i < root->list.size(); ++i) {
-        const sexp::SValue& entry = root->list[i];
-        if (entry.type != sexp::SValue::Type::List || entry.list.empty())
-            continue;
-        if (!sexp::is_symbol(entry.list.front(), "layout"))
-            continue;
-
-        auto id = sexp::extract_int(entry, "id");
-        auto label = sexp::extract_string(entry, "label");
-        if (!id || !label)
-            continue;
-
-        UILayout layout{};
-        layout.id = *id;
-        layout.label = *label;
-
-        // Parse resolution
-        const sexp::SValue* res_node = sexp::find_child(entry, "resolution");
-        if (res_node && res_node->type == sexp::SValue::Type::List) {
-            auto width = sexp::extract_int(*res_node, "width");
-            auto height = sexp::extract_int(*res_node, "height");
-            if (width && height) {
-                layout.resolution_width = *width;
-                layout.resolution_height = *height;
-            }
-        }
-
-        // Parse form factor
-        if (const sexp::SValue* ff_node = sexp::find_child(entry, "form_factor")) {
-            if (ff_node->type == sexp::SValue::Type::List && ff_node->list.size() >= 2) {
-                const sexp::SValue& token = ff_node->list[1];
-                if (token.type == sexp::SValue::Type::Symbol || token.type == sexp::SValue::Type::String) {
-                    layout.form_factor = form_factor_from_string(token.text);
-                }
-            }
-        }
-
-        // Parse objects
-        const sexp::SValue* objects_node = sexp::find_child(entry, "objects");
-        if (objects_node && objects_node->type == sexp::SValue::Type::List) {
-            for (size_t j = 1; j < objects_node->list.size(); ++j) {
-                const sexp::SValue& obj = objects_node->list[j];
-                if (obj.type != sexp::SValue::Type::List || obj.list.empty())
-                    continue;
-                if (!sexp::is_symbol(obj.list.front(), "object"))
-                    continue;
-
-                auto obj_id = sexp::extract_int(obj, "id");
-                auto obj_label = sexp::extract_string(obj, "label");
-                auto x = sexp::extract_float(obj, "x");
-                auto y = sexp::extract_float(obj, "y");
-                auto w = sexp::extract_float(obj, "w");
-                auto h = sexp::extract_float(obj, "h");
-
-                if (obj_id && obj_label && x && y && w && h) {
-                    UIObject ui_obj{};
-                    ui_obj.id = *obj_id;
-                    ui_obj.label = *obj_label;
-                    ui_obj.x = *x;
-                    ui_obj.y = *y;
-                    ui_obj.w = *w;
-                    ui_obj.h = *h;
-                    layout.objects.push_back(ui_obj);
-                }
-            }
-        }
-
-        layouts.push_back(std::move(layout));
+UILayout from_glayout_layout(const glayout::Layout& layout) {
+    UILayout out;
+    out.id = layout.id;
+    out.label = layout.label;
+    out.resolution_width = layout.width;
+    out.resolution_height = layout.height;
+    out.form_factor = from_glayout_form_factor(layout.form_factor);
+    out.objects.reserve(layout.objects.size());
+    for (const glayout::Object& object : layout.objects) {
+        out.objects.push_back(UIObject{
+            object.id,
+            object.label,
+            object.rect.x,
+            object.rect.y,
+            object.rect.w,
+            object.rect.h,
+        });
     }
-    return layouts;
+    return out;
+}
+
+std::vector<glayout::Layout> to_glayout_layouts(const std::vector<UILayout>& layouts) {
+    std::vector<glayout::Layout> out;
+    out.reserve(layouts.size());
+    for (const UILayout& layout : layouts)
+        out.push_back(to_glayout_layout(layout));
+    return out;
+}
+
+std::vector<UILayout> from_glayout_layouts(const std::vector<glayout::Layout>& layouts) {
+    std::vector<UILayout> out;
+    out.reserve(layouts.size());
+    for (const glayout::Layout& layout : layouts)
+        out.push_back(from_glayout_layout(layout));
+    return out;
+}
+
+std::filesystem::path ui_layouts_path() {
+    return data_path("ui_layouts/layouts.lisp");
 }
 
 std::vector<UILayout> read_ui_layouts_from_disk() {
-    std::filesystem::path path = data_path("ui_layouts/layouts.lisp");
-    std::ifstream f(path);
-    if (!f.is_open())
+    glayout::ParseResult result = glayout::load_layout_file(ui_layouts_path());
+    if (!result.ok)
         return {};
-    std::ostringstream oss;
-    oss << f.rdbuf();
-    auto parsed = sexp::parse_s_expressions(oss.str());
-    if (!parsed) {
-        std::fprintf(stderr, "[ui_layouts] Failed to parse %s\n", path.string().c_str());
-        return {};
-    }
-    return parse_ui_layouts_tree(*parsed);
+    return from_glayout_layouts(result.layouts);
 }
 
 bool write_ui_layouts_file(const std::vector<UILayout>& layouts) {
-    namespace fs = std::filesystem;
-    fs::path path = data_path("ui_layouts/layouts.lisp");
-    if (path.has_parent_path()) {
-        if (!ensure_dir(path.parent_path().string()))
-            return false;
-    }
-    std::ofstream out(path);
-    if (!out.is_open())
-        return false;
-
-    out << "(ui_layouts\n";
-    for (const auto& layout : layouts) {
-        out << "  (layout\n";
-        out << "    (id " << layout.id << ")\n";
-        out << "    (label " << sexp::quote_string(layout.label) << ")\n";
-        out << "    (resolution (width " << layout.resolution_width << ") (height " << layout.resolution_height << "))\n";
-        out << "    (form_factor " << form_factor_to_string(layout.form_factor) << ")\n";
-        out << "    (objects\n";
-        for (const auto& obj : layout.objects) {
-            out << "      (object (id " << obj.id << ") (label " << sexp::quote_string(obj.label) << ") ";
-            out << "(x " << obj.x << ") (y " << obj.y << ") (w " << obj.w << ") (h " << obj.h << "))\n";
-        }
-        out << "    )\n";
-        out << "  )\n";
-    }
-    out << ")\n";
-    return out.good();
+    return glayout::save_layout_file(ui_layouts_path(), to_glayout_layouts(layouts));
 }
 
 } // namespace
 
-void UILayout::add_object(int obj_id, const std::string& object_label,
-                          float x, float y, float w, float h) {
+void UILayout::add_object(int obj_id, const std::string& object_label, float x, float y, float w,
+                          float h) {
     // Idempotent - check if object with same id exists
     for (auto& obj : objects) {
         if (obj.id == obj_id) {
@@ -197,8 +139,9 @@ bool UILayout::remove_object(int obj_id) {
 }
 
 bool UILayout::remove_object(const std::string& object_label) {
-    auto it = std::remove_if(objects.begin(), objects.end(),
-                             [&object_label](const UIObject& obj) { return obj.label == object_label; });
+    auto it = std::remove_if(objects.begin(), objects.end(), [&object_label](const UIObject& obj) {
+        return obj.label == object_label;
+    });
     if (it != objects.end()) {
         objects.erase(it, objects.end());
         return true;
@@ -226,8 +169,7 @@ bool save_ui_layout(const UILayout& layout) {
     // Check if layout with same id and resolution exists
     bool updated = false;
     for (auto& existing : layouts) {
-        if (existing.id == layout.id &&
-            existing.resolution_width == layout.resolution_width &&
+        if (existing.id == layout.id && existing.resolution_width == layout.resolution_width &&
             existing.resolution_height == layout.resolution_height &&
             existing.form_factor == layout.form_factor) {
             existing = layout;
@@ -243,9 +185,7 @@ bool save_ui_layout(const UILayout& layout) {
     return write_ui_layouts_file(layouts);
 }
 
-const UILayout* get_ui_layout_for_resolution(EngineState& engine,
-                                             int layout_id,
-                                             int width,
+const UILayout* get_ui_layout_for_resolution(EngineState& engine, int layout_id, int width,
                                              int height) {
     // Find all layouts with matching id
     std::vector<const UILayout*> candidates;
@@ -264,7 +204,8 @@ const UILayout* get_ui_layout_for_resolution(EngineState& engine,
 
     auto score_layout = [&](const UILayout* layout) {
         float target_aspect = static_cast<float>(width) / static_cast<float>(height);
-        float layout_aspect = static_cast<float>(layout->resolution_width) / static_cast<float>(layout->resolution_height);
+        float layout_aspect = static_cast<float>(layout->resolution_width) /
+                              static_cast<float>(layout->resolution_height);
         float aspect_distance = std::abs(target_aspect - layout_aspect);
         float res_dx = static_cast<float>(width - layout->resolution_width);
         float res_dy = static_cast<float>(height - layout->resolution_height);
@@ -292,9 +233,7 @@ const UILayout* get_ui_layout_for_resolution(EngineState& engine,
     if (!chosen)
         chosen = pick_best(desired, false);
     if (chosen) {
-        layout_editor_notify_active_layout(engine,
-                                           layout_id,
-                                           chosen->resolution_width,
+        layout_editor_notify_active_layout(engine, layout_id, chosen->resolution_width,
                                            chosen->resolution_height);
     }
     return chosen;
