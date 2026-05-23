@@ -11,7 +11,41 @@
 #include "engine/menu/screens/binds_choose_input_screen.hpp"
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/screens/mods_screen.hpp"
-#include "gubsy/runtime.hpp"
+#include "engine/gubsy_runtime_internal.hpp"
+
+GubsyRuntime::GubsyRuntime()
+    : engine_(new EngineState()) {
+}
+
+GubsyRuntime::~GubsyRuntime() {
+    if (engine_)
+        cleanup_engine_state(*engine_);
+    delete engine_;
+}
+
+GubsyRuntime::GubsyRuntime(GubsyRuntime&& other) noexcept
+    : engine_(other.engine_) {
+    other.engine_ = nullptr;
+}
+
+GubsyRuntime& GubsyRuntime::operator=(GubsyRuntime&& other) noexcept {
+    if (this == &other)
+        return *this;
+    if (engine_)
+        cleanup_engine_state(*engine_);
+    delete engine_;
+    engine_ = other.engine_;
+    other.engine_ = nullptr;
+    return *this;
+}
+
+EngineState& gubsy_runtime_engine(GubsyRuntime& runtime) {
+    return *runtime.engine_;
+}
+
+const EngineState& gubsy_runtime_engine(const GubsyRuntime& runtime) {
+    return *runtime.engine_;
+}
 
 bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     engine.app_config = normalize_gubsy_app_config(config);
@@ -41,17 +75,17 @@ void cleanup_engine_state(EngineState& engine) {
 }
 
 bool init_gubsy_runtime(GubsyRuntime& runtime, const GubsyAppConfig& config) {
-    return init_engine_state(runtime, config);
+    return init_engine_state(gubsy_runtime_engine(runtime), config);
 }
 
 void cleanup_gubsy_runtime(GubsyRuntime& runtime) {
-    cleanup_engine_state(runtime);
+    cleanup_engine_state(gubsy_runtime_engine(runtime));
 }
 
 const GubsyAppConfig& gubsy_runtime_config(const GubsyRuntime& runtime) {
-    return runtime.app_config;
+    return gubsy_runtime_engine(runtime).app_config;
 }
 
 bool gubsy_runtime_has_menu_screen(const GubsyRuntime& runtime, MenuScreenId screen_id) {
-    return runtime.menu_manager.find_screen(screen_id) != nullptr;
+    return gubsy_runtime_engine(runtime).menu_manager.find_screen(screen_id) != nullptr;
 }

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include "graphics.hpp"
 #include "engine_state.hpp"
+#include "gubsy/run.hpp"
 #include <SDL_mixer.h>
 #include "audio.hpp"
 #include "engine/audio_settings.hpp"
@@ -27,6 +28,7 @@
 #include "engine/imgui_debug/imgui_debug.hpp"
 #include "engine/layout_editor/layout_editor.hpp"
 #include "engine/project_paths.hpp"
+#include "engine/gubsy_runtime_internal.hpp"
 
 
 bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
@@ -172,4 +174,12 @@ bool stop_doing_the_gubsy(EngineState& engine){
     cleanup_engine_state(engine);
     SDL_Quit();
     return 1;
+}
+
+bool do_the_gubsy(GubsyRuntime& runtime, const GubsyAppHooks& hooks) {
+    return do_the_gubsy(gubsy_runtime_engine(runtime), hooks);
+}
+
+bool stop_doing_the_gubsy(GubsyRuntime& runtime) {
+    return stop_doing_the_gubsy(gubsy_runtime_engine(runtime));
 }

@@ -42,9 +42,8 @@ but it is not yet a clean imported library boundary. The main violations are:
 
 1. Public `include/gubsy/...` headers are still mostly thin facades over
    `engine/...` headers, so the repo root remains a public include path.
-2. `GubsyRuntime` is still backed directly by `EngineState`; this is acceptable
-   during migration, but it means engine internals are still visible to any
-   consumer that wants to inspect them.
+2. `GubsyRuntime` now owns an internal `EngineState`, but most subsystem
+   facade headers still include implementation headers directly.
 3. Engine boot flow still assumes the built-in menu/profile/settings shell is
    always registered. Mods are runtime-optional now, but broader app-owned
    registration hooks are still incomplete.

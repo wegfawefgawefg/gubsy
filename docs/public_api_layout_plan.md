@@ -124,6 +124,9 @@ cleanup_gubsy_runtime(runtime);
 The older `init_engine_state` and `cleanup_engine_state` names remain internal
 migration details. Consumer smoke tests should avoid them.
 
+`GubsyRuntime` is an owning public wrapper around the internal `EngineState`.
+Consumers should not include or depend on `engine/engine_state.hpp`.
+
 ## Migration Order
 
 1. Done: create `include/gubsy/` facade headers for the APIs Splonks would use first.
@@ -145,15 +148,14 @@ Start with the APIs needed by a Splonks-style consumer:
 1. Done: `include/gubsy/app.hpp`
 2. Done: `include/gubsy/run.hpp`
 3. Done: `include/gubsy/runtime.hpp`
-4. Done: `include/gubsy/engine_state.hpp`
-5. Done: `include/gubsy/input/binds.hpp`
-6. Done: `include/gubsy/profiles/profiles.hpp`
-7. Done: `include/gubsy/settings/settings.hpp`
-8. Done: `include/gubsy/menu/menu.hpp`
-9. Done: `include/gubsy/layout/layout.hpp`
-10. Done: `include/gubsy/lobby/session.hpp`
-11. Done: `include/gubsy/menu/types.hpp`
-12. Done: `include/gubsy/menu/ids.hpp`
+4. Done: `include/gubsy/input/binds.hpp`
+5. Done: `include/gubsy/profiles/profiles.hpp`
+6. Done: `include/gubsy/settings/settings.hpp`
+7. Done: `include/gubsy/menu/menu.hpp`
+8. Done: `include/gubsy/layout/layout.hpp`
+9. Done: `include/gubsy/lobby/session.hpp`
+10. Done: `include/gubsy/menu/types.hpp`
+11. Done: `include/gubsy/menu/ids.hpp`
 
 Do not expose everything at once. Expose only APIs that are ready to be used by
 a game importing Gubsy.
