@@ -12,7 +12,8 @@
 #include "engine/menu/settings_category_registry.hpp"
 #include "engine/menu/screens/mods_screen.hpp"
 
-bool init_engine_state(EngineState& engine) {
+bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
+    engine.app_config = normalize_gubsy_app_config(config);
     engine.menu_manager.set_command_registry(&engine.menu_commands);
     register_engine_settings_schema_entries(engine);
     register_settings_category_screens(engine);
@@ -22,7 +23,8 @@ bool init_engine_state(EngineState& engine) {
     register_binds_profile_editor_screen(engine);
     register_binds_action_editor_screen(engine);
     register_binds_choose_input_screen(engine);
-    register_mods_menu_screen(engine);
+    if (engine.app_config.enable_mod_browser)
+        register_mods_menu_screen(engine);
     return true;
 }
 

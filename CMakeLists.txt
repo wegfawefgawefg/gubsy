@@ -253,6 +253,7 @@ if (NOT SDL3_TTF_FOUND_LOCAL)
 endif()
 
 target_include_directories(gubsy_engine BEFORE PUBLIC
+  ${CMAKE_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/third_party
   ${CMAKE_SOURCE_DIR}/imgui
@@ -275,6 +276,10 @@ if (GUB_BUILD_SAMPLE)
 endif()
 
 if (GUB_BUILD_TOOLS)
+  add_executable(public_api_smoke tools/public_api_smoke/main.cpp)
+  target_link_libraries(public_api_smoke PRIVATE gubsy_engine)
+  target_enable_strict_warnings(public_api_smoke)
+
   add_executable(mod_server
     tools/mod_server/main.cpp
     engine/project_paths.cpp

@@ -12,6 +12,7 @@
 #include "engine/menu/menu_runtime_state.hpp"
 #include "engine/top_level_game_settings.hpp"
 #include "engine/ui_layouts.hpp"
+#include "gubsy/app.hpp"
 #include "mode_registry.hpp"
 #include "player.hpp"
 #include "user_profiles.hpp"
@@ -31,6 +32,7 @@ struct Graphics;
 struct EngineState {
     bool running{true};
     void* app_context{nullptr};
+    GubsyAppConfig app_config{};
 
     double now{0.0};
     float dt{0.0f};
@@ -96,5 +98,5 @@ struct EngineState {
     Graphics* graphics{nullptr};
 };
 
-bool init_engine_state(EngineState& engine);
+bool init_engine_state(EngineState& engine, const GubsyAppConfig& config = {});
 void cleanup_engine_state(EngineState& engine);

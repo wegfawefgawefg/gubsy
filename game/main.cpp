@@ -144,6 +144,10 @@ int main() {
    
     GubsyAppHooks hooks{};
     hooks.app_context = &app;
+    hooks.config.enable_mods = true;
+    hooks.config.enable_mod_browser = true;
+    hooks.config.enable_mod_hot_reload = true;
+    hooks.config.enable_lua_mod_host = true;
     hooks.on_mods_changed = on_mods_changed;
 
     do_the_gubsy(engine, hooks);

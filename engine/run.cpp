@@ -30,11 +30,14 @@
 
 
 bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
+    GubsyAppConfig app_config = normalize_gubsy_app_config(hooks.config);
     ensure_data_folder_structure();
-    std::error_code mods_ec;
-    std::filesystem::create_directories(runtime_mods_path(), mods_ec);
+    if (app_config.enable_mods) {
+        std::error_code mods_ec;
+        std::filesystem::create_directories(runtime_mods_path(), mods_ec);
+    }
 
-    if (!init_engine_state(engine)) {
+    if (!init_engine_state(engine, app_config)) {
         SDL_Quit();
         return 1;
     }
@@ -61,11 +64,13 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
 #endif
     }
 
-    if (!init_mods_manager(engine, runtime_mods_path().string())) {
-        cleanup_audio(engine);
-        cleanup_engine_state(engine);
-        SDL_Quit();
-        return 1;
+    if (engine.app_config.enable_mods) {
+        if (!init_mods_manager(engine, runtime_mods_path().string())) {
+            cleanup_audio(engine);
+            cleanup_engine_state(engine);
+            SDL_Quit();
+            return 1;
+        }
     }
     load_builtin_sounds(engine);
 
@@ -95,14 +100,19 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
     load_top_level_game_settings_into_state(engine);
     sync_graphics_from_settings(engine);
 
-    discover_mods(engine);
-    scan_mods_for_sprite_defs(engine);
+    if (engine.app_config.enable_mods) {
+        discover_mods(engine);
+        scan_mods_for_sprite_defs(engine);
+    }
     load_all_textures_in_sprite_lookup(engine);
-    load_mod_sounds(engine);
+    if (engine.app_config.enable_mods)
+        load_mod_sounds(engine);
 
-    load_enabled_mods_via_host(engine);
-    if (hooks.on_mods_changed)
-        hooks.on_mods_changed(hooks.app_context);
+    if (engine.app_config.enable_lua_mod_host) {
+        load_enabled_mods_via_host(engine);
+        if (hooks.on_mods_changed)
+            hooks.on_mods_changed(hooks.app_context);
+    }
 
     Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 t_last = SDL_GetPerformanceCounter();
@@ -128,9 +138,11 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
                 mode->process_inputs_fn(engine, engine.app_context);
         }
 
-        bool mods_changed = poll_fs_mods_hot_reload(engine);
-        if (mods_changed && hooks.on_mods_changed)
-            hooks.on_mods_changed(hooks.app_context);
+        if (engine.app_config.enable_mod_hot_reload) {
+            bool mods_changed = poll_fs_mods_hot_reload(engine);
+            if (mods_changed && hooks.on_mods_changed)
+                hooks.on_mods_changed(hooks.app_context);
+        }
 
         step(engine);
 
@@ -154,7 +166,8 @@ bool stop_doing_the_gubsy(EngineState& engine){
     layout_editor_shutdown(engine);
     imgui_debug_shutdown();
     shutdown_imgui_layer();
-    unload_all_mods_via_host(engine);
+    if (engine.app_config.enable_lua_mod_host)
+        unload_all_mods_via_host(engine);
     cleanup_audio(engine);
     cleanup_engine_state(engine);
     SDL_Quit();
