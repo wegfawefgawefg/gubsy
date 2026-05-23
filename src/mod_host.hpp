@@ -1,6 +1,12 @@
 #pragma once
 
+#ifndef GUB_ENABLE_LUA
+#define GUB_ENABLE_LUA 1
+#endif
+
+#if GUB_ENABLE_LUA
 #include <memory>
+#endif
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -18,7 +24,11 @@ struct ModContext {
     std::string path;
     std::vector<std::string> requested_apis;
     std::vector<const ModApiDescriptor*> bound_apis;
+#if GUB_ENABLE_LUA
     std::unique_ptr<sol::state> lua;
+#else
+    void* lua{nullptr};
+#endif
 };
 
 void set_required_mod_game_version(const std::string& version);

@@ -17,6 +17,7 @@ option(GUB_WARN_AS_ERROR "Treat warnings as errors" ON)
 option(GUB_BUILD_SAMPLE "Build bundled sample game consumer" ${GUB_DEFAULT_BUILD_EXTRAS})
 option(GUB_BUILD_TOOLS "Build bundled development tools and smokes" ${GUB_DEFAULT_BUILD_EXTRAS})
 option(GUB_COMPILE_IMGUI_SOURCES "Compile bundled Dear ImGui sources into gubsy::engine" ON)
+option(GUB_ENABLE_LUA_MOD_HOST "Build Lua-backed mod hosting support" ${GUB_DEFAULT_BUILD_EXTRAS})
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,6 +44,11 @@ file(GLOB_RECURSE GUB_ENGINE_SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
+if (GUB_ENABLE_LUA_MOD_HOST)
+  list(REMOVE_ITEM GUB_ENGINE_SOURCES "${GUB_SOURCE_DIR}/src/mod_host_disabled.cpp")
+else()
+  list(REMOVE_ITEM GUB_ENGINE_SOURCES "${GUB_SOURCE_DIR}/src/mod_host.cpp")
+endif()
 file(GLOB_RECURSE GUB_DEMO_SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/demo/*.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/demo/*.hpp"
@@ -51,7 +57,7 @@ file(GLOB_RECURSE GUB_DEMO_SOURCES
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
 add_library(gubsy::engine ALIAS gubsy_engine)
 
-if (EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lua.h")
+if (GUB_ENABLE_LUA_MOD_HOST AND EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lua.h")
   file(GLOB GUB_LUA_SOURCES "${GUB_SOURCE_DIR}/third_party/lua/src/*.c")
   list(REMOVE_ITEM GUB_LUA_SOURCES
     "${GUB_SOURCE_DIR}/third_party/lua/src/lua.c"
@@ -318,9 +324,12 @@ if (GUB_BUILD_TOOLS)
   target_include_directories(coop_sync_smoke SYSTEM PRIVATE ${GUB_SOURCE_DIR}/third_party/glm_upstream)
 endif()
 
-# Lua 5.4 (required at runtime; build-time optional with stub)
+# Lua 5.4. Embedders can disable this when they do not want Gubsy's Lua mod
+# host compiled into the engine target.
 set(LUA_FOUND_LOCAL OFF)
-if (TARGET gubsy_lua)
+if (NOT GUB_ENABLE_LUA_MOD_HOST)
+  target_compile_definitions(gubsy_engine PUBLIC GUB_ENABLE_LUA=0)
+elseif (TARGET gubsy_lua)
   set(LUA_FOUND_LOCAL ON)
   target_link_libraries(gubsy_engine PRIVATE gubsy_lua)
 else()
@@ -349,7 +358,7 @@ endif()
 endif()
 if (LUA_FOUND_LOCAL)
   target_compile_definitions(gubsy_engine PUBLIC GUB_ENABLE_LUA=1)
-else()
+elseif (GUB_ENABLE_LUA_MOD_HOST)
   message(FATAL_ERROR "Lua 5.4 not found. Install lua5.4 (liblua5.4-dev) or brew install lua.")
 endif()
 
@@ -399,18 +408,20 @@ else()
   message(WARNING "SDL3_mixer not found. Audio playback will be disabled.")
 endif()
 
-# sol2 (optional header-only). If found, enable GUB_USE_SOL2
-if (EXISTS "${GUB_SOURCE_DIR}/sol/sol.hpp")
-  set(SOL2_INCLUDE_DIR ${GUB_SOURCE_DIR})
-endif()
-find_path(SOL2_INCLUDE_DIR ${SOL2_INCLUDE_DIR} sol/sol.hpp)
-if (SOL2_INCLUDE_DIR)
-  target_compile_definitions(gubsy_engine PUBLIC GUB_USE_SOL2=1)
-  # Treat sol2 as a system include to avoid third-party warnings-as-errors
-  target_include_directories(gubsy_engine SYSTEM PRIVATE ${SOL2_INCLUDE_DIR})
-  message(STATUS "Found sol2: ${SOL2_INCLUDE_DIR}")
-else()
-  message(STATUS "sol2 not found; using Lua C API path")
+# sol2 (optional header-only). Only needed when the Lua mod host is built.
+if (GUB_ENABLE_LUA_MOD_HOST)
+  if (EXISTS "${GUB_SOURCE_DIR}/sol/sol.hpp")
+    set(SOL2_INCLUDE_DIR ${GUB_SOURCE_DIR})
+  endif()
+  find_path(SOL2_INCLUDE_DIR ${SOL2_INCLUDE_DIR} sol/sol.hpp)
+  if (SOL2_INCLUDE_DIR)
+    target_compile_definitions(gubsy_engine PUBLIC GUB_USE_SOL2=1)
+    # Treat sol2 as a system include to avoid third-party warnings-as-errors
+    target_include_directories(gubsy_engine SYSTEM PRIVATE ${SOL2_INCLUDE_DIR})
+    message(STATUS "Found sol2: ${SOL2_INCLUDE_DIR}")
+  else()
+    message(STATUS "sol2 not found; using Lua C API path")
+  endif()
 endif()
 if (NOT SDL3_IMAGE_FOUND_LOCAL)
   if (GUB_REQUIRE_DEPS)
