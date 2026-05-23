@@ -53,8 +53,8 @@ void layout_editor_render_panel(EngineState& engine, float dt) {
         return;
     }
     ImGui::TextUnformatted("Ctrl+L toggle | Ctrl+S save | G snap");
-    ImGui::Text("Grid %.3f (%s)", static_cast<double>(state.grid_step),
-                state.snap_enabled ? "snap ON" : "snap OFF");
+    ImGui::Text("Grid %.3f (%s)", static_cast<double>(state.editor.grid_step),
+                state.editor.snap_enabled ? "snap ON" : "snap OFF");
     if (!has_layouts(engine)) {
         ImGui::TextUnformatted("No layouts loaded.");
         ImGui::End();
