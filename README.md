@@ -60,6 +60,43 @@ Run:
 
 The build also creates `./build/arti` as a symlink alias to `gubsy`.
 
+Using Gubsy From Another Project
+--------------------------------
+
+`gubsy` can be added as one dependency and linked through `gubsy::engine`:
+
+```cmake
+add_subdirectory(path/to/gubsy)
+target_link_libraries(my_game PRIVATE gubsy::engine)
+```
+
+Public headers live under `include/gubsy/`:
+
+```cpp
+#include <gubsy/app.hpp>
+#include <gubsy/run.hpp>
+#include <gubsy/runtime.hpp>
+```
+
+The bundled sample and local tools are built by default only when `gubsy` is the
+top-level CMake project. When imported as a subproject, they default off.
+
+Runtime mod systems are opt-in for consumers:
+
+```cpp
+GubsyRuntime runtime{};
+GubsyAppHooks hooks{};
+hooks.config.enable_mods = false;
+hooks.config.enable_mod_browser = false;
+hooks.config.enable_mod_hot_reload = false;
+hooks.config.enable_lua_mod_host = false;
+
+do_the_gubsy(runtime, hooks);
+```
+
+The in-repo sample enables mods, the mod browser, hot reload, and Lua explicitly
+to preserve the current demo behavior.
+
 VS Code
 -------
 

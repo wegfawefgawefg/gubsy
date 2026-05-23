@@ -37,16 +37,17 @@ Build policy
 Current boundary violations
 ---------------------------
 
-The engine is not yet truly standalone. The main violations are:
+The engine no longer has direct `engine/ -> game/` includes in the current tree,
+but it is not yet a clean imported library boundary. The main violations are:
 
-1. Engine runtime types still depend on sample/game types.
-   Examples: `engine/globals.hpp`, `engine/engine_state.hpp`,
-   `engine/input_system.hpp`, `engine/input_queries.cpp`.
-2. Engine boot flow still performs sample-specific registration.
-   Example: `engine/run.cpp`.
-3. Engine menu/debug code still hardcodes sample UI/layout/state types.
-   Examples: `engine/menu/screens/*.cpp`, `engine/menu/menu_system_state.hpp`,
-   `engine/imgui_debug/session_window.cpp`.
+1. Public `include/gubsy/...` headers are still mostly thin facades over
+   `engine/...` headers, so the repo root remains a public include path.
+2. `GubsyRuntime` is still backed directly by `EngineState`; this is acceptable
+   during migration, but it means engine internals are still visible to any
+   consumer that wants to inspect them.
+3. Engine boot flow still assumes the built-in menu/profile/settings shell is
+   always registered. Mods are runtime-optional now, but broader app-owned
+   registration hooks are still incomplete.
 4. Engine path/runtime assumptions still lean on the current repo structure.
    The current path layer is better than before, but a library consumer should be
    able to provide app-owned paths rather than rely on source-tree defaults.
@@ -54,15 +55,30 @@ The engine is not yet truly standalone. The main violations are:
 Cut plan
 --------
 
-1. Remove all `engine -> game` includes.
-2. Replace sample registration in engine boot with explicit app/bootstrap hooks.
-3. Move sample-specific menu screens, layout ids, and debug windows out of the
-   engine layer.
-4. Replace sample-specific input/state types in engine headers with generic
+1. Keep `engine -> game` includes at zero and add checks if this regresses.
+2. Promote stable public headers under `include/gubsy/...` instead of exposing
+   every `engine/...` header.
+3. Move repo-root/`engine/` from public to private include paths once the public
+   headers no longer need implementation headers.
+4. Replace sample registration in engine boot with explicit app/bootstrap hooks.
+5. Move sample-specific menu screens, layout ids, and debug windows out of the
+   engine layer when they are not generally useful to the game kit.
+6. Replace sample-specific input/state types in public headers with generic
    engine-owned interfaces or opaque callbacks.
-5. Keep the sample as an in-repo consumer until the boundary is clean enough
+7. Keep the sample as an in-repo consumer until the boundary is clean enough
    that moving it to its own repo would be a mechanical step instead of a
    semantic one.
+
+Current verification
+--------------------
+
+- `tools/public_api_smoke` includes only `gubsy/...` public headers from inside
+  the top-level build.
+- `tools/consumer_smoke` is a separate CMake project that imports Gubsy through
+  `add_subdirectory`, links only `gubsy::engine`, and includes only
+  `gubsy/...` headers.
+- `GUB_BUILD_SAMPLE` and `GUB_BUILD_TOOLS` default on for a top-level Gubsy
+  checkout and off when Gubsy is imported as a subproject.
 
 Practical target
 ----------------
