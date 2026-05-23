@@ -42,6 +42,8 @@ struct Graphics {
     // Windowing
     SDL_Window* window{nullptr};
     SDL_Renderer* renderer{nullptr};
+    bool owns_window{true};
+    bool owns_renderer{true};
     TTF_Font* ui_font{nullptr};
 
     glm::uvec2 window_dims{1280, 720};
@@ -72,6 +74,11 @@ const Graphics* current_graphics(const EngineState& engine);
 // Initialize window/renderer into Graphics.
 // Returns true on success false if windowed init fails.
 bool init_graphics(EngineState& engine);
+bool attach_external_graphics(EngineState& engine,
+                              SDL_Window* window,
+                              SDL_Renderer* renderer,
+                              int render_width,
+                              int render_height);
 
 // Destroy renderer/window if present and reset pointers.
 void cleanup_graphics(EngineState& engine);

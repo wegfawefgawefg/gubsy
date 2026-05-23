@@ -4,6 +4,7 @@
 
 namespace MenuScreenID {
 inline constexpr MenuScreenId NONE = 0;
+inline constexpr MenuScreenId SHELL_MAIN = 1u << 19;
 inline constexpr MenuScreenId MODS = 1u << 20;
 inline constexpr MenuScreenId SETTINGS = (1u << 20) + 1;
 inline constexpr MenuScreenId PROFILES = (1u << 20) + 2;

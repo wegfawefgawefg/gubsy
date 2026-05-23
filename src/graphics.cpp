@@ -137,6 +137,8 @@ bool init_graphics(EngineState& engine) {
 
     graphics.window = nullptr;
     graphics.renderer = nullptr;
+    graphics.owns_window = true;
+    graphics.owns_renderer = true;
     graphics.window_dims = {static_cast<unsigned int>(window_dims.x), static_cast<unsigned int>(window_dims.y)};
 
     // Initialize SDL video with driver selection
@@ -185,6 +187,42 @@ bool init_graphics(EngineState& engine) {
     return true;
 }
 
+bool attach_external_graphics(EngineState& engine,
+                              SDL_Window* window,
+                              SDL_Renderer* renderer,
+                              int render_width,
+                              int render_height) {
+    if (!window || !renderer)
+        return false;
+    if (!engine.graphics)
+        engine.graphics = new Graphics{};
+
+    Graphics& graphics = *engine.graphics;
+    if (graphics.render_target) {
+        SDL_DestroyTexture(graphics.render_target);
+        graphics.render_target = nullptr;
+    }
+    if (graphics.owns_renderer && graphics.renderer && graphics.renderer != renderer)
+        SDL_DestroyRenderer(graphics.renderer);
+    if (graphics.owns_window && graphics.window && graphics.window != window)
+        SDL_DestroyWindow(graphics.window);
+
+    graphics.window = window;
+    graphics.renderer = renderer;
+    graphics.owns_window = false;
+    graphics.owns_renderer = false;
+    graphics.render_dims = {static_cast<unsigned int>(std::max(render_width, 16)),
+                            static_cast<unsigned int>(std::max(render_height, 16))};
+
+    int window_w = 0;
+    int window_h = 0;
+    SDL_GetRendererOutputSize(renderer, &window_w, &window_h);
+    graphics.window_dims = {static_cast<unsigned int>(std::max(window_w, 1)),
+                            static_cast<unsigned int>(std::max(window_h, 1))};
+    (void)init_font_for_graphics(graphics, {}, 20);
+    return true;
+}
+
 void cleanup_graphics(EngineState& engine) {
     Graphics* graphics = current_graphics(engine);
     if (!graphics)
@@ -196,15 +234,15 @@ void cleanup_graphics(EngineState& engine) {
         SDL_DestroyTexture(graphics->render_target);
         graphics->render_target = nullptr;
     }
-    if (graphics->renderer) {
+    if (graphics->renderer && graphics->owns_renderer) {
         SDL_DestroyRenderer(graphics->renderer);
-        graphics->renderer = nullptr;
     }
-    if (graphics->window) {
+    graphics->renderer = nullptr;
+    if (graphics->window && graphics->owns_window) {
         SDL_DestroyWindow(graphics->window);
-        graphics->window = nullptr;
     }
-    if (TTF_WasInit()) TTF_Quit();
+    graphics->window = nullptr;
+    if (graphics->owns_window && TTF_WasInit()) TTF_Quit();
     delete graphics;
     engine.graphics = nullptr;
 }

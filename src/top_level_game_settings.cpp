@@ -6,8 +6,10 @@
 #include "src/utils.hpp"
 
 #include <cstdio>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <vector>
 
 namespace {
 
@@ -69,7 +71,14 @@ bool write_top_level_settings_file(const TopLevelGameSettings& settings) {
     out << "(top_level_game_settings\n";
     out << "  (values\n";
 
-    for (const auto& [key, value] : settings.settings) {
+    std::vector<std::string> keys;
+    keys.reserve(settings.settings.size());
+    for (const auto& [key, value] : settings.settings)
+        keys.push_back(key);
+    std::sort(keys.begin(), keys.end());
+
+    for (const std::string& key : keys) {
+        const SettingsValue& value = settings.settings.at(key);
         out << "    (key " << gsexp::quote_string(key) << " ";
 
         std::visit(

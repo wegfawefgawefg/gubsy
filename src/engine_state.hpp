@@ -33,6 +33,7 @@ struct EngineState {
     bool running{true};
     void* app_context{nullptr};
     GubsyAppConfig app_config{};
+    GubsyMainMenuCommands main_menu_commands{};
 
     double now{0.0};
     float dt{0.0f};

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gubsy/menu/types.hpp"
+
 struct GubsyAppConfig {
     bool enable_mods{false};
     bool enable_mod_browser{false};
@@ -25,4 +27,9 @@ struct GubsyAppHooks {
     void* app_context{nullptr};
     GubsyAppConfig config{};
     void (*on_mods_changed)(void* app_context){nullptr};
+};
+
+struct GubsyMainMenuCommands {
+    MenuCommandId start_game{kMenuIdInvalid};
+    MenuCommandId quit{kMenuIdInvalid};
 };

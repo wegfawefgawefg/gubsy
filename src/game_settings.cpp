@@ -12,6 +12,7 @@
 #include <fstream>
 #include <random>
 #include <unordered_set>
+#include <vector>
 
 namespace {
 
@@ -95,7 +96,14 @@ bool write_game_settings_file(const std::vector<GameSettings>& settings_list) {
         out << "    (name " << gsexp::quote_string(settings.name) << ")\n";
         out << "    (values\n";
 
-        for (const auto& [key, value] : settings.settings) {
+        std::vector<std::string> keys;
+        keys.reserve(settings.settings.size());
+        for (const auto& [key, value] : settings.settings)
+            keys.push_back(key);
+        std::sort(keys.begin(), keys.end());
+
+        for (const std::string& key : keys) {
+            const SettingsValue& value = settings.settings.at(key);
             out << "      (key " << gsexp::quote_string(key) << " ";
 
             std::visit(

@@ -3,6 +3,11 @@
 #include "src/graphics.hpp"
 #include "src/mods.hpp"
 #include "src/settings_defaults.hpp"
+#include "src/data.hpp"
+#include "src/ui_layouts.hpp"
+#include "src/graphics.hpp"
+#include "src/menu/menu_system.hpp"
+#include "src/menu/screens/main_menu_screen.hpp"
 #include "src/menu/screens/settings_hub_screen.hpp"
 #include "src/menu/screens/profiles_screen.hpp"
 #include "src/menu/screens/binds_profiles_screen.hpp"
@@ -51,6 +56,7 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     engine.app_config = normalize_gubsy_app_config(config);
     engine.menu_manager.set_command_registry(&engine.menu_commands);
     register_engine_settings_schema_entries(engine);
+    register_main_menu_screen(engine);
     register_settings_category_screens(engine);
     register_settings_hub_screen(engine);
     register_profiles_screen(engine);
@@ -60,6 +66,8 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     register_binds_choose_input_screen(engine);
     if (engine.app_config.enable_mod_browser)
         register_mods_menu_screen(engine);
+    ensure_data_folder_structure();
+    load_ui_layouts_pool(engine);
     return true;
 }
 
@@ -88,4 +96,61 @@ const GubsyAppConfig& gubsy_runtime_config(const GubsyRuntime& runtime) {
 
 bool gubsy_runtime_has_menu_screen(const GubsyRuntime& runtime, MenuScreenId screen_id) {
     return gubsy_runtime_engine(runtime).menu_manager.find_screen(screen_id) != nullptr;
+}
+
+bool gubsy_attach_sdl_renderer(GubsyRuntime& runtime,
+                               SDL_Window* window,
+                               SDL_Renderer* renderer,
+                               int render_width,
+                               int render_height) {
+    return attach_external_graphics(gubsy_runtime_engine(runtime),
+                                    window,
+                                    renderer,
+                                    render_width,
+                                    render_height);
+}
+
+MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime,
+                                          GubsyHostMenuCommandFn fn,
+                                          void* user_data) {
+    return gubsy_runtime_engine(runtime).menu_commands.register_host_command(fn, user_data);
+}
+
+void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {
+    gubsy_runtime_engine(runtime).main_menu_commands = commands;
+}
+
+bool gubsy_show_main_menu(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.menu_manager.clear();
+    return engine.menu_manager.push_screen(MenuScreenID::SHELL_MAIN);
+}
+
+bool gubsy_push_menu_screen(GubsyRuntime& runtime, MenuScreenId screen_id) {
+    return gubsy_runtime_engine(runtime).menu_manager.push_screen(screen_id);
+}
+
+void gubsy_pop_menu_screen(GubsyRuntime& runtime) {
+    gubsy_runtime_engine(runtime).menu_manager.pop_screen();
+}
+
+void gubsy_clear_menu_stack(GubsyRuntime& runtime) {
+    gubsy_runtime_engine(runtime).menu_manager.clear();
+}
+
+void gubsy_set_menu_input(GubsyRuntime& runtime, const MenuInputState& input) {
+    menu_system_set_input(gubsy_runtime_engine(runtime), input);
+}
+
+void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.dt = dt;
+    menu_system_update(engine, dt, screen_width, screen_height);
+}
+
+void gubsy_render_menu(GubsyRuntime& runtime,
+                       SDL_Renderer* renderer,
+                       int screen_width,
+                       int screen_height) {
+    menu_system_render(gubsy_runtime_engine(runtime), renderer, screen_width, screen_height);
 }

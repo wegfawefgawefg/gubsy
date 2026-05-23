@@ -16,6 +16,7 @@ option(GUB_STRICT "Enable very strict warnings" ON)
 option(GUB_WARN_AS_ERROR "Treat warnings as errors" ON)
 option(GUB_BUILD_SAMPLE "Build bundled sample game consumer" ${GUB_DEFAULT_BUILD_EXTRAS})
 option(GUB_BUILD_TOOLS "Build bundled development tools and smokes" ${GUB_DEFAULT_BUILD_EXTRAS})
+option(GUB_COMPILE_IMGUI_SOURCES "Compile bundled Dear ImGui sources into gubsy::engine" ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -63,18 +64,21 @@ if (EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lua.h")
   target_link_libraries(gubsy_lua PUBLIC ${CMAKE_DL_LIBS} m)
 endif()
 
-# Dear ImGui sources
-set(IMGUI_SOURCES
-  ${GUB_SOURCE_DIR}/imgui/imgui.cpp
-  ${GUB_SOURCE_DIR}/imgui/imgui_demo.cpp
-  ${GUB_SOURCE_DIR}/imgui/imgui_draw.cpp
-  ${GUB_SOURCE_DIR}/imgui/imgui_tables.cpp
-  ${GUB_SOURCE_DIR}/imgui/imgui_widgets.cpp
-  ${GUB_SOURCE_DIR}/imgui/backends/imgui_impl_sdl3.cpp
-  ${GUB_SOURCE_DIR}/imgui/backends/imgui_impl_sdlrenderer3.cpp
-)
-target_sources(gubsy_engine PRIVATE ${IMGUI_SOURCES})
-set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
+# Dear ImGui sources. Embedders that already compile ImGui can disable this to
+# avoid duplicate symbols while still letting Gubsy compile against its headers.
+if (GUB_COMPILE_IMGUI_SOURCES)
+  set(IMGUI_SOURCES
+    ${GUB_SOURCE_DIR}/imgui/imgui.cpp
+    ${GUB_SOURCE_DIR}/imgui/imgui_demo.cpp
+    ${GUB_SOURCE_DIR}/imgui/imgui_draw.cpp
+    ${GUB_SOURCE_DIR}/imgui/imgui_tables.cpp
+    ${GUB_SOURCE_DIR}/imgui/imgui_widgets.cpp
+    ${GUB_SOURCE_DIR}/imgui/backends/imgui_impl_sdl3.cpp
+    ${GUB_SOURCE_DIR}/imgui/backends/imgui_impl_sdlrenderer3.cpp
+  )
+  target_sources(gubsy_engine PRIVATE ${IMGUI_SOURCES})
+  set_source_files_properties(${IMGUI_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
+endif()
 
 if (GUB_BUILD_SAMPLE)
   add_executable(gubsy ${GUB_DEMO_SOURCES})
