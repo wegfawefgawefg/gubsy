@@ -95,6 +95,7 @@ Docs
 - Content policy: `docs/content_policy.md`
 - Library consumption: `docs/library_consumption.md`
 - Gubsy game kit plan: `docs/game_kit_plan.md`
+- Public API layout plan: `docs/public_api_layout_plan.md`
 - Dependency packaging plan: `docs/dependency_packaging_plan.md`
 - Engine/game split plan: `docs/engine_game_split_plan.md`
 - Remove globals plan: `docs/remove_globals_plan.md`
