@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <imgui.h>
-#include <backends/imgui_impl_sdl2.h>
-#include <backends/imgui_impl_sdlrenderer2.h>
+#include <backends/imgui_impl_sdl3.h>
+#include <backends/imgui_impl_sdlrenderer3.h>
 
 namespace {
 bool g_imgui_init = false;
@@ -33,9 +33,9 @@ bool init_imgui_layer(SDL_Window* window, SDL_Renderer* renderer) {
     ImGui::StyleColorsDark();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
-    if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer))
+    if (!ImGui_ImplSDL3_InitForSDLRenderer(window, renderer))
         return false;
-    if (!ImGui_ImplSDLRenderer2_Init(renderer))
+    if (!ImGui_ImplSDLRenderer3_Init(renderer))
         return false;
     g_imgui_init = true;
     g_imgui_renderer = renderer;
@@ -48,8 +48,8 @@ bool init_imgui_layer(SDL_Window* window, SDL_Renderer* renderer) {
 void shutdown_imgui_layer() {
     if (!g_imgui_init)
         return;
-    ImGui_ImplSDLRenderer2_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
     g_imgui_init = false;
     g_imgui_renderer = nullptr;
@@ -58,8 +58,8 @@ void shutdown_imgui_layer() {
 void imgui_new_frame() {
     if (!g_imgui_init)
         return;
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 }
 
@@ -67,7 +67,7 @@ void imgui_render_layer() {
     if (!g_imgui_init || !g_imgui_renderer)
         return;
     ImGui::Render();
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), g_imgui_renderer);
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), g_imgui_renderer);
 }
 
 void imgui_process_event(const SDL_Event& event) {
@@ -88,7 +88,7 @@ void imgui_process_event(const SDL_Event& event) {
         default:
             break;
     }
-    ImGui_ImplSDL2_ProcessEvent(&event);
+    ImGui_ImplSDL3_ProcessEvent(&event);
 }
 
 bool imgui_is_initialized() {

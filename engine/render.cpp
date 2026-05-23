@@ -74,7 +74,7 @@ std::filesystem::path find_ui_font_path(const std::filesystem::path& fonts_dir) 
 
 TTF_Font* fallback_draw_font() {
     static TTF_Font* font = []() -> TTF_Font* {
-        if (!TTF_WasInit() && TTF_Init() != 0) {
+        if (!TTF_WasInit() && !TTF_Init()) {
             std::fprintf(stderr, "TTF_Init failed in draw_text: %s\n", TTF_GetError());
             return nullptr;
         }

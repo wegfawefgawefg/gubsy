@@ -32,7 +32,7 @@ bool init_font_for_graphics(Graphics& graphics,
     if (graphics.ui_font)
         return true;
     if (!TTF_WasInit()) {
-        if (TTF_Init() != 0) {
+        if (!TTF_Init()) {
             std::fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
             return false;
         }
@@ -103,7 +103,7 @@ bool recreate_render_target(Graphics& graphics, int width, int height) {
 bool try_init_video_with_driver(const char* driver) {
     Uint32 init_flags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS;
     if (!driver || !*driver) {
-        if (SDL_InitSubSystem(init_flags) == 0)
+        if (SDL_InitSubSystem(init_flags))
             return true;
         std::fprintf(stderr, "SDL_InitSubSystem(auto) failed: %s\n", SDL_GetError());
         return false;
@@ -115,7 +115,7 @@ bool try_init_video_with_driver(const char* driver) {
         std::snprintf(previous_buf, sizeof(previous_buf), "%s", previous);
 
     SDL_setenv("SDL_VIDEODRIVER", driver, 1);
-    if (SDL_InitSubSystem(init_flags) == 0)
+    if (SDL_InitSubSystem(init_flags))
         return true;
 
     std::fprintf(stderr, "SDL_InitSubSystem(%s) failed: %s\n", driver, SDL_GetError());
@@ -238,7 +238,7 @@ bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
             flag = SDL_WINDOW_FULLSCREEN;
             break;
     }
-    if (SDL_SetWindowFullscreen(current_graphics(engine)->window, flag) != 0) {
+    if (!SDL_SetWindowFullscreen(current_graphics(engine)->window, flag)) {
         std::fprintf(stderr, "Failed to change window mode: %s\n", SDL_GetError());
         return false;
     }

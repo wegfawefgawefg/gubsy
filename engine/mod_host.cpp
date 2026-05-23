@@ -105,7 +105,8 @@ bool activate_internal(ModInfo& info) {
     ctx.requested_apis = info.apis;
     ctx.lua = std::make_unique<sol::state>();
     ctx.lua->open_libraries(sol::lib::base, sol::lib::math,
-                            sol::lib::string, sol::lib::table);
+                            sol::lib::string, sol::lib::table,
+                            sol::lib::os);
 
     auto& registry = ModApiRegistry::instance();
     for (const auto& api_name : ctx.requested_apis) {

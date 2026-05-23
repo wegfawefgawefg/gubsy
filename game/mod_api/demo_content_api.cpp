@@ -14,6 +14,13 @@ void register_demo_content_api(ModApiRegistry& registry) {
             demo_content_internal::remove_override(ctx.id);
             demo_content_internal::register_override(ctx.id, tbl);
         });
+        auto ignore_legacy_def = [](const sol::table&) {};
+        lua.set_function("register_powerup", ignore_legacy_def);
+        lua.set_function("register_projectile", ignore_legacy_def);
+        lua.set_function("register_ammo", ignore_legacy_def);
+        lua.set_function("register_gun", ignore_legacy_def);
+        lua.set_function("register_entity_type", ignore_legacy_def);
+        lua.set_function("register_crate", ignore_legacy_def);
     };
     desc.on_mod_unloaded = [](ModContext& ctx) {
         demo_content_internal::remove_override(ctx.id);

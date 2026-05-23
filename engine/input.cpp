@@ -96,16 +96,19 @@ void update_mouse_projection(EngineState& engine) {
 
 void update_device_state_from_sdl(EngineState& engine) {
     auto& state = engine.device_state;
-    const Uint8* sdl_keystate = SDL_GetKeyboardState(nullptr);
-    std::copy(sdl_keystate, sdl_keystate + SDL_NUM_SCANCODES, state.keyboard.begin());
+    const bool* sdl_keystate = SDL_GetKeyboardState(nullptr);
+    for (int i = 0; i < SDL_NUM_SCANCODES; ++i)
+        state.keyboard[static_cast<std::size_t>(i)] = sdl_keystate[i] ? 1 : 0;
 
-    int x = 0;
-    int y = 0;
+    float x = 0.0f;
+    float y = 0.0f;
     state.mouse_buttons = SDL_GetMouseState(&x, &y);
-    state.mouse_dx = x - state.mouse_x;
-    state.mouse_dy = y - state.mouse_y;
-    state.mouse_x = x;
-    state.mouse_y = y;
+    int mouse_x = static_cast<int>(x);
+    int mouse_y = static_cast<int>(y);
+    state.mouse_dx = mouse_x - state.mouse_x;
+    state.mouse_dy = mouse_y - state.mouse_y;
+    state.mouse_x = mouse_x;
+    state.mouse_y = mouse_y;
     state.controllers.clear();
     state.controllers.reserve(engine.open_controllers.size());
     for (auto const& [device_id, controller] : engine.open_controllers) {
@@ -118,7 +121,7 @@ void update_device_state_from_sdl(EngineState& engine) {
         }
         for (int button = 0; button < SDL_CONTROLLER_BUTTON_MAX; ++button) {
             controller_state.buttons[static_cast<std::size_t>(button)] =
-                SDL_GameControllerGetButton(controller, static_cast<SDL_GameControllerButton>(button));
+                SDL_GameControllerGetButton(controller, static_cast<SDL_GameControllerButton>(button)) ? 1 : 0;
         }
         state.controllers.push_back(controller_state);
     }

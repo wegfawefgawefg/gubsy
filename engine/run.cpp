@@ -53,8 +53,13 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
     load_audio_settings(engine, data_path("settings_profiles/audio.lisp").string());
 
 
-    if (!init_audio(engine))
+    if (!init_audio(engine)) {
+#if GUB_ENABLE_SDL_MIXER
         std::fprintf(stderr, "[audio] SDL_mixer init failed: %s\n", Mix_GetError());
+#else
+        std::fprintf(stderr, "[audio] SDL3_mixer not available; audio disabled.\n");
+#endif
+    }
 
     if (!init_mods_manager(engine, runtime_mods_path().string())) {
         cleanup_audio(engine);

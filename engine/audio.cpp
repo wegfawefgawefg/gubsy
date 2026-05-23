@@ -8,7 +8,9 @@
 #include <cmath>
 #include <filesystem>
 #include <system_error>
+#if GUB_ENABLE_SDL_MIXER
 #include <SDL_mixer.h>
+#endif
 
 namespace {
 
@@ -21,6 +23,7 @@ Audio* current_audio(EngineState& engine) {
 bool init_audio(EngineState& engine) {
     if (!engine.audio)
         engine.audio = new Audio();
+#if GUB_ENABLE_SDL_MIXER
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) != 0)
         return false;
 
@@ -31,22 +34,28 @@ bool init_audio(EngineState& engine) {
     // Mix_GroupChannels(2, 63, 1);             // group 1 = SFX
 
     return true;
+#else
+    return false;
+#endif
 }
 
 void cleanup_audio(EngineState& engine) {
     Audio* audio = current_audio(engine);
     if (!audio)
         return;
+#if GUB_ENABLE_SDL_MIXER
     for (auto& kv : audio->chunks)
         Mix_FreeChunk(kv.second);
     audio->chunks.clear();
     if (Mix_QuerySpec(nullptr, nullptr, nullptr))
         Mix_CloseAudio();
+#endif
     delete audio;
     engine.audio = nullptr;
 }
 
 bool load_sound(EngineState& engine, const std::string& key, const std::string& path) {
+#if GUB_ENABLE_SDL_MIXER
     Audio* audio = current_audio(engine);
     if (!audio)
         return false;
@@ -55,9 +64,16 @@ bool load_sound(EngineState& engine, const std::string& key, const std::string& 
         return false;
     audio->chunks[key] = ch;
     return true;
+#else
+    (void)engine;
+    (void)key;
+    (void)path;
+    return false;
+#endif
 }
 
 void play_sound(EngineState& engine, const std::string& key, int loops, int /*channel_hint*/, int volume) {
+#if GUB_ENABLE_SDL_MIXER
     Audio* audio = current_audio(engine);
     if (!audio)
         return;
@@ -83,6 +99,12 @@ void play_sound(EngineState& engine, const std::string& key, int loops, int /*ch
     float scaled = static_cast<float>(base_volume) * master * sfx;
     int final_volume = static_cast<int>(std::round(std::clamp(scaled, 0.0f, static_cast<float>(MIX_MAX_VOLUME))));
     Mix_Volume(ch, final_volume); // per-channel, not global
+#else
+    (void)engine;
+    (void)key;
+    (void)loops;
+    (void)volume;
+#endif
 }
 
 void load_mod_sounds(EngineState& engine, const std::filesystem::path& mods_root) {

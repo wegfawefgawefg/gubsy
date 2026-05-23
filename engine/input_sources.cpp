@@ -103,7 +103,7 @@ void on_device_removed(EngineState& engine, int instance_id) {
 
     // Find the controller and its device_id from the instance_id
     for (auto const& [device_id, controller] : engine.open_controllers) {
-        if (SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)) == instance_id) {
+        if (static_cast<int>(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) == instance_id) {
             device_to_remove = device_id;
             controller_to_close = controller;
             break;
