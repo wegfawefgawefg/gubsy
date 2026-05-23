@@ -220,11 +220,13 @@ endif()
 target_include_directories(gubsy_engine BEFORE
   PUBLIC
     ${GUB_SOURCE_DIR}/include
-    ${GUB_SOURCE_DIR}/third_party
   PRIVATE
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/imgui
     ${GUB_SOURCE_DIR}/imgui/backends
+)
+target_include_directories(gubsy_engine SYSTEM PUBLIC
+  ${GUB_SOURCE_DIR}/third_party
 )
 if (GUB_BUILD_SAMPLE)
   target_include_directories(gubsy SYSTEM PRIVATE
