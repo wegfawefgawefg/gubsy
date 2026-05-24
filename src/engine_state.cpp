@@ -24,6 +24,9 @@
 #include "src/settings_defaults.hpp"
 #include "src/ui_layouts.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 namespace {
 
 void load_shell_data_pools(EngineState& engine) {
@@ -213,6 +216,15 @@ void gubsy_render_menu(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen
 
 void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt) {
     EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.dt = dt;
+    engine.fps_accumulator += std::max(dt, 0.0f);
+    engine.fps_frame_count += 1;
+    if (engine.fps_accumulator >= 0.5f) {
+        engine.displayed_fps = static_cast<int>(
+            std::round(static_cast<float>(engine.fps_frame_count) / engine.fps_accumulator));
+        engine.fps_accumulator = 0.0f;
+        engine.fps_frame_count = 0;
+    }
     layout_editor_begin_frame(engine, dt);
     imgui_debug_begin_frame(dt);
 }

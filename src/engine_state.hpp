@@ -1,5 +1,8 @@
 #pragma once
 
+#include "gubsy/app.hpp"
+#include "mode_registry.hpp"
+#include "player.hpp"
 #include "src/alerts.hpp"
 #include "src/binds_profiles.hpp"
 #include "src/device_state.hpp"
@@ -12,9 +15,6 @@
 #include "src/menu/menu_runtime_state.hpp"
 #include "src/top_level_game_settings.hpp"
 #include "src/ui_layouts.hpp"
-#include "gubsy/app.hpp"
-#include "mode_registry.hpp"
-#include "player.hpp"
 #include "user_profiles.hpp"
 
 #include <SDL2/SDL.h>
@@ -39,6 +39,9 @@ struct EngineState {
     float dt{0.0f};
     float accumulator{0.0f};
     std::uint64_t frame{0};
+    float fps_accumulator{0.0f};
+    int fps_frame_count{0};
+    int displayed_fps{0};
 
     std::string mode{"none"};
     std::vector<ModeDesc> modes;

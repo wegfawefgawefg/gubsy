@@ -15,8 +15,20 @@
 #include <cmath>
 #include <glm/glm.hpp>
 #include <string>
+#include <variant>
 
 namespace {
+
+bool setting_enabled(const EngineState& engine, const char* key) {
+    auto it = engine.top_level_game_settings.settings.find(key);
+    if (it == engine.top_level_game_settings.settings.end())
+        return false;
+    if (const int* iv = std::get_if<int>(&it->second))
+        return *iv != 0;
+    if (const float* fv = std::get_if<float>(&it->second))
+        return *fv >= 0.5f;
+    return false;
+}
 
 SDL_FRect compute_letterbox_rect(const glm::uvec2& render_dims, const glm::uvec2& window_dims) {
     SDL_FRect rect{};
@@ -174,6 +186,17 @@ void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width)
                         mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
 }
 
+void render_fps_counter(const EngineState& engine, SDL_Renderer* renderer) {
+    if (!setting_enabled(engine, "gubsy.video.show_fps"))
+        return;
+    const Graphics* graphics = current_graphics(engine);
+    if (!graphics)
+        return;
+    draw_text_with_font(graphics->ui_font ? graphics->ui_font : fallback_draw_font(), renderer,
+                        "FPS: " + std::to_string(engine.displayed_fps), 16, 14,
+                        SDL_Color{235, 245, 210, 255});
+}
+
 bool render_frame_to_window(EngineState& engine) {
     Graphics* graphics = current_graphics(engine);
     if (!graphics || !graphics->renderer || !graphics->render_target)
@@ -222,6 +245,7 @@ bool render_frame_to_window(EngineState& engine) {
     }
 
     graphics->present_rect = drawn_rect;
+    render_fps_counter(engine, renderer);
     return true;
 }
 
