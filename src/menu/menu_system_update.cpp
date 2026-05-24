@@ -143,6 +143,8 @@ void menu_system_update(EngineState& engine, float dt, int screen_width, int scr
 
         msi::update_repeat(state.current_input.left, state.repeat_left, left_pressed, dt);
         msi::update_repeat(state.current_input.right, state.repeat_right, right_pressed, dt);
+        msi::update_repeat(state.current_input.up, state.repeat_up, up_pressed, dt);
+        msi::update_repeat(state.current_input.down, state.repeat_down, down_pressed, dt);
 
         bool editing_focus =
             state.text_edit_active && focus && focus->id == state.text_edit_widget;
