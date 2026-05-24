@@ -96,6 +96,12 @@ void ensure_room_defaults(EngineState& engine) {
         engine.lobby.contract.session_phase = "lobby";
 }
 
+void disconnect_game_transport(EngineState& engine) {
+    if (!engine.lobby_commands.leave)
+        return;
+    (void)engine.lobby_commands.leave(engine.lobby_commands.leave_user_data, engine.lobby);
+}
+
 } // namespace
 
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message) {
@@ -126,6 +132,7 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     std::string err;
     MatchmakingRoom room = build_room_metadata(engine);
     if (!g_matchmaking.create_room(engine.lobby.room_server_url, room, create_result, err)) {
+        disconnect_game_transport(engine);
         message = err.empty() ? "Failed to create room" : err;
         engine.lobby.status_message = message;
         engine.lobby.last_error = message;
@@ -176,6 +183,7 @@ bool gubsy_lobby_join_room(EngineState& engine,
     std::string err;
     if (!g_matchmaking.join_room(engine.lobby.room_server_url, room.room_code,
                                  local_player_name(engine), member_id, err)) {
+        disconnect_game_transport(engine);
         message = err.empty() ? "Failed to join room service" : err;
         engine.lobby.status_message = message;
         engine.lobby.last_error = message;
@@ -226,6 +234,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
         engine.lobby.last_error = message;
         return false;
     }
+    disconnect_game_transport(engine);
 
     engine.lobby.online = false;
     engine.lobby.is_host = false;
