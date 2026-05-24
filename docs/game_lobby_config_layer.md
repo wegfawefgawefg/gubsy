@@ -29,7 +29,17 @@ The game owns:
 
 The game should register a lobby config provider with Gubsy.
 
-Required data:
+The provider has two jobs:
+
+1. Describe boring editable fields that Gubsy can render with default widgets.
+2. Register custom game-authored panels/screens for rich UI that descriptors
+   cannot express well.
+
+This matches the normal engine shape: the framework owns screen routing, stack
+behavior, input handoff, and session lifecycle; the game authors the actual
+rich UI where game-specific presentation matters.
+
+Required descriptor data:
 
 1. Game mode id.
 2. Game mode label.
@@ -37,6 +47,13 @@ Required data:
 4. Mode-specific setting descriptors.
 5. Per-player choice descriptors.
 6. Default config.
+
+Optional custom UI data:
+
+1. A game mode panel hook for rich mode-specific configuration.
+2. A per-player panel hook for rich character/loadout/team selection.
+3. A summary panel hook for showing game-specific lobby state.
+4. A help/description hook for selected game-specific fields.
 
 Required callbacks:
 
@@ -47,7 +64,61 @@ Required callbacks:
 5. Apply local per-player choices.
 6. Start the game from validated lobby state.
 
-The initial implementation can be low abstraction. A small struct of function pointers is enough.
+The initial implementation should stay low abstraction. A small struct of
+function pointers is enough.
+
+## UI Driving Model
+
+Gubsy should not try to model every possible game-specific lobby widget as
+data. That becomes restrictive quickly for character select screens, animated
+previews, sprite panels, custom descriptions, loadout previews, and similar
+game-specific presentation.
+
+Use a hybrid model instead:
+
+1. Gubsy owns the reusable shell.
+2. Gubsy owns navigation between lobby sections.
+3. Gubsy owns local player/profile/input/session lifecycle.
+4. Gubsy can render default descriptor-backed fields for simple settings.
+5. The game can provide custom panels for anything rich or highly specific.
+6. Custom panels read and mutate the game-owned lobby config through the
+   provider.
+7. Custom panels must not own transport, room membership, local player roster,
+   or profile/input assignment.
+
+The practical shape should be boring:
+
+```cpp
+struct LobbyPanelContext {
+    Rect area;
+    int player_index;
+    LobbyState& lobby;
+    GameLobbyConfig& config;
+    MenuInput input;
+};
+
+using LobbyPanelFn = void (*)(LobbyPanelContext&);
+```
+
+The exact types can change during implementation, but the boundary should stay
+the same: Gubsy gives the game a slot and context; the game draws/updates its
+own rich game-specific panel inside that slot.
+
+## Engine Comparison
+
+This should follow the common engine pattern rather than trying to make a
+universal data-only UI.
+
+1. Unreal Common UI has framework-owned activatable widget stacks, while games
+   still author and push their own widgets.
+2. Godot commonly keeps lobby/session/network state separate from custom
+   `Control` scenes and signals.
+3. Unity Lobby is a service/data layer; the game authors the lobby UI with
+   uGUI/UI Toolkit or its own screens.
+
+The useful pattern is not "Gubsy owns all lobby UI." The useful pattern is
+"Gubsy owns the reusable shell and lifecycle; games own rich game-specific
+panels."
 
 ## Mode-Specific Settings
 
@@ -75,6 +146,9 @@ Examples:
 
 Gubsy should not know what these fields mean. It only needs descriptors that let it render and edit them.
 
+For richer mode setup, the game should register a custom mode panel instead of
+forcing all controls through descriptors.
+
 ## Per-Player Choices
 
 Per-player game choices are separate from user profile and input settings.
@@ -87,6 +161,9 @@ Examples:
 4. Loadout.
 
 These choices belong to the active lobby session. They should not be stored as generic user profile data unless the game explicitly wants preference persistence.
+
+Simple choices can use descriptors. Rich choices, such as animated character
+select cards or loadout previews, should use a game-authored per-player panel.
 
 ## Host And Client Rules
 
