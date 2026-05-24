@@ -166,6 +166,33 @@ Splonks does not need mod management in the lobby right now. Mod/content fields 
 11. Reconnect host/join/server browser flow.
 12. Polish copy/navigation/status messages.
 
+## Current Implementation Notes
+
+The reusable local-player path is implemented through `GubsyLobbyState`.
+
+Implemented now:
+
+1. Local player roster state.
+2. Per-player user profile selection.
+3. Per-player binds profile selection.
+4. Per-player input settings profile selection.
+5. Per-player device toggles.
+6. Start validation before game start callbacks.
+7. Direct host/join callbacks through `GubsyLobbyCommands`.
+
+The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
+tested transport code without putting game networking details in Gubsy. Splonks
+uses this to call its existing `StartHostSession` and `JoinHostSession` entry
+points.
+
+Still remaining:
+
+1. Real room-server browser UI backed by `RoomServerMatchmaking`.
+2. Room-code join flow.
+3. Periodic room heartbeat/refresh while hosted or joined.
+4. Game-owned lobby config provider from `game_lobby_config_layer.md`.
+5. Richer status copy for online failures and compatibility checks.
+
 ## Non-Goals For This Pass
 
 1. No visual redesign requirement.
