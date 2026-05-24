@@ -188,6 +188,8 @@ Implemented now:
 12. Remote game config validation/application hooks for joined rooms.
 13. Contextual host/join/refresh/leave status messages for common failure
     paths.
+14. Automated smoke coverage proving remote config rejection stops before join
+    transport and accepted config applies before join transport.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -202,7 +204,6 @@ started.
 Further hardening:
 
 1. Exercise the full host/join path manually across two processes.
-2. Add automated room-service compatibility tests for mismatched game config.
 
 ## Non-Goals For This Pass
 
