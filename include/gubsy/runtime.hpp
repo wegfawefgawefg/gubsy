@@ -7,6 +7,7 @@
 #include "gubsy/menu/system.hpp"
 
 struct SDL_Renderer;
+union SDL_Event;
 struct SDL_Texture;
 struct SDL_Window;
 
@@ -67,6 +68,9 @@ bool gubsy_push_menu_screen(GubsyRuntime& runtime, MenuScreenId screen_id);
 void gubsy_pop_menu_screen(GubsyRuntime& runtime);
 void gubsy_clear_menu_stack(GubsyRuntime& runtime);
 void gubsy_set_menu_input(GubsyRuntime& runtime, const MenuInputState& input);
+void gubsy_process_sdl_event(GubsyRuntime& runtime, const SDL_Event& event);
+void gubsy_update_device_state(GubsyRuntime& runtime);
+bool gubsy_menu_text_edit_active(GubsyRuntime& runtime);
 void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height);
 void gubsy_render_menu(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                        int screen_height);

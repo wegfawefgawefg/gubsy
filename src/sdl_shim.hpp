@@ -1,13 +1,15 @@
 #pragma once
 
 struct EngineState;
+union SDL_Event;
 
-/** Goes through sdl input events this frame, updating the gubsy input system state. 
+/** Goes through sdl input events this frame, updating the gubsy input system state.
     First translates raw sdl events into states for each device thats plugged in.
         does not know about the player abstraction, just updates per device input states.
 
-    Why: 
+    Why:
         this is the sdl shim. well need different shims later.
         internally we want gubsy inputs, so this is the translation layer.
 */
 void update_gubsy_device_inputs_system_from_sdl_events(EngineState& engine);
+void process_gubsy_sdl_event(EngineState& engine, const SDL_Event& ev);

@@ -6,8 +6,10 @@
 #include "src/graphics.hpp"
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/imgui_debug/imgui_debug.hpp"
+#include "src/input_system.hpp"
 #include "src/layout_editor/layout_editor.hpp"
 #include "src/menu/menu_system.hpp"
+#include "src/menu/menu_system_state.hpp"
 #include "src/menu/screens/binds_action_editor_screen.hpp"
 #include "src/menu/screens/binds_choose_input_screen.hpp"
 #include "src/menu/screens/binds_profile_editor_screen.hpp"
@@ -21,6 +23,7 @@
 #include "src/mods.hpp"
 #include "src/project_paths.hpp"
 #include "src/render.hpp"
+#include "src/sdl_shim.hpp"
 #include "src/settings_defaults.hpp"
 #include "src/ui_layouts.hpp"
 
@@ -202,6 +205,18 @@ void gubsy_clear_menu_stack(GubsyRuntime& runtime) {
 
 void gubsy_set_menu_input(GubsyRuntime& runtime, const MenuInputState& input) {
     menu_system_set_input(gubsy_runtime_engine(runtime), input);
+}
+
+void gubsy_process_sdl_event(GubsyRuntime& runtime, const SDL_Event& event) {
+    process_gubsy_sdl_event(gubsy_runtime_engine(runtime), event);
+}
+
+void gubsy_update_device_state(GubsyRuntime& runtime) {
+    update_device_state_from_sdl(gubsy_runtime_engine(runtime));
+}
+
+bool gubsy_menu_text_edit_active(GubsyRuntime& runtime) {
+    return menu_system_internal::runtime_state(gubsy_runtime_engine(runtime)).text_edit_active;
 }
 
 void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height) {
