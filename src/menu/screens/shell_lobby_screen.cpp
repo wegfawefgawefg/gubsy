@@ -39,17 +39,11 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
 }
 
 void command_host_game(MenuContext& ctx, std::int32_t) {
-    gubsy_lobby_ensure_ready(ctx.engine);
-    ctx.engine.lobby.online = true;
-    ctx.engine.lobby.is_host = true;
-    ctx.engine.lobby.room_code = "LOCAL";
-    ctx.engine.lobby.status_message = "Hosting local lobby";
-    add_alert(ctx.engine, ctx.engine.lobby.status_message);
+    ctx.manager.push_screen(MenuScreenID::LOBBY_HOST_SETUP);
 }
 
 void command_browse_servers(MenuContext& ctx, std::int32_t) {
-    ctx.engine.lobby.status_message = "Server browser is not connected yet";
-    add_alert(ctx.engine, ctx.engine.lobby.status_message);
+    ctx.manager.push_screen(MenuScreenID::LOBBY_SERVER_BROWSER);
 }
 
 BuiltScreen build_shell_lobby(MenuContext& ctx) {

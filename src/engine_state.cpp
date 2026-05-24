@@ -15,6 +15,7 @@
 #include "src/menu/screens/binds_profile_editor_screen.hpp"
 #include "src/menu/screens/binds_profiles_screen.hpp"
 #include "src/menu/screens/lobby_local_players_screen.hpp"
+#include "src/menu/screens/lobby_online_screens.hpp"
 #include "src/menu/screens/lobby_picker_screens.hpp"
 #include "src/menu/screens/lobby_player_settings_screen.hpp"
 #include "src/menu/screens/main_menu_screen.hpp"
@@ -88,6 +89,7 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     register_lobby_local_players_screen(engine);
     register_lobby_player_settings_screen(engine);
     register_lobby_picker_screens(engine);
+    register_lobby_online_screens(engine);
     register_settings_category_screens(engine);
     register_settings_hub_screen(engine);
     register_profiles_screen(engine);
@@ -193,6 +195,10 @@ void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schem
 
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {
     gubsy_runtime_engine(runtime).main_menu_commands = commands;
+}
+
+void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands) {
+    gubsy_runtime_engine(runtime).lobby_commands = commands;
 }
 
 bool gubsy_show_main_menu(GubsyRuntime& runtime) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gubsy/app.hpp"
+#include "gubsy/lobby/commands.hpp"
 #include "mode_registry.hpp"
 #include "player.hpp"
 #include "src/alerts.hpp"
@@ -35,6 +36,7 @@ struct EngineState {
     void* app_context{nullptr};
     GubsyAppConfig app_config{};
     GubsyMainMenuCommands main_menu_commands{};
+    GubsyLobbyCommands lobby_commands{};
 
     double now{0.0};
     float dt{0.0f};
