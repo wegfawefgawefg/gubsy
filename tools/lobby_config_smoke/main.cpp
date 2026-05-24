@@ -3,6 +3,7 @@
 #include "src/lobby_state.hpp"
 
 #include <cstdio>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 
@@ -92,6 +93,9 @@ int main() {
         GubsyRuntime runtime;
         GubsyAppConfig config;
         config.enable_mods = false;
+        config.project_root = std::filesystem::current_path().string();
+        config.data_root =
+            (std::filesystem::current_path() / "build" / "lobby_config_smoke_data").string();
         require(init_gubsy_runtime(runtime, config), "failed to init runtime");
         EngineState& engine = gubsy_runtime_engine(runtime);
 
