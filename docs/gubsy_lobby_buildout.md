@@ -193,26 +193,28 @@ Implemented now:
 15. Automated online lobby smoke coverage proving host-room publish, room-code
     join, remote config validation/application, and leave all run through the
     lobby command layer with a real room server.
-16. Public runtime access for host games to inspect and replace binds profiles
+16. Host-room setup exposes lobby name, port, visibility, and max-player count
+    in the default menu before publishing room metadata.
+17. Public runtime access for host games to inspect and replace binds profiles
     after registering their action schema.
-17. Public lobby-player action query that resolves player-assigned devices
+18. Public lobby-player action query that resolves player-assigned devices
     through the selected binds profile, with smoke coverage for keyboard and
     gamepad device filtering.
-18. Splonks gameplay input bridge consumes the lobby-player action query and
+19. Splonks gameplay input bridge consumes the lobby-player action query and
     writes Splonks `InputFrame`s for local players, so lobby binds/device
     assignment drives gameplay input instead of a duplicate hardcoded decoder.
-19. Public runtime lobby command wrappers for start, host, join-by-room-code,
+20. Public runtime lobby command wrappers for start, host, join-by-room-code,
     and leave, so host games can drive the default lobby without private
     `EngineState` access or widget-click simulation.
-20. Splonks no-window shell smoke coverage initializes the real Gubsy shell,
+21. Splonks no-window shell smoke coverage initializes the real Gubsy shell,
     starts through `gubsy_start_lobby_game`, verifies Splonks enters stage
     transition, and verifies the lobby config reaches Splonks state.
-21. Runtime-level matchmaking backend injection lets embedders or tests provide
+22. Runtime-level matchmaking backend injection lets embedders or tests provide
     a room backend without replacing Gubsy lobby state or command flow.
-22. Splonks shell smoke coverage now hosts and joins through Gubsy public lobby
+23. Splonks shell smoke coverage now hosts and joins through Gubsy public lobby
     commands, using Splonks' real UDP transport callbacks and an injected room
     backend.
-23. Public runtime wrappers for adding/removing/selecting local lobby players,
+24. Public runtime wrappers for adding/removing/selecting local lobby players,
     setting per-player user/binds/input-settings profiles, and toggling
     per-player devices. `public_api_smoke` covers these through public headers.
 
@@ -226,10 +228,18 @@ publishes room metadata with the advertised realtime endpoint. If room creation
 fails, Gubsy calls the leave callback to disconnect the transport it just
 started.
 
-Remaining validation:
+## Validation Notes
 
-1. Exercise Splonks itself across two interactive processes before treating the
-   user-facing network flow as playtested.
+Automated coverage now splits the host/join proof:
+
+1. `lobby_online_smoke` exercises the real room server, Gubsy room metadata,
+   room-code join, remote config validation/application, and leave through the
+   lobby command layer.
+2. Splonks `gubsy_shell_smoke` exercises Splonks' real shell callbacks and UDP
+   transport setup through Gubsy public lobby commands with an injected room
+   backend.
+3. A manual two-process run is still useful for human UX/playtesting, but it is
+   not the only completion gate for the integration path.
 
 ## Completion Standard
 
