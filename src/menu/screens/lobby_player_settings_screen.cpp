@@ -110,8 +110,7 @@ void command_remove_player(MenuContext& ctx, std::int32_t) {
 void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     auto& st = ctx.state<PlayerSettingsState>();
     st.page = std::clamp(st.page + delta, 0, std::max(0, st.total_pages - 1));
-    int row_count = ctx.engine.lobby.local_players.size() > 1 ? 5 : 4;
-    update_page(st, row_count);
+    update_page(st, 4);
 }
 
 std::string profile_name_or_missing(UserProfile* profile) {
@@ -131,8 +130,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     gubsy_lobby_select_player(ctx.engine, ctx.player_index);
     auto& st = ctx.state<PlayerSettingsState>();
     bool can_remove_player = ctx.engine.lobby.local_players.size() > 1;
-    int row_count = can_remove_player ? 5 : 4;
-    update_page(st, row_count);
+    update_page(st, 4);
 
     static std::vector<MenuWidget> widgets;
     static std::vector<std::string> text_cache;
@@ -196,7 +194,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
                                    text_cache.back().c_str(),
                                    MenuAction::run_command(g_cmd_open_devices));
     MenuWidget remove = make_button(kRemoveWidgetId,
-                                    SettingsObjectID::CARD0,
+                                    SettingsObjectID::SEARCH,
                                     "Remove Player",
                                     MenuAction::run_command(g_cmd_remove_player));
     remove.secondary = "Remove this local player from the lobby.";
@@ -206,11 +204,13 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     remove.style.focus_r = 255;
     remove.style.focus_g = 120;
     remove.style.focus_b = 120;
+    if (can_remove_player) {
+        widgets.push_back(remove);
+    }
+    std::size_t remove_idx = can_remove_player ? widgets.size() - 1 : 0;
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     std::vector<MenuWidget> rows;
-    if (can_remove_player)
-        rows.push_back(remove);
     rows.push_back(profile);
     rows.push_back(binds);
     rows.push_back(input);
@@ -246,13 +246,23 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     prev_ref.nav_down = first_row;
     next_ref.nav_left = prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid;
     next_ref.nav_down = first_row;
+    if (can_remove_player) {
+        MenuWidget& remove_ref = widgets[remove_idx];
+        remove_ref.nav_right = next_ref.type == WidgetType::Button
+                                   ? next_ref.id
+                                   : (prev_ref.type == WidgetType::Button ? prev_ref.id
+                                                                          : kMenuIdInvalid);
+        remove_ref.nav_down = first_row;
+    }
     for (std::size_t i = 0; i < row_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != row_ids[i])
                 continue;
             widget.nav_up = (i == 0)
-                                ? (prev_ref.type == WidgetType::Button ? prev_ref.id
-                                                                       : kMenuIdInvalid)
+                                ? (can_remove_player
+                                       ? kRemoveWidgetId
+                                       : (prev_ref.type == WidgetType::Button ? prev_ref.id
+                                                                              : kMenuIdInvalid))
                                 : row_ids[i - 1];
             widget.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
             break;
@@ -263,7 +273,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = first_row;
+    built.default_focus = can_remove_player ? kRemoveWidgetId : first_row;
     return built;
 }
 

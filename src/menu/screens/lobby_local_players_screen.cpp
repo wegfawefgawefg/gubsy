@@ -55,8 +55,7 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
 }
 
 void update_page(LocalPlayersState& st, int count) {
-    int rows = count + 1;
-    st.total_pages = std::max(1, (rows + kRowsPerPage - 1) / kRowsPerPage);
+    st.total_pages = std::max(1, (count + kRowsPerPage - 1) / kRowsPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
     st.page_text = "Page " + std::to_string(st.page + 1) + " / " +
                    std::to_string(st.total_pages);
@@ -116,7 +115,7 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     std::vector<WidgetId> card_ids;
     int start = st.page * kRowsPerPage;
     MenuWidget add = make_button(kAddButtonId,
-                                 SettingsObjectID::CARD0,
+                                 SettingsObjectID::SEARCH,
                                  "Add Local Player",
                                  MenuAction::run_command(g_cmd_add_player));
     add.secondary = "Join another local player.";
@@ -127,18 +126,14 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     add.style.focus_g = 230;
     add.style.focus_b = 140;
 
+    widgets.push_back(add);
+    std::size_t add_idx = widgets.size() - 1;
+
     for (int i = 0; i < kRowsPerPage; ++i) {
-        int row_index = start + i;
+        int player_index = start + i;
         WidgetId widget_id = kFirstCardWidgetId + static_cast<WidgetId>(i);
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
-        if (row_index == 0) {
-            add.slot = slot;
-            add.on_left = prev_action;
-            add.on_right = next_action;
-            widgets.push_back(add);
-            card_ids.push_back(add.id);
-        } else if (row_index - 1 < count) {
-            int player_index = row_index - 1;
+        if (player_index < count) {
             MenuWidget card;
             card.id = widget_id;
             card.slot = slot;
@@ -167,6 +162,7 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 
     MenuWidget& prev_ref = widgets[prev_idx];
     MenuWidget& next_ref = widgets[next_idx];
+    MenuWidget& add_ref = widgets[add_idx];
     MenuWidget& back_ref = widgets[back_idx];
 
     WidgetId first_card = card_ids.empty() ? back_ref.id : card_ids.front();
@@ -175,6 +171,10 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     prev_ref.nav_down = first_card;
     next_ref.nav_left = prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid;
     next_ref.nav_down = first_card;
+    add_ref.nav_right = next_ref.type == WidgetType::Button
+                            ? next_ref.id
+                            : (prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid);
+    add_ref.nav_down = first_card;
 
     for (std::size_t i = 0; i < card_ids.size(); ++i) {
         MenuWidget* card = nullptr;
@@ -186,10 +186,7 @@ BuiltScreen build_local_players(MenuContext& ctx) {
         }
         if (!card)
             continue;
-        card->nav_up = (i == 0)
-                            ? (prev_ref.type == WidgetType::Button ? prev_ref.id
-                                                                   : kMenuIdInvalid)
-                            : card_ids[i - 1];
+        card->nav_up = (i == 0) ? add_ref.id : card_ids[i - 1];
         card->nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
     }
     back_ref.nav_up = last_card;
@@ -197,7 +194,7 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = first_card;
+    built.default_focus = add_ref.id;
     return built;
 }
 
