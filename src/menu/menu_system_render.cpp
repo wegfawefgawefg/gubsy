@@ -60,14 +60,14 @@ void draw_text_input(const EngineState& engine,
         display = placeholder;
     SDL_Rect input_clip{
         static_cast<int>(rect.x) + 4,
-        static_cast<int>(rect.y) + 3,
+        static_cast<int>(rect.y) + 1,
         std::max(0, static_cast<int>(rect.w) - 8),
-        std::max(0, static_cast<int>(rect.h) - 6)};
+        std::max(0, static_cast<int>(rect.h) - 2)};
     menu_system_internal::draw_text_with_clip(engine,
                                               renderer,
                                               display.c_str(),
                                               static_cast<int>(rect.x) + 6,
-                                              static_cast<int>(rect.y) + 4,
+                                              static_cast<int>(rect.y) + 2,
                                               SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
                                               &input_clip);
     if (editing && state.text_edit_active) {
@@ -79,8 +79,8 @@ void draw_text_input(const EngineState& engine,
                           menu_system_internal::measure_text_width(engine, buffer->c_str());
             if (caret_x > static_cast<int>(rect.x + rect.w) - 6)
                 caret_x = static_cast<int>(rect.x + rect.w) - 6;
-            int caret_top = static_cast<int>(rect.y) + 4;
-            int caret_bottom = caret_top + static_cast<int>(rect.h) - 8;
+            int caret_top = static_cast<int>(rect.y) + 2;
+            int caret_bottom = static_cast<int>(rect.y + rect.h) - 2;
             SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
             SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
         }
@@ -293,14 +293,14 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
             if (widget.badge) {
                 SDL_Rect value_clip{
                     static_cast<int>(opt_layout.value_rect.x) + 6,
-                    static_cast<int>(opt_layout.value_rect.y) + 4,
+                    static_cast<int>(opt_layout.value_rect.y) + 1,
                     std::max(0, static_cast<int>(opt_layout.value_rect.w) - 12),
-                    std::max(0, static_cast<int>(opt_layout.value_rect.h) - 8)};
+                    std::max(0, static_cast<int>(opt_layout.value_rect.h) - 2)};
                 msi::draw_text_with_clip(engine,
                                          renderer,
                                          widget.badge,
                                          static_cast<int>(opt_layout.value_rect.x) + 10,
-                                         static_cast<int>(opt_layout.value_rect.y) + 5,
+                                         static_cast<int>(opt_layout.value_rect.y) + 2,
                                          SDL_Color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255},
                                          &value_clip);
                 drew_option_value = true;
