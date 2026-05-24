@@ -136,6 +136,10 @@ void gubsy_lobby_ensure_ready(EngineState& engine) {
     ensure_default_user_profile(engine);
     ensure_default_binds_profile(engine);
     ensure_default_input_settings_profile(engine);
+    if (engine.lobby.contract.net_protocol.empty())
+        engine.lobby.contract.net_protocol = session_contract_default_net_protocol();
+    if (engine.lobby.contract.session_phase.empty())
+        engine.lobby.contract.session_phase = "lobby";
     if (engine.input_sources.empty())
         detect_input_sources(engine);
     if (engine.lobby.local_players.empty())

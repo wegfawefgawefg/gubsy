@@ -2,6 +2,7 @@
 
 #include "gubsy/input/binds_profile.hpp"
 #include "gubsy/input/sources.hpp"
+#include "gubsy/lobby/matchmaking.hpp"
 #include "gubsy/lobby/session_contract.hpp"
 
 #include <string>
@@ -43,9 +44,15 @@ struct GubsyLobbyState {
     std::string member_id;
     std::string host_secret;
     std::string status_message;
+    std::string last_error;
+    std::string advertised_endpoint;
     bool online{false};
     bool is_host{false};
+    double next_heartbeat_at{0.0};
+    double next_room_refresh_at{0.0};
     std::vector<std::string> browse_room_codes;
+    std::vector<MatchmakingRoom> discovered_rooms;
+    std::vector<MatchmakingMember> members;
     SessionContract contract{};
 };
 
@@ -74,6 +81,16 @@ bool gubsy_lobby_player_has_device(const EngineState& engine,
                                    GubsyLobbyDeviceAssignment device);
 
 bool gubsy_lobby_validate_start(EngineState& engine, std::string& message);
+bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message);
+bool gubsy_lobby_join_room_code(EngineState& engine,
+                                const std::string& room_code,
+                                std::string& message);
+bool gubsy_lobby_join_room(EngineState& engine,
+                           const MatchmakingRoom& room,
+                           std::string& message);
+bool gubsy_lobby_leave_room(EngineState& engine, std::string& message);
+bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& message);
+void gubsy_lobby_tick_online(EngineState& engine);
 std::string gubsy_lobby_player_label(const EngineState& engine, int player_index);
 std::string gubsy_lobby_device_label(GubsyLobbyDeviceAssignment device);
 GubsyLobbyDeviceAssignment gubsy_lobby_device_from_input_source(const InputSource& source);

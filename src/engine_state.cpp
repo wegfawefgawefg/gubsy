@@ -8,6 +8,7 @@
 #include "src/imgui_debug/imgui_debug.hpp"
 #include "src/input_system.hpp"
 #include "src/layout_editor/layout_editor.hpp"
+#include "src/lobby_state.hpp"
 #include "src/menu/menu_system.hpp"
 #include "src/menu/menu_system_state.hpp"
 #include "src/menu/screens/binds_action_editor_screen.hpp"
@@ -238,6 +239,8 @@ bool gubsy_menu_text_edit_active(GubsyRuntime& runtime) {
 void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     engine.dt = dt;
+    engine.now += static_cast<double>(std::max(dt, 0.0f));
+    gubsy_lobby_tick_online(engine);
     menu_system_update(engine, dt, screen_width, screen_height);
 }
 
