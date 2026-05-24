@@ -464,6 +464,7 @@ void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
             st.status_text = "Display mode applied";
             if (current_graphics(ctx.engine))
                 current_graphics(ctx.engine)->window_mode = mode;
+            save_top_level_game_settings(ctx.engine.top_level_game_settings);
         } else {
             st.status_text = "Failed to apply display mode";
         }
@@ -1025,6 +1026,14 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
                             badge_text = opt.label;
                             break;
                         }
+                    }
+                    int selected_w = 0;
+                    int selected_h = 0;
+                    const Graphics* graphics = current_graphics(engine);
+                    if (graphics && parse_resolution_value(*sv, selected_w, selected_h) &&
+                        selected_w == static_cast<int>(graphics->window_dims.x) &&
+                        selected_h == static_cast<int>(graphics->window_dims.y)) {
+                        w.secondary = "Matches the current window size";
                     }
                 }
                 label_cache.push_back(badge_text);

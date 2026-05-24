@@ -558,20 +558,6 @@ void sync_graphics_from_settings(EngineState& engine) {
         }
     }
 
-    if (auto it = settings.find("gubsy.video.window_mode"); it != settings.end()) {
-        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
-            WindowDisplayMode mode = current_graphics(engine)->window_mode;
-            if (*sv == "windowed")
-                mode = WindowDisplayMode::Windowed;
-            else if (*sv == "borderless")
-                mode = WindowDisplayMode::Borderless;
-            else if (*sv == "fullscreen")
-                mode = WindowDisplayMode::Fullscreen;
-            if (mode != current_graphics(engine)->window_mode)
-                set_window_display_mode(engine, mode);
-        }
-    }
-
     // Sync preview zoom
     if (auto it = settings.find("gubsy.video.preview_zoom"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
