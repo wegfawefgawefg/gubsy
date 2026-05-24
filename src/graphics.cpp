@@ -209,7 +209,7 @@ bool init_graphics(EngineState& engine) {
     (void)init_font_for_graphics(graphics, {}, 20);
     recreate_render_target(graphics, render_dims.x, render_dims.y);
     register_engine_settings_schema_entries(engine);
-    sync_graphics_from_settings(engine);
+    sync_graphics_from_settings(engine, true);
     return true;
 }
 
@@ -244,7 +244,7 @@ bool attach_external_graphics(EngineState& engine, SDL_Window* window, SDL_Rende
                             static_cast<unsigned int>(std::max(window_h, 1))};
     (void)init_font_for_graphics(graphics, {}, 20);
     register_engine_settings_schema_entries(engine);
-    sync_graphics_from_settings(engine);
+    sync_graphics_from_settings(engine, true);
     return true;
 }
 
@@ -556,27 +556,30 @@ void sync_matched_render_resolution(EngineState& engine) {
         std::to_string(width) + "x" + std::to_string(height);
 }
 
-void sync_graphics_from_settings(EngineState& engine) {
+void sync_graphics_from_settings(EngineState& engine, bool apply_display_mode) {
     if (!current_graphics(engine))
         return;
 
     auto& settings = engine.top_level_game_settings.settings;
 
-    if (auto it = settings.find("gubsy.video.window_mode"); it != settings.end()) {
-        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
-            WindowDisplayMode desired = current_graphics(engine)->window_mode;
-            if (*sv == "windowed")
-                desired = WindowDisplayMode::Windowed;
-            else if (*sv == "borderless")
-                desired = WindowDisplayMode::Borderless;
-            else if (*sv == "fullscreen")
-                desired = WindowDisplayMode::Fullscreen;
-            const bool fullscreen_mode_dirty =
-                desired == WindowDisplayMode::Fullscreen &&
-                configured_fullscreen_display_mode(engine) !=
-                    current_graphics(engine)->fullscreen_display_mode;
-            if (desired != current_graphics(engine)->window_mode || fullscreen_mode_dirty)
-                set_window_display_mode(engine, desired);
+    if (apply_display_mode) {
+        auto it = settings.find("gubsy.video.window_mode");
+        if (it != settings.end()) {
+            if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+                WindowDisplayMode desired = current_graphics(engine)->window_mode;
+                if (*sv == "windowed")
+                    desired = WindowDisplayMode::Windowed;
+                else if (*sv == "borderless")
+                    desired = WindowDisplayMode::Borderless;
+                else if (*sv == "fullscreen")
+                    desired = WindowDisplayMode::Fullscreen;
+                const bool fullscreen_mode_dirty =
+                    desired == WindowDisplayMode::Fullscreen &&
+                    configured_fullscreen_display_mode(engine) !=
+                        current_graphics(engine)->fullscreen_display_mode;
+                if (desired != current_graphics(engine)->window_mode || fullscreen_mode_dirty)
+                    set_window_display_mode(engine, desired);
+            }
         }
     }
 

@@ -1055,6 +1055,14 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
                     w.style.focus_g = 200;
                     w.style.focus_b = 90;
                     w.badge_color = SDL_Color{240, 205, 120, 255};
+                } else {
+                    w.style.bg_r = 22;
+                    w.style.bg_g = 36;
+                    w.style.bg_b = 26;
+                    w.style.focus_r = 100;
+                    w.style.focus_g = 210;
+                    w.style.focus_b = 150;
+                    w.badge_color = SDL_Color{140, 220, 150, 255};
                 }
                 w.on_select =
                     MenuAction::run_command(g_cmd_apply_fullscreen_display_mode, entry_index);

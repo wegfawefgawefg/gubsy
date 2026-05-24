@@ -99,7 +99,7 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks) {
     load_input_settings_profiles_pool(engine);
     load_game_settings_pool(engine);
     load_top_level_game_settings_into_state(engine);
-    sync_graphics_from_settings(engine);
+    sync_graphics_from_settings(engine, true);
 
     if (engine.app_config.enable_mods) {
         discover_mods(engine);

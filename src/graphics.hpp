@@ -100,7 +100,7 @@ void sync_matched_render_resolution(EngineState& engine);
 int configured_frame_cap_fps(const EngineState& engine);
 
 // Sync graphics settings from top-level settings
-void sync_graphics_from_settings(EngineState& engine);
+void sync_graphics_from_settings(EngineState& engine, bool apply_display_mode = false);
 
 // ---- Asset Management ----
 
