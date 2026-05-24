@@ -200,9 +200,6 @@ started.
 Still remaining:
 
 1. Richer status copy for online failures and compatibility checks.
-2. Better advertised-host defaults for real LAN/internet use. Splonks currently
-   supports `SPLONKS_ADVERTISE_HOST`, falling back to `127.0.0.1` for same-machine
-   testing.
 
 ## Non-Goals For This Pass
 
