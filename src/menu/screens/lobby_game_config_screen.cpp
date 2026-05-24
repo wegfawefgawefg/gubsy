@@ -126,9 +126,12 @@ BuiltScreen build_game_config(MenuContext& ctx) {
                                  ? MenuAction::run_command(g_cmd_page_delta, 1)
                                  : MenuAction::none();
 
-    MenuWidget prev = make_button(kPrevWidgetId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev = st.page > 0 ? make_button(kPrevWidgetId, SettingsObjectID::PREV, "<", prev_action)
+                                  : make_label(kPrevWidgetId, SettingsObjectID::PREV, "");
     prev.role = MenuWidgetRole::PagePrev;
-    MenuWidget next = make_button(kNextWidgetId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next = st.page + 1 < st.total_pages
+                          ? make_button(kNextWidgetId, SettingsObjectID::NEXT, ">", next_action)
+                          : make_label(kNextWidgetId, SettingsObjectID::NEXT, "");
     next.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev);
     widgets.push_back(next);
@@ -152,8 +155,6 @@ BuiltScreen build_game_config(MenuContext& ctx) {
                     std::clamp(row.selected_option, 0, static_cast<int>(row.options.size()) - 1);
                 const GubsyLobbyOption& option = row.options[static_cast<std::size_t>(selected)];
                 widget.badge = option.label.c_str();
-                if (!option.description.empty())
-                    widget.tertiary = option.description.c_str();
             }
             const bool read_only =
                 row.host_only && ctx.engine.lobby.online && !ctx.engine.lobby.is_host;
@@ -175,11 +176,15 @@ BuiltScreen build_game_config(MenuContext& ctx) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != row_ids[i])
                 continue;
-            widget.nav_up = (i == 0) ? prev.id : row_ids[i - 1];
+            widget.nav_up = (i == 0)
+                                ? (prev.type == WidgetType::Button ? prev.id : kMenuIdInvalid)
+                                : row_ids[i - 1];
             widget.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back.id;
         }
     }
-    back.nav_up = row_ids.empty() ? prev.id : row_ids.back();
+    back.nav_up = row_ids.empty()
+                      ? (prev.type == WidgetType::Button ? prev.id : kMenuIdInvalid)
+                      : row_ids.back();
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
