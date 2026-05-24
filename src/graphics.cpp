@@ -1,7 +1,9 @@
 #include "src/graphics.hpp"
 
+#include "src/display_modes.hpp"
 #include "src/engine_state.hpp"
 #include "src/project_paths.hpp"
+#include "src/settings_defaults.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -206,6 +208,8 @@ bool init_graphics(EngineState& engine) {
     // Initialize default UI font (optional)
     (void)init_font_for_graphics(graphics, {}, 20);
     recreate_render_target(graphics, render_dims.x, render_dims.y);
+    register_engine_settings_schema_entries(engine);
+    sync_graphics_from_settings(engine);
     return true;
 }
 
@@ -239,6 +243,8 @@ bool attach_external_graphics(EngineState& engine, SDL_Window* window, SDL_Rende
     graphics.window_dims = {static_cast<unsigned int>(std::max(window_w, 1)),
                             static_cast<unsigned int>(std::max(window_h, 1))};
     (void)init_font_for_graphics(graphics, {}, 20);
+    register_engine_settings_schema_entries(engine);
+    sync_graphics_from_settings(engine);
     return true;
 }
 
@@ -288,14 +294,24 @@ bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
     if (!current_graphics(engine) || !current_graphics(engine)->window)
         return false;
     Uint32 flag = 0;
+    std::string applied_fullscreen_mode = current_graphics(engine)->fullscreen_display_mode;
     switch (mode) {
     case WindowDisplayMode::Windowed:
         flag = 0;
         break;
     case WindowDisplayMode::Borderless:
+        if (!apply_fullscreen_display_mode(current_graphics(engine)->window, "desktop",
+                                           applied_fullscreen_mode)) {
+            return false;
+        }
         flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
         break;
     case WindowDisplayMode::Fullscreen:
+        if (!apply_fullscreen_display_mode(current_graphics(engine)->window,
+                                           configured_fullscreen_display_mode(engine),
+                                           applied_fullscreen_mode)) {
+            return false;
+        }
         flag = SDL_WINDOW_FULLSCREEN;
         break;
     }
@@ -304,6 +320,7 @@ bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
         return false;
     }
     current_graphics(engine)->window_mode = mode;
+    current_graphics(engine)->fullscreen_display_mode = applied_fullscreen_mode;
     int actual_w = 0;
     int actual_h = 0;
     SDL_GetWindowSize(current_graphics(engine)->window, &actual_w, &actual_h);
@@ -513,14 +530,14 @@ bool render_resolution_matches_window(const EngineState& engine) {
 int configured_frame_cap_fps(const EngineState& engine) {
     auto it = engine.top_level_game_settings.settings.find("gubsy.video.frame_cap");
     if (it == engine.top_level_game_settings.settings.end())
-        return 60;
+        return 0;
     if (const std::string* sv = std::get_if<std::string>(&it->second))
         return std::max(0, std::atoi(sv->c_str()));
     if (const int* iv = std::get_if<int>(&it->second))
         return std::max(0, *iv);
     if (const float* fv = std::get_if<float>(&it->second))
         return std::max(0, static_cast<int>(*fv));
-    return 60;
+    return 0;
 }
 
 void sync_matched_render_resolution(EngineState& engine) {
@@ -544,6 +561,24 @@ void sync_graphics_from_settings(EngineState& engine) {
         return;
 
     auto& settings = engine.top_level_game_settings.settings;
+
+    if (auto it = settings.find("gubsy.video.window_mode"); it != settings.end()) {
+        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+            WindowDisplayMode desired = current_graphics(engine)->window_mode;
+            if (*sv == "windowed")
+                desired = WindowDisplayMode::Windowed;
+            else if (*sv == "borderless")
+                desired = WindowDisplayMode::Borderless;
+            else if (*sv == "fullscreen")
+                desired = WindowDisplayMode::Fullscreen;
+            const bool fullscreen_mode_dirty =
+                desired == WindowDisplayMode::Fullscreen &&
+                configured_fullscreen_display_mode(engine) !=
+                    current_graphics(engine)->fullscreen_display_mode;
+            if (desired != current_graphics(engine)->window_mode || fullscreen_mode_dirty)
+                set_window_display_mode(engine, desired);
+        }
+    }
 
     if (auto it = settings.find("gubsy.video.window_resolution"); it != settings.end()) {
         if (const std::string* sv = std::get_if<std::string>(&it->second)) {

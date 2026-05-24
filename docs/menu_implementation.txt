@@ -55,18 +55,11 @@ What’s next
    - Maintain the first edge as immediate, then repeat at `repeat_interval` while held.
    - Ensure mouse/keyboard focus rules still work cleanly together.
 
-2) Resolutions list:
-   - Build a combined list:
-     - Presets (curated common modes: 1280x720, 1600x900, 1920x1080, 2560x1440, etc.).
-     - OS-provided modes from SDL for the selected display: use `SDL_GetNumDisplayModes` + `SDL_GetDisplayMode`.
-     - Deduplicate and sort by area, then width/height.
-   - Use OS modes for Fullscreen/Borderless where applicable; allow Window Size list separately even in Windowed.
-
-3) Apply wiring:
-   - Resolution: rebuild internal render targets/resources when `gg->dims` changes.
-   - Window mode: apply via `SDL_SetWindowFullscreen` (0, FULLSCREEN_DESKTOP, FULLSCREEN), preserve/restore window size when leaving modes.
-   - VSync: toggle swap interval (renderer-dependent); if needed, recreate renderer with desired flags.
-   - Frame cap: implement configurable sleep in the main loop to clamp FPS without altering fixed timestep.
+2) Video settings:
+   - Window/render resolution lists use curated presets.
+   - Fullscreen display modes come from SDL for the selected display through `SDL_GetFullscreenDisplayModes`.
+   - Window mode applies through SDL fullscreen state and `SDL_SetWindowFullscreenMode` for concrete exclusive modes.
+   - Render rate limiting is a render/present throttle, not a fixed-step simulation setting.
 
 4) Binds enhancements:
    - Add gamepad binding capture and display (controller buttons/axes with tokens like PAD_A, PAD_LB, etc.).

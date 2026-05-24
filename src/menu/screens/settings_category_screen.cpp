@@ -38,6 +38,7 @@ constexpr WidgetId kNextButtonId = 405;
 constexpr WidgetId kBackButtonId = 430;
 constexpr WidgetId kFirstRowWidgetId = 500;
 constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
+constexpr const char* kFullscreenDisplayModeSettingKey = "gubsy.video.fullscreen_display_mode";
 constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
 constexpr const char* kWindowResolutionSettingKey = "gubsy.video.window_resolution";
 constexpr const char* kMatchRenderToWindowSettingKey = "gubsy.video.match_render_to_window";
@@ -127,6 +128,7 @@ MenuCommandId g_cmd_option_prev = kMenuIdInvalid;
 MenuCommandId g_cmd_option_next = kMenuIdInvalid;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_window_mode = kMenuIdInvalid;
+MenuCommandId g_cmd_apply_fullscreen_display_mode = kMenuIdInvalid;
 MenuCommandId g_cmd_apply_render_resolution = kMenuIdInvalid;
 MenuCommandId g_cmd_profile_delete = kMenuIdInvalid;
 MenuCommandId g_cmd_profile_reset = kMenuIdInvalid;
@@ -468,6 +470,20 @@ void command_apply_window_mode(MenuContext& ctx, std::int32_t index) {
         } else {
             st.status_text = "Failed to apply display mode";
         }
+    }
+}
+
+void command_apply_fullscreen_display_mode(MenuContext& ctx, std::int32_t index) {
+    EntryBinding* binding = get_entry_binding(ctx, index);
+    if (!binding || !binding->entry.metadata ||
+        binding->entry.metadata->key != kFullscreenDisplayModeSettingKey)
+        return;
+    auto& st = ctx.state<SettingsCategoryState>();
+    if (set_window_display_mode(ctx.engine, WindowDisplayMode::Fullscreen)) {
+        st.status_text = "Fullscreen mode applied";
+        save_top_level_game_settings(ctx.engine.top_level_game_settings);
+    } else {
+        st.status_text = "Failed to apply fullscreen mode";
     }
 }
 
@@ -972,6 +988,7 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
         w.type = WidgetType::OptionCycle;
         label_cache.push_back(format_option_display(desc, *binding.entry.value));
         w.badge = label_cache.back().c_str();
+        bool use_generic_option_controls = true;
         if (std::string* sv = std::get_if<std::string>(binding.entry.value))
             w.bind_ptr = sv;
         if (binding.entry.metadata && binding.entry.metadata->key == kWindowModeSettingKey) {
@@ -998,6 +1015,50 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
                 w.badge_color = SDL_Color{240, 205, 120, 255};
             }
             w.on_select = MenuAction::run_command(g_cmd_apply_window_mode, entry_index);
+        } else if (binding.entry.metadata &&
+                   binding.entry.metadata->key == kFullscreenDisplayModeSettingKey) {
+            const Graphics* graphics = current_graphics(engine);
+            bool is_fullscreen = false;
+            if (auto it = engine.top_level_game_settings.settings.find(kWindowModeSettingKey);
+                it != engine.top_level_game_settings.settings.end()) {
+                if (const std::string* mode = std::get_if<std::string>(&it->second))
+                    is_fullscreen = (*mode == "fullscreen");
+            } else if (graphics) {
+                is_fullscreen = graphics->window_mode == WindowDisplayMode::Fullscreen;
+            }
+            if (!is_fullscreen) {
+                use_generic_option_controls = false;
+                w.play_select_sound = false;
+                if (graphics && graphics->window_mode == WindowDisplayMode::Borderless)
+                    w.secondary = "Borderless uses the desktop display mode.";
+                else
+                    w.secondary = "Only used by exclusive fullscreen.";
+                w.style.bg_r = 24;
+                w.style.bg_g = 24;
+                w.style.bg_b = 28;
+                w.style.fg_r = 140;
+                w.style.fg_g = 140;
+                w.style.fg_b = 150;
+                w.badge_color = SDL_Color{130, 130, 145, 255};
+            } else {
+                bool dirty = false;
+                if (graphics && w.bind_ptr) {
+                    dirty = (*static_cast<std::string*>(w.bind_ptr) !=
+                             graphics->fullscreen_display_mode);
+                }
+                if (dirty) {
+                    w.secondary = "Press Enter to apply this fullscreen mode.";
+                    w.style.bg_r = 48;
+                    w.style.bg_g = 34;
+                    w.style.bg_b = 18;
+                    w.style.focus_r = 230;
+                    w.style.focus_g = 200;
+                    w.style.focus_b = 90;
+                    w.badge_color = SDL_Color{240, 205, 120, 255};
+                }
+                w.on_select =
+                    MenuAction::run_command(g_cmd_apply_fullscreen_display_mode, entry_index);
+            }
         } else if (binding.entry.metadata &&
                    binding.entry.metadata->key == kRenderResolutionSettingKey) {
             if (state.resolution_entry_index == entry_index) {
@@ -1051,9 +1112,16 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
                 w.badge = label_cache.back().c_str();
                 w.on_select = MenuAction::run_command(g_cmd_apply_render_resolution, entry_index);
             }
+        } else if (binding.entry.metadata && binding.entry.metadata->key == kFrameCapSettingKey) {
+            if (const std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+                if (*sv == "0")
+                    w.secondary = "No frame cap";
+            }
         }
-        w.on_left = MenuAction::run_command(g_cmd_option_prev, entry_index);
-        w.on_right = MenuAction::run_command(g_cmd_option_next, entry_index);
+        if (use_generic_option_controls) {
+            w.on_left = MenuAction::run_command(g_cmd_option_prev, entry_index);
+            w.on_right = MenuAction::run_command(g_cmd_option_next, entry_index);
+        }
         break;
     }
     case SettingWidgetKind::Text: {
@@ -1297,6 +1365,10 @@ void register_settings_category_screens(EngineState& engine) {
         g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     if (g_cmd_apply_window_mode == kMenuIdInvalid)
         g_cmd_apply_window_mode = engine.menu_commands.register_command(command_apply_window_mode);
+    if (g_cmd_apply_fullscreen_display_mode == kMenuIdInvalid) {
+        g_cmd_apply_fullscreen_display_mode =
+            engine.menu_commands.register_command(command_apply_fullscreen_display_mode);
+    }
     if (g_cmd_apply_render_resolution == kMenuIdInvalid)
         g_cmd_apply_render_resolution =
             engine.menu_commands.register_command(command_apply_render_resolution);

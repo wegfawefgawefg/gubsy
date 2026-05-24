@@ -1,5 +1,6 @@
 #include "src/settings_defaults.hpp"
 
+#include "src/display_modes.hpp"
 #include "src/settings_schema.hpp"
 
 #include <initializer_list>
@@ -186,6 +187,10 @@ void register_engine_settings_schema_entries(EngineState& engine) {
          SettingOption{"windowed", "Windowed"}},
         "fullscreen"));
     schema.add_setting(make_option_setting(
+        SettingScope::Install, "gubsy.video.fullscreen_display_mode", "Fullscreen Display Mode",
+        "Display resolution and refresh used by exclusive fullscreen.", {"Video"},
+        fullscreen_display_mode_options(engine), "desktop"));
+    schema.add_setting(make_option_setting(
         SettingScope::Install, "gubsy.video.render_scale_mode", "Render Scale",
         "How to scale render resolution to window.", {"Video"},
         {SettingOption{"fit", "Fit (letterbox)"}, SettingOption{"stretch", "Stretch"}}, "fit"));
@@ -193,11 +198,11 @@ void register_engine_settings_schema_entries(EngineState& engine) {
                                            "Synchronize frames with monitor refresh.", {"Video"},
                                            true));
     schema.add_setting(make_option_setting(
-        SettingScope::Install, "gubsy.video.frame_cap", "Frame Rate Cap",
-        "Limit rendering to a target framerate.", {"Video"},
-        {SettingOption{"30", "30"}, SettingOption{"60", "60"}, SettingOption{"120", "120"},
-         SettingOption{"144", "144"}, SettingOption{"240", "240"}, SettingOption{"0", "Unlimited"}},
-        "60"));
+        SettingScope::Install, "gubsy.video.frame_cap", "Render Rate Limit",
+        "Limit how often frames are rendered and presented.", {"Video"},
+        {SettingOption{"0", "Off"}, SettingOption{"30", "30"}, SettingOption{"60", "60"},
+         SettingOption{"120", "120"}, SettingOption{"144", "144"}, SettingOption{"240", "240"}},
+        "0"));
     schema.add_setting(make_slider_setting(
         SettingScope::Install, "gubsy.video.safe_area_left", "Safe Area Left",
         "Inset from the left edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f));

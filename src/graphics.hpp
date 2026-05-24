@@ -51,6 +51,7 @@ struct Graphics {
     bool fullscreen{false};
     RenderScaleMode render_scale_mode{RenderScaleMode::Fit};
     WindowDisplayMode window_mode{WindowDisplayMode::Windowed};
+    std::string fullscreen_display_mode{"desktop"};
     SDL_Texture* render_target{nullptr};
     SDL_FRect present_rect{0.0f, 0.0f, 1280.0f, 720.0f};
     float preview_zoom{1.0f};
