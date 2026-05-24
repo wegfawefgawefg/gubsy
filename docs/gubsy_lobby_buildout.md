@@ -201,6 +201,9 @@ Implemented now:
 18. Splonks gameplay input bridge consumes the lobby-player action query and
     writes Splonks `InputFrame`s for local players, so lobby binds/device
     assignment drives gameplay input instead of a duplicate hardcoded decoder.
+19. Public runtime lobby command wrappers for start, host, join-by-room-code,
+    and leave, so host games can drive the default lobby without private
+    `EngineState` access or widget-click simulation.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -240,6 +243,8 @@ Required evidence:
    Gubsy private state or editing generated profile data by hand.
 9. Host games can query actions for a specific lobby player without duplicating
    Gubsy's binds-profile or device-assignment decoding.
+10. Host games can trigger default lobby start/host/join/leave behavior through
+    public runtime functions.
 
 ## Non-Goals
 

@@ -34,3 +34,16 @@ void MenuCommandRegistry::invoke(MenuContext& ctx, MenuCommandId id, std::int32_
     if (handler.host_fn)
         handler.host_fn(handler.user_data, payload);
 }
+
+bool MenuCommandRegistry::invoke_host(MenuCommandId id, std::int32_t payload) const {
+    if (id == kMenuIdInvalid)
+        return false;
+    std::size_t index = static_cast<std::size_t>(id);
+    if (index == 0 || index > handlers_.size())
+        return false;
+    const Handler& handler = handlers_[index - 1];
+    if (!handler.host_fn)
+        return false;
+    handler.host_fn(handler.user_data, payload);
+    return true;
+}

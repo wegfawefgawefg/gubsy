@@ -81,6 +81,28 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 12;
     }
+    bool lobby_start_called = false;
+    MenuCommandId lobby_start = gubsy_register_menu_command(
+        no_mod_engine,
+        [](void* user_data, std::int32_t) {
+            *static_cast<bool*>(user_data) = true;
+        },
+        &lobby_start_called);
+    if (lobby_start == kMenuIdInvalid) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 15;
+    }
+    commands.start_game = lobby_start;
+    gubsy_set_main_menu_commands(no_mod_engine, commands);
+    std::string lobby_start_message;
+    if (!gubsy_start_lobby_game(no_mod_engine, lobby_start_message) || !lobby_start_called) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 16;
+    }
+    if (lobby_start_message != "Starting game") {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 17;
+    }
     cleanup_gubsy_runtime(no_mod_engine);
 
     GubsyRuntime mod_browser_engine{};

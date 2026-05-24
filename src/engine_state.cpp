@@ -238,6 +238,38 @@ bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int
     return false;
 }
 
+bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+
+    if (!gubsy_lobby_validate_start(engine, message))
+        return false;
+
+    if (!engine.menu_commands.invoke_host(engine.main_menu_commands.start_game, 0)) {
+        message = "Cannot start game: no start callback registered";
+        engine.lobby.status_message = message;
+        return false;
+    }
+
+    message = "Starting game";
+    engine.lobby.status_message = message;
+    return true;
+}
+
+bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::string& message) {
+    return gubsy_lobby_host_room(gubsy_runtime_engine(runtime), port, message);
+}
+
+bool gubsy_join_lobby_room_code(GubsyRuntime& runtime,
+                                const std::string& room_code,
+                                std::string& message) {
+    return gubsy_lobby_join_room_code(gubsy_runtime_engine(runtime), room_code, message);
+}
+
+bool gubsy_leave_lobby_room(GubsyRuntime& runtime, std::string& message) {
+    return gubsy_lobby_leave_room(gubsy_runtime_engine(runtime), message);
+}
+
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {
     gubsy_runtime_engine(runtime).main_menu_commands = commands;
 }

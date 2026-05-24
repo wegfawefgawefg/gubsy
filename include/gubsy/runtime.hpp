@@ -8,6 +8,8 @@
 #include "gubsy/menu/ids.hpp"
 #include "gubsy/menu/system.hpp"
 
+#include <cstdint>
+#include <string>
 #include <vector>
 
 struct SDL_Renderer;
@@ -71,6 +73,12 @@ const std::vector<BindsProfile>& gubsy_get_binds_profiles(GubsyRuntime& runtime)
 const BindsProfile* gubsy_find_binds_profile(GubsyRuntime& runtime, int profile_id);
 bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& profile);
 bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int action_id);
+bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message);
+bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
+bool gubsy_join_lobby_room_code(GubsyRuntime& runtime,
+                                const std::string& room_code,
+                                std::string& message);
+bool gubsy_leave_lobby_room(GubsyRuntime& runtime, std::string& message);
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands);
 void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands);
 void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProvider provider);
