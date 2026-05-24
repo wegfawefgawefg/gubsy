@@ -179,19 +179,26 @@ Implemented now:
 5. Per-player device toggles.
 6. Start validation before game start callbacks.
 7. Direct host/join callbacks through `GubsyLobbyCommands`.
+8. Room-server host, room-code join, room list refresh, leave, and heartbeat
+   through `RoomServerMatchmaking`.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
 uses this to call its existing `StartHostSession` and `JoinHostSession` entry
 points.
 
+Room browser hosting starts the game transport through the host callback, then
+publishes room metadata with the advertised realtime endpoint. If room creation
+fails, Gubsy calls the leave callback to disconnect the transport it just
+started.
+
 Still remaining:
 
-1. Real room-server browser UI backed by `RoomServerMatchmaking`.
-2. Room-code join flow.
-3. Periodic room heartbeat/refresh while hosted or joined.
-4. Game-owned lobby config provider from `game_lobby_config_layer.md`.
-5. Richer status copy for online failures and compatibility checks.
+1. Game-owned lobby config provider from `game_lobby_config_layer.md`.
+2. Richer status copy for online failures and compatibility checks.
+3. Better advertised-host defaults for real LAN/internet use. Splonks currently
+   supports `SPLONKS_ADVERTISE_HOST`, falling back to `127.0.0.1` for same-machine
+   testing.
 
 ## Non-Goals For This Pass
 
