@@ -147,7 +147,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
                                    text_cache.back().c_str(),
                                    MenuAction::run_command(g_cmd_open_devices));
     MenuWidget remove = make_button(kRemoveWidgetId,
-                                    SettingsObjectID::PREV,
+                                    SettingsObjectID::CARD4,
                                     "Remove Player",
                                     MenuAction::run_command(g_cmd_remove_player));
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
@@ -161,7 +161,9 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     devices.nav_down = remove.id;
     remove.nav_up = devices.id;
     remove.nav_down = back.id;
+    remove.nav_left = back.id;
     back.nav_up = remove.id;
+    back.nav_right = remove.id;
 
     widgets.push_back(profile);
     widgets.push_back(binds);

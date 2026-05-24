@@ -34,7 +34,6 @@ MenuCommandId g_cmd_pick_profile = kMenuIdInvalid;
 MenuCommandId g_cmd_pick_binds = kMenuIdInvalid;
 MenuCommandId g_cmd_pick_input = kMenuIdInvalid;
 MenuCommandId g_cmd_toggle_device = kMenuIdInvalid;
-MenuCommandId g_cmd_refresh_devices = kMenuIdInvalid;
 
 struct PickerState {
     int page{0};
@@ -130,11 +129,6 @@ void command_toggle_device(MenuContext& ctx, std::int32_t index) {
     GubsyLobbyDeviceAssignment device =
         gubsy_lobby_device_from_input_source(ctx.engine.input_sources[static_cast<std::size_t>(index)]);
     gubsy_lobby_toggle_device(ctx.engine, ctx.player_index, device);
-}
-
-void command_refresh_devices(MenuContext& ctx, std::int32_t) {
-    refresh_input_sources(ctx.engine);
-    gubsy_lobby_ensure_ready(ctx.engine);
 }
 
 int item_count(const EngineState& engine, PickerKind kind) {
@@ -237,9 +231,12 @@ BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
     MenuAction next_action = st.page + 1 < st.total_pages ? MenuAction::run_command(page_cmd, 1)
                                                           : MenuAction::none();
 
-    MenuWidget prev = make_button(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev = st.page > 0 ? make_button(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action)
+                                  : make_label(kPrevButtonId, SettingsObjectID::PREV, "");
     prev.role = MenuWidgetRole::PagePrev;
-    MenuWidget next = make_button(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next = st.page + 1 < st.total_pages
+                          ? make_button(kNextButtonId, SettingsObjectID::NEXT, ">", next_action)
+                          : make_label(kNextButtonId, SettingsObjectID::NEXT, "");
     next.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev);
     std::size_t prev_idx = widgets.size() - 1;
@@ -272,11 +269,6 @@ BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
     }
 
     MenuWidget action = make_button(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
-    if (kind == PickerKind::Device) {
-        action.label = "Refresh / Back";
-        action.on_select = MenuAction::run_command(g_cmd_refresh_devices);
-        action.on_back = MenuAction::pop();
-    }
     widgets.push_back(action);
     std::size_t back_idx = widgets.size() - 1;
 
@@ -285,15 +277,18 @@ BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
     MenuWidget& back_ref = widgets[back_idx];
     WidgetId first_card = card_ids.empty() ? back_ref.id : card_ids.front();
     WidgetId last_card = card_ids.empty() ? back_ref.id : card_ids.back();
-    prev_ref.nav_right = next_ref.id;
+    prev_ref.nav_right = next_ref.type == WidgetType::Button ? next_ref.id : kMenuIdInvalid;
     prev_ref.nav_down = first_card;
-    next_ref.nav_left = prev_ref.id;
+    next_ref.nav_left = prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid;
     next_ref.nav_down = first_card;
     for (std::size_t i = 0; i < card_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != card_ids[i])
                 continue;
-            widget.nav_up = (i == 0) ? prev_ref.id : card_ids[i - 1];
+            widget.nav_up = (i == 0)
+                                ? (prev_ref.type == WidgetType::Button ? prev_ref.id
+                                                                       : kMenuIdInvalid)
+                                : card_ids[i - 1];
             widget.nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
             break;
         }
@@ -351,8 +346,6 @@ void register_lobby_picker_screens(EngineState& engine) {
         g_cmd_pick_input = engine.menu_commands.register_command(command_pick_input);
     if (g_cmd_toggle_device == kMenuIdInvalid)
         g_cmd_toggle_device = engine.menu_commands.register_command(command_toggle_device);
-    if (g_cmd_refresh_devices == kMenuIdInvalid)
-        g_cmd_refresh_devices = engine.menu_commands.register_command(command_refresh_devices);
 
     register_picker(engine, MenuScreenID::LOBBY_PROFILE_PICKER, build_profile_picker);
     register_picker(engine, MenuScreenID::LOBBY_BINDS_PICKER, build_binds_picker);
