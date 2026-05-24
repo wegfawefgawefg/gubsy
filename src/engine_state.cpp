@@ -20,6 +20,7 @@
 #include "src/menu/settings_category_registry.hpp"
 #include "src/mods.hpp"
 #include "src/project_paths.hpp"
+#include "src/render.hpp"
 #include "src/settings_defaults.hpp"
 #include "src/ui_layouts.hpp"
 
@@ -156,6 +157,14 @@ GubsyFrame gubsy_get_frame(GubsyRuntime& runtime) {
     };
 }
 
+bool gubsy_draw_frame_to_window(GubsyRuntime& runtime) {
+    return render_frame_to_window(gubsy_runtime_engine(runtime));
+}
+
+void gubsy_present_frame(GubsyRuntime& runtime) {
+    present_frame(gubsy_runtime_engine(runtime));
+}
+
 MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime, GubsyHostMenuCommandFn fn,
                                           void* user_data) {
     return gubsy_runtime_engine(runtime).menu_commands.register_host_command(fn, user_data);
@@ -212,7 +221,14 @@ void gubsy_render_debug(GubsyRuntime& runtime, SDL_Renderer* renderer, int scree
                         int screen_height) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     if (layout_editor_is_active(engine)) {
-        layout_editor_render(engine, renderer, screen_width, screen_height);
+        const Graphics* graphics = current_graphics(engine);
+        if (graphics) {
+            const SDL_FRect rect = graphics->present_rect;
+            layout_editor_render(engine, renderer, static_cast<int>(rect.w),
+                                 static_cast<int>(rect.h), rect.x, rect.y);
+        } else {
+            layout_editor_render(engine, renderer, screen_width, screen_height);
+        }
     }
     imgui_debug_render(engine);
 }

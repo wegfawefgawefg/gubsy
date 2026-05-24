@@ -1,15 +1,15 @@
 #pragma once
 
+#include "src/sprites.hpp" // for SpriteDef metadata
+
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
 #include <filesystem>
 #include <glm/glm.hpp>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
-#include <SDL2/SDL_image.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "src/sprites.hpp" // for SpriteDef metadata
 
 struct EngineState;
 
@@ -52,6 +52,7 @@ struct Graphics {
     RenderScaleMode render_scale_mode{RenderScaleMode::Fit};
     WindowDisplayMode window_mode{WindowDisplayMode::Windowed};
     SDL_Texture* render_target{nullptr};
+    SDL_FRect present_rect{0.0f, 0.0f, 1280.0f, 720.0f};
     float preview_zoom{1.0f};
     glm::vec2 preview_pan{0.0f, 0.0f};
     glm::vec4 safe_area{0.0f, 0.0f, 0.0f, 0.0f}; // left, right, top, bottom (normalized)
@@ -74,11 +75,8 @@ const Graphics* current_graphics(const EngineState& engine);
 // Initialize window/renderer into Graphics.
 // Returns true on success false if windowed init fails.
 bool init_graphics(EngineState& engine);
-bool attach_external_graphics(EngineState& engine,
-                              SDL_Window* window,
-                              SDL_Renderer* renderer,
-                              int render_width,
-                              int render_height);
+bool attach_external_graphics(EngineState& engine, SDL_Window* window, SDL_Renderer* renderer,
+                              int render_width, int render_height);
 
 // Destroy renderer/window if present and reset pointers.
 void cleanup_graphics(EngineState& engine);

@@ -488,6 +488,36 @@ void sync_graphics_from_settings(EngineState& engine) {
 
     const auto& settings = engine.top_level_game_settings.settings;
 
+    if (auto it = settings.find("gubsy.video.render_resolution"); it != settings.end()) {
+        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+            const std::size_t x_pos = sv->find('x');
+            if (x_pos != std::string::npos) {
+                int width = std::atoi(sv->substr(0, x_pos).c_str());
+                int height = std::atoi(sv->substr(x_pos + 1).c_str());
+                if (width > 0 && height > 0 &&
+                    (static_cast<unsigned int>(width) != current_graphics(engine)->render_dims.x ||
+                     static_cast<unsigned int>(height) !=
+                         current_graphics(engine)->render_dims.y)) {
+                    set_render_resolution(engine, width, height);
+                }
+            }
+        }
+    }
+
+    if (auto it = settings.find("gubsy.video.window_mode"); it != settings.end()) {
+        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+            WindowDisplayMode mode = current_graphics(engine)->window_mode;
+            if (*sv == "windowed")
+                mode = WindowDisplayMode::Windowed;
+            else if (*sv == "borderless")
+                mode = WindowDisplayMode::Borderless;
+            else if (*sv == "fullscreen")
+                mode = WindowDisplayMode::Fullscreen;
+            if (mode != current_graphics(engine)->window_mode)
+                set_window_display_mode(engine, mode);
+        }
+    }
+
     // Sync preview zoom
     if (auto it = settings.find("gubsy.video.preview_zoom"); it != settings.end()) {
         if (const float* fv = std::get_if<float>(&it->second))
