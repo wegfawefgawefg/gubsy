@@ -169,6 +169,7 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
         return false;
     }
 
+    engine.lobby.contract = build_lobby_contract(engine);
     GubsyLobbyHostResult result =
         engine.lobby_commands.host(engine.lobby_commands.host_user_data, engine.lobby, port);
     if (!result.ok) {

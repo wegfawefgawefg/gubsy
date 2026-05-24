@@ -29,7 +29,7 @@ The game owns:
 
 The game should register a lobby config provider with Gubsy.
 
-The provider has one implemented job now:
+The provider has one implemented job:
 
 1. Describe boring editable fields that Gubsy can render with default widgets.
 

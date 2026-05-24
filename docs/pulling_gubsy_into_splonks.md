@@ -104,7 +104,7 @@ if (splonks.pause_menu_open) {
 Splonks owns gameplay. Gubsy owns menu stack, layout, navigation, input profile
 UI, and settings UI.
 
-## First Integration Scope
+## Integration Scope
 
 Do first:
 
@@ -197,7 +197,7 @@ Use Splonks as the stronger forcing function:
 3. If both Splonks and demo need the same behavior, it probably belongs in
    Gubsy public API.
 
-## First Milestone Definition Of Done
+## Definition Of Done
 
 1. Splonks CMake imports Gubsy and links `gubsy::engine`.
 2. Splonks can initialize and shut down `GubsyRuntime`.
@@ -207,6 +207,8 @@ Use Splonks as the stronger forcing function:
 6. Splonks gameplay still runs through its existing update/render path.
 7. No Splonks code includes Gubsy private `src/...` headers.
 8. Gubsy's existing build, tests, and consumer smoke still pass.
+9. The lobby path can host, advertise, join, validate remote game config, and
+   start Splonks without bypassing the same command layer used by the menu.
 
 ## Verification
 
@@ -224,4 +226,5 @@ Run in Splonks after integration:
 cmake --build build
 ```
 
-Add a Splonks-side smoke target once the first integration compiles.
+Keep a Splonks-side smoke target for any API boundary that can be verified
+without opening an SDL window.

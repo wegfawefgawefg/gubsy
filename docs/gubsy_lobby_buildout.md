@@ -190,6 +190,9 @@ Implemented now:
     paths.
 14. Automated smoke coverage proving remote config rejection stops before join
     transport and accepted config applies before join transport.
+15. Automated online lobby smoke coverage proving host-room publish, room-code
+    join, remote config validation/application, and leave all run through the
+    lobby command layer with a real room server.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -201,11 +204,32 @@ publishes room metadata with the advertised realtime endpoint. If room creation
 fails, Gubsy calls the leave callback to disconnect the transport it just
 started.
 
-Further hardening:
+Remaining validation:
 
-1. Exercise the full host/join path manually across two processes.
+1. Exercise Splonks itself across two interactive processes before treating the
+   user-facing network flow as playtested.
 
-## Non-Goals For This Pass
+## Completion Standard
+
+This is not a prototype path. A lobby implementation is complete only when the
+generic Gubsy responsibilities and game-owned Splonks config layer both work
+through the same runtime path a user exercises in the menu.
+
+Required evidence:
+
+1. Gubsy can build, test, and pass the consumer boundary check.
+2. Splonks can build and run with the Gubsy lobby as its startup shell.
+3. Gubsy start/host/join commands call Splonks' real transport entry points.
+4. Splonks lobby config is serialized into the session contract before host or
+   join, and applied to Splonks state before offline start.
+5. Remote lobby config is validated before joining transport and applied before
+   the joined game starts.
+6. Local player roster, profiles, binds profiles, input profiles, and device
+   assignment are editable from the lobby.
+7. A two-process host/join run succeeds, or an automated equivalent covers the
+   same host and join path without bypassing the Gubsy lobby command layer.
+
+## Non-Goals
 
 1. No visual redesign requirement.
 2. No mod management UI for Splonks.
