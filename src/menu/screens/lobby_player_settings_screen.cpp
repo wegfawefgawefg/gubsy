@@ -110,7 +110,8 @@ void command_remove_player(MenuContext& ctx, std::int32_t) {
 void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     auto& st = ctx.state<PlayerSettingsState>();
     st.page = std::clamp(st.page + delta, 0, std::max(0, st.total_pages - 1));
-    update_page(st, 5);
+    int row_count = ctx.engine.lobby.local_players.size() > 1 ? 5 : 4;
+    update_page(st, row_count);
 }
 
 std::string profile_name_or_missing(UserProfile* profile) {
@@ -129,7 +130,9 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     gubsy_lobby_ensure_ready(ctx.engine);
     gubsy_lobby_select_player(ctx.engine, ctx.player_index);
     auto& st = ctx.state<PlayerSettingsState>();
-    update_page(st, 5);
+    bool can_remove_player = ctx.engine.lobby.local_players.size() > 1;
+    int row_count = can_remove_player ? 5 : 4;
+    update_page(st, row_count);
 
     static std::vector<MenuWidget> widgets;
     static std::vector<std::string> text_cache;
@@ -206,11 +209,12 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     std::vector<MenuWidget> rows;
+    if (can_remove_player)
+        rows.push_back(remove);
     rows.push_back(profile);
     rows.push_back(binds);
     rows.push_back(input);
     rows.push_back(devices);
-    rows.push_back(remove);
 
     std::vector<WidgetId> row_ids;
     int start = st.page * kRowsPerPage;

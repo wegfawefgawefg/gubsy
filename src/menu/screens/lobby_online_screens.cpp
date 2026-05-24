@@ -253,7 +253,7 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     max_players.secondary = "Session-wide player cap advertised to the room backend.";
 
     MenuWidget action = make_button(kActionWidgetId,
-                                    SettingsObjectID::CARD4,
+                                    SettingsObjectID::ACTION,
                                     ctx.engine.lobby.online ? "Leave Room" : "Host Room",
                                     MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave
                                                                                    : g_cmd_host));

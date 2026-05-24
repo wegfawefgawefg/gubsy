@@ -80,7 +80,7 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
                                   MenuAction::run_command(g_cmd_host_game));
     MenuWidget browse = make_button(204, SettingsObjectID::CARD3, "Browse Servers",
                                     MenuAction::run_command(g_cmd_browse_servers));
-    MenuWidget start = make_button(205, SettingsObjectID::PREV, "Start Game",
+    MenuWidget start = make_button(205, SettingsObjectID::ACTION, "Start Game",
                                    MenuAction::run_command(g_cmd_start_game));
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
@@ -90,10 +90,11 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     host.nav_up = settings.id;
     host.nav_down = browse.id;
     browse.nav_up = host.id;
-    browse.nav_down = start.id;
+    browse.nav_down = back.id;
     start.nav_up = browse.id;
-    start.nav_down = back.id;
-    back.nav_up = start.id;
+    start.nav_left = back.id;
+    back.nav_up = browse.id;
+    back.nav_right = start.id;
 
     widgets.push_back(players);
     widgets.push_back(settings);
