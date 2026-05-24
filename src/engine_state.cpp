@@ -238,6 +238,54 @@ bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int
     return false;
 }
 
+int gubsy_add_lobby_local_player(GubsyRuntime& runtime) {
+    return gubsy_lobby_add_local_player(gubsy_runtime_engine(runtime));
+}
+
+bool gubsy_remove_lobby_local_player(GubsyRuntime& runtime, int player_index) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+    const int before = static_cast<int>(engine.lobby.local_players.size());
+    if (before <= 1)
+        return false;
+    gubsy_lobby_remove_local_player(engine, player_index);
+    return static_cast<int>(engine.lobby.local_players.size()) == before - 1;
+}
+
+bool gubsy_select_lobby_local_player(GubsyRuntime& runtime, int player_index) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+    if (player_index < 0 || player_index >= static_cast<int>(engine.lobby.local_players.size()))
+        return false;
+    gubsy_lobby_select_player(engine, player_index);
+    return engine.lobby.selected_player_index == player_index;
+}
+
+bool gubsy_set_lobby_player_user_profile(GubsyRuntime& runtime,
+                                         int player_index,
+                                         int profile_id) {
+    return gubsy_lobby_set_user_profile(gubsy_runtime_engine(runtime), player_index, profile_id);
+}
+
+bool gubsy_set_lobby_player_binds_profile(GubsyRuntime& runtime,
+                                          int player_index,
+                                          int profile_id) {
+    return gubsy_lobby_set_binds_profile(gubsy_runtime_engine(runtime), player_index, profile_id);
+}
+
+bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime,
+                                                   int player_index,
+                                                   int profile_id) {
+    return gubsy_lobby_set_input_settings_profile(gubsy_runtime_engine(runtime), player_index,
+                                                  profile_id);
+}
+
+void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime,
+                                      int player_index,
+                                      GubsyLobbyDeviceAssignment device) {
+    gubsy_lobby_toggle_device(gubsy_runtime_engine(runtime), player_index, device);
+}
+
 bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     gubsy_lobby_ensure_ready(engine);

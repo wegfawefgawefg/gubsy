@@ -62,6 +62,43 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 13;
     }
+    if (gubsy_add_lobby_local_player(no_mod_engine) != 1) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 18;
+    }
+    const GubsyLobbyState& initial_lobby = gubsy_get_lobby_state(no_mod_engine);
+    const GubsyLobbyPlayer initial_player = initial_lobby.local_players.front();
+    if (!gubsy_select_lobby_local_player(no_mod_engine, 1)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 19;
+    }
+    if (!gubsy_set_lobby_player_user_profile(no_mod_engine, 1, initial_player.user_profile_id)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 20;
+    }
+    if (!gubsy_set_lobby_player_binds_profile(no_mod_engine, 1, initial_player.binds_profile_id)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 21;
+    }
+    if (!gubsy_set_lobby_player_input_settings_profile(
+            no_mod_engine, 1, initial_player.input_settings_profile_id)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 22;
+    }
+    GubsyLobbyDeviceAssignment mouse_device{InputSourceType::Mouse, 0};
+    gubsy_toggle_lobby_player_device(no_mod_engine, 1, mouse_device);
+    if (gubsy_get_lobby_state(no_mod_engine).local_players[1].devices.empty()) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 23;
+    }
+    if (!gubsy_remove_lobby_local_player(no_mod_engine, 1)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 24;
+    }
+    if (gubsy_remove_lobby_local_player(no_mod_engine, 0)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 25;
+    }
     bool command_called = false;
     MenuCommandId command = gubsy_register_menu_command(
         no_mod_engine,

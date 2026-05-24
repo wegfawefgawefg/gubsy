@@ -73,6 +73,17 @@ const std::vector<BindsProfile>& gubsy_get_binds_profiles(GubsyRuntime& runtime)
 const BindsProfile* gubsy_find_binds_profile(GubsyRuntime& runtime, int profile_id);
 bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& profile);
 bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int action_id);
+int gubsy_add_lobby_local_player(GubsyRuntime& runtime);
+bool gubsy_remove_lobby_local_player(GubsyRuntime& runtime, int player_index);
+bool gubsy_select_lobby_local_player(GubsyRuntime& runtime, int player_index);
+bool gubsy_set_lobby_player_user_profile(GubsyRuntime& runtime, int player_index, int profile_id);
+bool gubsy_set_lobby_player_binds_profile(GubsyRuntime& runtime, int player_index, int profile_id);
+bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime,
+                                                   int player_index,
+                                                   int profile_id);
+void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime,
+                                      int player_index,
+                                      GubsyLobbyDeviceAssignment device);
 bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message);
 bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
 bool gubsy_join_lobby_room_code(GubsyRuntime& runtime,

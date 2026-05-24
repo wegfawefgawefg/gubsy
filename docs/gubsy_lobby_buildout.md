@@ -212,6 +212,9 @@ Implemented now:
 22. Splonks shell smoke coverage now hosts and joins through Gubsy public lobby
     commands, using Splonks' real UDP transport callbacks and an injected room
     backend.
+23. Public runtime wrappers for adding/removing/selecting local lobby players,
+    setting per-player user/binds/input-settings profiles, and toggling
+    per-player devices. `public_api_smoke` covers these through public headers.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -257,6 +260,8 @@ Required evidence:
     public lobby start path.
 12. Splonks has automated coverage that Gubsy host/join commands call Splonks'
     real transport callbacks and apply the remote lobby config.
+13. Host games can manage default lobby local players, profiles, and devices
+    through public runtime functions instead of private `EngineState` helpers.
 
 ## Non-Goals
 
