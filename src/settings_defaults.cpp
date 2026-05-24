@@ -169,64 +169,130 @@ void register_engine_settings_schema_entries(EngineState& engine) {
 
     // Video / Display
     const std::vector<SettingOption> resolution_options = video_resolution_options();
-    schema.add_setting(make_option_setting(SettingScope::Install, "gubsy.video.window_resolution",
-                                           "Window Size",
-                                           "Size of the application window in windowed mode.",
-                                           {"Video"}, resolution_options, "1280x720"));
-    schema.add_setting(make_toggle_setting(
-        SettingScope::Install, "gubsy.video.match_render_to_window", "Match Render To Window",
-        "Use the window size as the internal render resolution.", {"Video"}, true));
-    schema.add_setting(make_option_setting(SettingScope::Install, "gubsy.video.render_resolution",
-                                           "Render Resolution",
-                                           "Target internal render resolution when not matched.",
-                                           {"Video"}, resolution_options, "1280x720"));
-    schema.add_setting(make_option_setting(
-        SettingScope::Install, "gubsy.video.window_mode", "Display Mode",
-        "Choose how the window is presented.", {"Video"},
-        {SettingOption{"fullscreen", "Fullscreen"}, SettingOption{"borderless", "Borderless"},
-         SettingOption{"windowed", "Windowed"}},
-        "fullscreen"));
-    schema.add_setting(make_option_setting(
-        SettingScope::Install, "gubsy.video.fullscreen_display_mode", "Fullscreen Display Mode",
-        "Display resolution and refresh used by exclusive fullscreen.", {"Video"},
-        fullscreen_display_mode_options(engine), "desktop"));
-    schema.add_setting(make_option_setting(
-        SettingScope::Install, "gubsy.video.render_scale_mode", "Render Scale",
-        "How to scale render resolution to window.", {"Video"},
-        {SettingOption{"fit", "Fit (letterbox)"}, SettingOption{"stretch", "Stretch"}}, "fit"));
-    schema.add_setting(make_toggle_setting(SettingScope::Install, "gubsy.video.vsync", "V-Sync",
-                                           "Synchronize frames with monitor refresh.", {"Video"},
-                                           true));
-    schema.add_setting(make_option_setting(
-        SettingScope::Install, "gubsy.video.frame_cap", "Render Rate Limit",
-        "Limit how often frames are rendered and presented.", {"Video"},
-        {SettingOption{"0", "Off"}, SettingOption{"30", "30"}, SettingOption{"60", "60"},
-         SettingOption{"120", "120"}, SettingOption{"144", "144"}, SettingOption{"240", "240"}},
-        "0"));
-    schema.add_setting(make_slider_setting(
-        SettingScope::Install, "gubsy.video.safe_area_left", "Safe Area Left",
-        "Inset from the left edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f));
-    schema.add_setting(make_slider_setting(
-        SettingScope::Install, "gubsy.video.safe_area_right", "Safe Area Right",
-        "Inset from the right edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f));
-    schema.add_setting(make_slider_setting(
-        SettingScope::Install, "gubsy.video.safe_area_top", "Safe Area Top",
-        "Inset from the top edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f));
-    schema.add_setting(make_slider_setting(
-        SettingScope::Install, "gubsy.video.safe_area_bottom", "Safe Area Bottom",
-        "Inset from the bottom edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f));
-    schema.add_setting(make_toggle_setting(SettingScope::Install, "gubsy.video.show_fps",
-                                           "FPS Counter", "Display the current frames-per-second.",
-                                           {"Video", "Debug"}, false));
-    schema.add_setting(make_slider_setting(SettingScope::Install, "gubsy.video.preview_zoom",
-                                           "Zoom", "Preview zoom adjustment for debugging.",
-                                           {"Video", "Debug"}, 0.5f, 3.0f, 0.01f, 1.0f));
-    schema.add_setting(make_slider_setting(SettingScope::Install, "gubsy.video.preview_pan_x",
-                                           "Pan X", "Preview pan X offset in pixels for debugging.",
-                                           {"Video", "Debug"}, -1000.0f, 1000.0f, 1.0f, 0.0f));
-    schema.add_setting(make_slider_setting(SettingScope::Install, "gubsy.video.preview_pan_y",
-                                           "Pan Y", "Preview pan Y offset in pixels for debugging.",
-                                           {"Video", "Debug"}, -1000.0f, 1000.0f, 1.0f, 0.0f));
+    {
+        SettingMetadata meta = make_option_setting(
+            SettingScope::Install, "gubsy.video.window_mode", "Display Mode",
+            "Choose how the window is presented.", {"Video"},
+            {SettingOption{"fullscreen", "Fullscreen"}, SettingOption{"borderless", "Borderless"},
+             SettingOption{"windowed", "Windowed"}},
+            "fullscreen");
+        meta.order = 0;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta =
+            make_toggle_setting(SettingScope::Install, "gubsy.video.vsync", "V-Sync",
+                                "Synchronize frames with monitor refresh.", {"Video"}, true);
+        meta.order = 10;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta =
+            make_option_setting(SettingScope::Install, "gubsy.video.window_resolution",
+                                "Window Size", "Size of the application window in windowed mode.",
+                                {"Video"}, resolution_options, "1280x720");
+        meta.order = 20;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_option_setting(
+            SettingScope::Install, "gubsy.video.fullscreen_display_mode", "Fullscreen Display Mode",
+            "Display resolution and refresh used by exclusive fullscreen.", {"Video"},
+            fullscreen_display_mode_options(engine), "desktop");
+        meta.order = 30;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_toggle_setting(
+            SettingScope::Install, "gubsy.video.match_render_to_window", "Match Render To Window",
+            "Use the window size as the internal render resolution.", {"Video"}, true);
+        meta.order = 40;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_option_setting(
+            SettingScope::Install, "gubsy.video.render_resolution", "Render Resolution",
+            "Target internal render resolution when not matched.", {"Video"}, resolution_options,
+            "1280x720");
+        meta.order = 50;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_option_setting(
+            SettingScope::Install, "gubsy.video.render_scale_mode", "Render Scale",
+            "How to scale render resolution to window.", {"Video"},
+            {SettingOption{"fit", "Fit (letterbox)"}, SettingOption{"stretch", "Stretch"}}, "fit");
+        meta.order = 60;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_option_setting(
+            SettingScope::Install, "gubsy.video.frame_cap", "Render Rate Limit",
+            "Limit how often frames are rendered and presented.", {"Video"},
+            {SettingOption{"0", "Off"}, SettingOption{"30", "30"}, SettingOption{"60", "60"},
+             SettingOption{"120", "120"}, SettingOption{"144", "144"}, SettingOption{"240", "240"}},
+            "0");
+        meta.order = 70;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_toggle_setting(
+            SettingScope::Install, "gubsy.video.show_fps", "FPS Counter",
+            "Display the current frames-per-second.", {"Video", "Debug"}, false);
+        meta.order = 80;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_slider_setting(
+            SettingScope::Install, "gubsy.video.safe_area_left", "Safe Area Left",
+            "Inset from the left edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f);
+        meta.order = 100;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_slider_setting(
+            SettingScope::Install, "gubsy.video.safe_area_right", "Safe Area Right",
+            "Inset from the right edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f);
+        meta.order = 110;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_slider_setting(
+            SettingScope::Install, "gubsy.video.safe_area_top", "Safe Area Top",
+            "Inset from the top edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f);
+        meta.order = 120;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_slider_setting(
+            SettingScope::Install, "gubsy.video.safe_area_bottom", "Safe Area Bottom",
+            "Inset from the bottom edge to avoid overscan.", {"Video"}, 0.0f, 0.2f, 0.005f, 0.0f);
+        meta.order = 130;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_slider_setting(
+            SettingScope::Install, "gubsy.video.preview_zoom", "Zoom",
+            "Preview zoom adjustment for debugging.", {"Video", "Debug"}, 0.5f, 3.0f, 0.01f, 1.0f);
+        meta.order = 200;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta =
+            make_slider_setting(SettingScope::Install, "gubsy.video.preview_pan_x", "Pan X",
+                                "Preview pan X offset in pixels for debugging.", {"Video", "Debug"},
+                                -1000.0f, 1000.0f, 1.0f, 0.0f);
+        meta.order = 210;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta =
+            make_slider_setting(SettingScope::Install, "gubsy.video.preview_pan_y", "Pan Y",
+                                "Preview pan Y offset in pixels for debugging.", {"Video", "Debug"},
+                                -1000.0f, 1000.0f, 1.0f, 0.0f);
+        meta.order = 220;
+        schema.add_setting(meta);
+    }
 
     // Input (profile-specific)
     {
