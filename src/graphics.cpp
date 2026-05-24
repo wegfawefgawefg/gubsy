@@ -1,14 +1,15 @@
 #include "src/graphics.hpp"
+
 #include "src/engine_state.hpp"
 #include "src/project_paths.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <string>
-#include <algorithm>
-#include <cctype>
 
 Graphics* current_graphics(EngineState& engine) {
     return engine.graphics;
@@ -26,8 +27,7 @@ bool init_font(const std::filesystem::path& fonts_dir, int pt_size) {
 
 namespace {
 
-bool init_font_for_graphics(Graphics& graphics,
-                            const std::filesystem::path& fonts_dir,
+bool init_font_for_graphics(Graphics& graphics, const std::filesystem::path& fonts_dir,
                             int pt_size) {
     if (graphics.ui_font)
         return true;
@@ -43,11 +43,16 @@ bool init_font_for_graphics(Graphics& graphics,
     if (std::filesystem::exists(fdir, ec) && std::filesystem::is_directory(fdir, ec)) {
         std::filesystem::path fallback_path;
         for (auto const& de : std::filesystem::directory_iterator(fdir, ec)) {
-            if (ec) { ec.clear(); continue; }
-            if (!de.is_regular_file()) continue;
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!de.is_regular_file())
+                continue;
             auto p = de.path();
             auto ext = p.extension().string();
-            for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
+            for (auto& c : ext)
+                c = (char)std::tolower((unsigned char)c);
             if (ext == ".ttf") {
                 font_path = p.string();
                 break;
@@ -86,8 +91,8 @@ bool recreate_render_target(Graphics& graphics, int width, int height) {
     SDL_Texture* tex = SDL_CreateTexture(graphics.renderer, SDL_PIXELFORMAT_RGBA8888,
                                          SDL_TEXTUREACCESS_TARGET, width, height);
     if (!tex) {
-        std::fprintf(stderr, "Failed to create render target %dx%d: %s\n",
-                     width, height, SDL_GetError());
+        std::fprintf(stderr, "Failed to create render target %dx%d: %s\n", width, height,
+                     SDL_GetError());
         return false;
     }
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
@@ -132,14 +137,23 @@ bool init_graphics(EngineState& engine) {
     engine.graphics = new Graphics{};
     Graphics& graphics = *engine.graphics;
 
-    const char* title = "artificial";
-    glm::ivec2 window_dims = {1280, 720};
+    const char* title =
+        engine.app_config.window_title.empty() ? "Gubsy" : engine.app_config.window_title.c_str();
+    glm::ivec2 window_dims = {
+        std::max(engine.app_config.window_width, 16),
+        std::max(engine.app_config.window_height, 16),
+    };
+    glm::ivec2 render_dims = {
+        std::max(engine.app_config.render_width, 16),
+        std::max(engine.app_config.render_height, 16),
+    };
 
     graphics.window = nullptr;
     graphics.renderer = nullptr;
     graphics.owns_window = true;
     graphics.owns_renderer = true;
-    graphics.window_dims = {static_cast<unsigned int>(window_dims.x), static_cast<unsigned int>(window_dims.y)};
+    graphics.window_dims = {static_cast<unsigned int>(window_dims.x),
+                            static_cast<unsigned int>(window_dims.y)};
 
     // Initialize SDL video with driver selection
     const char* env_display = std::getenv("DISPLAY");
@@ -159,16 +173,24 @@ bool init_graphics(EngineState& engine) {
     if (!initialized)
         return false;
 
-    Uint32 win_flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_UTILITY;
+    Uint32 win_flags = 0;
+    if (engine.app_config.resizable_window)
+        win_flags |= SDL_WINDOW_RESIZABLE;
+    if (engine.app_config.always_on_top)
+        win_flags |= SDL_WINDOW_ALWAYS_ON_TOP;
+    if (engine.app_config.utility_window)
+        win_flags |= SDL_WINDOW_UTILITY;
     graphics.window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                  window_dims.x, window_dims.y, win_flags);
+                                       window_dims.x, window_dims.y, win_flags);
     if (!graphics.window) {
         const char* err = SDL_GetError();
-        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", (err && *err) ? err : "(no error text)");
+        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n",
+                     (err && *err) ? err : "(no error text)");
         return false;
     }
 
-    SDL_SetWindowAlwaysOnTop(graphics.window, SDL_TRUE);
+    if (engine.app_config.always_on_top)
+        SDL_SetWindowAlwaysOnTop(graphics.window, SDL_TRUE);
 
     graphics.renderer = SDL_CreateRenderer(graphics.window, -1, SDL_RENDERER_ACCELERATED);
     if (!graphics.renderer) {
@@ -183,15 +205,12 @@ bool init_graphics(EngineState& engine) {
 
     // Initialize default UI font (optional)
     (void)init_font_for_graphics(graphics, {}, 20);
-    recreate_render_target(graphics, window_dims.x, window_dims.y);
+    recreate_render_target(graphics, render_dims.x, render_dims.y);
     return true;
 }
 
-bool attach_external_graphics(EngineState& engine,
-                              SDL_Window* window,
-                              SDL_Renderer* renderer,
-                              int render_width,
-                              int render_height) {
+bool attach_external_graphics(EngineState& engine, SDL_Window* window, SDL_Renderer* renderer,
+                              int render_width, int render_height) {
     if (!window || !renderer)
         return false;
     if (!engine.graphics)
@@ -227,7 +246,10 @@ void cleanup_graphics(EngineState& engine) {
     Graphics* graphics = current_graphics(engine);
     if (!graphics)
         return;
-    if (graphics->ui_font) { TTF_CloseFont(graphics->ui_font); graphics->ui_font = nullptr; }
+    if (graphics->ui_font) {
+        TTF_CloseFont(graphics->ui_font);
+        graphics->ui_font = nullptr;
+    }
     // Destroy textures before renderer
     clear_textures(engine);
     if (graphics->render_target) {
@@ -242,7 +264,8 @@ void cleanup_graphics(EngineState& engine) {
         SDL_DestroyWindow(graphics->window);
     }
     graphics->window = nullptr;
-    if (graphics->owns_window && TTF_WasInit()) TTF_Quit();
+    if (graphics->owns_window && TTF_WasInit())
+        TTF_Quit();
     delete graphics;
     engine.graphics = nullptr;
 }
@@ -257,7 +280,7 @@ bool set_window_dimensions(EngineState& engine, int width, int height) {
     int actual_h = height;
     SDL_GetWindowSize(current_graphics(engine)->window, &actual_w, &actual_h);
     current_graphics(engine)->window_dims = {static_cast<unsigned int>(actual_w),
-                       static_cast<unsigned int>(actual_h)};
+                                             static_cast<unsigned int>(actual_h)};
     return true;
 }
 
@@ -266,15 +289,15 @@ bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
         return false;
     Uint32 flag = 0;
     switch (mode) {
-        case WindowDisplayMode::Windowed:
-            flag = 0;
-            break;
-        case WindowDisplayMode::Borderless:
-            flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
-            break;
-        case WindowDisplayMode::Fullscreen:
-            flag = SDL_WINDOW_FULLSCREEN;
-            break;
+    case WindowDisplayMode::Windowed:
+        flag = 0;
+        break;
+    case WindowDisplayMode::Borderless:
+        flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
+        break;
+    case WindowDisplayMode::Fullscreen:
+        flag = SDL_WINDOW_FULLSCREEN;
+        break;
     }
     if (!SDL_SetWindowFullscreen(current_graphics(engine)->window, flag)) {
         std::fprintf(stderr, "Failed to change window mode: %s\n", SDL_GetError());
@@ -285,7 +308,7 @@ bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
     int actual_h = 0;
     SDL_GetWindowSize(current_graphics(engine)->window, &actual_w, &actual_h);
     current_graphics(engine)->window_dims = {static_cast<unsigned int>(actual_w),
-                       static_cast<unsigned int>(actual_h)};
+                                             static_cast<unsigned int>(actual_h)};
     return true;
 }
 
@@ -314,7 +337,6 @@ glm::ivec2 get_window_dimensions(const EngineState& engine) {
                       static_cast<int>(current_graphics(engine)->window_dims.y));
 }
 
-
 // ---- Registry ----
 
 void build_sprite_name_id_mapping(EngineState& engine, const std::vector<std::string>& names) {
@@ -330,7 +352,8 @@ void build_sprite_name_id_mapping(EngineState& engine, const std::vector<std::st
 
 int add_or_get_sprite_id(EngineState& engine, const std::string& name) {
     auto it = current_graphics(engine)->sprite_name_to_id.find(name);
-    if (it != current_graphics(engine)->sprite_name_to_id.end()) return it->second;
+    if (it != current_graphics(engine)->sprite_name_to_id.end())
+        return it->second;
     int id = static_cast<int>(current_graphics(engine)->sprite_id_to_name.size());
     current_graphics(engine)->sprite_name_to_id.emplace(name, id);
     current_graphics(engine)->sprite_id_to_name.push_back(name);
@@ -354,9 +377,13 @@ void rebuild_sprite_mapping(EngineState& engine, const std::vector<SpriteDef>& n
     if (!name_to_id.empty()) {
         std::unordered_map<std::string, int> new_names;
         new_names.reserve(new_defs.size());
-        for (const auto& d : new_defs) new_names.emplace(d.name, 1);
+        for (const auto& d : new_defs)
+            new_names.emplace(d.name, 1);
         for (const auto& kv : name_to_id) {
-            if (new_names.find(kv.first) == new_names.end()) { only_additions = false; break; }
+            if (new_names.find(kv.first) == new_names.end()) {
+                only_additions = false;
+                break;
+            }
         }
     }
 
@@ -380,7 +407,8 @@ void rebuild_sprite_mapping(EngineState& engine, const std::vector<SpriteDef>& n
             }
         }
         for (const auto& d : new_defs) {
-            if (new_name_to_id.find(d.name) != new_name_to_id.end()) continue;
+            if (new_name_to_id.find(d.name) != new_name_to_id.end())
+                continue;
             int id = static_cast<int>(new_defs_by_id.size());
             new_defs_by_id.push_back(d);
             new_id_to_name.push_back(d.name);
@@ -402,9 +430,11 @@ void rebuild_sprite_mapping(EngineState& engine, const std::vector<SpriteDef>& n
 }
 
 const SpriteDef* get_sprite_def_by_id(const EngineState& engine, int id) {
-    if (id < 0) return nullptr;
+    if (id < 0)
+        return nullptr;
     size_t idx = static_cast<size_t>(id);
-    if (idx >= current_graphics(engine)->sprite_defs_by_id.size()) return nullptr;
+    if (idx >= current_graphics(engine)->sprite_defs_by_id.size())
+        return nullptr;
     return &current_graphics(engine)->sprite_defs_by_id[idx];
 }
 
@@ -417,7 +447,8 @@ const SpriteDef* try_get_sprite_def(const EngineState& engine, const std::string
 
 void clear_textures(EngineState& engine) {
     for (auto& kv : current_graphics(engine)->textures_by_id) {
-        if (kv.second) SDL_DestroyTexture(kv.second);
+        if (kv.second)
+            SDL_DestroyTexture(kv.second);
     }
     current_graphics(engine)->textures_by_id.clear();
 }
@@ -425,12 +456,17 @@ void clear_textures(EngineState& engine) {
 /// Runs through the sprite defs from the last mod scan and loads the textures.
 /// Heavy. Dont run often.
 bool load_all_textures_in_sprite_lookup(EngineState& engine) {
-    if (!current_graphics(engine)->renderer) return false;
-    for (int id = 0; id < static_cast<int>(current_graphics(engine)->sprite_defs_by_id.size()); ++id) {
+    if (!current_graphics(engine)->renderer)
+        return false;
+    for (int id = 0; id < static_cast<int>(current_graphics(engine)->sprite_defs_by_id.size());
+         ++id) {
         const auto* def = get_sprite_def_by_id(engine, id);
-        if (!def) continue;
-        if (def->image_path.empty()) continue;
-        SDL_Texture* tex = IMG_LoadTexture(current_graphics(engine)->renderer, def->image_path.c_str());
+        if (!def)
+            continue;
+        if (def->image_path.empty())
+            continue;
+        SDL_Texture* tex =
+            IMG_LoadTexture(current_graphics(engine)->renderer, def->image_path.c_str());
         if (!tex) {
             std::fprintf(stderr, "IMG_LoadTexture failed for %s: %s\n", def->image_path.c_str(),
                          IMG_GetError());

@@ -1,27 +1,27 @@
 #include "engine_state.hpp"
+
 #include "src/audio.hpp"
 #include "src/audio_settings.hpp"
-#include "src/graphics.hpp"
-#include "src/mods.hpp"
-#include "src/project_paths.hpp"
-#include "src/settings_defaults.hpp"
 #include "src/data.hpp"
-#include "src/ui_layouts.hpp"
 #include "src/graphics.hpp"
-#include "src/menu/menu_system.hpp"
-#include "src/menu/screens/main_menu_screen.hpp"
-#include "src/menu/screens/shell_lobby_screen.hpp"
-#include "src/menu/screens/settings_hub_screen.hpp"
-#include "src/menu/screens/profiles_screen.hpp"
-#include "src/menu/screens/binds_profiles_screen.hpp"
-#include "src/menu/screens/binds_profile_editor_screen.hpp"
-#include "src/menu/screens/binds_action_editor_screen.hpp"
-#include "src/menu/screens/binds_choose_input_screen.hpp"
-#include "src/menu/settings_category_registry.hpp"
-#include "src/menu/screens/mods_screen.hpp"
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/imgui_debug/imgui_debug.hpp"
 #include "src/layout_editor/layout_editor.hpp"
+#include "src/menu/menu_system.hpp"
+#include "src/menu/screens/binds_action_editor_screen.hpp"
+#include "src/menu/screens/binds_choose_input_screen.hpp"
+#include "src/menu/screens/binds_profile_editor_screen.hpp"
+#include "src/menu/screens/binds_profiles_screen.hpp"
+#include "src/menu/screens/main_menu_screen.hpp"
+#include "src/menu/screens/mods_screen.hpp"
+#include "src/menu/screens/profiles_screen.hpp"
+#include "src/menu/screens/settings_hub_screen.hpp"
+#include "src/menu/screens/shell_lobby_screen.hpp"
+#include "src/menu/settings_category_registry.hpp"
+#include "src/mods.hpp"
+#include "src/project_paths.hpp"
+#include "src/settings_defaults.hpp"
+#include "src/ui_layouts.hpp"
 
 namespace {
 
@@ -36,8 +36,7 @@ void load_shell_data_pools(EngineState& engine) {
 
 } // namespace
 
-GubsyRuntime::GubsyRuntime()
-    : engine_(new EngineState()) {
+GubsyRuntime::GubsyRuntime() : engine_(new EngineState()) {
 }
 
 GubsyRuntime::~GubsyRuntime() {
@@ -46,8 +45,7 @@ GubsyRuntime::~GubsyRuntime() {
     delete engine_;
 }
 
-GubsyRuntime::GubsyRuntime(GubsyRuntime&& other) noexcept
-    : engine_(other.engine_) {
+GubsyRuntime::GubsyRuntime(GubsyRuntime&& other) noexcept : engine_(other.engine_) {
     other.engine_ = nullptr;
 }
 
@@ -119,20 +117,46 @@ bool gubsy_runtime_has_menu_screen(const GubsyRuntime& runtime, MenuScreenId scr
     return gubsy_runtime_engine(runtime).menu_manager.find_screen(screen_id) != nullptr;
 }
 
-bool gubsy_attach_sdl_renderer(GubsyRuntime& runtime,
-                               SDL_Window* window,
-                               SDL_Renderer* renderer,
-                               int render_width,
-                               int render_height) {
-    return attach_external_graphics(gubsy_runtime_engine(runtime),
-                                    window,
-                                    renderer,
-                                    render_width,
+bool gubsy_attach_sdl_renderer(GubsyRuntime& runtime, SDL_Window* window, SDL_Renderer* renderer,
+                               int render_width, int render_height) {
+    return attach_external_graphics(gubsy_runtime_engine(runtime), window, renderer, render_width,
                                     render_height);
 }
 
-MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime,
-                                          GubsyHostMenuCommandFn fn,
+bool gubsy_init_sdl_renderer(GubsyRuntime& runtime) {
+    return init_graphics(gubsy_runtime_engine(runtime));
+}
+
+GubsyFrame gubsy_get_frame(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    Graphics* graphics = current_graphics(engine);
+    if (!graphics) {
+        return {};
+    }
+
+    int window_w = 0;
+    int window_h = 0;
+    if (graphics->window) {
+        SDL_GetWindowSize(graphics->window, &window_w, &window_h);
+        if (window_w > 0 && window_h > 0) {
+            graphics->window_dims = {static_cast<unsigned int>(window_w),
+                                     static_cast<unsigned int>(window_h)};
+        }
+    }
+
+    return GubsyFrame{
+        .backend = GubsyRenderBackend::SDLRenderer,
+        .window = graphics->window,
+        .renderer = graphics->renderer,
+        .render_target = graphics->render_target,
+        .window_width = static_cast<int>(graphics->window_dims.x),
+        .window_height = static_cast<int>(graphics->window_dims.y),
+        .render_width = static_cast<int>(graphics->render_dims.x),
+        .render_height = static_cast<int>(graphics->render_dims.y),
+    };
+}
+
+MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime, GubsyHostMenuCommandFn fn,
                                           void* user_data) {
     return gubsy_runtime_engine(runtime).menu_commands.register_host_command(fn, user_data);
 }
@@ -173,9 +197,7 @@ void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int sc
     menu_system_update(engine, dt, screen_width, screen_height);
 }
 
-void gubsy_render_menu(GubsyRuntime& runtime,
-                       SDL_Renderer* renderer,
-                       int screen_width,
+void gubsy_render_menu(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                        int screen_height) {
     menu_system_render(gubsy_runtime_engine(runtime), renderer, screen_width, screen_height);
 }
@@ -186,9 +208,7 @@ void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt) {
     imgui_debug_begin_frame(dt);
 }
 
-void gubsy_render_debug(GubsyRuntime& runtime,
-                        SDL_Renderer* renderer,
-                        int screen_width,
+void gubsy_render_debug(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                         int screen_height) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     if (layout_editor_is_active(engine)) {
