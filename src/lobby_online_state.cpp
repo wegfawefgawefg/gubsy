@@ -14,6 +14,12 @@ constexpr double kRoomHeartbeatIntervalSec = 1.0;
 
 RoomServerMatchmaking g_matchmaking;
 
+IMatchmaking& matchmaking(EngineState& engine) {
+    if (engine.lobby_matchmaking != nullptr)
+        return *engine.lobby_matchmaking;
+    return g_matchmaking;
+}
+
 std::string default_room_server_url() {
     if (const char* value = std::getenv("GUB_ROOM_SERVER_URL")) {
         if (*value != '\0')
@@ -187,7 +193,7 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     MatchmakingCreateResult create_result;
     std::string err;
     MatchmakingRoom room = build_room_metadata(engine);
-    if (!g_matchmaking.create_room(engine.lobby.room_server_url, room, create_result, err)) {
+    if (!matchmaking(engine).create_room(engine.lobby.room_server_url, room, create_result, err)) {
         disconnect_game_transport(engine);
         message = err.empty() ? "Cannot host room: failed to publish room"
                               : with_prefix("Cannot host room", err);
@@ -238,8 +244,8 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
 
     std::string member_id;
     std::string err;
-    if (!g_matchmaking.join_room(engine.lobby.room_server_url, room.room_code,
-                                 local_player_name(engine), member_id, err)) {
+    if (!matchmaking(engine).join_room(engine.lobby.room_server_url, room.room_code,
+                                      local_player_name(engine), member_id, err)) {
         disconnect_game_transport(engine);
         message = err.empty() ? "Cannot join room: room service rejected join"
                               : with_prefix("Cannot join room", err);
@@ -266,7 +272,7 @@ bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_cod
     ensure_room_defaults(engine);
     MatchmakingRoom room;
     std::string err;
-    if (!g_matchmaking.fetch_room(engine.lobby.room_server_url, room_code, room, err)) {
+    if (!matchmaking(engine).fetch_room(engine.lobby.room_server_url, room_code, room, err)) {
         message = err.empty() ? "Cannot join room: room code not found"
                               : with_prefix("Cannot join room", err);
         set_lobby_error(engine, message);
@@ -284,8 +290,8 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
         return true;
     }
     std::string err;
-    if (!g_matchmaking.leave_room(engine.lobby.room_server_url, engine.lobby.room_code,
-                                  engine.lobby.member_id, engine.lobby.host_secret, err)) {
+    if (!matchmaking(engine).leave_room(engine.lobby.room_server_url, engine.lobby.room_code,
+                                       engine.lobby.member_id, engine.lobby.host_secret, err)) {
         message = err.empty() ? "Cannot leave room: room service rejected leave"
                               : with_prefix("Cannot leave room", err);
         set_lobby_error(engine, message);
@@ -314,7 +320,7 @@ bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& mes
 
     std::vector<MatchmakingRoom> rooms;
     std::string err;
-    if (!g_matchmaking.list_rooms(engine.lobby.room_server_url, rooms, err)) {
+    if (!matchmaking(engine).list_rooms(engine.lobby.room_server_url, rooms, err)) {
         message = err.empty() ? "Cannot refresh rooms: failed to list rooms"
                               : with_prefix("Cannot refresh rooms", err);
         set_lobby_error(engine, message);
@@ -342,9 +348,9 @@ void gubsy_lobby_tick_online(EngineState& engine) {
     MatchmakingRoom room_update = build_room_metadata(engine);
     MatchmakingRoom* update_ptr = engine.lobby.is_host ? &room_update : nullptr;
     std::string err;
-    if (!g_matchmaking.heartbeat_room(engine.lobby.room_server_url, engine.lobby.room_code,
-                                      engine.lobby.member_id, local_player_name(engine),
-                                      engine.lobby.host_secret, update_ptr, err)) {
+    if (!matchmaking(engine).heartbeat_room(engine.lobby.room_server_url, engine.lobby.room_code,
+                                           engine.lobby.member_id, local_player_name(engine),
+                                           engine.lobby.host_secret, update_ptr, err)) {
         engine.lobby.last_error = err.empty() ? "Room heartbeat failed" : err;
     } else {
         engine.lobby.last_error.clear();

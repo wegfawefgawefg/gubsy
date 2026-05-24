@@ -282,6 +282,10 @@ void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProv
     gubsy_runtime_engine(runtime).lobby_config_provider = provider;
 }
 
+void gubsy_set_lobby_matchmaking_backend(GubsyRuntime& runtime, IMatchmaking* matchmaking) {
+    gubsy_runtime_engine(runtime).lobby_matchmaking = matchmaking;
+}
+
 const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime) {
     return gubsy_runtime_engine(runtime).lobby;
 }

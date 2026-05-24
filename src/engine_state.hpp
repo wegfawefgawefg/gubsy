@@ -41,6 +41,7 @@ struct EngineState {
     GubsyMainMenuCommands main_menu_commands{};
     GubsyLobbyCommands lobby_commands{};
     GubsyLobbyConfigProvider lobby_config_provider{};
+    IMatchmaking* lobby_matchmaking{nullptr};
 
     double now{0.0};
     float dt{0.0f};

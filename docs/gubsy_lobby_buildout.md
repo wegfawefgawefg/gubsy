@@ -207,6 +207,11 @@ Implemented now:
 20. Splonks no-window shell smoke coverage initializes the real Gubsy shell,
     starts through `gubsy_start_lobby_game`, verifies Splonks enters stage
     transition, and verifies the lobby config reaches Splonks state.
+21. Runtime-level matchmaking backend injection lets embedders or tests provide
+    a room backend without replacing Gubsy lobby state or command flow.
+22. Splonks shell smoke coverage now hosts and joins through Gubsy public lobby
+    commands, using Splonks' real UDP transport callbacks and an injected room
+    backend.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -250,6 +255,8 @@ Required evidence:
     public runtime functions.
 11. Splonks has automated coverage for its actual Gubsy shell registration and
     public lobby start path.
+12. Splonks has automated coverage that Gubsy host/join commands call Splonks'
+    real transport callbacks and apply the remote lobby config.
 
 ## Non-Goals
 

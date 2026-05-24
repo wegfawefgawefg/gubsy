@@ -82,6 +82,7 @@ bool gubsy_leave_lobby_room(GubsyRuntime& runtime, std::string& message);
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands);
 void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands);
 void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProvider provider);
+void gubsy_set_lobby_matchmaking_backend(GubsyRuntime& runtime, IMatchmaking* matchmaking);
 const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime);
 bool gubsy_show_main_menu(GubsyRuntime& runtime);
 bool gubsy_push_menu_screen(GubsyRuntime& runtime, MenuScreenId screen_id);
