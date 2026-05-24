@@ -1,10 +1,10 @@
 #include "src/menu/screens/main_menu_screen.hpp"
 
+#include "gubsy/menu/ids.hpp"
 #include "src/engine_state.hpp"
 #include "src/menu/menu_manager.hpp"
 #include "src/menu/menu_screen.hpp"
 #include "src/menu_layout_ids.hpp"
-#include "gubsy/menu/ids.hpp"
 
 #include <vector>
 
@@ -12,8 +12,6 @@ namespace {
 
 MenuCommandId g_cmd_open_lobby = kMenuIdInvalid;
 MenuCommandId g_cmd_open_settings = kMenuIdInvalid;
-MenuCommandId g_cmd_open_profiles = kMenuIdInvalid;
-MenuCommandId g_cmd_open_binds = kMenuIdInvalid;
 
 void command_open_lobby(MenuContext& ctx, std::int32_t) {
     ctx.manager.push_screen(MenuScreenID::SHELL_LOBBY);
@@ -21,14 +19,6 @@ void command_open_lobby(MenuContext& ctx, std::int32_t) {
 
 void command_open_settings(MenuContext& ctx, std::int32_t) {
     ctx.manager.push_screen(MenuScreenID::SETTINGS);
-}
-
-void command_open_profiles(MenuContext& ctx, std::int32_t) {
-    ctx.manager.push_screen(MenuScreenID::PROFILES);
-}
-
-void command_open_binds(MenuContext& ctx, std::int32_t) {
-    ctx.manager.push_screen(MenuScreenID::BINDS_PROFILES);
 }
 
 MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
@@ -55,40 +45,20 @@ BuiltScreen build_main_menu(MenuContext& ctx) {
     title.label = "Main Menu";
     widgets.push_back(title);
 
-    MenuWidget play = make_button(101,
-                                  SettingsObjectID::CARD0,
-                                  "Play",
+    MenuWidget play = make_button(101, SettingsObjectID::CARD0, "Play",
                                   MenuAction::run_command(g_cmd_open_lobby));
-    MenuWidget settings = make_button(102,
-                                      SettingsObjectID::CARD1,
-                                      "Settings",
+    MenuWidget settings = make_button(102, SettingsObjectID::CARD1, "Settings",
                                       MenuAction::run_command(g_cmd_open_settings));
-    MenuWidget profiles = make_button(103,
-                                      SettingsObjectID::CARD2,
-                                      "Profiles",
-                                      MenuAction::run_command(g_cmd_open_profiles));
-    MenuWidget binds = make_button(104,
-                                   SettingsObjectID::CARD3,
-                                   "Input Profiles",
-                                   MenuAction::run_command(g_cmd_open_binds));
-    MenuWidget quit = make_button(105,
-                                  SettingsObjectID::BACK,
-                                  "Quit",
+    MenuWidget quit = make_button(105, SettingsObjectID::CARD2, "Quit",
                                   MenuAction::run_command(ctx.engine.main_menu_commands.quit));
 
     play.nav_down = settings.id;
     settings.nav_up = play.id;
-    settings.nav_down = profiles.id;
-    profiles.nav_up = settings.id;
-    profiles.nav_down = binds.id;
-    binds.nav_up = profiles.id;
-    binds.nav_down = quit.id;
-    quit.nav_up = binds.id;
+    settings.nav_down = quit.id;
+    quit.nav_up = settings.id;
 
     widgets.push_back(play);
     widgets.push_back(settings);
-    widgets.push_back(profiles);
-    widgets.push_back(binds);
     widgets.push_back(quit);
 
     BuiltScreen built;
@@ -106,10 +76,6 @@ void register_main_menu_screen(EngineState& engine) {
         g_cmd_open_lobby = engine.menu_commands.register_command(command_open_lobby);
     if (g_cmd_open_settings == kMenuIdInvalid)
         g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
-    if (g_cmd_open_profiles == kMenuIdInvalid)
-        g_cmd_open_profiles = engine.menu_commands.register_command(command_open_profiles);
-    if (g_cmd_open_binds == kMenuIdInvalid)
-        g_cmd_open_binds = engine.menu_commands.register_command(command_open_binds);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SHELL_MAIN;
