@@ -193,6 +193,8 @@ Implemented now:
 15. Automated online lobby smoke coverage proving host-room publish, room-code
     join, remote config validation/application, and leave all run through the
     lobby command layer with a real room server.
+16. Public runtime access for host games to inspect and replace binds profiles
+    after registering their action schema.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -228,6 +230,8 @@ Required evidence:
    assignment are editable from the lobby.
 7. A two-process host/join run succeeds, or an automated equivalent covers the
    same host and join path without bypassing the Gubsy lobby command layer.
+8. Host games can seed a playable default binds profile without reaching into
+   Gubsy private state or editing generated profile data by hand.
 
 ## Non-Goals
 
