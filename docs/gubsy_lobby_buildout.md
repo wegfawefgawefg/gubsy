@@ -204,6 +204,9 @@ Implemented now:
 19. Public runtime lobby command wrappers for start, host, join-by-room-code,
     and leave, so host games can drive the default lobby without private
     `EngineState` access or widget-click simulation.
+20. Splonks no-window shell smoke coverage initializes the real Gubsy shell,
+    starts through `gubsy_start_lobby_game`, verifies Splonks enters stage
+    transition, and verifies the lobby config reaches Splonks state.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -245,6 +248,8 @@ Required evidence:
    Gubsy's binds-profile or device-assignment decoding.
 10. Host games can trigger default lobby start/host/join/leave behavior through
     public runtime functions.
+11. Splonks has automated coverage for its actual Gubsy shell registration and
+    public lobby start path.
 
 ## Non-Goals
 
