@@ -1,13 +1,20 @@
 #pragma once
 
 #include "gubsy/input/binds.hpp"
+#include "gubsy/lobby/state.hpp"
 #include "gubsy/profiles/user_profile.hpp"
+
+#include <vector>
 
 struct EngineState;
 
 struct Player {
     bool has_active_profile = false;
     UserProfile profile;
+    int user_profile_id{-1};
+    int binds_profile_id{-1};
+    int input_settings_profile_id{-1};
+    std::vector<GubsyLobbyDeviceAssignment> devices;
 };
 
 int add_player(EngineState& engine, int player_index = -1);

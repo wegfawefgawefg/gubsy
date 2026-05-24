@@ -9,6 +9,7 @@
 #include "src/game_settings.hpp"
 #include "src/input_settings_profiles.hpp"
 #include "src/input_sources.hpp"
+#include "src/lobby_state.hpp"
 #include "src/layout_editor/layout_editor_state.hpp"
 #include "src/menu/menu_commands.hpp"
 #include "src/menu/menu_manager.hpp"
@@ -49,6 +50,8 @@ struct EngineState {
 
     // active players
     std::vector<Player> players;
+
+    GubsyLobbyState lobby;
 
     // user profiles pool
     std::vector<UserProfile> user_profiles_pool;
