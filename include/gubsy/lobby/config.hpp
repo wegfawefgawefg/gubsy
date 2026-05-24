@@ -31,6 +31,11 @@ using GubsyLobbyConfigSerializeFn = nlohmann::json (*)(void* user_data,
                                                        const GubsyLobbyState& lobby);
 using GubsyLobbyConfigValidateFn = bool (*)(void* user_data, const GubsyLobbyState& lobby,
                                             std::string& message);
+using GubsyLobbyConfigValidateRemoteFn = bool (*)(void* user_data, const GubsyLobbyState& lobby,
+                                                  const SessionContract& remote,
+                                                  std::string& message);
+using GubsyLobbyConfigApplyRemoteFn = bool (*)(void* user_data, GubsyLobbyState& lobby,
+                                               const SessionContract& remote, std::string& message);
 
 struct GubsyLobbyConfigProvider {
     void* user_data{nullptr};
@@ -39,4 +44,6 @@ struct GubsyLobbyConfigProvider {
     GubsyLobbyConfigSetOptionFn set_option{nullptr};
     GubsyLobbyConfigSerializeFn serialize{nullptr};
     GubsyLobbyConfigValidateFn validate{nullptr};
+    GubsyLobbyConfigValidateRemoteFn validate_remote{nullptr};
+    GubsyLobbyConfigApplyRemoteFn apply_remote{nullptr};
 };

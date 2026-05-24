@@ -64,12 +64,12 @@ Implemented callbacks:
 2. Validate config.
 3. Serialize config to JSON or sexpr-backed data.
 4. Apply local per-player choices.
+5. Validate remote config before transport connect.
+6. Apply remote config after a room is selected for joining.
 
 Planned callbacks:
 
-1. Deserialize config from a remote session.
-2. Validate remote config before transport connect.
-3. Register custom rich panels.
+1. Register custom rich panels.
 
 The implementation should stay low abstraction. The current API is a small
 struct of function pointers so the call path is explicit and easy to debug.

@@ -106,6 +106,40 @@ void disconnect_game_transport(EngineState& engine) {
     (void)engine.lobby_commands.leave(engine.lobby_commands.leave_user_data, engine.lobby);
 }
 
+bool validate_room_contract(EngineState& engine, const MatchmakingRoom& room,
+                            std::string& message) {
+    const SessionContract local = build_lobby_contract(engine);
+    const SessionCompatibility compatibility =
+        session_contract_check_compatibility(room.contract, local);
+    if (compatibility != SessionCompatibility::Compatible) {
+        message = session_contract_compatibility_text(compatibility);
+        engine.lobby.status_message = message;
+        engine.lobby.last_error = message;
+        return false;
+    }
+
+    GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
+    if (provider.validate_remote &&
+        !provider.validate_remote(provider.user_data, engine.lobby, room.contract, message)) {
+        engine.lobby.status_message = message;
+        engine.lobby.last_error = message;
+        return false;
+    }
+    return true;
+}
+
+bool apply_remote_room_config(EngineState& engine, const MatchmakingRoom& room,
+                              std::string& message) {
+    GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
+    if (!provider.apply_remote)
+        return true;
+    if (provider.apply_remote(provider.user_data, engine.lobby, room.contract, message))
+        return true;
+    engine.lobby.status_message = message;
+    engine.lobby.last_error = message;
+    return false;
+}
+
 } // namespace
 
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message) {
@@ -158,6 +192,11 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
 bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
+    if (!validate_room_contract(engine, room, message))
+        return false;
+    if (!apply_remote_room_config(engine, room, message))
+        return false;
+
     std::string host;
     std::uint16_t port = 0;
     if (!parse_endpoint(room.contract.realtime_endpoint, host, port)) {
