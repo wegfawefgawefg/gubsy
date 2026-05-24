@@ -14,6 +14,9 @@
 #include "src/menu/screens/binds_choose_input_screen.hpp"
 #include "src/menu/screens/binds_profile_editor_screen.hpp"
 #include "src/menu/screens/binds_profiles_screen.hpp"
+#include "src/menu/screens/lobby_local_players_screen.hpp"
+#include "src/menu/screens/lobby_picker_screens.hpp"
+#include "src/menu/screens/lobby_player_settings_screen.hpp"
 #include "src/menu/screens/main_menu_screen.hpp"
 #include "src/menu/screens/mods_screen.hpp"
 #include "src/menu/screens/profiles_screen.hpp"
@@ -82,6 +85,9 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     register_engine_settings_schema_entries(engine);
     register_main_menu_screen(engine);
     register_shell_lobby_screen(engine);
+    register_lobby_local_players_screen(engine);
+    register_lobby_player_settings_screen(engine);
+    register_lobby_picker_screens(engine);
     register_settings_category_screens(engine);
     register_settings_hub_screen(engine);
     register_profiles_screen(engine);
