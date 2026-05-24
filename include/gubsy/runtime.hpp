@@ -8,6 +8,8 @@
 #include "gubsy/menu/ids.hpp"
 #include "gubsy/menu/system.hpp"
 
+#include <vector>
+
 struct SDL_Renderer;
 union SDL_Event;
 struct SDL_Texture;
@@ -65,6 +67,9 @@ int gubsy_configured_frame_cap_fps(GubsyRuntime& runtime);
 MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime, GubsyHostMenuCommandFn fn,
                                           void* user_data);
 void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schema);
+const std::vector<BindsProfile>& gubsy_get_binds_profiles(GubsyRuntime& runtime);
+const BindsProfile* gubsy_find_binds_profile(GubsyRuntime& runtime, int profile_id);
+bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& profile);
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands);
 void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands);
 void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProvider provider);

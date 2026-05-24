@@ -196,6 +196,21 @@ void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schem
     register_binds_schema(gubsy_runtime_engine(runtime), schema);
 }
 
+const std::vector<BindsProfile>& gubsy_get_binds_profiles(GubsyRuntime& runtime) {
+    return gubsy_runtime_engine(runtime).binds_profiles;
+}
+
+const BindsProfile* gubsy_find_binds_profile(GubsyRuntime& runtime, int profile_id) {
+    return ginput::find_profile(gubsy_runtime_engine(runtime).binds_profiles, profile_id);
+}
+
+bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& profile) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    if (!ginput::replace_profile(engine.binds_profiles, profile))
+        return false;
+    return save_binds_profile(profile);
+}
+
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {
     gubsy_runtime_engine(runtime).main_menu_commands = commands;
 }
