@@ -1,4 +1,5 @@
 #include "src/alerts.hpp"
+#include "src/display_modes.hpp"
 #include "src/engine_state.hpp"
 #include "src/game_settings.hpp"
 #include "src/graphics.hpp"
@@ -1063,6 +1064,15 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
                     w.style.focus_g = 210;
                     w.style.focus_b = 150;
                     w.badge_color = SDL_Color{140, 220, 150, 255};
+                }
+                if (const std::string* sv = std::get_if<std::string>(binding.entry.value)) {
+                    if (*sv == "desktop") {
+                        std::string desktop = desktop_display_mode_label(engine);
+                        if (!desktop.empty()) {
+                            label_cache.push_back("Uses desktop mode: " + desktop);
+                            w.secondary = label_cache.back().c_str();
+                        }
+                    }
                 }
                 w.on_select =
                     MenuAction::run_command(g_cmd_apply_fullscreen_display_mode, entry_index);

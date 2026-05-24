@@ -92,7 +92,12 @@ SDL_DisplayID display_for_window(SDL_Window* window) {
 } // namespace
 
 std::vector<SettingOption> fullscreen_display_mode_options(EngineState& engine) {
-    std::vector<SettingOption> options{SettingOption{"desktop", "Desktop Default"}};
+    std::string desktop_label = desktop_display_mode_label(engine);
+    if (desktop_label.empty())
+        desktop_label = "Desktop Default";
+    else
+        desktop_label = "Desktop Default (" + desktop_label + ")";
+    std::vector<SettingOption> options{SettingOption{"desktop", desktop_label}};
     SDL_Window* window = current_graphics(engine) ? current_graphics(engine)->window : nullptr;
     if (!window || !SDL_WasInit(SDL_INIT_VIDEO))
         return options;
@@ -127,6 +132,15 @@ std::string configured_fullscreen_display_mode(const EngineState& engine) {
     if (const std::string* sv = std::get_if<std::string>(&it->second))
         return sv->empty() ? std::string("desktop") : *sv;
     return "desktop";
+}
+
+std::string desktop_display_mode_label(EngineState& engine) {
+    SDL_Window* window = current_graphics(engine) ? current_graphics(engine)->window : nullptr;
+    if (!window || !SDL_WasInit(SDL_INIT_VIDEO))
+        return {};
+
+    const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(display_for_window(window));
+    return mode ? fullscreen_mode_label(*mode) : std::string{};
 }
 
 bool apply_fullscreen_display_mode(SDL_Window* window, const std::string& value,
