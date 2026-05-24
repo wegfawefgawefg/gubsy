@@ -94,6 +94,8 @@ bool set_render_resolution(EngineState& engine, int width, int height);
 void set_render_scale_mode(EngineState& engine, RenderScaleMode mode);
 glm::ivec2 get_render_dimensions(const EngineState& engine);
 glm::ivec2 get_window_dimensions(const EngineState& engine);
+bool render_resolution_matches_window(const EngineState& engine);
+void sync_matched_render_resolution(EngineState& engine);
 
 // Sync graphics settings from top-level settings
 void sync_graphics_from_settings(EngineState& engine);

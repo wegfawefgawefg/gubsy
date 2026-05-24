@@ -147,6 +147,7 @@ GubsyFrame gubsy_get_frame(GubsyRuntime& runtime) {
                                      static_cast<unsigned int>(window_h)};
         }
     }
+    sync_matched_render_resolution(engine);
 
     return GubsyFrame{
         .backend = GubsyRenderBackend::SDLRenderer,

@@ -482,24 +482,78 @@ SDL_Texture* get_texture(EngineState& engine, int sprite_id) {
     return (it == current_graphics(engine)->textures_by_id.end()) ? nullptr : it->second;
 }
 
+namespace {
+
+bool setting_is_on(const SettingsValue& value) {
+    if (const int* iv = std::get_if<int>(&value))
+        return *iv != 0;
+    if (const float* fv = std::get_if<float>(&value))
+        return *fv >= 0.5f;
+    return false;
+}
+
+bool parse_resolution_setting(const std::string& value, int& width, int& height) {
+    const std::size_t x_pos = value.find('x');
+    if (x_pos == std::string::npos)
+        return false;
+    width = std::atoi(value.substr(0, x_pos).c_str());
+    height = std::atoi(value.substr(x_pos + 1).c_str());
+    return width > 0 && height > 0;
+}
+
+} // namespace
+
+bool render_resolution_matches_window(const EngineState& engine) {
+    auto it = engine.top_level_game_settings.settings.find("gubsy.video.match_render_to_window");
+    if (it == engine.top_level_game_settings.settings.end())
+        return true;
+    return setting_is_on(it->second);
+}
+
+void sync_matched_render_resolution(EngineState& engine) {
+    Graphics* graphics = current_graphics(engine);
+    if (!graphics || !render_resolution_matches_window(engine))
+        return;
+
+    int width = static_cast<int>(std::max(graphics->window_dims.x, 1U));
+    int height = static_cast<int>(std::max(graphics->window_dims.y, 1U));
+    if (static_cast<unsigned int>(width) == graphics->render_dims.x &&
+        static_cast<unsigned int>(height) == graphics->render_dims.y) {
+        return;
+    }
+    set_render_resolution(engine, width, height);
+    engine.top_level_game_settings.settings["gubsy.video.render_resolution"] =
+        std::to_string(width) + "x" + std::to_string(height);
+}
+
 void sync_graphics_from_settings(EngineState& engine) {
     if (!current_graphics(engine))
         return;
 
-    const auto& settings = engine.top_level_game_settings.settings;
+    auto& settings = engine.top_level_game_settings.settings;
 
-    if (auto it = settings.find("gubsy.video.render_resolution"); it != settings.end()) {
+    if (auto it = settings.find("gubsy.video.window_resolution"); it != settings.end()) {
         if (const std::string* sv = std::get_if<std::string>(&it->second)) {
-            const std::size_t x_pos = sv->find('x');
-            if (x_pos != std::string::npos) {
-                int width = std::atoi(sv->substr(0, x_pos).c_str());
-                int height = std::atoi(sv->substr(x_pos + 1).c_str());
-                if (width > 0 && height > 0 &&
-                    (static_cast<unsigned int>(width) != current_graphics(engine)->render_dims.x ||
-                     static_cast<unsigned int>(height) !=
-                         current_graphics(engine)->render_dims.y)) {
-                    set_render_resolution(engine, width, height);
-                }
+            int width = 0;
+            int height = 0;
+            if (parse_resolution_setting(*sv, width, height) &&
+                (static_cast<unsigned int>(width) != current_graphics(engine)->window_dims.x ||
+                 static_cast<unsigned int>(height) != current_graphics(engine)->window_dims.y)) {
+                set_window_dimensions(engine, width, height);
+            }
+        }
+    }
+
+    if (render_resolution_matches_window(engine)) {
+        sync_matched_render_resolution(engine);
+    } else if (auto it = settings.find("gubsy.video.render_resolution"); it != settings.end()) {
+        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+            int width = 0;
+            int height = 0;
+            if (parse_resolution_setting(*sv, width, height) &&
+                (static_cast<unsigned int>(width) != current_graphics(engine)->render_dims.x ||
+                 static_cast<unsigned int>(height) != current_graphics(engine)->render_dims.y)) {
+                set_render_resolution(engine, width, height);
             }
         }
     }
