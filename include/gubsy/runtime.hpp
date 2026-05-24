@@ -70,6 +70,7 @@ void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schem
 const std::vector<BindsProfile>& gubsy_get_binds_profiles(GubsyRuntime& runtime);
 const BindsProfile* gubsy_find_binds_profile(GubsyRuntime& runtime, int profile_id);
 bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& profile);
+bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int action_id);
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands);
 void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands);
 void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProvider provider);

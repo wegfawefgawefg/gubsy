@@ -273,6 +273,7 @@ if (GUB_BUILD_TOOLS)
   if (BUILD_TESTING)
     add_test(NAME public_api_smoke COMMAND public_api_smoke)
     add_test(NAME lobby_config_smoke COMMAND lobby_config_smoke)
+    add_test(NAME lobby_input_smoke COMMAND lobby_input_smoke)
     add_test(
       NAME lobby_online_smoke
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/lobby_online_smoke.sh"
@@ -333,6 +334,15 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
   target_enable_strict_warnings(lobby_config_smoke)
+
+  add_executable(lobby_input_smoke tools/lobby_input_smoke/main.cpp)
+  target_link_libraries(lobby_input_smoke PRIVATE gubsy_engine)
+  target_include_directories(lobby_input_smoke PRIVATE
+    ${GUB_SOURCE_DIR}/include
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
+  )
+  target_enable_strict_warnings(lobby_input_smoke)
 
   add_executable(lobby_online_smoke tools/lobby_online_smoke/main.cpp)
   target_link_libraries(lobby_online_smoke PRIVATE gubsy_engine)

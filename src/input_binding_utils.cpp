@@ -321,6 +321,58 @@ bool device_button_is_down(const EngineState& engine, int encoded_button) {
     return false;
 }
 
+bool device_button_is_down_for_source(const EngineState& engine,
+                                      int encoded_button,
+                                      InputSourceType source_type,
+                                      int source_id) {
+    const DeviceState& state = engine.device_state;
+    DeviceInputKind kind = DeviceInputKind::Keyboard;
+    int device_id = kAnyDeviceId;
+    int code = 0;
+    if (!decode_extended_button(encoded_button, kind, device_id, code)) {
+        auto it = kLegacyButtonMap.find(encoded_button);
+        if (it == kLegacyButtonMap.end())
+            return false;
+        kind = it->second.kind;
+        code = it->second.code;
+        device_id = kAnyDeviceId;
+    }
+
+    switch (kind) {
+        case DeviceInputKind::Keyboard:
+            if (source_type != InputSourceType::Keyboard)
+                return false;
+            if (imgui_want_capture_keyboard() || layout_editor_is_active(engine))
+                return false;
+            if (code >= 0 && code < SDL_NUM_SCANCODES)
+                return state.keyboard[static_cast<std::size_t>(code)] != 0;
+            return false;
+        case DeviceInputKind::Mouse:
+            if (source_type != InputSourceType::Mouse)
+                return false;
+            if (imgui_want_capture_mouse() || layout_editor_is_active(engine))
+                return false;
+            return (state.mouse_buttons & static_cast<uint32_t>(code)) != 0;
+        case DeviceInputKind::Gamepad:
+            if (source_type != InputSourceType::Gamepad)
+                return false;
+            if (layout_editor_is_active(engine))
+                return false;
+            if (code < 0 || code >= SDL_CONTROLLER_BUTTON_MAX)
+                return false;
+            for (const auto& controller : state.controllers) {
+                if (device_id != kAnyDeviceId && controller.device_id != device_id)
+                    continue;
+                if (source_id != kAnyDeviceId && controller.device_id != source_id)
+                    continue;
+                if (controller.buttons[static_cast<std::size_t>(code)])
+                    return true;
+            }
+            return false;
+    }
+    return false;
+}
+
 float sample_analog_1d(const EngineState& engine, int encoded_axis) {
     const DeviceState& state = engine.device_state;
     DeviceInputKind kind = DeviceInputKind::Keyboard;

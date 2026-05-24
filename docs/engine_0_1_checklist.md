@@ -31,8 +31,8 @@ The missing work is mostly about:
 
 ## Must Have
 
-These are the things that should exist before calling the engine solid enough
-for outside use or for serious internal game work.
+These are the things that must work before calling the engine ready for outside
+use or serious internal game work.
 
 ### 1. Multiplayer Session Hardening
 
@@ -122,7 +122,7 @@ engine feeling mature.
 ### 4. Better Example Game Coverage
 
 - keep the bundled game as a proof case, not as the engine’s center of gravity
-- add just enough example behavior to prove the engine APIs are good
+- add focused example behavior that exercises the intended engine APIs
 - avoid growing the demo in ways that hide engine API problems
 
 ## Nice To Have
@@ -143,10 +143,10 @@ Gubsy should count as a `0.1` engine when:
 
 - a small game can define its own lobby/config/sync behavior without fighting engine assumptions
 - a small game can define its own multiplayer protocol without inheriting mandatory engine message formats
-- local and online session flow are both reliable enough for normal use
+- local and online session flow are both reliable in normal use
 - transport and session failures are understandable and recoverable
 - mod/version/network compatibility is enforced instead of hand-waved
-- the engine has enough tooling to debug sync, session, and content problems quickly
+- the engine has the tooling needed to debug sync, session, and content problems quickly
 
 ## Not The Goal
 

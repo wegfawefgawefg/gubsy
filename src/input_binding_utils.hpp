@@ -4,6 +4,7 @@
 
 #include "src/device_state.hpp"
 #include "src/input.hpp"
+#include "gubsy/input/sources.hpp"
 
 struct EngineState;
 
@@ -24,6 +25,10 @@ int encode_device_analog_2d(DeviceInputKind kind, int device_id, int axis_x_code
 // Sampling helpers -----------------------------------------------------------
 
 bool device_button_is_down(const EngineState& engine, int encoded_button);
+bool device_button_is_down_for_source(const EngineState& engine,
+                                      int encoded_button,
+                                      InputSourceType source_type,
+                                      int source_id);
 float sample_analog_1d(const EngineState& engine, int encoded_axis);
 glm::vec2 sample_analog_2d(const EngineState& engine, int encoded_axis);
 glm::vec2 normalized_mouse_coords(const DeviceState& state);

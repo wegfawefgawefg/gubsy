@@ -64,9 +64,9 @@ Cut plan
    engine layer when they are not generally useful to the game kit.
 6. Replace sample-specific input/state types in public headers with generic
    engine-owned interfaces or opaque callbacks.
-7. Keep the sample as an in-repo consumer until the boundary is clean enough
-   that moving it to its own repo would be a mechanical step instead of a
-   semantic one.
+7. Keep the sample as an in-repo consumer until it uses the same public
+   dependency boundary as an external game. At that point, moving it to its own
+   repo should be a mechanical step instead of a semantic one.
 
 Current verification
 --------------------

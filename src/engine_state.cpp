@@ -6,6 +6,7 @@
 #include "src/graphics.hpp"
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/imgui_debug/imgui_debug.hpp"
+#include "src/input_binding_utils.hpp"
 #include "src/input_system.hpp"
 #include "src/layout_editor/layout_editor.hpp"
 #include "src/lobby_state.hpp"
@@ -209,6 +210,32 @@ bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& prof
     if (!ginput::replace_profile(engine.binds_profiles, profile))
         return false;
     return save_binds_profile(profile);
+}
+
+bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int action_id) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+
+    const GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
+    if (player == nullptr)
+        return false;
+
+    const BindsProfile* profile =
+        ginput::find_profile(engine.binds_profiles, player->binds_profile_id);
+    if (profile == nullptr)
+        return false;
+
+    const std::vector<ginput::ButtonBind>& binds =
+        ginput::button_binds_for_action(*profile, action_id);
+    for (const ginput::ButtonBind& bind : binds) {
+        for (const GubsyLobbyDeviceAssignment& device : player->devices) {
+            if (device_button_is_down_for_source(engine, bind.device_button, device.type,
+                                                 device.device_id)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {

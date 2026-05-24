@@ -195,6 +195,12 @@ Implemented now:
     lobby command layer with a real room server.
 16. Public runtime access for host games to inspect and replace binds profiles
     after registering their action schema.
+17. Public lobby-player action query that resolves player-assigned devices
+    through the selected binds profile, with smoke coverage for keyboard and
+    gamepad device filtering.
+18. Splonks gameplay input bridge consumes the lobby-player action query and
+    writes Splonks `InputFrame`s for local players, so lobby binds/device
+    assignment drives gameplay input instead of a duplicate hardcoded decoder.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -232,6 +238,8 @@ Required evidence:
    same host and join path without bypassing the Gubsy lobby command layer.
 8. Host games can seed a playable default binds profile without reaching into
    Gubsy private state or editing generated profile data by hand.
+9. Host games can query actions for a specific lobby player without duplicating
+   Gubsy's binds-profile or device-assignment decoding.
 
 ## Non-Goals
 
