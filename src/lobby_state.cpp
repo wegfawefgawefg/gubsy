@@ -14,16 +14,14 @@ namespace {
 
 constexpr int kMaxLocalPlayers = 32;
 
-template <typename T, typename Pred>
-T* find_if_ptr(std::vector<T>& items, Pred pred) {
+template <typename T, typename Pred> T* find_if_ptr(std::vector<T>& items, Pred pred) {
     auto it = std::find_if(items.begin(), items.end(), pred);
     if (it == items.end())
         return nullptr;
     return &*it;
 }
 
-template <typename T, typename Pred>
-const T* find_if_ptr(const std::vector<T>& items, Pred pred) {
+template <typename T, typename Pred> const T* find_if_ptr(const std::vector<T>& items, Pred pred) {
     auto it = std::find_if(items.begin(), items.end(), pred);
     if (it == items.end())
         return nullptr;
@@ -111,12 +109,13 @@ void fill_missing_player_choices(EngineState& engine, GubsyLobbyPlayer& player) 
             find_binds_profile(engine, preferred_binds) ? preferred_binds : fallback_binds.id;
     }
     if (!find_input_settings_profile(engine, player.input_settings_profile_id)) {
-        player.input_settings_profile_id =
-            find_input_settings_profile(engine, preferred_input) ? preferred_input
-                                                                 : fallback_input.id;
+        player.input_settings_profile_id = find_input_settings_profile(engine, preferred_input)
+                                               ? preferred_input
+                                               : fallback_input.id;
     }
     if (player.devices.empty() && !engine.input_sources.empty()) {
-        player.devices.push_back(gubsy_lobby_device_from_input_source(engine.input_sources.front()));
+        player.devices.push_back(
+            gubsy_lobby_device_from_input_source(engine.input_sources.front()));
     }
     if (selected_user)
         persist_user_profile_choice(*selected_user, player);
@@ -151,6 +150,9 @@ void gubsy_lobby_ensure_ready(EngineState& engine) {
     int max_index = static_cast<int>(engine.lobby.local_players.size()) - 1;
     engine.lobby.selected_player_index =
         std::clamp(engine.lobby.selected_player_index, 0, std::max(0, max_index));
+    GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
+    if (provider.ensure_defaults)
+        provider.ensure_defaults(provider.user_data, engine.lobby);
     sync_engine_players_from_lobby(engine);
 }
 
@@ -177,9 +179,8 @@ void gubsy_lobby_remove_local_player(EngineState& engine, int player_index) {
     if (player_index < 0 || player_index >= static_cast<int>(engine.lobby.local_players.size()))
         return;
     engine.lobby.local_players.erase(engine.lobby.local_players.begin() + player_index);
-    gubsy_lobby_select_player(engine, std::min(player_index,
-                                              static_cast<int>(engine.lobby.local_players.size()) -
-                                                  1));
+    gubsy_lobby_select_player(
+        engine, std::min(player_index, static_cast<int>(engine.lobby.local_players.size()) - 1));
     sync_engine_players_from_lobby(engine);
 }
 
@@ -228,10 +229,9 @@ bool gubsy_lobby_set_user_profile(EngineState& engine, int player_index, int pro
         return false;
 
     player->user_profile_id = profile->id;
-    player->binds_profile_id =
-        find_binds_profile(engine, profile->last_binds_profile_id)
-            ? profile->last_binds_profile_id
-            : ensure_default_binds_profile(engine).id;
+    player->binds_profile_id = find_binds_profile(engine, profile->last_binds_profile_id)
+                                   ? profile->last_binds_profile_id
+                                   : ensure_default_binds_profile(engine).id;
     player->input_settings_profile_id =
         find_input_settings_profile(engine, profile->last_input_settings_profile_id)
             ? profile->last_input_settings_profile_id
@@ -254,9 +254,7 @@ bool gubsy_lobby_set_binds_profile(EngineState& engine, int player_index, int pr
     return true;
 }
 
-bool gubsy_lobby_set_input_settings_profile(EngineState& engine,
-                                            int player_index,
-                                            int profile_id) {
+bool gubsy_lobby_set_input_settings_profile(EngineState& engine, int player_index, int profile_id) {
     gubsy_lobby_ensure_ready(engine);
     GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
     InputSettingsProfile* input = find_input_settings_profile(engine, profile_id);
@@ -269,18 +267,15 @@ bool gubsy_lobby_set_input_settings_profile(EngineState& engine,
     return true;
 }
 
-void gubsy_lobby_toggle_device(EngineState& engine,
-                               int player_index,
+void gubsy_lobby_toggle_device(EngineState& engine, int player_index,
                                GubsyLobbyDeviceAssignment device) {
     gubsy_lobby_ensure_ready(engine);
     GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
     if (!player)
         return;
-    auto it = std::find_if(player->devices.begin(),
-                           player->devices.end(),
-                           [device](GubsyLobbyDeviceAssignment item) {
-                               return same_device(item, device);
-                           });
+    auto it = std::find_if(
+        player->devices.begin(), player->devices.end(),
+        [device](GubsyLobbyDeviceAssignment item) { return same_device(item, device); });
     if (it != player->devices.end())
         player->devices.erase(it);
     else
@@ -288,17 +283,14 @@ void gubsy_lobby_toggle_device(EngineState& engine,
     sync_engine_players_from_lobby(engine);
 }
 
-bool gubsy_lobby_player_has_device(const EngineState& engine,
-                                   int player_index,
+bool gubsy_lobby_player_has_device(const EngineState& engine, int player_index,
                                    GubsyLobbyDeviceAssignment device) {
     const GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
     if (!player)
         return false;
-    return std::any_of(player->devices.begin(),
-                       player->devices.end(),
-                       [device](GubsyLobbyDeviceAssignment item) {
-                           return same_device(item, device);
-                       });
+    return std::any_of(
+        player->devices.begin(), player->devices.end(),
+        [device](GubsyLobbyDeviceAssignment item) { return same_device(item, device); });
 }
 
 bool gubsy_lobby_validate_start(EngineState& engine, std::string& message) {
@@ -317,18 +309,22 @@ bool gubsy_lobby_validate_start(EngineState& engine, std::string& message) {
             add_alert(engine, "Player " + std::to_string(i + 1) + " is missing a binds profile");
         if (!find_input_settings_profile(engine, player.input_settings_profile_id)) {
             add_alert(engine,
-                      "Player " + std::to_string(i + 1) +
-                          " is missing an input settings profile");
+                      "Player " + std::to_string(i + 1) + " is missing an input settings profile");
         }
     }
+    GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
+    if (provider.ensure_defaults)
+        provider.ensure_defaults(provider.user_data, engine.lobby);
+    if (provider.validate && !provider.validate(provider.user_data, engine.lobby, message))
+        return false;
     message = "Ready";
     return true;
 }
 
 std::string gubsy_lobby_player_label(const EngineState& engine, int player_index) {
     const GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
-    const UserProfile* profile = player ? find_user_profile(engine, player->user_profile_id)
-                                        : nullptr;
+    const UserProfile* profile =
+        player ? find_user_profile(engine, player->user_profile_id) : nullptr;
     std::string label = "Player " + std::to_string(player_index + 1);
     if (profile)
         label += ": " + profile->name;

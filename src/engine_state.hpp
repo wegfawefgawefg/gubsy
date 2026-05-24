@@ -1,7 +1,10 @@
 #pragma once
+#ifndef GUBSY_SRC_ENGINE_STATE_HPP
+#define GUBSY_SRC_ENGINE_STATE_HPP
 
 #include "gubsy/app.hpp"
 #include "gubsy/lobby/commands.hpp"
+#include "gubsy/lobby/config.hpp"
 #include "mode_registry.hpp"
 #include "player.hpp"
 #include "src/alerts.hpp"
@@ -10,8 +13,8 @@
 #include "src/game_settings.hpp"
 #include "src/input_settings_profiles.hpp"
 #include "src/input_sources.hpp"
-#include "src/lobby_state.hpp"
 #include "src/layout_editor/layout_editor_state.hpp"
+#include "src/lobby_state.hpp"
 #include "src/menu/menu_commands.hpp"
 #include "src/menu/menu_manager.hpp"
 #include "src/menu/menu_runtime_state.hpp"
@@ -37,6 +40,7 @@ struct EngineState {
     GubsyAppConfig app_config{};
     GubsyMainMenuCommands main_menu_commands{};
     GubsyLobbyCommands lobby_commands{};
+    GubsyLobbyConfigProvider lobby_config_provider{};
 
     double now{0.0};
     float dt{0.0f};
@@ -109,3 +113,5 @@ struct EngineState {
 
 bool init_engine_state(EngineState& engine, const GubsyAppConfig& config = {});
 void cleanup_engine_state(EngineState& engine);
+
+#endif

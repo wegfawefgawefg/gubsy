@@ -29,10 +29,13 @@ The game owns:
 
 The game should register a lobby config provider with Gubsy.
 
-The provider has two jobs:
+The provider has one implemented job now:
 
 1. Describe boring editable fields that Gubsy can render with default widgets.
-2. Register custom game-authored panels/screens for rich UI that descriptors
+
+It has one planned extension point:
+
+1. Register custom game-authored panels/screens for rich UI that descriptors
    cannot express well.
 
 This matches the normal engine shape: the framework owns screen routing, stack
@@ -55,17 +58,21 @@ Optional custom UI data:
 3. A summary panel hook for showing game-specific lobby state.
 4. A help/description hook for selected game-specific fields.
 
-Required callbacks:
+Implemented callbacks:
 
 1. Build default config.
 2. Validate config.
 3. Serialize config to JSON or sexpr-backed data.
-4. Deserialize config from a remote session.
-5. Apply local per-player choices.
-6. Start the game from validated lobby state.
+4. Apply local per-player choices.
 
-The initial implementation should stay low abstraction. A small struct of
-function pointers is enough.
+Planned callbacks:
+
+1. Deserialize config from a remote session.
+2. Validate remote config before transport connect.
+3. Register custom rich panels.
+
+The implementation should stay low abstraction. The current API is a small
+struct of function pointers so the call path is explicit and easy to debug.
 
 ## UI Driving Model
 

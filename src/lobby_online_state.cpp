@@ -1,6 +1,5 @@
-#include "src/lobby_state.hpp"
-
 #include "src/engine_state.hpp"
+#include "src/lobby_state.hpp"
 #include "src/room_matchmaking.hpp"
 #include "src/user_profiles.hpp"
 
@@ -43,6 +42,11 @@ SessionContract build_lobby_contract(EngineState& engine) {
     if (contract.session_phase.empty())
         contract.session_phase = "lobby";
     contract.realtime_endpoint = engine.lobby.advertised_endpoint;
+    GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
+    if (provider.ensure_defaults)
+        provider.ensure_defaults(provider.user_data, engine.lobby);
+    if (provider.serialize)
+        contract.game_config = provider.serialize(provider.user_data, engine.lobby);
     engine.lobby.contract = contract;
     return contract;
 }
@@ -79,8 +83,8 @@ bool parse_endpoint(std::string_view endpoint, std::string& host, std::uint16_t&
 
 void apply_room_to_lobby(EngineState& engine, const MatchmakingRoom& room) {
     engine.lobby.room_code = room.room_code;
-    engine.lobby.lobby_name = room.session_name.empty() ? engine.lobby.lobby_name
-                                                        : room.session_name;
+    engine.lobby.lobby_name =
+        room.session_name.empty() ? engine.lobby.lobby_name : room.session_name;
     engine.lobby.max_players = std::max(1, room.max_players);
     engine.lobby.contract = room.contract;
     engine.lobby.members = room.members;
@@ -151,9 +155,7 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     return true;
 }
 
-bool gubsy_lobby_join_room(EngineState& engine,
-                           const MatchmakingRoom& room,
-                           std::string& message) {
+bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
     std::string host;
@@ -168,12 +170,10 @@ bool gubsy_lobby_join_room(EngineState& engine,
         return false;
     }
 
-    GubsyLobbyJoinResult join_result =
-        engine.lobby_commands.join(engine.lobby_commands.join_user_data, engine.lobby,
-                                   host.c_str(), port);
+    GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
+        engine.lobby_commands.join_user_data, engine.lobby, host.c_str(), port);
     if (!join_result.ok) {
-        message = join_result.status.empty() ? "Failed to join host transport"
-                                             : join_result.status;
+        message = join_result.status.empty() ? "Failed to join host transport" : join_result.status;
         engine.lobby.status_message = message;
         engine.lobby.last_error = message;
         return false;
@@ -204,8 +204,7 @@ bool gubsy_lobby_join_room(EngineState& engine,
     return true;
 }
 
-bool gubsy_lobby_join_room_code(EngineState& engine,
-                                const std::string& room_code,
+bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_code,
                                 std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);

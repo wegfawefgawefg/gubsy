@@ -181,6 +181,8 @@ Implemented now:
 7. Direct host/join callbacks through `GubsyLobbyCommands`.
 8. Room-server host, room-code join, room list refresh, leave, and heartbeat
    through `RoomServerMatchmaking`.
+9. Game-owned lobby config provider with descriptor-backed default rows.
+10. Game config serialization into `SessionContract::game_config`.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -194,8 +196,9 @@ started.
 
 Still remaining:
 
-1. Game-owned lobby config provider from `game_lobby_config_layer.md`.
-2. Richer status copy for online failures and compatibility checks.
+1. Richer status copy for online failures and compatibility checks.
+2. Remote `game_config` compatibility validation on room join before transport
+   connect.
 3. Better advertised-host defaults for real LAN/internet use. Splonks currently
    supports `SPLONKS_ADVERTISE_HOST`, falling back to `127.0.0.1` for same-machine
    testing.

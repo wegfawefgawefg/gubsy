@@ -74,21 +74,13 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     players.secondary = text_cache[1].c_str();
     players.on_select = MenuAction::push(MenuScreenID::LOBBY_LOCAL_PLAYERS);
 
-    MenuWidget settings = make_button(202,
-                                      SettingsObjectID::CARD1,
-                                      "Game / Settings",
-                                      MenuAction::push(MenuScreenID::SETTINGS));
-    MenuWidget host = make_button(203,
-                                  SettingsObjectID::CARD2,
-                                  "Host Game",
+    MenuWidget settings = make_button(202, SettingsObjectID::CARD1, "Game Settings",
+                                      MenuAction::push(MenuScreenID::LOBBY_GAME_CONFIG));
+    MenuWidget host = make_button(203, SettingsObjectID::CARD2, "Host Game",
                                   MenuAction::run_command(g_cmd_host_game));
-    MenuWidget browse = make_button(204,
-                                    SettingsObjectID::CARD3,
-                                    "Browse Servers",
+    MenuWidget browse = make_button(204, SettingsObjectID::CARD3, "Browse Servers",
                                     MenuAction::run_command(g_cmd_browse_servers));
-    MenuWidget start = make_button(205,
-                                   SettingsObjectID::PREV,
-                                   "Start Game",
+    MenuWidget start = make_button(205, SettingsObjectID::PREV, "Start Game",
                                    MenuAction::run_command(g_cmd_start_game));
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());
 

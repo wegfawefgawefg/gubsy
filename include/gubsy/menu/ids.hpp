@@ -14,6 +14,7 @@ inline constexpr MenuScreenId LOBBY_INPUT_SETTINGS_PICKER = (1u << 19) + 6;
 inline constexpr MenuScreenId LOBBY_DEVICE_PICKER = (1u << 19) + 7;
 inline constexpr MenuScreenId LOBBY_SERVER_BROWSER = (1u << 19) + 8;
 inline constexpr MenuScreenId LOBBY_HOST_SETUP = (1u << 19) + 9;
+inline constexpr MenuScreenId LOBBY_GAME_CONFIG = (1u << 19) + 10;
 inline constexpr MenuScreenId MODS = 1u << 20;
 inline constexpr MenuScreenId SETTINGS = (1u << 20) + 1;
 inline constexpr MenuScreenId PROFILES = (1u << 20) + 2;
