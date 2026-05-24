@@ -186,6 +186,8 @@ Implemented now:
 11. Remote session contract compatibility validation before join transport
     connect.
 12. Remote game config validation/application hooks for joined rooms.
+13. Contextual host/join/refresh/leave status messages for common failure
+    paths.
 
 The direct host/join callback path lets a game wire Gubsy's lobby UI to its own
 tested transport code without putting game networking details in Gubsy. Splonks
@@ -197,9 +199,10 @@ publishes room metadata with the advertised realtime endpoint. If room creation
 fails, Gubsy calls the leave callback to disconnect the transport it just
 started.
 
-Still remaining:
+Further hardening:
 
-1. Richer status copy for online failures and compatibility checks.
+1. Exercise the full host/join path manually across two processes.
+2. Add automated room-service compatibility tests for mismatched game config.
 
 ## Non-Goals For This Pass
 

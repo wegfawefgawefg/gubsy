@@ -35,6 +35,22 @@ int lobby_visibility_value(GubsyLobbyVisibility visibility) {
     return visibility == GubsyLobbyVisibility::Public ? 1 : 0;
 }
 
+std::string with_prefix(const char* prefix, const std::string& detail) {
+    if (detail.empty())
+        return prefix;
+    return std::string(prefix) + ": " + detail;
+}
+
+void set_lobby_error(EngineState& engine, const std::string& message) {
+    engine.lobby.status_message = message;
+    engine.lobby.last_error = message;
+}
+
+void clear_lobby_error(EngineState& engine, const std::string& status) {
+    engine.lobby.status_message = status;
+    engine.lobby.last_error.clear();
+}
+
 SessionContract build_lobby_contract(EngineState& engine) {
     SessionContract contract = engine.lobby.contract;
     if (contract.net_protocol.empty())
@@ -112,17 +128,17 @@ bool validate_room_contract(EngineState& engine, const MatchmakingRoom& room,
     const SessionCompatibility compatibility =
         session_contract_check_compatibility(room.contract, local);
     if (compatibility != SessionCompatibility::Compatible) {
-        message = session_contract_compatibility_text(compatibility);
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message =
+            with_prefix("Cannot join room", session_contract_compatibility_text(compatibility));
+        set_lobby_error(engine, message);
         return false;
     }
 
     GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
     if (provider.validate_remote &&
         !provider.validate_remote(provider.user_data, engine.lobby, room.contract, message)) {
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message = with_prefix("Cannot join room", message);
+        set_lobby_error(engine, message);
         return false;
     }
     return true;
@@ -135,8 +151,8 @@ bool apply_remote_room_config(EngineState& engine, const MatchmakingRoom& room,
         return true;
     if (provider.apply_remote(provider.user_data, engine.lobby, room.contract, message))
         return true;
-    engine.lobby.status_message = message;
-    engine.lobby.last_error = message;
+    message = with_prefix("Cannot apply room config", message);
+    set_lobby_error(engine, message);
     return false;
 }
 
@@ -148,16 +164,17 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     if (!gubsy_lobby_validate_start(engine, message))
         return false;
     if (!engine.lobby_commands.host) {
-        message = "No host callback registered";
+        message = "Cannot host room: no host callback registered";
+        set_lobby_error(engine, message);
         return false;
     }
 
     GubsyLobbyHostResult result =
         engine.lobby_commands.host(engine.lobby_commands.host_user_data, engine.lobby, port);
     if (!result.ok) {
-        message = result.status.empty() ? "Failed to start host transport" : result.status;
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message = result.status.empty() ? "Cannot host room: failed to start transport"
+                                        : with_prefix("Cannot host room", result.status);
+        set_lobby_error(engine, message);
         return false;
     }
 
@@ -171,9 +188,9 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     MatchmakingRoom room = build_room_metadata(engine);
     if (!g_matchmaking.create_room(engine.lobby.room_server_url, room, create_result, err)) {
         disconnect_game_transport(engine);
-        message = err.empty() ? "Failed to create room" : err;
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message = err.empty() ? "Cannot host room: failed to publish room"
+                              : with_prefix("Cannot host room", err);
+        set_lobby_error(engine, message);
         return false;
     }
 
@@ -182,8 +199,7 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     engine.lobby.room_code = create_result.room_code;
     engine.lobby.host_secret = create_result.host_secret;
     engine.lobby.member_id = create_result.member_id;
-    engine.lobby.status_message = "Hosting room " + engine.lobby.room_code;
-    engine.lobby.last_error.clear();
+    clear_lobby_error(engine, "Hosting room " + engine.lobby.room_code);
     engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
     message = engine.lobby.status_message;
     return true;
@@ -201,20 +217,21 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     std::uint16_t port = 0;
     if (!parse_endpoint(room.contract.realtime_endpoint, host, port)) {
         message = "Room has no joinable realtime endpoint";
-        engine.lobby.last_error = message;
+        set_lobby_error(engine, message);
         return false;
     }
     if (!engine.lobby_commands.join) {
-        message = "No join callback registered";
+        message = "Cannot join room: no join callback registered";
+        set_lobby_error(engine, message);
         return false;
     }
 
     GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
         engine.lobby_commands.join_user_data, engine.lobby, host.c_str(), port);
     if (!join_result.ok) {
-        message = join_result.status.empty() ? "Failed to join host transport" : join_result.status;
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message = join_result.status.empty() ? "Cannot join room: failed to reach host transport"
+                                             : with_prefix("Cannot join room", join_result.status);
+        set_lobby_error(engine, message);
         return false;
     }
 
@@ -223,9 +240,9 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     if (!g_matchmaking.join_room(engine.lobby.room_server_url, room.room_code,
                                  local_player_name(engine), member_id, err)) {
         disconnect_game_transport(engine);
-        message = err.empty() ? "Failed to join room service" : err;
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message = err.empty() ? "Cannot join room: room service rejected join"
+                              : with_prefix("Cannot join room", err);
+        set_lobby_error(engine, message);
         return false;
     }
 
@@ -236,8 +253,7 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     engine.lobby.host_secret.clear();
     engine.lobby.join_host = host;
     engine.lobby.network_port = static_cast<int>(port);
-    engine.lobby.status_message = "Joined room " + room.room_code;
-    engine.lobby.last_error.clear();
+    clear_lobby_error(engine, "Joined room " + room.room_code);
     engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
     message = engine.lobby.status_message;
     return true;
@@ -250,9 +266,9 @@ bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_cod
     MatchmakingRoom room;
     std::string err;
     if (!g_matchmaking.fetch_room(engine.lobby.room_server_url, room_code, room, err)) {
-        message = err.empty() ? "Failed to fetch room" : err;
-        engine.lobby.status_message = message;
-        engine.lobby.last_error = message;
+        message = err.empty() ? "Cannot join room: room code not found"
+                              : with_prefix("Cannot join room", err);
+        set_lobby_error(engine, message);
         return false;
     }
     return gubsy_lobby_join_room(engine, room, message);
@@ -263,13 +279,15 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     ensure_room_defaults(engine);
     if (!engine.lobby.online || engine.lobby.room_code.empty()) {
         message = "Not in an online room";
+        engine.lobby.status_message = message;
         return true;
     }
     std::string err;
     if (!g_matchmaking.leave_room(engine.lobby.room_server_url, engine.lobby.room_code,
                                   engine.lobby.member_id, engine.lobby.host_secret, err)) {
-        message = err.empty() ? "Failed to leave room" : err;
-        engine.lobby.last_error = message;
+        message = err.empty() ? "Cannot leave room: room service rejected leave"
+                              : with_prefix("Cannot leave room", err);
+        set_lobby_error(engine, message);
         return false;
     }
     disconnect_game_transport(engine);
@@ -280,8 +298,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.members.clear();
-    engine.lobby.status_message = "Left online room";
-    engine.lobby.last_error.clear();
+    clear_lobby_error(engine, "Left online room");
     message = engine.lobby.status_message;
     return true;
 }
@@ -297,8 +314,9 @@ bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& mes
     std::vector<MatchmakingRoom> rooms;
     std::string err;
     if (!g_matchmaking.list_rooms(engine.lobby.room_server_url, rooms, err)) {
-        message = err.empty() ? "Failed to list rooms" : err;
-        engine.lobby.last_error = message;
+        message = err.empty() ? "Cannot refresh rooms: failed to list rooms"
+                              : with_prefix("Cannot refresh rooms", err);
+        set_lobby_error(engine, message);
         return false;
     }
 
@@ -306,9 +324,8 @@ bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& mes
     engine.lobby.browse_room_codes.clear();
     for (const MatchmakingRoom& room : engine.lobby.discovered_rooms)
         engine.lobby.browse_room_codes.push_back(room.room_code);
-    engine.lobby.status_message =
-        std::to_string(engine.lobby.discovered_rooms.size()) + " rooms visible";
-    engine.lobby.last_error.clear();
+    clear_lobby_error(engine,
+                      std::to_string(engine.lobby.discovered_rooms.size()) + " rooms visible");
     engine.lobby.next_room_refresh_at = engine.now + kRoomRefreshIntervalSec;
     message = engine.lobby.status_message;
     return true;
