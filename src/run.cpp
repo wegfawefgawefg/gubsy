@@ -1,37 +1,37 @@
 
 #include "run.hpp"
 
-#include <SDL.h>
-#include <filesystem>
-#include "graphics.hpp"
-#include "engine_state.hpp"
-#include "gubsy/run.hpp"
-#include <SDL_mixer.h>
 #include "audio.hpp"
-#include "src/audio_settings.hpp"
-#include "mods.hpp"
-#include "step.hpp"
-#include "data.hpp"
-#include "user_profiles.hpp"
-#include "player.hpp"
-#include "input_sources.hpp"
 #include "binds_profiles.hpp"
-#include "input_settings_profiles.hpp"
+#include "data.hpp"
+#include "engine_state.hpp"
 #include "game_settings.hpp"
-#include "top_level_game_settings.hpp"
-#include "sdl_shim.hpp"
+#include "graphics.hpp"
+#include "gubsy/run.hpp"
+#include "input_settings_profiles.hpp"
+#include "input_sources.hpp"
+#include "mods.hpp"
+#include "player.hpp"
 #include "render.hpp"
-#include "src/mod_host.hpp"
-#include "src/input_system.hpp"
-#include "src/mode_registry.hpp"
-#include "src/imgui_layer.hpp"
-#include "src/imgui_debug/imgui_debug.hpp"
-#include "src/layout_editor/layout_editor.hpp"
-#include "src/project_paths.hpp"
+#include "sdl_shim.hpp"
+#include "src/audio_settings.hpp"
 #include "src/gubsy_runtime_internal.hpp"
+#include "src/imgui_debug/imgui_debug.hpp"
+#include "src/imgui_layer.hpp"
+#include "src/input_system.hpp"
+#include "src/layout_editor/layout_editor.hpp"
+#include "src/mod_host.hpp"
+#include "src/mode_registry.hpp"
+#include "src/project_paths.hpp"
+#include "step.hpp"
+#include "top_level_game_settings.hpp"
+#include "user_profiles.hpp"
 
+#include <SDL.h>
+#include <SDL_mixer.h>
+#include <filesystem>
 
-bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
+bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks) {
     GubsyAppConfig app_config = normalize_gubsy_app_config(hooks.config);
     ensure_data_folder_structure();
     if (app_config.enable_mods) {
@@ -56,7 +56,6 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
     }
 
     load_audio_settings(engine, data_path("settings_profiles/audio.lisp").string());
-
 
     if (!init_audio(engine)) {
 #if GUB_ENABLE_SDL_MIXER
@@ -150,6 +149,19 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
 
         render(engine);
 
+        const int frame_cap = configured_frame_cap_fps(engine);
+        if (frame_cap > 0) {
+            const Uint64 frame_end = SDL_GetPerformanceCounter();
+            const double frame_seconds =
+                static_cast<double>(frame_end - t_now) / static_cast<double>(perf_freq);
+            const double target_seconds = 1.0 / static_cast<double>(frame_cap);
+            if (frame_seconds < target_seconds) {
+                Uint32 delay_ms = static_cast<Uint32>((target_seconds - frame_seconds) * 1000.0);
+                if (delay_ms > 0)
+                    SDL_Delay(delay_ms);
+            }
+        }
+
         accum_sec += dt;
         frame_counter += 1;
         if (accum_sec >= 1.0f) {
@@ -164,7 +176,7 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks){
     return 0;
 }
 
-bool stop_doing_the_gubsy(EngineState& engine){
+bool stop_doing_the_gubsy(EngineState& engine) {
     layout_editor_shutdown(engine);
     imgui_debug_shutdown();
     shutdown_imgui_layer();

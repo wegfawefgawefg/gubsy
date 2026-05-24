@@ -59,6 +59,7 @@ bool gubsy_init_sdl_renderer(GubsyRuntime& runtime);
 GubsyFrame gubsy_get_frame(GubsyRuntime& runtime);
 bool gubsy_draw_frame_to_window(GubsyRuntime& runtime);
 void gubsy_present_frame(GubsyRuntime& runtime);
+int gubsy_configured_frame_cap_fps(GubsyRuntime& runtime);
 MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime, GubsyHostMenuCommandFn fn,
                                           void* user_data);
 void gubsy_register_binds_schema(GubsyRuntime& runtime, const BindsSchema& schema);

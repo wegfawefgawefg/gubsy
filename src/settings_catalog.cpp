@@ -11,8 +11,7 @@
 
 namespace {
 
-GameSettings& ensure_active_game_settings_for_player(EngineState& engine,
-                                                     int player_index,
+GameSettings& ensure_active_game_settings_for_player(EngineState& engine, int player_index,
                                                      UserProfile** out_profile = nullptr) {
     static GameSettings dummy_settings{};
     auto ensure_profile_has_settings = [&](UserProfile& profile) {
@@ -29,7 +28,8 @@ GameSettings& ensure_active_game_settings_for_player(EngineState& engine,
             }
         }
         for (std::size_t i = 0; i < engine.players.size(); ++i) {
-            if (engine.players[i].has_active_profile && engine.players[i].profile.id == profile.id) {
+            if (engine.players[i].has_active_profile &&
+                engine.players[i].profile.id == profile.id) {
                 engine.players[i].profile.last_game_settings_profile_id = new_settings.id;
             }
         }
@@ -68,8 +68,7 @@ GameSettings& ensure_active_game_settings_for_player(EngineState& engine,
     int target_settings_id = target_profile ? target_profile->last_game_settings_profile_id : -1;
 
     auto find_settings = [&](int id) -> GameSettings* {
-        auto it = std::find_if(engine.game_settings_pool.begin(),
-                               engine.game_settings_pool.end(),
+        auto it = std::find_if(engine.game_settings_pool.begin(), engine.game_settings_pool.end(),
                                [&](const GameSettings& settings) { return settings.id == id; });
         if (it != engine.game_settings_pool.end())
             return &(*it);
@@ -126,8 +125,7 @@ SettingsValue* resolve_value(const SettingMetadata& meta, GameSettings& profile_
     return &it->second;
 }
 
-SettingsValue* resolve_value(EngineState& engine,
-                             const SettingMetadata& meta,
+SettingsValue* resolve_value(EngineState& engine, const SettingMetadata& meta,
                              GameSettings& profile_settings) {
     if (meta.scope == SettingScope::Install) {
         auto& map = engine.top_level_game_settings.settings;
@@ -140,6 +138,14 @@ SettingsValue* resolve_value(EngineState& engine,
 }
 
 void coerce_value_type(const SettingMetadata& meta, SettingsValue& value) {
+    if (meta.key == "gubsy.video.frame_cap") {
+        if (const int* iv = std::get_if<int>(&value)) {
+            value = std::to_string(*iv);
+        } else if (const float* fv = std::get_if<float>(&value)) {
+            value = std::to_string(static_cast<int>(*fv));
+        }
+        return;
+    }
     if (meta.widget.kind == SettingWidgetKind::Slider) {
         if (std::string* sv = std::get_if<std::string>(&value)) {
             char* end_ptr = nullptr;
@@ -148,9 +154,8 @@ void coerce_value_type(const SettingMetadata& meta, SettingsValue& value) {
                 value = parsed;
             } else {
                 std::string lower = *sv;
-                std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
-                    return static_cast<char>(std::tolower(c));
-                });
+                std::transform(lower.begin(), lower.end(), lower.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 if (lower == "unlimited")
                     value = 0.0f;
             }

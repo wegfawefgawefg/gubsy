@@ -619,6 +619,17 @@ std::string format_value(const SettingsValue& value) {
     return {};
 }
 
+std::string format_option_display(const SettingWidgetDesc& desc, const SettingsValue& value) {
+    const std::string* sv = std::get_if<std::string>(&value);
+    if (!sv)
+        return format_value(value);
+    for (const SettingOption& opt : desc.options) {
+        if (opt.value == *sv)
+            return opt.label.empty() ? opt.value : opt.label;
+    }
+    return *sv;
+}
+
 std::string format_slider_display(const SettingWidgetDesc& desc, float value) {
     float shown = value * desc.display_scale + desc.display_offset;
     int precision = std::max(0, desc.display_precision);
@@ -959,7 +970,7 @@ MenuWidget make_setting_widget(EngineState& engine, const EntryBinding& binding,
     }
     case SettingWidgetKind::Option: {
         w.type = WidgetType::OptionCycle;
-        label_cache.push_back(format_value(*binding.entry.value));
+        label_cache.push_back(format_option_display(desc, *binding.entry.value));
         w.badge = label_cache.back().c_str();
         if (std::string* sv = std::get_if<std::string>(binding.entry.value))
             w.bind_ptr = sv;

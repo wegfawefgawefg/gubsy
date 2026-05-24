@@ -172,6 +172,10 @@ void gubsy_present_frame(GubsyRuntime& runtime) {
     present_frame(gubsy_runtime_engine(runtime));
 }
 
+int gubsy_configured_frame_cap_fps(GubsyRuntime& runtime) {
+    return configured_frame_cap_fps(gubsy_runtime_engine(runtime));
+}
+
 MenuCommandId gubsy_register_menu_command(GubsyRuntime& runtime, GubsyHostMenuCommandFn fn,
                                           void* user_data) {
     return gubsy_runtime_engine(runtime).menu_commands.register_host_command(fn, user_data);

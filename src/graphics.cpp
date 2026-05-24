@@ -510,6 +510,19 @@ bool render_resolution_matches_window(const EngineState& engine) {
     return setting_is_on(it->second);
 }
 
+int configured_frame_cap_fps(const EngineState& engine) {
+    auto it = engine.top_level_game_settings.settings.find("gubsy.video.frame_cap");
+    if (it == engine.top_level_game_settings.settings.end())
+        return 60;
+    if (const std::string* sv = std::get_if<std::string>(&it->second))
+        return std::max(0, std::atoi(sv->c_str()));
+    if (const int* iv = std::get_if<int>(&it->second))
+        return std::max(0, *iv);
+    if (const float* fv = std::get_if<float>(&it->second))
+        return std::max(0, static_cast<int>(*fv));
+    return 60;
+}
+
 void sync_matched_render_resolution(EngineState& engine) {
     Graphics* graphics = current_graphics(engine);
     if (!graphics || !render_resolution_matches_window(engine))

@@ -6,7 +6,7 @@
     (key "gubsy.audio.sfx_volume" 0.611597)
     (key "gubsy.audio.ui_volume" 0.208)
     (key "gubsy.localization.language" "en")
-    (key "gubsy.video.frame_cap" 60)
+    (key "gubsy.video.frame_cap" "60")
     (key "gubsy.video.match_render_to_window" 1)
     (key "gubsy.video.preview_pan_x" 0)
     (key "gubsy.video.preview_pan_y" 0)
