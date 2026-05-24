@@ -16,6 +16,7 @@ MenuCommandId MenuCommandRegistry::register_host_command(GubsyHostMenuCommandFn 
     Handler handler;
     handler.host_fn = fn;
     handler.user_data = user_data;
+    handlers_.push_back(handler);
     return static_cast<MenuCommandId>(handlers_.size());
 }
 
