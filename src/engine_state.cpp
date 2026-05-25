@@ -241,6 +241,33 @@ bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int
     return false;
 }
 
+bool gubsy_lobby_player_axis_1d_down(GubsyRuntime& runtime, int player_index, int axis_1d_id,
+                                     float threshold) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+
+    const GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
+    if (player == nullptr)
+        return false;
+
+    const BindsProfile* profile =
+        ginput::find_profile(engine.binds_profiles, player->binds_profile_id);
+    if (profile == nullptr)
+        return false;
+
+    const std::vector<ginput::Axis1DBind>& binds = ginput::binds_for_axis_1d(*profile, axis_1d_id);
+    for (const ginput::Axis1DBind& bind : binds) {
+        for (const GubsyLobbyDeviceAssignment& device : player->devices) {
+            float value = sample_analog_1d_for_source(engine, bind.device_axis, device.type,
+                                                      device.device_id);
+            value = ginput::apply_axis_transform(value, bind.scale, bind.deadzone);
+            if (value >= threshold)
+                return true;
+        }
+    }
+    return false;
+}
+
 int gubsy_add_lobby_local_player(GubsyRuntime& runtime) {
     return gubsy_lobby_add_local_player(gubsy_runtime_engine(runtime));
 }

@@ -73,6 +73,8 @@ const std::vector<BindsProfile>& gubsy_get_binds_profiles(GubsyRuntime& runtime)
 const BindsProfile* gubsy_find_binds_profile(GubsyRuntime& runtime, int profile_id);
 bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& profile);
 bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int action_id);
+bool gubsy_lobby_player_axis_1d_down(GubsyRuntime& runtime, int player_index, int axis_1d_id,
+                                     float threshold);
 int gubsy_add_lobby_local_player(GubsyRuntime& runtime);
 bool gubsy_remove_lobby_local_player(GubsyRuntime& runtime, int player_index);
 bool gubsy_select_lobby_local_player(GubsyRuntime& runtime, int player_index);
