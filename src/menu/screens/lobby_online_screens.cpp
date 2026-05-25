@@ -373,23 +373,28 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
                                      MenuAction::run_command(g_cmd_refresh));
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(refresh);
+    std::size_t refresh_idx = widgets.size() - 1;
     widgets.push_back(back);
+    std::size_t back_idx = widgets.size() - 1;
+
+    MenuWidget& refresh_ref = widgets[refresh_idx];
+    MenuWidget& back_ref = widgets[back_idx];
 
     code.nav_down = join_code.id;
     join_code.nav_up = code.id;
-    join_code.nav_down = room_ids.empty() ? refresh.id : room_ids.front();
+    join_code.nav_down = room_ids.empty() ? refresh_ref.id : room_ids.front();
     for (std::size_t i = 0; i < room_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != room_ids[i])
                 continue;
             widget.nav_up = (i == 0) ? join_code.id : room_ids[i - 1];
-            widget.nav_down = (i + 1 < room_ids.size()) ? room_ids[i + 1] : refresh.id;
+            widget.nav_down = (i + 1 < room_ids.size()) ? room_ids[i + 1] : refresh_ref.id;
             break;
         }
     }
-    refresh.nav_up = room_ids.empty() ? join_code.id : room_ids.back();
-    refresh.nav_down = back.id;
-    back.nav_up = refresh.id;
+    refresh_ref.nav_up = room_ids.empty() ? join_code.id : room_ids.back();
+    refresh_ref.nav_down = back_ref.id;
+    back_ref.nav_up = refresh_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;

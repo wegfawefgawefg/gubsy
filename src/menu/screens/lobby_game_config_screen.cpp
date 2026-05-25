@@ -174,10 +174,12 @@ BuiltScreen build_game_config(MenuContext& ctx) {
 
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back);
+    std::size_t back_idx = widgets.size() - 1;
 
     MenuWidget& prev_ref = widgets[prev_idx];
     MenuWidget& next_ref = widgets[next_idx];
-    const WidgetId first_row = row_ids.empty() ? back.id : row_ids.front();
+    MenuWidget& back_ref = widgets[back_idx];
+    const WidgetId first_row = row_ids.empty() ? back_ref.id : row_ids.front();
     const WidgetId visible_pager =
         prev_ref.type == WidgetType::Button
             ? prev_ref.id
@@ -192,15 +194,15 @@ BuiltScreen build_game_config(MenuContext& ctx) {
             if (widget.id != row_ids[i])
                 continue;
             widget.nav_up = (i == 0) ? visible_pager : row_ids[i - 1];
-            widget.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back.id;
+            widget.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
         }
     }
-    back.nav_up = row_ids.empty() ? visible_pager : row_ids.back();
+    back_ref.nav_up = row_ids.empty() ? visible_pager : row_ids.back();
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = row_ids.empty() ? back.id : row_ids.front();
+    built.default_focus = row_ids.empty() ? back_ref.id : row_ids.front();
     return built;
 }
 
