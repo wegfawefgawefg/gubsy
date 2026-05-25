@@ -44,8 +44,7 @@ struct PlayerSettingsState {
 void update_page(PlayerSettingsState& st, int row_count) {
     st.total_pages = std::max(1, (row_count + kRowsPerPage - 1) / kRowsPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
-    st.page_text = "Page " + std::to_string(st.page + 1) + " / " +
-                   std::to_string(st.total_pages);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
 MenuWidget make_label(WidgetId id, UILayoutObjectId slot, const char* label) {
@@ -57,10 +56,7 @@ MenuWidget make_label(WidgetId id, UILayoutObjectId slot, const char* label) {
     return widget;
 }
 
-MenuWidget make_card(WidgetId id,
-                     UILayoutObjectId slot,
-                     const char* label,
-                     const char* secondary,
+MenuWidget make_card(WidgetId id, UILayoutObjectId slot, const char* label, const char* secondary,
                      MenuAction action) {
     MenuWidget widget;
     widget.id = id;
@@ -138,7 +134,8 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     text_cache.clear();
 
     text_cache.push_back(gubsy_lobby_player_label(ctx.engine, ctx.player_index));
-    widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, text_cache.back().c_str()));
+    widgets.push_back(
+        make_label(kTitleWidgetId, SettingsObjectID::TITLE, text_cache.back().c_str()));
     widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS, "Player setup"));
     widgets.push_back(make_label(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
@@ -160,44 +157,32 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     widgets.push_back(next);
     std::size_t next_idx = widgets.size() - 1;
 
-    text_cache.push_back(profile_name_or_missing(gubsy_lobby_user_profile(ctx.engine,
-                                                                          ctx.player_index)));
-    MenuWidget profile = make_card(kProfileWidgetId,
-                                   SettingsObjectID::CARD0,
-                                   "User Profile",
-                                   text_cache.back().c_str(),
-                                   MenuAction::run_command(g_cmd_open_profile));
+    text_cache.push_back(
+        profile_name_or_missing(gubsy_lobby_user_profile(ctx.engine, ctx.player_index)));
+    MenuWidget profile =
+        make_card(kProfileWidgetId, SettingsObjectID::CARD0, "User Profile",
+                  text_cache.back().c_str(), MenuAction::run_command(g_cmd_open_profile));
 
-    text_cache.push_back(binds_name_or_missing(gubsy_lobby_binds_profile(ctx.engine,
-                                                                         ctx.player_index)));
-    MenuWidget binds = make_card(kBindsWidgetId,
-                                 SettingsObjectID::CARD1,
-                                 "Binds Profile",
-                                 text_cache.back().c_str(),
-                                 MenuAction::run_command(g_cmd_open_binds));
+    text_cache.push_back(
+        binds_name_or_missing(gubsy_lobby_binds_profile(ctx.engine, ctx.player_index)));
+    MenuWidget binds =
+        make_card(kBindsWidgetId, SettingsObjectID::CARD1, "Binds Profile",
+                  text_cache.back().c_str(), MenuAction::run_command(g_cmd_open_binds));
 
-    text_cache.push_back(input_name_or_missing(gubsy_lobby_input_settings_profile(
-        ctx.engine,
-        ctx.player_index)));
-    MenuWidget input = make_card(kInputWidgetId,
-                                 SettingsObjectID::CARD2,
-                                 "Input Settings",
-                                 text_cache.back().c_str(),
-                                 MenuAction::run_command(g_cmd_open_input));
+    text_cache.push_back(
+        input_name_or_missing(gubsy_lobby_input_settings_profile(ctx.engine, ctx.player_index)));
+    MenuWidget input =
+        make_card(kInputWidgetId, SettingsObjectID::CARD2, "Input Settings",
+                  text_cache.back().c_str(), MenuAction::run_command(g_cmd_open_input));
 
     const GubsyLobbyPlayer* player = gubsy_lobby_player(ctx.engine, ctx.player_index);
     text_cache.push_back("Assigned devices: " +
                          std::to_string(player ? player->devices.size() : 0));
-    MenuWidget devices = make_card(kDeviceWidgetId,
-                                   SettingsObjectID::CARD3,
-                                   "Input Devices",
-                                   text_cache.back().c_str(),
-                                   MenuAction::run_command(g_cmd_open_devices));
-    MenuWidget remove = make_button(kRemoveWidgetId,
-                                    SettingsObjectID::SEARCH,
-                                    "Remove Player",
+    MenuWidget devices =
+        make_card(kDeviceWidgetId, SettingsObjectID::CARD3, "Input Devices",
+                  text_cache.back().c_str(), MenuAction::run_command(g_cmd_open_devices));
+    MenuWidget remove = make_button(kRemoveWidgetId, SettingsObjectID::SEARCH, "Remove Player",
                                     MenuAction::run_command(g_cmd_remove_player));
-    remove.secondary = "Remove this local player from the lobby.";
     remove.style.bg_r = 74;
     remove.style.bg_g = 26;
     remove.style.bg_b = 30;
@@ -229,9 +214,8 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
             widgets.push_back(row);
             row_ids.push_back(row.id);
         } else {
-            widgets.push_back(make_label(kProfileWidgetId + static_cast<WidgetId>(100 + i),
-                                         slot,
-                                         ""));
+            widgets.push_back(
+                make_label(kProfileWidgetId + static_cast<WidgetId>(100 + i), slot, ""));
         }
     }
     widgets.push_back(back);
@@ -248,22 +232,22 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     next_ref.nav_down = first_row;
     if (can_remove_player) {
         MenuWidget& remove_ref = widgets[remove_idx];
-        remove_ref.nav_right = next_ref.type == WidgetType::Button
-                                   ? next_ref.id
-                                   : (prev_ref.type == WidgetType::Button ? prev_ref.id
-                                                                          : kMenuIdInvalid);
+        remove_ref.nav_right =
+            next_ref.type == WidgetType::Button
+                ? next_ref.id
+                : (prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid);
         remove_ref.nav_down = first_row;
     }
     for (std::size_t i = 0; i < row_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != row_ids[i])
                 continue;
-            widget.nav_up = (i == 0)
-                                ? (can_remove_player
-                                       ? kRemoveWidgetId
-                                       : (prev_ref.type == WidgetType::Button ? prev_ref.id
-                                                                              : kMenuIdInvalid))
-                                : row_ids[i - 1];
+            widget.nav_up =
+                (i == 0)
+                    ? (can_remove_player
+                           ? kRemoveWidgetId
+                           : (prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid))
+                    : row_ids[i - 1];
             widget.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back_ref.id;
             break;
         }

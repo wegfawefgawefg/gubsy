@@ -193,7 +193,7 @@
       (object (id 423) (label "card3") (x 0.18) (y 0.72) (w 0.64) (h 0.12))
       (object (id 424) (label "card4") (x 0.38) (y 0.88) (w 0.28) (h 0.07))
       (object (id 430) (label "back") (x 0.08) (y 0.88) (w 0.2) (h 0.07))
-      (object (id 431) (label "action") (x 0.68) (y 0.88) (w 0.2) (h 0.07))
+      (object (id 431) (label "action") (x 0.72) (y 0.88) (w 0.2) (h 0.07))
     )
   )
   (layout
@@ -214,7 +214,7 @@
       (object (id 423) (label "card3") (x 0.16) (y 0.74) (w 0.68) (h 0.11))
       (object (id 424) (label "card4") (x 0.38) (y 0.88) (w 0.28) (h 0.08))
       (object (id 430) (label "back") (x 0.08) (y 0.88) (w 0.24) (h 0.08))
-      (object (id 431) (label "action") (x 0.64) (y 0.88) (w 0.24) (h 0.08))
+      (object (id 431) (label "action") (x 0.68) (y 0.88) (w 0.24) (h 0.08))
     )
   )
   (layout
@@ -235,7 +235,7 @@
       (object (id 423) (label "card3") (x 0.16) (y 0.71) (w 0.6) (h 0.09))
       (object (id 424) (label "card4") (x 0.34) (y 0.84) (w 0.28) (h 0.07))
       (object (id 430) (label "back") (x 0.08) (y 0.84) (w 0.2) (h 0.07))
-      (object (id 431) (label "action") (x 0.56) (y 0.84) (w 0.2) (h 0.07))
+      (object (id 431) (label "action") (x 0.72) (y 0.84) (w 0.2) (h 0.07))
     )
   )
   (layout

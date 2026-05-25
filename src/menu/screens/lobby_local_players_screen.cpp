@@ -57,8 +57,7 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
 void update_page(LocalPlayersState& st, int count) {
     st.total_pages = std::max(1, (count + kRowsPerPage - 1) / kRowsPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
-    st.page_text = "Page " + std::to_string(st.page + 1) + " / " +
-                   std::to_string(st.total_pages);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
 void command_page_delta(MenuContext& ctx, std::int32_t delta) {
@@ -90,7 +89,8 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Local Players"));
     st.status_text = std::to_string(count) + (count == 1 ? " local player" : " local players");
-    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
     MenuAction prev_action = MenuAction::none();
@@ -100,8 +100,9 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages)
         next_action = MenuAction::run_command(g_cmd_page_delta, 1);
 
-    MenuWidget prev = st.page > 0 ? make_button(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action)
-                                  : make_label(kPrevButtonId, SettingsObjectID::PREV, "");
+    MenuWidget prev = st.page > 0
+                          ? make_button(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action)
+                          : make_label(kPrevButtonId, SettingsObjectID::PREV, "");
     prev.role = MenuWidgetRole::PagePrev;
     MenuWidget next = st.page + 1 < st.total_pages
                           ? make_button(kNextButtonId, SettingsObjectID::NEXT, ">", next_action)
@@ -114,11 +115,8 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 
     std::vector<WidgetId> card_ids;
     int start = st.page * kRowsPerPage;
-    MenuWidget add = make_button(kAddButtonId,
-                                 SettingsObjectID::SEARCH,
-                                 "Add Local Player",
+    MenuWidget add = make_button(kAddButtonId, SettingsObjectID::SEARCH, "Add Local Player",
                                  MenuAction::run_command(g_cmd_add_player));
-    add.secondary = "Join another local player.";
     add.style.bg_r = 22;
     add.style.bg_g = 58;
     add.style.bg_b = 34;
