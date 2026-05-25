@@ -2,6 +2,7 @@
 
 #include "src/engine_state.hpp"
 #include "src/input.hpp"
+#include "src/lobby_state.hpp"
 #include "src/render.hpp"
 
 #include <SDL2/SDL.h>
@@ -53,7 +54,7 @@ void refresh_input_sources(EngineState& engine) {
     // Remove all gamepads from the public list
     engine.input_sources.erase(
         std::remove_if(engine.input_sources.begin(), engine.input_sources.end(),
-                      [](const InputSource& src) { return src.type == InputSourceType::Gamepad; }),
+                       [](const InputSource& src) { return src.type == InputSourceType::Gamepad; }),
         engine.input_sources.end());
 
     // Re-enumerate and open gamepads
@@ -66,7 +67,8 @@ void refresh_input_sources(EngineState& engine) {
 
     size_t new_count = engine.open_controllers.size();
     if (old_count != new_count) {
-        std::fprintf(stderr, "[input] Input sources refreshed: %zu -> %zu gamepads\n", old_count, new_count);
+        std::fprintf(stderr, "[input] Input sources refreshed: %zu -> %zu gamepads\n", old_count,
+                     new_count);
     }
 }
 
@@ -78,10 +80,11 @@ void on_device_added(EngineState& engine, int device_index) {
     if (engine.open_controllers.count(device_index)) {
         return;
     }
-    
+
     SDL_GameController* controller = SDL_GameControllerOpen(device_index);
     if (!controller) {
-        std::fprintf(stderr, "[input] Could not open gamecontroller %i: %s\n", device_index, SDL_GetError());
+        std::fprintf(stderr, "[input] Could not open gamecontroller %i: %s\n", device_index,
+                     SDL_GetError());
         return;
     }
 
@@ -93,6 +96,7 @@ void on_device_added(EngineState& engine, int device_index) {
     gamepad.type = InputSourceType::Gamepad;
     gamepad.device_id.id = device_index;
     engine.input_sources.push_back(gamepad);
+    gubsy_lobby_assign_gamepad_to_primary_player(engine, device_index);
 
     std::fprintf(stderr, "[input] Gamepad added and opened (device %d)\n", device_index);
 }
@@ -103,7 +107,8 @@ void on_device_removed(EngineState& engine, int instance_id) {
 
     // Find the controller and its device_id from the instance_id
     for (auto const& [device_id, controller] : engine.open_controllers) {
-        if (static_cast<int>(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) == instance_id) {
+        if (static_cast<int>(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) ==
+            instance_id) {
             device_to_remove = device_id;
             controller_to_close = controller;
             break;
@@ -111,20 +116,23 @@ void on_device_removed(EngineState& engine, int instance_id) {
     }
 
     if (controller_to_close) {
-        std::fprintf(stderr, "[input] Gamepad removed (device %d, instance %d)\n", device_to_remove, instance_id);
-        
+        std::fprintf(stderr, "[input] Gamepad removed (device %d, instance %d)\n", device_to_remove,
+                     instance_id);
+
         // Close handle and remove from maps
         SDL_GameControllerClose(controller_to_close);
         engine.open_controllers.erase(device_to_remove);
         engine.gamepad_states.erase(device_to_remove);
+        gubsy_lobby_remove_gamepad_device_assignments(engine, device_to_remove);
 
         // Remove from public list of sources
-        engine.input_sources.erase(
-            std::remove_if(engine.input_sources.begin(), engine.input_sources.end(),
-                          [device_to_remove](const InputSource& src) {
-                              return src.type == InputSourceType::Gamepad && src.device_id.id == device_to_remove;
-                          }),
-            engine.input_sources.end());
+        engine.input_sources.erase(std::remove_if(engine.input_sources.begin(),
+                                                  engine.input_sources.end(),
+                                                  [device_to_remove](const InputSource& src) {
+                                                      return src.type == InputSourceType::Gamepad &&
+                                                             src.device_id.id == device_to_remove;
+                                                  }),
+                                   engine.input_sources.end());
     }
 }
 
@@ -147,18 +155,18 @@ void draw_input_devices_overlay(const EngineState& engine, SDL_Renderer* rendere
         std::string device_text;
 
         switch (src.type) {
-            case InputSourceType::Keyboard:
-                device_text = "Keyboard (ID: " + std::to_string(src.device_id.id) + ")";
-                draw_text(renderer, device_text, 20, y, green);
-                break;
-            case InputSourceType::Mouse:
-                device_text = "Mouse (ID: " + std::to_string(src.device_id.id) + ")";
-                draw_text(renderer, device_text, 20, y, green);
-                break;
-            case InputSourceType::Gamepad:
-                device_text = "Gamepad (ID: " + std::to_string(src.device_id.id) + ")";
-                draw_text(renderer, device_text, 20, y, cyan);
-                break;
+        case InputSourceType::Keyboard:
+            device_text = "Keyboard (ID: " + std::to_string(src.device_id.id) + ")";
+            draw_text(renderer, device_text, 20, y, green);
+            break;
+        case InputSourceType::Mouse:
+            device_text = "Mouse (ID: " + std::to_string(src.device_id.id) + ")";
+            draw_text(renderer, device_text, 20, y, green);
+            break;
+        case InputSourceType::Gamepad:
+            device_text = "Gamepad (ID: " + std::to_string(src.device_id.id) + ")";
+            draw_text(renderer, device_text, 20, y, cyan);
+            break;
         }
 
         y += line_height;

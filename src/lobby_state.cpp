@@ -311,6 +311,38 @@ bool gubsy_lobby_player_has_device(const EngineState& engine, int player_index,
         [device](GubsyLobbyDeviceAssignment item) { return same_device(item, device); });
 }
 
+void gubsy_lobby_assign_gamepad_to_primary_player(EngineState& engine, int device_id) {
+    gubsy_lobby_ensure_ready(engine);
+    if (engine.lobby.local_players.empty())
+        return;
+
+    GubsyLobbyPlayer& player = engine.lobby.local_players.front();
+    auto has_gamepad = [](GubsyLobbyDeviceAssignment device) {
+        return device.type == InputSourceType::Gamepad;
+    };
+    if (std::any_of(player.devices.begin(), player.devices.end(), has_gamepad))
+        return;
+
+    player.devices.push_back(GubsyLobbyDeviceAssignment{InputSourceType::Gamepad, device_id});
+    sync_engine_players_from_lobby(engine);
+}
+
+void gubsy_lobby_remove_gamepad_device_assignments(EngineState& engine, int device_id) {
+    bool changed = false;
+    for (GubsyLobbyPlayer& player : engine.lobby.local_players) {
+        auto old_size = player.devices.size();
+        player.devices.erase(std::remove_if(player.devices.begin(), player.devices.end(),
+                                            [device_id](GubsyLobbyDeviceAssignment device) {
+                                                return device.type == InputSourceType::Gamepad &&
+                                                       device.device_id == device_id;
+                                            }),
+                             player.devices.end());
+        changed = changed || player.devices.size() != old_size;
+    }
+    if (changed)
+        sync_engine_players_from_lobby(engine);
+}
+
 bool gubsy_lobby_validate_start(EngineState& engine, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     if (engine.lobby.local_players.empty()) {

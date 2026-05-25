@@ -73,21 +73,18 @@ InputSettingsProfile* gubsy_lobby_input_settings_profile(EngineState& engine, in
 bool gubsy_lobby_set_user_profile(EngineState& engine, int player_index, int profile_id);
 bool gubsy_lobby_set_binds_profile(EngineState& engine, int player_index, int profile_id);
 bool gubsy_lobby_set_input_settings_profile(EngineState& engine, int player_index, int profile_id);
-void gubsy_lobby_toggle_device(EngineState& engine,
-                               int player_index,
+void gubsy_lobby_toggle_device(EngineState& engine, int player_index,
                                GubsyLobbyDeviceAssignment device);
-bool gubsy_lobby_player_has_device(const EngineState& engine,
-                                   int player_index,
+bool gubsy_lobby_player_has_device(const EngineState& engine, int player_index,
                                    GubsyLobbyDeviceAssignment device);
+void gubsy_lobby_assign_gamepad_to_primary_player(EngineState& engine, int device_id);
+void gubsy_lobby_remove_gamepad_device_assignments(EngineState& engine, int device_id);
 
 bool gubsy_lobby_validate_start(EngineState& engine, std::string& message);
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message);
-bool gubsy_lobby_join_room_code(EngineState& engine,
-                                const std::string& room_code,
+bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_code,
                                 std::string& message);
-bool gubsy_lobby_join_room(EngineState& engine,
-                           const MatchmakingRoom& room,
-                           std::string& message);
+bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message);
 bool gubsy_lobby_leave_room(EngineState& engine, std::string& message);
 bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& message);
 void gubsy_lobby_tick_online(EngineState& engine);
