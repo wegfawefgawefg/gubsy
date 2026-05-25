@@ -70,6 +70,26 @@ bool same_device(GubsyLobbyDeviceAssignment a, GubsyLobbyDeviceAssignment b) {
     return a.type == b.type && a.device_id == b.device_id;
 }
 
+const InputSource* first_input_source_of_type(const EngineState& engine, InputSourceType type) {
+    auto it = std::find_if(engine.input_sources.begin(), engine.input_sources.end(),
+                           [type](const InputSource& source) { return source.type == type; });
+    return it == engine.input_sources.end() ? nullptr : &*it;
+}
+
+void assign_default_devices(EngineState& engine, GubsyLobbyPlayer& player, bool primary_player) {
+    if (!player.devices.empty())
+        return;
+
+    if (const InputSource* keyboard = first_input_source_of_type(engine, InputSourceType::Keyboard))
+        player.devices.push_back(gubsy_lobby_device_from_input_source(*keyboard));
+
+    if (primary_player) {
+        if (const InputSource* gamepad =
+                first_input_source_of_type(engine, InputSourceType::Gamepad))
+            player.devices.push_back(gubsy_lobby_device_from_input_source(*gamepad));
+    }
+}
+
 void persist_user_profile_choice(UserProfile& profile, const GubsyLobbyPlayer& player) {
     profile.last_binds_profile_id = player.binds_profile_id;
     profile.last_input_settings_profile_id = player.input_settings_profile_id;
@@ -92,7 +112,8 @@ void sync_engine_players_from_lobby(EngineState& engine) {
     }
 }
 
-void fill_missing_player_choices(EngineState& engine, GubsyLobbyPlayer& player) {
+void fill_missing_player_choices(EngineState& engine, GubsyLobbyPlayer& player,
+                                 bool primary_player) {
     UserProfile& fallback_user = ensure_default_user_profile(engine);
     BindsProfile& fallback_binds = ensure_default_binds_profile(engine);
     InputSettingsProfile& fallback_input = ensure_default_input_settings_profile(engine);
@@ -113,10 +134,7 @@ void fill_missing_player_choices(EngineState& engine, GubsyLobbyPlayer& player) 
                                                ? preferred_input
                                                : fallback_input.id;
     }
-    if (player.devices.empty() && !engine.input_sources.empty()) {
-        player.devices.push_back(
-            gubsy_lobby_device_from_input_source(engine.input_sources.front()));
-    }
+    assign_default_devices(engine, player, primary_player);
     if (selected_user)
         persist_user_profile_choice(*selected_user, player);
 }
@@ -144,8 +162,8 @@ void gubsy_lobby_ensure_ready(EngineState& engine) {
     if (engine.lobby.local_players.empty())
         engine.lobby.local_players.push_back({});
 
-    for (GubsyLobbyPlayer& player : engine.lobby.local_players)
-        fill_missing_player_choices(engine, player);
+    for (std::size_t i = 0; i < engine.lobby.local_players.size(); ++i)
+        fill_missing_player_choices(engine, engine.lobby.local_players[i], i == 0);
 
     int max_index = static_cast<int>(engine.lobby.local_players.size()) - 1;
     engine.lobby.selected_player_index =
@@ -165,7 +183,7 @@ int gubsy_lobby_add_local_player(EngineState& engine) {
     engine.lobby.local_players.push_back({});
     int index = static_cast<int>(engine.lobby.local_players.size()) - 1;
     engine.lobby.selected_player_index = index;
-    fill_missing_player_choices(engine, engine.lobby.local_players.back());
+    fill_missing_player_choices(engine, engine.lobby.local_players.back(), false);
     sync_engine_players_from_lobby(engine);
     return index;
 }
