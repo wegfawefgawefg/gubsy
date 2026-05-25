@@ -227,6 +227,16 @@ void register_engine_settings_schema_entries(EngineState& engine) {
     }
     {
         SettingMetadata meta = make_option_setting(
+            SettingScope::Install, "gubsy.video.render_sample_mode", "Render Sampling",
+            "How to sample the internal render texture when it is scaled.", {"Video"},
+            {SettingOption{"nearest", "Nearest (pixel)"},
+             SettingOption{"linear", "Linear (smooth)"}},
+            "nearest");
+        meta.order = 65;
+        schema.add_setting(meta);
+    }
+    {
+        SettingMetadata meta = make_option_setting(
             SettingScope::Install, "gubsy.video.frame_cap", "Render Rate Limit",
             "Limit how often frames are rendered and presented.", {"Video"},
             {SettingOption{"0", "Off"}, SettingOption{"30", "30"}, SettingOption{"60", "60"},

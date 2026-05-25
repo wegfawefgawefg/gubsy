@@ -32,6 +32,11 @@ enum class RenderScaleMode {
     Stretch,
 };
 
+enum class RenderSampleMode {
+    Nearest,
+    Linear,
+};
+
 enum class WindowDisplayMode {
     Windowed,
     Borderless,
@@ -50,6 +55,7 @@ struct Graphics {
     glm::uvec2 render_dims{1280, 720};
     bool fullscreen{false};
     RenderScaleMode render_scale_mode{RenderScaleMode::Fit};
+    RenderSampleMode render_sample_mode{RenderSampleMode::Nearest};
     WindowDisplayMode window_mode{WindowDisplayMode::Windowed};
     std::string fullscreen_display_mode{"desktop"};
     SDL_Texture* render_target{nullptr};
@@ -93,6 +99,7 @@ bool set_window_dimensions(EngineState& engine, int width, int height);
 bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode);
 bool set_render_resolution(EngineState& engine, int width, int height);
 void set_render_scale_mode(EngineState& engine, RenderScaleMode mode);
+void set_render_sample_mode(EngineState& engine, RenderSampleMode mode);
 glm::ivec2 get_render_dimensions(const EngineState& engine);
 glm::ivec2 get_window_dimensions(const EngineState& engine);
 bool render_resolution_matches_window(const EngineState& engine);

@@ -13,6 +13,7 @@
     (key "gubsy.video.preview_pan_y" 0)
     (key "gubsy.video.preview_zoom" 1)
     (key "gubsy.video.render_resolution" "1280x720")
+    (key "gubsy.video.render_sample_mode" "nearest")
     (key "gubsy.video.render_scale_mode" "fit")
     (key "gubsy.video.safe_area_bottom" 0)
     (key "gubsy.video.safe_area_left" 0)

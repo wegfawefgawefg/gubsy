@@ -85,6 +85,14 @@ int clamp_dimension(int value) {
     return value;
 }
 
+void apply_render_sample_mode(SDL_Texture* texture, RenderSampleMode mode) {
+    if (!texture)
+        return;
+    SDL_ScaleMode sdl_mode =
+        (mode == RenderSampleMode::Nearest) ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR;
+    SDL_SetTextureScaleMode(texture, sdl_mode);
+}
+
 bool recreate_render_target(Graphics& graphics, int width, int height) {
     if (!graphics.renderer)
         return false;
@@ -98,6 +106,7 @@ bool recreate_render_target(Graphics& graphics, int width, int height) {
         return false;
     }
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
+    apply_render_sample_mode(tex, graphics.render_sample_mode);
     if (graphics.render_target)
         SDL_DestroyTexture(graphics.render_target);
     graphics.render_target = tex;
@@ -338,6 +347,14 @@ void set_render_scale_mode(EngineState& engine, RenderScaleMode mode) {
     if (!current_graphics(engine))
         return;
     current_graphics(engine)->render_scale_mode = mode;
+}
+
+void set_render_sample_mode(EngineState& engine, RenderSampleMode mode) {
+    Graphics* graphics = current_graphics(engine);
+    if (!graphics)
+        return;
+    graphics->render_sample_mode = mode;
+    apply_render_sample_mode(graphics->render_target, mode);
 }
 
 glm::ivec2 get_render_dimensions(const EngineState& engine) {
@@ -652,6 +669,16 @@ void sync_graphics_from_settings(EngineState& engine, bool apply_display_mode) {
                 current_graphics(engine)->render_scale_mode = RenderScaleMode::Fit;
             else if (*sv == "stretch")
                 current_graphics(engine)->render_scale_mode = RenderScaleMode::Stretch;
+        }
+    }
+
+    // Sync render target sampling
+    if (auto it = settings.find("gubsy.video.render_sample_mode"); it != settings.end()) {
+        if (const std::string* sv = std::get_if<std::string>(&it->second)) {
+            if (*sv == "nearest")
+                set_render_sample_mode(engine, RenderSampleMode::Nearest);
+            else if (*sv == "linear")
+                set_render_sample_mode(engine, RenderSampleMode::Linear);
         }
     }
 

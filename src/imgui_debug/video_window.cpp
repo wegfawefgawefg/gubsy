@@ -1,13 +1,12 @@
-#include "src/imgui_debug/windows.hpp"
-
 #include "src/engine_state.hpp"
 #include "src/graphics.hpp"
+#include "src/imgui_debug/windows.hpp"
 #include "src/render.hpp"
 #include "src/ui_layouts.hpp"
 
 #include <algorithm>
-#include <string>
 #include <imgui.h>
+#include <string>
 
 namespace {
 
@@ -26,9 +25,12 @@ struct PresetGroup {
 
 const char* form_factor_short_tag(UILayoutFormFactor factor) {
     switch (factor) {
-        case UILayoutFormFactor::Desktop: return "PC";
-        case UILayoutFormFactor::Tablet: return "Tab";
-        case UILayoutFormFactor::Phone: return "Mob";
+    case UILayoutFormFactor::Desktop:
+        return "PC";
+    case UILayoutFormFactor::Tablet:
+        return "Tab";
+    case UILayoutFormFactor::Phone:
+        return "Mob";
     }
     return "PC";
 }
@@ -95,9 +97,8 @@ void auto_adjust_form_factor_for_resolution(int width, int height) {
         return;
     }
     if (current == UILayoutFormFactor::Phone) {
-        UILayoutFormFactor fallback = (width <= 1500)
-                                          ? UILayoutFormFactor::Tablet
-                                          : UILayoutFormFactor::Desktop;
+        UILayoutFormFactor fallback =
+            (width <= 1500) ? UILayoutFormFactor::Tablet : UILayoutFormFactor::Desktop;
         set_ui_layout_form_factor(fallback);
     }
 }
@@ -185,7 +186,8 @@ void imgui_debug_render_video_window(EngineState& engine, bool* open_flag) {
             for (int i = 0; i < group.count; ++i) {
                 int idx = group.start + i;
                 const auto& preset = kRenderPresets[idx];
-                std::string entry = "[" + std::string(form_factor_short_tag(preset.bias)) + "] " + preset.label;
+                std::string entry =
+                    "[" + std::string(form_factor_short_tag(preset.bias)) + "] " + preset.label;
                 bool selected = (render_preset_idx == idx);
                 if (ImGui::Selectable(entry.c_str(), selected)) {
                     render_preset_idx = idx;
@@ -242,7 +244,8 @@ void imgui_debug_render_video_window(EngineState& engine, bool* open_flag) {
             for (int i = 0; i < group.count; ++i) {
                 int idx = group.start + i;
                 const auto& preset = kWindowPresets[idx];
-                std::string entry = "[" + std::string(form_factor_short_tag(preset.bias)) + "] " + preset.label;
+                std::string entry =
+                    "[" + std::string(form_factor_short_tag(preset.bias)) + "] " + preset.label;
                 bool selected = (window_preset_idx == idx);
                 if (ImGui::Selectable(entry.c_str(), selected)) {
                     window_preset_idx = idx;
@@ -267,8 +270,8 @@ void imgui_debug_render_video_window(EngineState& engine, bool* open_flag) {
 
     const char* window_mode_labels[] = {"Windowed", "Borderless", "Fullscreen"};
     int window_mode = static_cast<int>(current_graphics(engine)->window_mode);
-    if (ImGui::Combo("Window Mode", &window_mode,
-                     window_mode_labels, IM_ARRAYSIZE(window_mode_labels))) {
+    if (ImGui::Combo("Window Mode", &window_mode, window_mode_labels,
+                     IM_ARRAYSIZE(window_mode_labels))) {
         set_window_display_mode(engine, static_cast<WindowDisplayMode>(window_mode));
     }
 
@@ -278,19 +281,29 @@ void imgui_debug_render_video_window(EngineState& engine, bool* open_flag) {
         set_render_scale_mode(engine, static_cast<RenderScaleMode>(scale_mode));
     }
 
+    const char* sample_labels[] = {"Nearest (pixel)", "Linear (smooth)"};
+    int sample_mode = static_cast<int>(current_graphics(engine)->render_sample_mode);
+    if (ImGui::Combo("Render Sampling", &sample_mode, sample_labels, IM_ARRAYSIZE(sample_labels))) {
+        set_render_sample_mode(engine, static_cast<RenderSampleMode>(sample_mode));
+    }
+
     ImGui::Separator();
     ImGui::TextUnformatted("Preview adjustments (debug)");
     float zoom = current_graphics(engine)->preview_zoom;
     if (ImGui::SliderFloat("Zoom", &zoom, 0.5f, 3.0f, "%.2fx")) {
         current_graphics(engine)->preview_zoom = zoom;
     }
-    float pan[2] = {current_graphics(engine)->preview_pan.x, current_graphics(engine)->preview_pan.y};
+    float pan[2] = {current_graphics(engine)->preview_pan.x,
+                    current_graphics(engine)->preview_pan.y};
     if (ImGui::DragFloat2("Pan (pixels)", pan, 1.0f, -1000.0f, 1000.0f)) {
         current_graphics(engine)->preview_pan = glm::vec2(pan[0], pan[1]);
     }
-    float safe_vals[4] = {current_graphics(engine)->safe_area.x, current_graphics(engine)->safe_area.y, current_graphics(engine)->safe_area.z, current_graphics(engine)->safe_area.w};
+    float safe_vals[4] = {
+        current_graphics(engine)->safe_area.x, current_graphics(engine)->safe_area.y,
+        current_graphics(engine)->safe_area.z, current_graphics(engine)->safe_area.w};
     if (ImGui::SliderFloat4("Safe area (pct of window)", safe_vals, 0.0f, 0.25f, "%.3f")) {
-        current_graphics(engine)->safe_area = glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
+        current_graphics(engine)->safe_area =
+            glm::vec4(safe_vals[0], safe_vals[1], safe_vals[2], safe_vals[3]);
     }
     if (ImGui::Button("Reset Preview Adjustments")) {
         current_graphics(engine)->preview_zoom = 1.0f;
