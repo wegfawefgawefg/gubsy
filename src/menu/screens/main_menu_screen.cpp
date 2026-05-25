@@ -14,10 +14,12 @@ MenuCommandId g_cmd_open_lobby = kMenuIdInvalid;
 MenuCommandId g_cmd_open_settings = kMenuIdInvalid;
 
 void command_open_lobby(MenuContext& ctx, std::int32_t) {
+    ctx.engine.menu_context = GubsyMenuContext::Lobby;
     ctx.manager.push_screen(MenuScreenID::SHELL_LOBBY);
 }
 
 void command_open_settings(MenuContext& ctx, std::int32_t) {
+    ctx.engine.menu_context = GubsyMenuContext::Title;
     ctx.manager.push_screen(MenuScreenID::SETTINGS);
 }
 

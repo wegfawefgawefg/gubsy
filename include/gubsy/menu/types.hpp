@@ -12,6 +12,13 @@ using UILayoutId = std::uint32_t;
 using UILayoutObjectId = std::uint32_t;
 using MenuCommandId = std::uint32_t;
 
+enum class GubsyMenuContext : std::uint8_t {
+    None = 0,
+    Title,
+    Lobby,
+    InGame,
+};
+
 struct MenuStyle {
     std::uint8_t bg_r{24}, bg_g{24}, bg_b{32}, bg_a{255};
     std::uint8_t fg_r{220}, fg_g{220}, fg_b{230}, fg_a{255};
@@ -39,7 +46,9 @@ struct MenuAction {
     float f{0.0f};
     void* ptr{nullptr};
 
-    static MenuAction none() { return {}; }
+    static MenuAction none() {
+        return {};
+    }
     static MenuAction push(MenuScreenId id) {
         MenuAction act;
         act.type = MenuActionType::PushScreen;

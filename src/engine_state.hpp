@@ -39,6 +39,8 @@ struct EngineState {
     void* app_context{nullptr};
     GubsyAppConfig app_config{};
     GubsyMainMenuCommands main_menu_commands{};
+    GubsyInGameMenuCommands in_game_menu_commands{};
+    GubsyMenuContext menu_context{GubsyMenuContext::None};
     GubsyLobbyCommands lobby_commands{};
     GubsyLobbyConfigProvider lobby_config_provider{};
     IMatchmaking* lobby_matchmaking{nullptr};

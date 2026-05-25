@@ -1,5 +1,14 @@
 #include "src/menu/screens/settings_hub_screen.hpp"
 
+#include "src/engine_state.hpp"
+#include "src/menu/menu_commands.hpp"
+#include "src/menu/menu_ids.hpp"
+#include "src/menu/menu_manager.hpp"
+#include "src/menu/menu_screen.hpp"
+#include "src/menu/settings_category_registry.hpp"
+#include "src/menu_layout_ids.hpp"
+#include "src/settings_catalog.hpp"
+
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -7,15 +16,6 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-
-#include "src/engine_state.hpp"
-#include "src/menu/menu_commands.hpp"
-#include "src/menu/menu_manager.hpp"
-#include "src/menu/menu_screen.hpp"
-#include "src/menu/menu_ids.hpp"
-#include "src/menu/settings_category_registry.hpp"
-#include "src/menu_layout_ids.hpp"
-#include "src/settings_catalog.hpp"
 namespace {
 
 constexpr int kCategoriesPerPage = 4;
@@ -37,23 +37,21 @@ struct CategoryCard {
     std::size_t order_hint{std::numeric_limits<std::size_t>::max()};
 };
 
-constexpr std::array<const char*, 10> kPreferredCategoryOrder = {
-    "Display",
-    "Video",
-    "Graphics",
-    "Audio",
-    "Controls",
-    "Binds",
-    "Gameplay",
-    "Accessibility",
-    "Profiles",
-    "Saves",
+constexpr std::array<const char*, 11> kPreferredCategoryOrder = {
+    "Display",  "Video",         "Graphics", "Audio",         "Controls", "Binds",
+    "Gameplay", "Accessibility", "Profiles", "Local Players", "Saves",
 };
 
 struct CategoryOverride {
     const char* label{nullptr};
     const char* description{nullptr};
 };
+
+bool category_allowed_in_context(const std::string& tag, GubsyMenuContext context) {
+    if (context != GubsyMenuContext::InGame)
+        return true;
+    return tag != "Saves";
+}
 
 const std::unordered_map<std::string_view, CategoryOverride> kCategoryOverrides = {
     {"Display", {"Display", "Resolution / fullscreen / scaling"}},
@@ -65,6 +63,7 @@ const std::unordered_map<std::string_view, CategoryOverride> kCategoryOverrides 
     {"HUD", {"HUD", "HUD layout & minimap"}},
     {"Accessibility", {"Accessibility", "Accessibility options"}},
     {"Profiles", {"Profiles", "Profile management"}},
+    {"Local Players", {"Local Players", "Profiles, binds, and input devices"}},
     {"Binds Profiles", {"Binds Profiles", "Manage binds profiles"}},
     {"Saves", {"Saves", "Save slot management"}},
     {"Cheats", {"Cheats", "Cheats & sandbox"}},
@@ -120,7 +119,8 @@ MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* lab
     return w;
 }
 
-MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label,
+                              MenuAction action) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -137,7 +137,8 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     if (st.filtered_indices.empty()) {
         st.page_text = "Page 0 / 0";
     } else {
-        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 }
 
@@ -176,6 +177,8 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     st.cards.clear();
     st.cards.reserve(catalog.categories.size());
     for (const auto& [tag, entries] : catalog.categories) {
+        if (!category_allowed_in_context(tag, ctx.engine.menu_context))
+            continue;
         CategoryCard card;
         card.tag = tag;
         card.item_count = static_cast<int>(entries.size());
@@ -190,11 +193,20 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     auto binds_it = std::find_if(st.cards.begin(), st.cards.end(), [](const CategoryCard& card) {
         return card.tag == "Binds Profiles";
     });
-    if (binds_it == st.cards.end()) {
+    if (binds_it == st.cards.end() &&
+        category_allowed_in_context("Binds Profiles", ctx.engine.menu_context)) {
         CategoryCard card;
         card.tag = "Binds Profiles";
         card.item_count = static_cast<int>(ctx.engine.binds_profiles.size());
         card.screen_id = MenuScreenID::BINDS_PROFILES;
+        card.order_hint = category_priority(card.tag);
+        st.cards.push_back(std::move(card));
+    }
+    if (ctx.engine.menu_context == GubsyMenuContext::InGame) {
+        CategoryCard card;
+        card.tag = "Local Players";
+        card.item_count = static_cast<int>(ctx.engine.lobby.local_players.size());
+        card.screen_id = MenuScreenID::LOBBY_LOCAL_PLAYERS;
         card.order_hint = category_priority(card.tag);
         st.cards.push_back(std::move(card));
     }
@@ -214,10 +226,12 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     if (st.filtered_indices.empty()) {
         st.page_text = "Page 0 / 0";
     } else {
-        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 
-    st.status_text = std::to_string(st.filtered_indices.size()) + (st.filtered_indices.size() == 1 ? " category" : " categories");
+    st.status_text = std::to_string(st.filtered_indices.size()) +
+                     (st.filtered_indices.size() == 1 ? " category" : " categories");
 
     MenuAction prev_action = MenuAction::none();
     MenuAction next_action = MenuAction::none();
@@ -233,7 +247,8 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
 
     widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, "Settings"));
 
-    MenuWidget status_label = make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
+    MenuWidget status_label =
+        make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
     status_label.label = st.status_text.c_str();
     widgets.push_back(status_label);
 
@@ -247,13 +262,16 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     widgets.push_back(search);
     std::size_t search_idx = widgets.size() - 1;
 
-    MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
+    MenuWidget page_label =
+        make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     page_label.label = st.page_text.c_str();
     widgets.push_back(page_label);
 
-    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev_btn =
+        make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     prev_btn.role = MenuWidgetRole::PagePrev;
-    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next_btn =
+        make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
     next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
@@ -282,8 +300,9 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
             else
                 card_widget.label = card.tag.c_str();
 
-            std::string count_text = (card.item_count == 1) ? "1 setting"
-                                                            : std::to_string(card.item_count) + " settings";
+            std::string count_text = (card.item_count == 1)
+                                         ? "1 setting"
+                                         : std::to_string(card.item_count) + " settings";
             std::string subtitle;
             if (override_it != kCategoryOverrides.end() && override_it->second.description) {
                 subtitle = std::string(override_it->second.description) + " · " + count_text;
@@ -296,8 +315,9 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
             }
             text_cache.emplace_back(std::move(subtitle));
             card_widget.secondary = text_cache.back().c_str();
-            card_widget.on_select = (card.screen_id != kMenuIdInvalid) ? MenuAction::push(card.screen_id)
-                                                                       : MenuAction::none();
+            card_widget.on_select = (card.screen_id != kMenuIdInvalid)
+                                        ? MenuAction::push(card.screen_id)
+                                        : MenuAction::none();
             card_widget.on_left = MenuAction::none();
             card_widget.on_right = MenuAction::none();
             widgets.push_back(card_widget);
@@ -307,7 +327,8 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
         }
     }
 
-    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget back_btn =
+        make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
@@ -355,11 +376,12 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = !card_ids.empty()
-                              ? card_ids.front()
-                              : (prev_action.type != MenuActionType::None
-                                         ? prev_btn.id
-                                         : (next_action.type != MenuActionType::None ? next_btn.id : back_btn.id));
+    built.default_focus =
+        !card_ids.empty()
+            ? card_ids.front()
+            : (prev_action.type != MenuActionType::None
+                   ? prev_btn.id
+                   : (next_action.type != MenuActionType::None ? next_btn.id : back_btn.id));
     return built;
 }
 

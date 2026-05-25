@@ -16,6 +16,7 @@
 #include "src/menu/screens/binds_choose_input_screen.hpp"
 #include "src/menu/screens/binds_profile_editor_screen.hpp"
 #include "src/menu/screens/binds_profiles_screen.hpp"
+#include "src/menu/screens/in_game_menu_screen.hpp"
 #include "src/menu/screens/lobby_game_config_screen.hpp"
 #include "src/menu/screens/lobby_local_players_screen.hpp"
 #include "src/menu/screens/lobby_online_screens.hpp"
@@ -86,8 +87,10 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
     engine.app_config = normalize_gubsy_app_config(config);
     configure_project_paths(engine.app_config);
     engine.menu_manager.set_command_registry(&engine.menu_commands);
+    engine.menu_context = GubsyMenuContext::None;
     register_engine_settings_schema_entries(engine);
     register_main_menu_screen(engine);
+    register_in_game_menu_screen(engine);
     register_shell_lobby_screen(engine);
     register_lobby_local_players_screen(engine);
     register_lobby_player_settings_screen(engine);
@@ -261,27 +264,21 @@ bool gubsy_select_lobby_local_player(GubsyRuntime& runtime, int player_index) {
     return engine.lobby.selected_player_index == player_index;
 }
 
-bool gubsy_set_lobby_player_user_profile(GubsyRuntime& runtime,
-                                         int player_index,
-                                         int profile_id) {
+bool gubsy_set_lobby_player_user_profile(GubsyRuntime& runtime, int player_index, int profile_id) {
     return gubsy_lobby_set_user_profile(gubsy_runtime_engine(runtime), player_index, profile_id);
 }
 
-bool gubsy_set_lobby_player_binds_profile(GubsyRuntime& runtime,
-                                          int player_index,
-                                          int profile_id) {
+bool gubsy_set_lobby_player_binds_profile(GubsyRuntime& runtime, int player_index, int profile_id) {
     return gubsy_lobby_set_binds_profile(gubsy_runtime_engine(runtime), player_index, profile_id);
 }
 
-bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime,
-                                                   int player_index,
+bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime, int player_index,
                                                    int profile_id) {
     return gubsy_lobby_set_input_settings_profile(gubsy_runtime_engine(runtime), player_index,
                                                   profile_id);
 }
 
-void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime,
-                                      int player_index,
+void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime, int player_index,
                                       GubsyLobbyDeviceAssignment device) {
     gubsy_lobby_toggle_device(gubsy_runtime_engine(runtime), player_index, device);
 }
@@ -308,8 +305,7 @@ bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::strin
     return gubsy_lobby_host_room(gubsy_runtime_engine(runtime), port, message);
 }
 
-bool gubsy_join_lobby_room_code(GubsyRuntime& runtime,
-                                const std::string& room_code,
+bool gubsy_join_lobby_room_code(GubsyRuntime& runtime, const std::string& room_code,
                                 std::string& message) {
     return gubsy_lobby_join_room_code(gubsy_runtime_engine(runtime), room_code, message);
 }
@@ -320,6 +316,10 @@ bool gubsy_leave_lobby_room(GubsyRuntime& runtime, std::string& message) {
 
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands) {
     gubsy_runtime_engine(runtime).main_menu_commands = commands;
+}
+
+void gubsy_set_in_game_menu_commands(GubsyRuntime& runtime, GubsyInGameMenuCommands commands) {
+    gubsy_runtime_engine(runtime).in_game_menu_commands = commands;
 }
 
 void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands) {
@@ -341,7 +341,28 @@ const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime) {
 bool gubsy_show_main_menu(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     engine.menu_manager.clear();
+    engine.menu_context = GubsyMenuContext::Title;
     return engine.menu_manager.push_screen(MenuScreenID::SHELL_MAIN);
+}
+
+bool gubsy_open_in_game_menu(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.menu_manager.clear();
+    engine.menu_context = GubsyMenuContext::InGame;
+    return engine.menu_manager.push_screen(MenuScreenID::IN_GAME_MENU);
+}
+
+void gubsy_close_in_game_menu(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    if (engine.menu_context == GubsyMenuContext::InGame) {
+        engine.menu_manager.clear();
+        engine.menu_context = GubsyMenuContext::None;
+    }
+}
+
+bool gubsy_in_game_menu_open(const GubsyRuntime& runtime) {
+    const EngineState& engine = gubsy_runtime_engine(runtime);
+    return engine.menu_context == GubsyMenuContext::InGame && !engine.menu_manager.stack().empty();
 }
 
 bool gubsy_push_menu_screen(GubsyRuntime& runtime, MenuScreenId screen_id) {

@@ -10,10 +10,8 @@
 
 int main() {
     GubsyAppHooks hooks{};
-    if (hooks.config.enable_mods ||
-        hooks.config.enable_mod_browser ||
-        hooks.config.enable_mod_hot_reload ||
-        hooks.config.enable_lua_mod_host) {
+    if (hooks.config.enable_mods || hooks.config.enable_mod_browser ||
+        hooks.config.enable_mod_hot_reload || hooks.config.enable_lua_mod_host) {
         return 1;
     }
 
@@ -27,10 +25,8 @@ int main() {
     GubsyAppConfig no_mods{};
     no_mods.data_root = "data";
     normalized = normalize_gubsy_app_config(no_mods);
-    if (normalized.enable_mods ||
-        normalized.enable_mod_browser ||
-        normalized.enable_mod_hot_reload ||
-        normalized.enable_lua_mod_host) {
+    if (normalized.enable_mods || normalized.enable_mod_browser ||
+        normalized.enable_mod_hot_reload || normalized.enable_lua_mod_host) {
         return 3;
     }
 
@@ -39,10 +35,8 @@ int main() {
         return 4;
     }
     const GubsyAppConfig& no_mod_config = gubsy_runtime_config(no_mod_engine);
-    if (no_mod_config.enable_mods ||
-        no_mod_config.enable_mod_browser ||
-        no_mod_config.enable_mod_hot_reload ||
-        no_mod_config.enable_lua_mod_host) {
+    if (no_mod_config.enable_mods || no_mod_config.enable_mod_browser ||
+        no_mod_config.enable_mod_hot_reload || no_mod_config.enable_lua_mod_host) {
         cleanup_gubsy_runtime(no_mod_engine);
         return 5;
     }
@@ -62,6 +56,10 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 13;
     }
+    if (!gubsy_runtime_has_menu_screen(no_mod_engine, MenuScreenID::IN_GAME_MENU)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 26;
+    }
     if (gubsy_add_lobby_local_player(no_mod_engine) != 1) {
         cleanup_gubsy_runtime(no_mod_engine);
         return 18;
@@ -80,8 +78,8 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 21;
     }
-    if (!gubsy_set_lobby_player_input_settings_profile(
-            no_mod_engine, 1, initial_player.input_settings_profile_id)) {
+    if (!gubsy_set_lobby_player_input_settings_profile(no_mod_engine, 1,
+                                                       initial_player.input_settings_profile_id)) {
         cleanup_gubsy_runtime(no_mod_engine);
         return 22;
     }
@@ -118,12 +116,49 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 12;
     }
-    bool lobby_start_called = false;
-    MenuCommandId lobby_start = gubsy_register_menu_command(
+    struct PauseSmoke {
+        GubsyRuntime* runtime{nullptr};
+        bool resumed{false};
+    } pause_smoke{&no_mod_engine, false};
+    MenuCommandId resume_command = gubsy_register_menu_command(
         no_mod_engine,
         [](void* user_data, std::int32_t) {
-            *static_cast<bool*>(user_data) = true;
+            auto* smoke = static_cast<PauseSmoke*>(user_data);
+            smoke->resumed = true;
+            gubsy_close_in_game_menu(*smoke->runtime);
         },
+        &pause_smoke);
+    if (resume_command == kMenuIdInvalid) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 27;
+    }
+    GubsyInGameMenuCommands in_game_commands{};
+    in_game_commands.resume = resume_command;
+    gubsy_set_in_game_menu_commands(no_mod_engine, in_game_commands);
+    if (!gubsy_open_in_game_menu(no_mod_engine) || !gubsy_in_game_menu_open(no_mod_engine)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 28;
+    }
+    if (!gubsy_push_menu_screen(no_mod_engine, MenuScreenID::SETTINGS)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 30;
+    }
+    gubsy_pop_menu_screen(no_mod_engine);
+    if (!gubsy_in_game_menu_open(no_mod_engine)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 31;
+    }
+    MenuInputState pause_input{};
+    pause_input.select = true;
+    gubsy_set_menu_input(no_mod_engine, pause_input);
+    gubsy_update_menu(no_mod_engine, 0.016f, 1280, 720);
+    if (!pause_smoke.resumed || gubsy_in_game_menu_open(no_mod_engine)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 29;
+    }
+    bool lobby_start_called = false;
+    MenuCommandId lobby_start = gubsy_register_menu_command(
+        no_mod_engine, [](void* user_data, std::int32_t) { *static_cast<bool*>(user_data) = true; },
         &lobby_start_called);
     if (lobby_start == kMenuIdInvalid) {
         cleanup_gubsy_runtime(no_mod_engine);
@@ -147,8 +182,7 @@ int main() {
         return 7;
     }
     const GubsyAppConfig& mod_browser_config = gubsy_runtime_config(mod_browser_engine);
-    if (!mod_browser_config.enable_mods ||
-        !mod_browser_config.enable_mod_browser) {
+    if (!mod_browser_config.enable_mods || !mod_browser_config.enable_mod_browser) {
         cleanup_gubsy_runtime(mod_browser_engine);
         return 8;
     }

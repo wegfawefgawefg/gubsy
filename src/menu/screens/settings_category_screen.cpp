@@ -794,15 +794,17 @@ void refresh_entries(EngineState& engine, SettingsCategoryState& st,
         settings_binding.entry.value = &st.settings_profile_value;
         st.entries.push_back(settings_binding);
 
-        EntryBinding reset_binding;
-        reset_binding.entry.metadata = &profile_reset_metadata();
-        reset_binding.entry.value = nullptr;
-        st.entries.push_back(reset_binding);
+        if (engine.menu_context != GubsyMenuContext::InGame) {
+            EntryBinding reset_binding;
+            reset_binding.entry.metadata = &profile_reset_metadata();
+            reset_binding.entry.value = nullptr;
+            st.entries.push_back(reset_binding);
 
-        EntryBinding delete_binding;
-        delete_binding.entry.metadata = &profile_delete_metadata();
-        delete_binding.entry.value = nullptr;
-        st.entries.push_back(delete_binding);
+            EntryBinding delete_binding;
+            delete_binding.entry.metadata = &profile_delete_metadata();
+            delete_binding.entry.value = nullptr;
+            st.entries.push_back(delete_binding);
+        }
     }
 
     std::sort(st.entries.begin(), st.entries.end(),

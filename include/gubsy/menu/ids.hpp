@@ -6,6 +6,7 @@ namespace MenuScreenID {
 inline constexpr MenuScreenId NONE = 0;
 inline constexpr MenuScreenId SHELL_MAIN = 1u << 19;
 inline constexpr MenuScreenId SHELL_LOBBY = (1u << 19) + 1;
+inline constexpr MenuScreenId IN_GAME_MENU = (1u << 19) + 11;
 inline constexpr MenuScreenId LOBBY_LOCAL_PLAYERS = (1u << 19) + 2;
 inline constexpr MenuScreenId LOBBY_PLAYER_SETTINGS = (1u << 19) + 3;
 inline constexpr MenuScreenId LOBBY_PROFILE_PICKER = (1u << 19) + 4;

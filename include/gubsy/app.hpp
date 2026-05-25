@@ -51,3 +51,9 @@ struct GubsyMainMenuCommands {
     MenuCommandId start_game{kMenuIdInvalid};
     MenuCommandId quit{kMenuIdInvalid};
 };
+
+struct GubsyInGameMenuCommands {
+    MenuCommandId resume{kMenuIdInvalid};
+    MenuCommandId restart_run{kMenuIdInvalid};
+    MenuCommandId quit_to_main_menu{kMenuIdInvalid};
+};

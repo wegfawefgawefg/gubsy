@@ -53,6 +53,22 @@ Bottom actions are optional:
 Initial implementation should keep the four main slots above. Online-specific
 actions can be added after the base overlay and settings reuse work correctly.
 
+## Resolved Behavior
+
+1. `Start` and `Escape` open the in-game menu while Splonks is in gameplay.
+2. `Back`/`Escape` on the top-level in-game menu resumes gameplay.
+3. `Back`/`Escape` inside a submenu returns to the previous menu screen first.
+4. Offline/local gameplay pauses while the in-game menu is open.
+5. Multiplayer gameplay does not pause while the in-game menu is open.
+6. Menu input is exclusive while the in-game menu is open. Gameplay should not
+   receive the same button, key, or text-edit input.
+7. Gubsy owns menu screens, navigation, layout, settings reuse, and rendering
+   the menu overlay.
+8. Splonks owns simulation pause policy, restart-run behavior, quit-to-title
+   behavior, session leave/disconnect behavior, and game-specific lobby values.
+9. Splonks should call into a small `gubsy_shell` surface instead of poking
+   private Gubsy runtime/menu state.
+
 ## Settings Reuse
 
 The pause menu should push existing Gubsy settings screens with an explicit
@@ -74,6 +90,9 @@ Potentially disabled in-game:
 4. Settings that require a full app restart.
 5. Settings that would desync an active network session unless host-owned and
    synchronized.
+
+In-game settings should not be copied into a separate pause menu tree. The same
+settings screens should adapt from the explicit `InGame` context.
 
 The context should be explicit, for example:
 
@@ -147,6 +166,25 @@ The Splonks callback ownership should stay explicit:
 3. `quit_to_main_menu`: leave/end network session as needed, clear gameplay
    transient state, return to title/main menu.
 
+Do not make the main loop depend on internal Gubsy screen ids. The main loop
+should only need to ask whether the in-game menu is open, open it from gameplay
+input edges, and update/render the active Gubsy menu path.
+
+## Local Player And Input Management
+
+The in-game menu should be able to reach the same local-player and input-profile
+tools as the lobby/settings path where those operations are safe.
+
+1. Input binds and bind profiles are allowed in-game.
+2. Input device assignment is allowed in-game.
+3. Local player add/remove can be available for local/offline runs.
+4. Local player add/remove in online sessions should be host/session-policy
+   controlled, not blindly local-only.
+5. Character selection and game-specific lobby values are Splonks-owned data
+   exposed through Gubsy config/provider hooks.
+6. Gubsy should not know Splonks character enums, stage ids, or respawn enum
+   internals.
+
 ## Pause Policy
 
 Splonks should own pause semantics.
@@ -191,6 +229,11 @@ bool ShouldRouteGameplayInput(const State& state, const gubsy_shell::Shell& shel
 
 That helper should be boring and visible in the main loop/input path.
 
+Opening or closing the menu should also suppress gameplay input for the current
+frame and a small follow-up guard frame. This prevents the same `Start`,
+`Escape`, or confirm press from opening the menu and immediately selecting,
+backing out, jumping, bombing, or otherwise affecting gameplay.
+
 ## Rendering
 
 Initial rendering should be simple:
@@ -204,6 +247,10 @@ Initial rendering should be simple:
 If the current title menu path assumes a full-screen Gubsy frame, split naming
 so the same update/render helpers can be called for title menus and overlays
 without implying Gubsy owns the whole screen.
+
+The overlay does not need a separate renderer. Splonks renders gameplay into
+the Gubsy-owned frame/render target, then Gubsy renders the active menu overlay
+on top before present/debug UI.
 
 ## Implementation Order
 
@@ -222,6 +269,14 @@ without implying Gubsy owns the whole screen.
 13. Add local player/input profile management from the in-game settings path.
 14. Add tests/smokes for the Splonks shell callbacks where practical.
 15. Playtest keyboard, controller, text input, local pause, and online no-pause.
+
+Recommended commit slices:
+
+1. Gubsy in-game menu API and smoke tests.
+2. Splonks shell wrappers and command callbacks.
+3. Splonks main-loop/input routing and offline pause behavior.
+4. Overlay rendering and settings-context restrictions.
+5. Restart/quit/session behavior and manual polish fixes.
 
 ## Files Likely Touched
 
@@ -274,16 +329,13 @@ Manual checks:
 9. Multiplayer game: menu input does not leak into gameplay controls.
 10. Text input fields consume Backspace/Escape appropriately.
 
-## Open Decisions
+## Remaining Decisions
 
-1. Should `Back` on the top-level pause menu resume immediately, or require
-   selecting `Resume`?
-2. Should offline pause also pause music, lower music volume, or leave audio
-   alone?
-3. Should `Restart Run` be host-only in multiplayer, hidden in multiplayer, or
-   converted into a host-owned session command later?
-4. Should `Quit to Main Menu` leave an online room immediately, or show a
-   confirmation screen for online sessions?
-5. Should local player add/remove be available during an active run in the
-   first implementation, or only input/profile assignment?
-
+1. Audio while paused: leave music alone initially unless it causes obvious
+   problems. SFX emitters can continue or be handled by Splonks later.
+2. Multiplayer `Restart Run`: hide or disable initially unless the local player
+   is host. Later it should become a host/session command.
+3. Multiplayer `Quit to Main Menu`: disconnect/leave immediately for the first
+   implementation. Add confirmation only if accidental exits become a problem.
+4. Online local-player add/remove: keep the UI path available only where the
+   session policy can apply it correctly.

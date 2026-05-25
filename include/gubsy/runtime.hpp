@@ -78,24 +78,25 @@ bool gubsy_remove_lobby_local_player(GubsyRuntime& runtime, int player_index);
 bool gubsy_select_lobby_local_player(GubsyRuntime& runtime, int player_index);
 bool gubsy_set_lobby_player_user_profile(GubsyRuntime& runtime, int player_index, int profile_id);
 bool gubsy_set_lobby_player_binds_profile(GubsyRuntime& runtime, int player_index, int profile_id);
-bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime,
-                                                   int player_index,
+bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime, int player_index,
                                                    int profile_id);
-void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime,
-                                      int player_index,
+void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime, int player_index,
                                       GubsyLobbyDeviceAssignment device);
 bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message);
 bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
-bool gubsy_join_lobby_room_code(GubsyRuntime& runtime,
-                                const std::string& room_code,
+bool gubsy_join_lobby_room_code(GubsyRuntime& runtime, const std::string& room_code,
                                 std::string& message);
 bool gubsy_leave_lobby_room(GubsyRuntime& runtime, std::string& message);
 void gubsy_set_main_menu_commands(GubsyRuntime& runtime, GubsyMainMenuCommands commands);
+void gubsy_set_in_game_menu_commands(GubsyRuntime& runtime, GubsyInGameMenuCommands commands);
 void gubsy_set_lobby_commands(GubsyRuntime& runtime, GubsyLobbyCommands commands);
 void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProvider provider);
 void gubsy_set_lobby_matchmaking_backend(GubsyRuntime& runtime, IMatchmaking* matchmaking);
 const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime);
 bool gubsy_show_main_menu(GubsyRuntime& runtime);
+bool gubsy_open_in_game_menu(GubsyRuntime& runtime);
+void gubsy_close_in_game_menu(GubsyRuntime& runtime);
+bool gubsy_in_game_menu_open(const GubsyRuntime& runtime);
 bool gubsy_push_menu_screen(GubsyRuntime& runtime, MenuScreenId screen_id);
 void gubsy_pop_menu_screen(GubsyRuntime& runtime);
 void gubsy_clear_menu_stack(GubsyRuntime& runtime);
