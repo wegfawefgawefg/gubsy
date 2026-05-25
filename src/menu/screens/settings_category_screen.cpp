@@ -49,6 +49,7 @@ constexpr const char* kSettingsProfileNameSettingKey = "__gubsy.settings_profile
 constexpr const char* kProfileDeleteSettingKey = "__gubsy.profile.delete";
 constexpr const char* kProfileResetSettingKey = "__gubsy.profile.reset";
 constexpr int kDangerConfirmPresses = 5;
+constexpr int kMinRenderResolutionDimension = 16;
 
 const char* window_mode_to_value(WindowDisplayMode mode);
 bool value_to_window_mode(const std::string& value, WindowDisplayMode& out);
@@ -494,8 +495,10 @@ void command_apply_render_resolution(MenuContext& ctx, std::int32_t index) {
         return;
     if (st.resolution_entry_index != index)
         return;
-    int width = std::clamp(parse_int_or(st.resolution_edit.width_text, 0), 320, 16384);
-    int height = std::clamp(parse_int_or(st.resolution_edit.height_text, 0), 240, 9216);
+    int width = std::clamp(parse_int_or(st.resolution_edit.width_text, 0),
+                           kMinRenderResolutionDimension, 16384);
+    int height = std::clamp(parse_int_or(st.resolution_edit.height_text, 0),
+                            kMinRenderResolutionDimension, 9216);
     std::string value = make_resolution_string(width, height);
     EntryBinding& binding = st.entries[static_cast<std::size_t>(index)];
     if (std::string* sv = std::get_if<std::string>(binding.entry.value)) {
@@ -870,8 +873,10 @@ void refresh_entries(EngineState& engine, SettingsCategoryState& st,
             }
         }
         glm::ivec2 dims = get_render_dimensions(engine);
-        int pending_w = std::clamp(parse_int_or(st.resolution_edit.width_text, dims.x), 320, 16384);
-        int pending_h = std::clamp(parse_int_or(st.resolution_edit.height_text, dims.y), 240, 9216);
+        int pending_w = std::clamp(parse_int_or(st.resolution_edit.width_text, dims.x),
+                                   kMinRenderResolutionDimension, 16384);
+        int pending_h = std::clamp(parse_int_or(st.resolution_edit.height_text, dims.y),
+                                   kMinRenderResolutionDimension, 9216);
         st.resolution_edit.dirty = (pending_w != dims.x || pending_h != dims.y);
     }
 }
