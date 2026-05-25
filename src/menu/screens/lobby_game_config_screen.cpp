@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kRowsPerPage = 3;
+constexpr int kRowsPerPage = 4;
 constexpr WidgetId kTitleWidgetId = 2800;
 constexpr WidgetId kStatusWidgetId = 2801;
 constexpr WidgetId kPageWidgetId = 2802;
@@ -126,15 +126,18 @@ BuiltScreen build_game_config(MenuContext& ctx) {
                                  ? MenuAction::run_command(g_cmd_page_delta, 1)
                                  : MenuAction::none();
 
-    MenuWidget prev = st.page > 0 ? make_button(kPrevWidgetId, SettingsObjectID::PREV, "<", prev_action)
-                                  : make_label(kPrevWidgetId, SettingsObjectID::PREV, "");
+    MenuWidget prev = st.page > 0
+                          ? make_button(kPrevWidgetId, SettingsObjectID::PREV, "<", prev_action)
+                          : make_label(kPrevWidgetId, SettingsObjectID::PREV, "");
     prev.role = MenuWidgetRole::PagePrev;
     MenuWidget next = st.page + 1 < st.total_pages
                           ? make_button(kNextWidgetId, SettingsObjectID::NEXT, ">", next_action)
                           : make_label(kNextWidgetId, SettingsObjectID::NEXT, "");
     next.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev);
+    std::size_t prev_idx = widgets.size() - 1;
     widgets.push_back(next);
+    std::size_t next_idx = widgets.size() - 1;
 
     std::vector<WidgetId> row_ids;
     int start = st.page * kRowsPerPage;
@@ -172,19 +175,27 @@ BuiltScreen build_game_config(MenuContext& ctx) {
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back);
 
+    MenuWidget& prev_ref = widgets[prev_idx];
+    MenuWidget& next_ref = widgets[next_idx];
+    const WidgetId first_row = row_ids.empty() ? back.id : row_ids.front();
+    const WidgetId visible_pager =
+        prev_ref.type == WidgetType::Button
+            ? prev_ref.id
+            : (next_ref.type == WidgetType::Button ? next_ref.id : kMenuIdInvalid);
+    prev_ref.nav_right = next_ref.type == WidgetType::Button ? next_ref.id : kMenuIdInvalid;
+    prev_ref.nav_down = first_row;
+    next_ref.nav_left = prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid;
+    next_ref.nav_down = first_row;
+
     for (std::size_t i = 0; i < row_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != row_ids[i])
                 continue;
-            widget.nav_up = (i == 0)
-                                ? (prev.type == WidgetType::Button ? prev.id : kMenuIdInvalid)
-                                : row_ids[i - 1];
+            widget.nav_up = (i == 0) ? visible_pager : row_ids[i - 1];
             widget.nav_down = (i + 1 < row_ids.size()) ? row_ids[i + 1] : back.id;
         }
     }
-    back.nav_up = row_ids.empty()
-                      ? (prev.type == WidgetType::Button ? prev.id : kMenuIdInvalid)
-                      : row_ids.back();
+    back.nav_up = row_ids.empty() ? visible_pager : row_ids.back();
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
