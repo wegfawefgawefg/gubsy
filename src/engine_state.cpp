@@ -332,6 +332,15 @@ bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::strin
     return gubsy_lobby_host_room(gubsy_runtime_engine(runtime), port, message);
 }
 
+bool gubsy_host_lobby_direct(GubsyRuntime& runtime, std::uint16_t port, std::string& message) {
+    return gubsy_lobby_host_direct(gubsy_runtime_engine(runtime), port, message);
+}
+
+bool gubsy_join_lobby_direct(GubsyRuntime& runtime, const std::string& host, std::uint16_t port,
+                             std::string& message) {
+    return gubsy_lobby_join_direct(gubsy_runtime_engine(runtime), host, port, message);
+}
+
 bool gubsy_join_lobby_room_code(GubsyRuntime& runtime, const std::string& room_code,
                                 std::string& message) {
     return gubsy_lobby_join_room_code(gubsy_runtime_engine(runtime), room_code, message);

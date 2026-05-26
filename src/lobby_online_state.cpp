@@ -212,6 +212,84 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     return true;
 }
 
+bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::string& message) {
+    gubsy_lobby_ensure_ready(engine);
+    ensure_room_defaults(engine);
+    if (!gubsy_lobby_validate_start(engine, message))
+        return false;
+    if (!engine.lobby_commands.host) {
+        message = "Cannot host direct game: no host callback registered";
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    engine.lobby.contract = build_lobby_contract(engine);
+    GubsyLobbyHostResult result =
+        engine.lobby_commands.host(engine.lobby_commands.host_user_data, engine.lobby, port);
+    if (!result.ok) {
+        message = result.status.empty() ? "Cannot host direct game: failed to start transport"
+                                        : with_prefix("Cannot host direct game", result.status);
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    engine.lobby.advertised_endpoint = result.advertised_endpoint;
+    engine.lobby.network_port = static_cast<int>(port);
+    engine.lobby.contract.session_phase = "lobby";
+    engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
+    engine.lobby.online = true;
+    engine.lobby.is_host = true;
+    engine.lobby.room_code.clear();
+    engine.lobby.member_id.clear();
+    engine.lobby.host_secret.clear();
+    engine.lobby.members.clear();
+    clear_lobby_error(engine, "Hosting direct " + engine.lobby.advertised_endpoint);
+    message = engine.lobby.status_message;
+    return true;
+}
+
+bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::uint16_t port,
+                             std::string& message) {
+    gubsy_lobby_ensure_ready(engine);
+    ensure_room_defaults(engine);
+    if (host.empty() || port == 0) {
+        message = "Cannot join direct game: invalid host or port";
+        set_lobby_error(engine, message);
+        return false;
+    }
+    if (!engine.lobby_commands.join) {
+        message = "Cannot join direct game: no join callback registered";
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    engine.lobby.contract = build_lobby_contract(engine);
+    GubsyLobbyJoinResult join_result =
+        engine.lobby_commands.join(engine.lobby_commands.join_user_data, engine.lobby,
+                                   host.c_str(), port);
+    if (!join_result.ok) {
+        message = join_result.status.empty() ? "Cannot join direct game: failed to reach host"
+                                             : with_prefix("Cannot join direct game",
+                                                           join_result.status);
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    engine.lobby.online = true;
+    engine.lobby.is_host = false;
+    engine.lobby.room_code.clear();
+    engine.lobby.member_id.clear();
+    engine.lobby.host_secret.clear();
+    engine.lobby.members.clear();
+    engine.lobby.join_host = host;
+    engine.lobby.network_port = static_cast<int>(port);
+    engine.lobby.advertised_endpoint = host + ":" + std::to_string(port);
+    engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
+    clear_lobby_error(engine, "Joined direct " + engine.lobby.advertised_endpoint);
+    message = engine.lobby.status_message;
+    return true;
+}
+
 bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
@@ -284,9 +362,20 @@ bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_cod
 bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
-    if (!engine.lobby.online || engine.lobby.room_code.empty()) {
-        message = "Not in an online room";
+    if (!engine.lobby.online) {
+        message = "Not in an online session";
         engine.lobby.status_message = message;
+        return true;
+    }
+    if (engine.lobby.room_code.empty()) {
+        disconnect_game_transport(engine);
+        engine.lobby.online = false;
+        engine.lobby.is_host = false;
+        engine.lobby.member_id.clear();
+        engine.lobby.host_secret.clear();
+        engine.lobby.members.clear();
+        clear_lobby_error(engine, "Left direct session");
+        message = engine.lobby.status_message;
         return true;
     }
     std::string err;

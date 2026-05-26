@@ -156,6 +156,36 @@ int main(int argc, char** argv) {
         gubsy_lobby_ensure_ready(host_engine);
         (void)gubsy_lobby_add_local_player(host_engine);
         std::string message;
+
+        require(gubsy_lobby_host_direct(host_engine, host_state.expected_port, message),
+                "host direct failed");
+        require(host_state.host_called, "direct host transport was not called");
+        require(host_engine.lobby.online, "direct host lobby is not online");
+        require(host_engine.lobby.is_host, "direct host lobby is not marked as host");
+        require(host_engine.lobby.room_code.empty(), "direct host should not have room code");
+        require(host_engine.lobby.advertised_endpoint == "127.0.0.1:45454",
+                "direct host advertised endpoint mismatch");
+
+        require(gubsy_lobby_join_direct(guest_engine,
+                                        guest_state.expected_host,
+                                        guest_state.expected_port,
+                                        message),
+                "guest direct join failed");
+        require(guest_state.join_called, "direct guest transport was not called");
+        require(guest_engine.lobby.online, "direct guest lobby is not online");
+        require(!guest_engine.lobby.is_host, "direct guest lobby is marked as host");
+        require(guest_engine.lobby.room_code.empty(), "direct guest should not have room code");
+
+        require(gubsy_lobby_leave_room(guest_engine, message), "direct guest leave failed");
+        require(guest_state.leave_called, "direct guest leave transport was not called");
+        require(gubsy_lobby_leave_room(host_engine, message), "direct host leave failed");
+        require(host_state.leave_called, "direct host leave transport was not called");
+
+        host_state.host_called = false;
+        host_state.leave_called = false;
+        guest_state.join_called = false;
+        guest_state.leave_called = false;
+
         require(gubsy_lobby_host_room(host_engine, host_state.expected_port, message),
                 "host room failed");
         require(host_state.host_called, "host transport was not called");

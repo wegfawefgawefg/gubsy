@@ -81,6 +81,9 @@ void gubsy_lobby_assign_gamepad_to_primary_player(EngineState& engine, int devic
 void gubsy_lobby_remove_gamepad_device_assignments(EngineState& engine, int device_id);
 
 bool gubsy_lobby_validate_start(EngineState& engine, std::string& message);
+bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::string& message);
+bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::uint16_t port,
+                             std::string& message);
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message);
 bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_code,
                                 std::string& message);

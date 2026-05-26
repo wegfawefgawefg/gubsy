@@ -85,6 +85,9 @@ bool gubsy_set_lobby_player_input_settings_profile(GubsyRuntime& runtime, int pl
 void gubsy_toggle_lobby_player_device(GubsyRuntime& runtime, int player_index,
                                       GubsyLobbyDeviceAssignment device);
 bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message);
+bool gubsy_host_lobby_direct(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
+bool gubsy_join_lobby_direct(GubsyRuntime& runtime, const std::string& host, std::uint16_t port,
+                             std::string& message);
 bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
 bool gubsy_join_lobby_room_code(GubsyRuntime& runtime, const std::string& room_code,
                                 std::string& message);

@@ -20,7 +20,6 @@ constexpr WidgetId kStatusWidgetId = 2701;
 constexpr WidgetId kPageWidgetId = 2702;
 constexpr WidgetId kHostInputWidgetId = 2720;
 constexpr WidgetId kPortInputWidgetId = 2721;
-constexpr WidgetId kCodeInputWidgetId = 2722;
 constexpr WidgetId kActionWidgetId = 2723;
 constexpr WidgetId kRefreshWidgetId = 2724;
 constexpr WidgetId kFirstRoomWidgetId = 2725;
@@ -32,8 +31,10 @@ constexpr WidgetId kBackWidgetId = 2730;
 constexpr int kDefaultPort = 35355;
 constexpr int kRoomsPerPage = 2;
 
-MenuCommandId g_cmd_host = kMenuIdInvalid;
+MenuCommandId g_cmd_host_direct = kMenuIdInvalid;
+MenuCommandId g_cmd_publish_room = kMenuIdInvalid;
 MenuCommandId g_cmd_leave = kMenuIdInvalid;
+MenuCommandId g_cmd_join_direct = kMenuIdInvalid;
 MenuCommandId g_cmd_join_code = kMenuIdInvalid;
 MenuCommandId g_cmd_join_listed = kMenuIdInvalid;
 MenuCommandId g_cmd_refresh = kMenuIdInvalid;
@@ -140,7 +141,20 @@ bool validate_common(MenuContext& ctx) {
     return false;
 }
 
-void command_host(MenuContext& ctx, std::int32_t) {
+void command_host_direct(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<OnlineState>();
+    if (!validate_common(ctx))
+        return;
+
+    std::uint16_t port = parse_port(st.port_text);
+    std::string message;
+    bool ok = gubsy_lobby_host_direct(ctx.engine, port, message);
+    add_alert(ctx.engine, message);
+    if (ok)
+        ctx.manager.pop_screen();
+}
+
+void command_publish_room(MenuContext& ctx, std::int32_t) {
     auto& st = ctx.state<OnlineState>();
     if (!validate_common(ctx))
         return;
@@ -157,6 +171,18 @@ void command_leave(MenuContext& ctx, std::int32_t) {
     std::string message;
     (void)gubsy_lobby_leave_room(ctx.engine, message);
     add_alert(ctx.engine, message);
+}
+
+void command_join_direct(MenuContext& ctx, std::int32_t) {
+    auto& st = ctx.state<OnlineState>();
+    if (!validate_common(ctx))
+        return;
+
+    std::string message;
+    bool ok = gubsy_lobby_join_direct(ctx.engine, st.host_text, parse_port(st.port_text), message);
+    add_alert(ctx.engine, message);
+    if (ok)
+        ctx.manager.pop_screen();
 }
 
 void command_join_code(MenuContext& ctx, std::int32_t) {
@@ -252,11 +278,17 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
                                          MenuAction::run_command(g_cmd_max_players_delta, 1));
     max_players.secondary = "Session-wide player cap advertised to the room backend.";
 
+    MenuWidget publish = make_button(kRefreshWidgetId,
+                                     SettingsObjectID::CARD4,
+                                     "Publish To Browser",
+                                     MenuAction::run_command(g_cmd_publish_room));
+    publish.secondary = "Starts hosting and advertises this game to the configured room server.";
+
     MenuWidget action = make_button(kActionWidgetId,
                                     SettingsObjectID::ACTION,
-                                    ctx.engine.lobby.online ? "Leave Room" : "Host Room",
+                                    ctx.engine.lobby.online ? "Leave Session" : "Host Direct",
                                     MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave
-                                                                                   : g_cmd_host));
+                                                                                   : g_cmd_host_direct));
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     lobby_name.nav_down = port_input.id;
@@ -265,15 +297,18 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     visibility.nav_up = port_input.id;
     visibility.nav_down = max_players.id;
     max_players.nav_up = visibility.id;
-    max_players.nav_down = back.id;
-    action.nav_up = max_players.id;
+    max_players.nav_down = publish.id;
+    publish.nav_up = max_players.id;
+    publish.nav_down = back.id;
+    action.nav_up = publish.id;
     action.nav_left = back.id;
-    back.nav_up = max_players.id;
+    back.nav_up = publish.id;
     back.nav_right = action.id;
     widgets.push_back(lobby_name);
     widgets.push_back(port_input);
     widgets.push_back(visibility);
     widgets.push_back(max_players);
+    widgets.push_back(publish);
     widgets.push_back(action);
     widgets.push_back(back);
 
@@ -321,25 +356,33 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     widgets.push_back(prev);
     widgets.push_back(next);
 
-    MenuWidget code = make_text(kCodeInputWidgetId,
+    MenuWidget host = make_text(kHostInputWidgetId,
                                 SettingsObjectID::CARD0,
-                                "Room Code",
-                                &st.room_code_text,
-                                16);
-    code.placeholder = "ABCD12";
-    MenuWidget join_code = make_button(kActionWidgetId,
-                                       SettingsObjectID::CARD1,
-                                       "Join Room Code",
-                                       MenuAction::run_command(g_cmd_join_code));
-    widgets.push_back(code);
-    widgets.push_back(join_code);
+                                "Direct Host",
+                                &st.host_text,
+                                64);
+    host.placeholder = "127.0.0.1";
+    MenuWidget port = make_text(kPortInputWidgetId,
+                                SettingsObjectID::CARD1,
+                                "Direct Port",
+                                &st.port_text,
+                                6);
+    port.placeholder = "35355";
+    MenuWidget join_direct = make_button(kActionWidgetId,
+                                         SettingsObjectID::CARD2,
+                                         "Join Direct",
+                                         MenuAction::run_command(g_cmd_join_direct));
+
+    widgets.push_back(host);
+    widgets.push_back(port);
+    widgets.push_back(join_direct);
 
     std::vector<WidgetId> room_ids;
     int start = st.page * kRoomsPerPage;
     for (int i = 0; i < kRoomsPerPage; ++i) {
         int room_index = start + i;
         WidgetId widget_id = kFirstRoomWidgetId + static_cast<WidgetId>(i);
-        UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD2 + i);
+        UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD3 + i);
         if (room_index < static_cast<int>(ctx.engine.lobby.discovered_rooms.size())) {
             const MatchmakingRoom& room =
                 ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(room_index)];
@@ -380,26 +423,28 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     MenuWidget& refresh_ref = widgets[refresh_idx];
     MenuWidget& back_ref = widgets[back_idx];
 
-    code.nav_down = join_code.id;
-    join_code.nav_up = code.id;
-    join_code.nav_down = room_ids.empty() ? refresh_ref.id : room_ids.front();
+    host.nav_down = port.id;
+    port.nav_up = host.id;
+    port.nav_down = join_direct.id;
+    join_direct.nav_up = port.id;
+    join_direct.nav_down = room_ids.empty() ? refresh_ref.id : room_ids.front();
     for (std::size_t i = 0; i < room_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != room_ids[i])
                 continue;
-            widget.nav_up = (i == 0) ? join_code.id : room_ids[i - 1];
+            widget.nav_up = (i == 0) ? join_direct.id : room_ids[i - 1];
             widget.nav_down = (i + 1 < room_ids.size()) ? room_ids[i + 1] : refresh_ref.id;
             break;
         }
     }
-    refresh_ref.nav_up = room_ids.empty() ? join_code.id : room_ids.back();
+    refresh_ref.nav_up = room_ids.empty() ? join_direct.id : room_ids.back();
     refresh_ref.nav_down = back_ref.id;
     back_ref.nav_up = refresh_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = code.id;
+    built.default_focus = host.id;
     return built;
 }
 
@@ -415,10 +460,14 @@ void register_screen(EngineState& engine, MenuScreenId id, MenuBuildFn build) {
 } // namespace
 
 void register_lobby_online_screens(EngineState& engine) {
-    if (g_cmd_host == kMenuIdInvalid)
-        g_cmd_host = engine.menu_commands.register_command(command_host);
+    if (g_cmd_host_direct == kMenuIdInvalid)
+        g_cmd_host_direct = engine.menu_commands.register_command(command_host_direct);
+    if (g_cmd_publish_room == kMenuIdInvalid)
+        g_cmd_publish_room = engine.menu_commands.register_command(command_publish_room);
     if (g_cmd_leave == kMenuIdInvalid)
         g_cmd_leave = engine.menu_commands.register_command(command_leave);
+    if (g_cmd_join_direct == kMenuIdInvalid)
+        g_cmd_join_direct = engine.menu_commands.register_command(command_join_direct);
     if (g_cmd_join_code == kMenuIdInvalid)
         g_cmd_join_code = engine.menu_commands.register_command(command_join_code);
     if (g_cmd_join_listed == kMenuIdInvalid)
