@@ -114,12 +114,9 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
 } // namespace
 
 void register_shell_lobby_screen(EngineState& engine) {
-    if (g_cmd_start_game == kMenuIdInvalid)
-        g_cmd_start_game = engine.menu_commands.register_command(command_start_game);
-    if (g_cmd_host_game == kMenuIdInvalid)
-        g_cmd_host_game = engine.menu_commands.register_command(command_host_game);
-    if (g_cmd_browse_servers == kMenuIdInvalid)
-        g_cmd_browse_servers = engine.menu_commands.register_command(command_browse_servers);
+    g_cmd_start_game = engine.menu_commands.register_command(command_start_game);
+    g_cmd_host_game = engine.menu_commands.register_command(command_host_game);
+    g_cmd_browse_servers = engine.menu_commands.register_command(command_browse_servers);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SHELL_LOBBY;

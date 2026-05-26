@@ -362,12 +362,9 @@ BuiltScreen build_binds_action_editor(MenuContext& ctx) {
 } // namespace
 
 void register_binds_action_editor_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_edit_mapping == kMenuIdInvalid)
-        g_cmd_edit_mapping = engine.menu_commands.register_command(command_edit_mapping);
-    if (g_cmd_reset_action == kMenuIdInvalid)
-        g_cmd_reset_action = engine.menu_commands.register_command(command_reset_action);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_edit_mapping = engine.menu_commands.register_command(command_edit_mapping);
+    g_cmd_reset_action = engine.menu_commands.register_command(command_reset_action);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_ACTION_EDITOR;

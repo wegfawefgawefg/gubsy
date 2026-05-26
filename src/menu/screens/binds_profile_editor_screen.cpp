@@ -431,12 +431,9 @@ BuiltScreen build_binds_profile_editor(MenuContext& ctx) {
 } // namespace
 
 void register_binds_profile_editor_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_open_action == kMenuIdInvalid)
-        g_cmd_open_action = engine.menu_commands.register_command(command_open_action);
-    if (g_cmd_reset_profile == kMenuIdInvalid)
-        g_cmd_reset_profile = engine.menu_commands.register_command(command_reset_profile);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_open_action = engine.menu_commands.register_command(command_open_action);
+    g_cmd_reset_profile = engine.menu_commands.register_command(command_reset_profile);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_PROFILE_EDITOR;

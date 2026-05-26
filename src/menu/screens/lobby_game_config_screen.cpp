@@ -209,10 +209,8 @@ BuiltScreen build_game_config(MenuContext& ctx) {
 } // namespace
 
 void register_lobby_game_config_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_option_delta == kMenuIdInvalid)
-        g_cmd_option_delta = engine.menu_commands.register_command(command_option_delta);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_option_delta = engine.menu_commands.register_command(command_option_delta);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOBBY_GAME_CONFIG;

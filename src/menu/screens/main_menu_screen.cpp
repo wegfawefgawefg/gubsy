@@ -74,10 +74,8 @@ BuiltScreen build_main_menu(MenuContext& ctx) {
 } // namespace
 
 void register_main_menu_screen(EngineState& engine) {
-    if (g_cmd_open_lobby == kMenuIdInvalid)
-        g_cmd_open_lobby = engine.menu_commands.register_command(command_open_lobby);
-    if (g_cmd_open_settings == kMenuIdInvalid)
-        g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
+    g_cmd_open_lobby = engine.menu_commands.register_command(command_open_lobby);
+    g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SHELL_MAIN;

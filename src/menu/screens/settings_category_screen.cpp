@@ -1376,35 +1376,19 @@ const std::string* tag_for_settings_screen(MenuScreenId id) {
 }
 
 void register_settings_category_screens(EngineState& engine) {
-    if (g_cmd_toggle_setting == kMenuIdInvalid)
-        g_cmd_toggle_setting = engine.menu_commands.register_command(command_toggle_setting);
-    if (g_cmd_slider_inc == kMenuIdInvalid)
-        g_cmd_slider_inc = engine.menu_commands.register_command(command_slider_inc);
-    if (g_cmd_slider_dec == kMenuIdInvalid)
-        g_cmd_slider_dec = engine.menu_commands.register_command(command_slider_dec);
-    if (g_cmd_option_prev == kMenuIdInvalid)
-        g_cmd_option_prev = engine.menu_commands.register_command(command_option_prev);
-    if (g_cmd_option_next == kMenuIdInvalid)
-        g_cmd_option_next = engine.menu_commands.register_command(command_option_next);
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_apply_window_mode == kMenuIdInvalid)
-        g_cmd_apply_window_mode = engine.menu_commands.register_command(command_apply_window_mode);
-    if (g_cmd_apply_fullscreen_display_mode == kMenuIdInvalid) {
-        g_cmd_apply_fullscreen_display_mode =
-            engine.menu_commands.register_command(command_apply_fullscreen_display_mode);
-    }
-    if (g_cmd_apply_render_resolution == kMenuIdInvalid)
-        g_cmd_apply_render_resolution =
-            engine.menu_commands.register_command(command_apply_render_resolution);
-    if (g_cmd_profile_delete == kMenuIdInvalid)
-        g_cmd_profile_delete = engine.menu_commands.register_command(command_profile_delete);
-    if (g_cmd_profile_reset == kMenuIdInvalid)
-        g_cmd_profile_reset = engine.menu_commands.register_command(command_profile_reset);
-    if (g_cmd_apply_text_setting == kMenuIdInvalid) {
-        g_cmd_apply_text_setting =
-            engine.menu_commands.register_command(command_apply_text_setting);
-    }
-    if (g_cmd_slider_set == kMenuIdInvalid)
-        g_cmd_slider_set = engine.menu_commands.register_command(command_slider_set);
+    g_cmd_toggle_setting = engine.menu_commands.register_command(command_toggle_setting);
+    g_cmd_slider_inc = engine.menu_commands.register_command(command_slider_inc);
+    g_cmd_slider_dec = engine.menu_commands.register_command(command_slider_dec);
+    g_cmd_option_prev = engine.menu_commands.register_command(command_option_prev);
+    g_cmd_option_next = engine.menu_commands.register_command(command_option_next);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_apply_window_mode = engine.menu_commands.register_command(command_apply_window_mode);
+    g_cmd_apply_fullscreen_display_mode =
+        engine.menu_commands.register_command(command_apply_fullscreen_display_mode);
+    g_cmd_apply_render_resolution =
+        engine.menu_commands.register_command(command_apply_render_resolution);
+    g_cmd_profile_delete = engine.menu_commands.register_command(command_profile_delete);
+    g_cmd_profile_reset = engine.menu_commands.register_command(command_profile_reset);
+    g_cmd_apply_text_setting = engine.menu_commands.register_command(command_apply_text_setting);
+    g_cmd_slider_set = engine.menu_commands.register_command(command_slider_set);
 }

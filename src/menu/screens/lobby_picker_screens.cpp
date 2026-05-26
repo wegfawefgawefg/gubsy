@@ -71,8 +71,7 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
 void update_page(PickerState& st, int count) {
     st.total_pages = std::max(1, (count + kItemsPerPage - 1) / kItemsPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
-    st.page_text = "Page " + std::to_string(st.page + 1) + " / " +
-                   std::to_string(st.total_pages);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
 void command_profile_page_delta(MenuContext& ctx, std::int32_t delta) {
@@ -126,8 +125,8 @@ void command_pick_input(MenuContext& ctx, std::int32_t index) {
 void command_toggle_device(MenuContext& ctx, std::int32_t index) {
     if (index < 0 || index >= static_cast<int>(ctx.engine.input_sources.size()))
         return;
-    GubsyLobbyDeviceAssignment device =
-        gubsy_lobby_device_from_input_source(ctx.engine.input_sources[static_cast<std::size_t>(index)]);
+    GubsyLobbyDeviceAssignment device = gubsy_lobby_device_from_input_source(
+        ctx.engine.input_sources[static_cast<std::size_t>(index)]);
     gubsy_lobby_toggle_device(ctx.engine, ctx.player_index, device);
 }
 
@@ -178,13 +177,11 @@ std::string item_label(const EngineState& engine, PickerKind kind, int item_inde
         return engine.binds_profiles[static_cast<std::size_t>(item_index)].name;
     if (kind == PickerKind::InputSettings)
         return engine.input_settings_profiles[static_cast<std::size_t>(item_index)].name;
-    return gubsy_lobby_device_label(
-        gubsy_lobby_device_from_input_source(engine.input_sources[static_cast<std::size_t>(item_index)]));
+    return gubsy_lobby_device_label(gubsy_lobby_device_from_input_source(
+        engine.input_sources[static_cast<std::size_t>(item_index)]));
 }
 
-std::string item_detail(const EngineState& engine,
-                        PickerKind kind,
-                        int player_index,
+std::string item_detail(const EngineState& engine, PickerKind kind, int player_index,
                         int item_index) {
     const GubsyLobbyPlayer* player = gubsy_lobby_player(engine, player_index);
     if (!player)
@@ -195,7 +192,8 @@ std::string item_detail(const EngineState& engine,
     }
     if (kind == PickerKind::Binds) {
         int id = engine.binds_profiles[static_cast<std::size_t>(item_index)].id;
-        return id == player->binds_profile_id ? "Current binds profile." : "Select for this player.";
+        return id == player->binds_profile_id ? "Current binds profile."
+                                              : "Select for this player.";
     }
     if (kind == PickerKind::InputSettings) {
         int id = engine.input_settings_profiles[static_cast<std::size_t>(item_index)].id;
@@ -203,10 +201,11 @@ std::string item_detail(const EngineState& engine,
                                                        : "Select for this player.";
     }
 
-    GubsyLobbyDeviceAssignment device =
-        gubsy_lobby_device_from_input_source(engine.input_sources[static_cast<std::size_t>(item_index)]);
-    return gubsy_lobby_player_has_device(engine, player_index, device) ? "Assigned. Select to remove."
-                                                                       : "Not assigned. Select to add.";
+    GubsyLobbyDeviceAssignment device = gubsy_lobby_device_from_input_source(
+        engine.input_sources[static_cast<std::size_t>(item_index)]);
+    return gubsy_lobby_player_has_device(engine, player_index, device)
+               ? "Assigned. Select to remove."
+               : "Not assigned. Select to add.";
 }
 
 BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
@@ -222,17 +221,19 @@ BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, title_for_kind(kind)));
     st.status_text = gubsy_lobby_player_label(ctx.engine, ctx.player_index);
-    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
     MenuCommandId page_cmd = page_command_for_kind(kind);
-    MenuAction prev_action = st.page > 0 ? MenuAction::run_command(page_cmd, -1)
-                                         : MenuAction::none();
-    MenuAction next_action = st.page + 1 < st.total_pages ? MenuAction::run_command(page_cmd, 1)
-                                                          : MenuAction::none();
+    MenuAction prev_action =
+        st.page > 0 ? MenuAction::run_command(page_cmd, -1) : MenuAction::none();
+    MenuAction next_action =
+        st.page + 1 < st.total_pages ? MenuAction::run_command(page_cmd, 1) : MenuAction::none();
 
-    MenuWidget prev = st.page > 0 ? make_button(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action)
-                                  : make_label(kPrevButtonId, SettingsObjectID::PREV, "");
+    MenuWidget prev = st.page > 0
+                          ? make_button(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action)
+                          : make_label(kPrevButtonId, SettingsObjectID::PREV, "");
     prev.role = MenuWidgetRole::PagePrev;
     MenuWidget next = st.page + 1 < st.total_pages
                           ? make_button(kNextButtonId, SettingsObjectID::NEXT, ">", next_action)
@@ -268,7 +269,8 @@ BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
         }
     }
 
-    MenuWidget action = make_button(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget action =
+        make_button(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(action);
     std::size_t back_idx = widgets.size() - 1;
 
@@ -285,10 +287,9 @@ BuiltScreen build_picker(MenuContext& ctx, PickerKind kind) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != card_ids[i])
                 continue;
-            widget.nav_up = (i == 0)
-                                ? (prev_ref.type == WidgetType::Button ? prev_ref.id
-                                                                       : kMenuIdInvalid)
-                                : card_ids[i - 1];
+            widget.nav_up =
+                (i == 0) ? (prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid)
+                         : card_ids[i - 1];
             widget.nav_down = (i + 1 < card_ids.size()) ? card_ids[i + 1] : back_ref.id;
             break;
         }
@@ -330,22 +331,14 @@ void register_picker(EngineState& engine, MenuScreenId id, MenuBuildFn build) {
 } // namespace
 
 void register_lobby_picker_screens(EngineState& engine) {
-    if (g_cmd_profile_page_delta == kMenuIdInvalid)
-        g_cmd_profile_page_delta = engine.menu_commands.register_command(command_profile_page_delta);
-    if (g_cmd_binds_page_delta == kMenuIdInvalid)
-        g_cmd_binds_page_delta = engine.menu_commands.register_command(command_binds_page_delta);
-    if (g_cmd_input_page_delta == kMenuIdInvalid)
-        g_cmd_input_page_delta = engine.menu_commands.register_command(command_input_page_delta);
-    if (g_cmd_device_page_delta == kMenuIdInvalid)
-        g_cmd_device_page_delta = engine.menu_commands.register_command(command_device_page_delta);
-    if (g_cmd_pick_profile == kMenuIdInvalid)
-        g_cmd_pick_profile = engine.menu_commands.register_command(command_pick_profile);
-    if (g_cmd_pick_binds == kMenuIdInvalid)
-        g_cmd_pick_binds = engine.menu_commands.register_command(command_pick_binds);
-    if (g_cmd_pick_input == kMenuIdInvalid)
-        g_cmd_pick_input = engine.menu_commands.register_command(command_pick_input);
-    if (g_cmd_toggle_device == kMenuIdInvalid)
-        g_cmd_toggle_device = engine.menu_commands.register_command(command_toggle_device);
+    g_cmd_profile_page_delta = engine.menu_commands.register_command(command_profile_page_delta);
+    g_cmd_binds_page_delta = engine.menu_commands.register_command(command_binds_page_delta);
+    g_cmd_input_page_delta = engine.menu_commands.register_command(command_input_page_delta);
+    g_cmd_device_page_delta = engine.menu_commands.register_command(command_device_page_delta);
+    g_cmd_pick_profile = engine.menu_commands.register_command(command_pick_profile);
+    g_cmd_pick_binds = engine.menu_commands.register_command(command_pick_binds);
+    g_cmd_pick_input = engine.menu_commands.register_command(command_pick_input);
+    g_cmd_toggle_device = engine.menu_commands.register_command(command_toggle_device);
 
     register_picker(engine, MenuScreenID::LOBBY_PROFILE_PICKER, build_profile_picker);
     register_picker(engine, MenuScreenID::LOBBY_BINDS_PICKER, build_binds_picker);

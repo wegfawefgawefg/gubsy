@@ -199,12 +199,9 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 } // namespace
 
 void register_lobby_local_players_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_add_player == kMenuIdInvalid)
-        g_cmd_add_player = engine.menu_commands.register_command(command_add_player);
-    if (g_cmd_open_player == kMenuIdInvalid)
-        g_cmd_open_player = engine.menu_commands.register_command(command_open_player);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_add_player = engine.menu_commands.register_command(command_add_player);
+    g_cmd_open_player = engine.menu_commands.register_command(command_open_player);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOBBY_LOCAL_PLAYERS;

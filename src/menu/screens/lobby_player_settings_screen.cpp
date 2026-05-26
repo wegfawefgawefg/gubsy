@@ -264,18 +264,12 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
 } // namespace
 
 void register_lobby_player_settings_screen(EngineState& engine) {
-    if (g_cmd_open_profile == kMenuIdInvalid)
-        g_cmd_open_profile = engine.menu_commands.register_command(command_open_profile);
-    if (g_cmd_open_binds == kMenuIdInvalid)
-        g_cmd_open_binds = engine.menu_commands.register_command(command_open_binds);
-    if (g_cmd_open_input == kMenuIdInvalid)
-        g_cmd_open_input = engine.menu_commands.register_command(command_open_input);
-    if (g_cmd_open_devices == kMenuIdInvalid)
-        g_cmd_open_devices = engine.menu_commands.register_command(command_open_devices);
-    if (g_cmd_remove_player == kMenuIdInvalid)
-        g_cmd_remove_player = engine.menu_commands.register_command(command_remove_player);
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_open_profile = engine.menu_commands.register_command(command_open_profile);
+    g_cmd_open_binds = engine.menu_commands.register_command(command_open_binds);
+    g_cmd_open_input = engine.menu_commands.register_command(command_open_input);
+    g_cmd_open_devices = engine.menu_commands.register_command(command_open_devices);
+    g_cmd_remove_player = engine.menu_commands.register_command(command_remove_player);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOBBY_PLAYER_SETTINGS;

@@ -1,19 +1,19 @@
 #include "src/menu/screens/profiles_screen.hpp"
 
+#include "src/engine_state.hpp"
+#include "src/menu/menu_commands.hpp"
+#include "src/menu/menu_ids.hpp"
+#include "src/menu/menu_manager.hpp"
+#include "src/menu/menu_screen.hpp"
+#include "src/menu/settings_category_registry.hpp"
+#include "src/menu_layout_ids.hpp"
+#include "src/player.hpp"
+#include "src/user_profiles.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
 #include <vector>
-
-#include "src/engine_state.hpp"
-#include "src/menu/menu_commands.hpp"
-#include "src/menu/menu_manager.hpp"
-#include "src/menu/menu_screen.hpp"
-#include "src/menu/menu_ids.hpp"
-#include "src/menu_layout_ids.hpp"
-#include "src/menu/settings_category_registry.hpp"
-#include "src/player.hpp"
-#include "src/user_profiles.hpp"
 
 namespace {
 
@@ -51,7 +51,8 @@ MenuWidget make_label_widget(WidgetId id, UILayoutObjectId slot, const char* lab
     return w;
 }
 
-MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
+MenuWidget make_button_widget(WidgetId id, UILayoutObjectId slot, const char* label,
+                              MenuAction action) {
     MenuWidget w;
     w.id = id;
     w.slot = slot;
@@ -108,7 +109,8 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     if (st.filtered_indices.empty()) {
         st.page_text = "Page 0 / 0";
     } else {
-        st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+        st.page_text =
+            "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
     }
 }
 
@@ -173,8 +175,10 @@ BuiltScreen build_profiles(MenuContext& ctx) {
 
     widgets.push_back(make_label_widget(kTitleWidgetId, SettingsObjectID::TITLE, "Profiles"));
 
-    st.status_text = std::to_string(profiles.size()) + (profiles.size() == 1 ? " profile" : " profiles");
-    MenuWidget status_label = make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
+    st.status_text =
+        std::to_string(profiles.size()) + (profiles.size() == 1 ? " profile" : " profiles");
+    MenuWidget status_label =
+        make_label_widget(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str());
     widgets.push_back(status_label);
 
     MenuWidget search;
@@ -187,7 +191,8 @@ BuiltScreen build_profiles(MenuContext& ctx) {
     widgets.push_back(search);
     std::size_t search_idx = widgets.size() - 1;
 
-    MenuWidget page_label = make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
+    MenuWidget page_label =
+        make_label_widget(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str());
     widgets.push_back(page_label);
 
     MenuAction prev_action = MenuAction::none();
@@ -197,9 +202,11 @@ BuiltScreen build_profiles(MenuContext& ctx) {
     if (st.page + 1 < st.total_pages && g_cmd_page_delta != kMenuIdInvalid)
         next_action = MenuAction::run_command(g_cmd_page_delta, +1);
 
-    MenuWidget prev_btn = make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
+    MenuWidget prev_btn =
+        make_button_widget(kPrevButtonId, SettingsObjectID::PREV, "<", prev_action);
     prev_btn.role = MenuWidgetRole::PagePrev;
-    MenuWidget next_btn = make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
+    MenuWidget next_btn =
+        make_button_widget(kNextButtonId, SettingsObjectID::NEXT, ">", next_action);
     next_btn.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev_btn);
     std::size_t prev_idx = widgets.size() - 1;
@@ -240,7 +247,8 @@ BuiltScreen build_profiles(MenuContext& ctx) {
         }
     }
 
-    MenuWidget back_btn = make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+    MenuWidget back_btn =
+        make_button_widget(kBackButtonId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(back_btn);
     std::size_t back_idx = widgets.size() - 1;
 
@@ -291,12 +299,9 @@ BuiltScreen build_profiles(MenuContext& ctx) {
 } // namespace
 
 void register_profiles_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_select_profile == kMenuIdInvalid)
-        g_cmd_select_profile = engine.menu_commands.register_command(command_select_profile);
-    if (g_cmd_create_profile == kMenuIdInvalid)
-        g_cmd_create_profile = engine.menu_commands.register_command(command_create_profile);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_select_profile = engine.menu_commands.register_command(command_select_profile);
+    g_cmd_create_profile = engine.menu_commands.register_command(command_create_profile);
 
     MenuScreenDef def;
     def.id = MenuScreenID::PROFILES;

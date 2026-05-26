@@ -120,14 +120,10 @@ BuiltScreen build_in_game_menu(MenuContext&) {
 } // namespace
 
 void register_in_game_menu_screen(EngineState& engine) {
-    if (g_cmd_resume == kMenuIdInvalid)
-        g_cmd_resume = engine.menu_commands.register_command(command_resume);
-    if (g_cmd_open_settings == kMenuIdInvalid)
-        g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
-    if (g_cmd_restart_run == kMenuIdInvalid)
-        g_cmd_restart_run = engine.menu_commands.register_command(command_restart_run);
-    if (g_cmd_quit_to_main_menu == kMenuIdInvalid)
-        g_cmd_quit_to_main_menu = engine.menu_commands.register_command(command_quit_to_main_menu);
+    g_cmd_resume = engine.menu_commands.register_command(command_resume);
+    g_cmd_open_settings = engine.menu_commands.register_command(command_open_settings);
+    g_cmd_restart_run = engine.menu_commands.register_command(command_restart_run);
+    g_cmd_quit_to_main_menu = engine.menu_commands.register_command(command_quit_to_main_menu);
 
     MenuScreenDef def;
     def.id = MenuScreenID::IN_GAME_MENU;

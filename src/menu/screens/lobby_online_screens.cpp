@@ -338,10 +338,6 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     MenuWidget join_direct = make_button(kActionWidgetId, SettingsObjectID::CARD2, "Join Direct",
                                          MenuAction::run_command(g_cmd_join_direct));
 
-    widgets.push_back(host);
-    widgets.push_back(port);
-    widgets.push_back(join_direct);
-
     std::vector<WidgetId> room_ids;
     int start = st.page * kRoomsPerPage;
     for (int i = 0; i < kRoomsPerPage; ++i) {
@@ -391,6 +387,11 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     port.nav_down = join_direct.id;
     join_direct.nav_up = port.id;
     join_direct.nav_down = room_ids.empty() ? refresh_ref.id : room_ids.front();
+
+    widgets.push_back(host);
+    widgets.push_back(port);
+    widgets.push_back(join_direct);
+
     for (std::size_t i = 0; i < room_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != room_ids[i])
@@ -423,26 +424,16 @@ void register_screen(EngineState& engine, MenuScreenId id, MenuBuildFn build) {
 } // namespace
 
 void register_lobby_online_screens(EngineState& engine) {
-    if (g_cmd_host_direct == kMenuIdInvalid)
-        g_cmd_host_direct = engine.menu_commands.register_command(command_host_direct);
-    if (g_cmd_publish_room == kMenuIdInvalid)
-        g_cmd_publish_room = engine.menu_commands.register_command(command_publish_room);
-    if (g_cmd_leave == kMenuIdInvalid)
-        g_cmd_leave = engine.menu_commands.register_command(command_leave);
-    if (g_cmd_join_direct == kMenuIdInvalid)
-        g_cmd_join_direct = engine.menu_commands.register_command(command_join_direct);
-    if (g_cmd_join_code == kMenuIdInvalid)
-        g_cmd_join_code = engine.menu_commands.register_command(command_join_code);
-    if (g_cmd_join_listed == kMenuIdInvalid)
-        g_cmd_join_listed = engine.menu_commands.register_command(command_join_listed);
-    if (g_cmd_refresh == kMenuIdInvalid)
-        g_cmd_refresh = engine.menu_commands.register_command(command_refresh);
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_visibility_delta == kMenuIdInvalid)
-        g_cmd_visibility_delta = engine.menu_commands.register_command(command_visibility_delta);
-    if (g_cmd_max_players_delta == kMenuIdInvalid)
-        g_cmd_max_players_delta = engine.menu_commands.register_command(command_max_players_delta);
+    g_cmd_host_direct = engine.menu_commands.register_command(command_host_direct);
+    g_cmd_publish_room = engine.menu_commands.register_command(command_publish_room);
+    g_cmd_leave = engine.menu_commands.register_command(command_leave);
+    g_cmd_join_direct = engine.menu_commands.register_command(command_join_direct);
+    g_cmd_join_code = engine.menu_commands.register_command(command_join_code);
+    g_cmd_join_listed = engine.menu_commands.register_command(command_join_listed);
+    g_cmd_refresh = engine.menu_commands.register_command(command_refresh);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_visibility_delta = engine.menu_commands.register_command(command_visibility_delta);
+    g_cmd_max_players_delta = engine.menu_commands.register_command(command_max_players_delta);
 
     register_screen(engine, MenuScreenID::LOBBY_HOST_SETUP, build_host_screen);
     register_screen(engine, MenuScreenID::LOBBY_SERVER_BROWSER, build_join_screen);

@@ -282,10 +282,8 @@ BuiltScreen build_binds_choose_input(MenuContext& ctx) {
 } // namespace
 
 void register_binds_choose_input_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    if (g_cmd_select_input == kMenuIdInvalid)
-        g_cmd_select_input = engine.menu_commands.register_command(command_select_input);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_select_input = engine.menu_commands.register_command(command_select_input);
 
     MenuScreenDef def;
     def.id = MenuScreenID::BINDS_CHOOSE_INPUT;

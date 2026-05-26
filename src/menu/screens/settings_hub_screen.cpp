@@ -388,8 +388,7 @@ BuiltScreen build_settings_hub(MenuContext& ctx) {
 } // namespace
 
 void register_settings_hub_screen(EngineState& engine) {
-    if (g_cmd_page_delta == kMenuIdInvalid)
-        g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
+    g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SETTINGS;
