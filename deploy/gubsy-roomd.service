@@ -1,0 +1,20 @@
+[Unit]
+Description=Gubsy room directory service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gubsy-roomd
+Group=gubsy-roomd
+EnvironmentFile=/etc/gubsy-roomd.env
+ExecStart=/usr/local/bin/gubsy-roomd --host=${GUBSY_ROOMD_HOST} --port=${GUBSY_ROOMD_PORT}
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
