@@ -62,10 +62,7 @@ MenuWidget make_label(WidgetId id, UILayoutObjectId slot, const char* label) {
     return widget;
 }
 
-MenuWidget make_text(WidgetId id,
-                     UILayoutObjectId slot,
-                     const char* label,
-                     std::string* buffer,
+MenuWidget make_text(WidgetId id, UILayoutObjectId slot, const char* label, std::string* buffer,
                      int max_len) {
     MenuWidget widget;
     widget.id = id;
@@ -87,12 +84,8 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
     return widget;
 }
 
-MenuWidget make_option(WidgetId id,
-                       UILayoutObjectId slot,
-                       const char* label,
-                       const char* badge,
-                       MenuAction left,
-                       MenuAction right) {
+MenuWidget make_option(WidgetId id, UILayoutObjectId slot, const char* label, const char* badge,
+                       MenuAction left, MenuAction right) {
     MenuWidget widget;
     widget.id = id;
     widget.slot = slot;
@@ -128,8 +121,7 @@ void sync_state_from_lobby(OnlineState& st, const GubsyLobbyState& lobby) {
 void update_page(OnlineState& st, int room_count) {
     st.total_pages = std::max(1, (room_count + kRoomsPerPage - 1) / kRoomsPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
-    st.page_text = "Page " + std::to_string(st.page + 1) + " / " +
-                   std::to_string(st.total_pages);
+    st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
 bool validate_common(MenuContext& ctx) {
@@ -219,10 +211,9 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 }
 
 void command_visibility_delta(MenuContext& ctx, std::int32_t) {
-    ctx.engine.lobby.visibility =
-        ctx.engine.lobby.visibility == GubsyLobbyVisibility::Public
-            ? GubsyLobbyVisibility::Private
-            : GubsyLobbyVisibility::Public;
+    ctx.engine.lobby.visibility = ctx.engine.lobby.visibility == GubsyLobbyVisibility::Public
+                                      ? GubsyLobbyVisibility::Private
+                                      : GubsyLobbyVisibility::Public;
 }
 
 void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
@@ -238,57 +229,42 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     static std::string max_players_text;
     widgets.clear();
 
-    widgets.push_back(make_label(kTitleWidgetId,
-                                 SettingsObjectID::TITLE,
-                                 "Host Session"));
+    widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Host Session"));
     st.status_text = ctx.engine.lobby.status_message.empty() ? "Network session setup"
                                                              : ctx.engine.lobby.status_message;
-    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
 
-    MenuWidget lobby_name = make_text(kHostInputWidgetId,
-                                      SettingsObjectID::CARD0,
-                                      "Lobby Name",
-                                      &ctx.engine.lobby.lobby_name,
-                                      48);
+    MenuWidget lobby_name = make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "Lobby Name",
+                                      &ctx.engine.lobby.lobby_name, 48);
     lobby_name.placeholder = "Local Game";
-    MenuWidget port_input = make_text(kPortInputWidgetId,
-                                      SettingsObjectID::CARD1,
-                                      "Port",
-                                      &st.port_text,
-                                      6);
+    MenuWidget port_input =
+        make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Port", &st.port_text, 6);
     port_input.placeholder = "35355";
 
     const char* visibility_text =
         ctx.engine.lobby.visibility == GubsyLobbyVisibility::Public ? "Public" : "Private";
     MenuAction visibility_delta = MenuAction::run_command(g_cmd_visibility_delta);
-    MenuWidget visibility = make_option(kVisibilityWidgetId,
-                                        SettingsObjectID::CARD2,
-                                        "Visibility",
-                                        visibility_text,
-                                        visibility_delta,
-                                        visibility_delta);
+    MenuWidget visibility = make_option(kVisibilityWidgetId, SettingsObjectID::CARD2, "Visibility",
+                                        visibility_text, visibility_delta, visibility_delta);
     visibility.secondary = "Advertise the room when the backend supports room visibility.";
 
     max_players_text = std::to_string(std::clamp(ctx.engine.lobby.max_players, 1, 32));
-    MenuWidget max_players = make_option(kMaxPlayersWidgetId,
-                                         SettingsObjectID::CARD3,
-                                         "Max Players",
-                                         max_players_text.c_str(),
-                                         MenuAction::run_command(g_cmd_max_players_delta, -1),
-                                         MenuAction::run_command(g_cmd_max_players_delta, 1));
+    MenuWidget max_players =
+        make_option(kMaxPlayersWidgetId, SettingsObjectID::CARD3, "Max Players",
+                    max_players_text.c_str(), MenuAction::run_command(g_cmd_max_players_delta, -1),
+                    MenuAction::run_command(g_cmd_max_players_delta, 1));
     max_players.secondary = "Session-wide player cap advertised to the room backend.";
 
-    MenuWidget publish = make_button(kRefreshWidgetId,
-                                     SettingsObjectID::CARD4,
-                                     "Publish To Browser",
-                                     MenuAction::run_command(g_cmd_publish_room));
+    MenuWidget publish =
+        make_button(kRefreshWidgetId, SettingsObjectID::CARD4, "Publish To Browser",
+                    MenuAction::run_command(g_cmd_publish_room));
     publish.secondary = "Starts hosting and advertises this game to the configured room server.";
 
-    MenuWidget action = make_button(kActionWidgetId,
-                                    SettingsObjectID::ACTION,
-                                    ctx.engine.lobby.online ? "Leave Session" : "Host Direct",
-                                    MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave
-                                                                                   : g_cmd_host_direct));
+    MenuWidget action = make_button(
+        kActionWidgetId, SettingsObjectID::ACTION,
+        ctx.engine.lobby.online ? "Leave Session" : "Host Direct",
+        MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave : g_cmd_host_direct));
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     lobby_name.nav_down = port_input.id;
@@ -337,40 +313,29 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
                                                          : ctx.engine.lobby.last_error;
     if (st.status_text.empty())
         st.status_text = "Room browser";
-    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+    widgets.push_back(
+        make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label(kPageWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
-    MenuWidget prev = make_button(kPrevWidgetId,
-                                  SettingsObjectID::PREV,
-                                  "<",
+    MenuWidget prev = make_button(kPrevWidgetId, SettingsObjectID::PREV, "<",
                                   st.page > 0 ? MenuAction::run_command(g_cmd_page_delta, -1)
                                               : MenuAction::none());
     prev.role = MenuWidgetRole::PagePrev;
-    MenuWidget next = make_button(kNextWidgetId,
-                                  SettingsObjectID::NEXT,
-                                  ">",
-                                  st.page + 1 < st.total_pages
-                                      ? MenuAction::run_command(g_cmd_page_delta, 1)
-                                      : MenuAction::none());
+    MenuWidget next =
+        make_button(kNextWidgetId, SettingsObjectID::NEXT, ">",
+                    st.page + 1 < st.total_pages ? MenuAction::run_command(g_cmd_page_delta, 1)
+                                                 : MenuAction::none());
     next.role = MenuWidgetRole::PageNext;
     widgets.push_back(prev);
     widgets.push_back(next);
 
-    MenuWidget host = make_text(kHostInputWidgetId,
-                                SettingsObjectID::CARD0,
-                                "Direct Host",
-                                &st.host_text,
-                                64);
+    MenuWidget host =
+        make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "Direct Host", &st.host_text, 64);
     host.placeholder = "127.0.0.1";
-    MenuWidget port = make_text(kPortInputWidgetId,
-                                SettingsObjectID::CARD1,
-                                "Direct Port",
-                                &st.port_text,
-                                6);
+    MenuWidget port =
+        make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Direct Port", &st.port_text, 6);
     port.placeholder = "35355";
-    MenuWidget join_direct = make_button(kActionWidgetId,
-                                         SettingsObjectID::CARD2,
-                                         "Join Direct",
+    MenuWidget join_direct = make_button(kActionWidgetId, SettingsObjectID::CARD2, "Join Direct",
                                          MenuAction::run_command(g_cmd_join_direct));
 
     widgets.push_back(host);
@@ -410,9 +375,7 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
         }
     }
 
-    MenuWidget refresh = make_button(kRefreshWidgetId,
-                                     SettingsObjectID::SEARCH,
-                                     "Refresh",
+    MenuWidget refresh = make_button(kRefreshWidgetId, SettingsObjectID::SEARCH, "Refresh",
                                      MenuAction::run_command(g_cmd_refresh));
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(refresh);

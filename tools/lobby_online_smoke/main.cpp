@@ -166,10 +166,8 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.advertised_endpoint == "127.0.0.1:45454",
                 "direct host advertised endpoint mismatch");
 
-        require(gubsy_lobby_join_direct(guest_engine,
-                                        guest_state.expected_host,
-                                        guest_state.expected_port,
-                                        message),
+        require(gubsy_lobby_join_direct(guest_engine, guest_state.expected_host,
+                                        guest_state.expected_port, message),
                 "guest direct join failed");
         require(guest_state.join_called, "direct guest transport was not called");
         require(guest_engine.lobby.online, "direct guest lobby is not online");

@@ -264,13 +264,12 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
     }
 
     engine.lobby.contract = build_lobby_contract(engine);
-    GubsyLobbyJoinResult join_result =
-        engine.lobby_commands.join(engine.lobby_commands.join_user_data, engine.lobby,
-                                   host.c_str(), port);
+    GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
+        engine.lobby_commands.join_user_data, engine.lobby, host.c_str(), port);
     if (!join_result.ok) {
-        message = join_result.status.empty() ? "Cannot join direct game: failed to reach host"
-                                             : with_prefix("Cannot join direct game",
-                                                           join_result.status);
+        message = join_result.status.empty()
+                      ? "Cannot join direct game: failed to reach host"
+                      : with_prefix("Cannot join direct game", join_result.status);
         set_lobby_error(engine, message);
         return false;
     }
@@ -323,7 +322,7 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     std::string member_id;
     std::string err;
     if (!matchmaking(engine).join_room(engine.lobby.room_server_url, room.room_code,
-                                      local_player_name(engine), member_id, err)) {
+                                       local_player_name(engine), member_id, err)) {
         disconnect_game_transport(engine);
         message = err.empty() ? "Cannot join room: room service rejected join"
                               : with_prefix("Cannot join room", err);
@@ -380,7 +379,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     }
     std::string err;
     if (!matchmaking(engine).leave_room(engine.lobby.room_server_url, engine.lobby.room_code,
-                                       engine.lobby.member_id, engine.lobby.host_secret, err)) {
+                                        engine.lobby.member_id, engine.lobby.host_secret, err)) {
         message = err.empty() ? "Cannot leave room: room service rejected leave"
                               : with_prefix("Cannot leave room", err);
         set_lobby_error(engine, message);
@@ -438,8 +437,8 @@ void gubsy_lobby_tick_online(EngineState& engine) {
     MatchmakingRoom* update_ptr = engine.lobby.is_host ? &room_update : nullptr;
     std::string err;
     if (!matchmaking(engine).heartbeat_room(engine.lobby.room_server_url, engine.lobby.room_code,
-                                           engine.lobby.member_id, local_player_name(engine),
-                                           engine.lobby.host_secret, update_ptr, err)) {
+                                            engine.lobby.member_id, local_player_name(engine),
+                                            engine.lobby.host_secret, update_ptr, err)) {
         engine.lobby.last_error = err.empty() ? "Room heartbeat failed" : err;
     } else {
         engine.lobby.last_error.clear();
