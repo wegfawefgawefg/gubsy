@@ -7,13 +7,12 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <nlohmann/json.hpp>
-
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -28,6 +27,7 @@ constexpr auto kCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 constexpr int kRoomCodeLen = 6;
 constexpr int kMemberIdLen = 8;
 constexpr int kSecretLen = 24;
+constexpr int kDefaultPort = 8788;
 
 struct RoomMember {
     std::string member_id;
@@ -58,13 +58,18 @@ struct RoomRecord {
     Clock::time_point updated_at{Clock::now()};
 };
 
+bool room_is_public(const RoomRecord& room) {
+    return room.privacy > 0;
+}
+
 struct RoomRegistry {
     std::mutex mutex;
     std::unordered_map<std::string, RoomRecord> rooms;
     std::mt19937_64 rng{std::random_device{}()};
 
     std::string random_token(int len) {
-        std::uniform_int_distribution<std::size_t> dist(0, std::char_traits<char>::length(kCodeAlphabet) - 1);
+        std::uniform_int_distribution<std::size_t> dist(
+            0, std::char_traits<char>::length(kCodeAlphabet) - 1);
         std::string out;
         out.reserve(static_cast<std::size_t>(len));
         for (int i = 0; i < len; ++i)
@@ -85,10 +90,10 @@ struct RoomRegistry {
         std::vector<std::string> dead_rooms;
         for (auto& [room_code, room] : rooms) {
             std::vector<std::string> dead_members;
-            room.members.erase(std::remove_if(room.members.begin(),
-                                              room.members.end(),
+            room.members.erase(std::remove_if(room.members.begin(), room.members.end(),
                                               [&](const RoomMember& member) {
-                                                  const bool expired = now - member.last_seen > kMemberTimeout;
+                                                  const bool expired =
+                                                      now - member.last_seen > kMemberTimeout;
                                                   return expired;
                                               }),
                                room.members.end());
@@ -103,6 +108,19 @@ struct RoomRegistry {
 };
 
 RoomRegistry g_registry;
+
+std::uint64_t ms_since_epoch() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                          std::chrono::system_clock::now().time_since_epoch())
+                                          .count());
+}
+
+void log_event(const char* event, const nlohmann::json& fields = nlohmann::json::object()) {
+    nlohmann::json line = fields.is_object() ? fields : nlohmann::json::object();
+    line["event"] = event;
+    line["ts_ms"] = ms_since_epoch();
+    std::cout << line.dump() << '\n';
+}
 
 RoomMember* find_member(RoomRecord& room, const std::string& member_id) {
     for (auto& member : room.members) {
@@ -195,9 +213,7 @@ std::vector<std::string> json_string_array(const nlohmann::json& body, const cha
     return out;
 }
 
-bool body_member_access(RoomRecord& room,
-                        const nlohmann::json& body,
-                        RoomMember*& member_out,
+bool body_member_access(RoomRecord& room, const nlohmann::json& body, RoomMember*& member_out,
                         httplib::Response& res) {
     RoomMember* member = find_member(room, json_string(body, "member_id"));
     if (!member) {
@@ -213,20 +229,35 @@ bool body_member_access(RoomRecord& room,
 } // namespace
 
 int main(int argc, char** argv) {
-    int port = 8788;
+    std::string bind_host = "127.0.0.1";
+    int port = kDefaultPort;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--port=", 0) == 0) {
             try {
                 port = std::stoi(arg.substr(7));
             } catch (...) {
-                port = 8788;
+                port = kDefaultPort;
             }
+        } else if (arg == "--port" && i + 1 < argc) {
+            try {
+                port = std::stoi(argv[++i]);
+            } catch (...) {
+                port = kDefaultPort;
+            }
+        } else if (arg.rfind("--host=", 0) == 0) {
+            bind_host = arg.substr(7);
+        } else if (arg == "--host" && i + 1 < argc) {
+            bind_host = argv[++i];
         } else if (arg == "--help") {
-            std::cout << "Usage: room_server [--port=<port>]\n";
+            std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n";
             return 0;
         }
     }
+    if (bind_host.empty())
+        bind_host = "127.0.0.1";
+    if (port <= 0 || port > 65535)
+        port = kDefaultPort;
 
     httplib::Server server;
 
@@ -238,8 +269,11 @@ int main(int argc, char** argv) {
         std::lock_guard<std::mutex> lock(g_registry.mutex);
         g_registry.cleanup_expired_locked();
         nlohmann::json rooms = nlohmann::json::array();
-        for (const auto& [_, room] : g_registry.rooms)
+        for (const auto& [_, room] : g_registry.rooms) {
+            if (!room_is_public(room))
+                continue;
             rooms.push_back(room_to_json(room));
+        }
         res.set_content(nlohmann::json{{"rooms", std::move(rooms)}}.dump(), "application/json");
     });
 
@@ -252,7 +286,8 @@ int main(int argc, char** argv) {
             res.set_content("room not found", "text/plain");
             return;
         }
-        res.set_content(nlohmann::json{{"room", room_to_json(it->second)}}.dump(), "application/json");
+        res.set_content(nlohmann::json{{"room", room_to_json(it->second)}}.dump(),
+                        "application/json");
     });
 
     server.Post("/rooms/create", [](const httplib::Request& req, httplib::Response& res) {
@@ -267,7 +302,8 @@ int main(int argc, char** argv) {
         room.host_secret = g_registry.random_token(kSecretLen);
         room.session_name = json_string(body, "session_name", "Online Lobby");
         room.host_name = json_string(body, "host_name", "Host");
-        room.session_phase = json_string(body, "session_phase", json_bool(body, "in_game", false) ? "in_game" : "lobby");
+        room.session_phase = json_string(body, "session_phase",
+                                         json_bool(body, "in_game", false) ? "in_game" : "lobby");
         room.net_protocol = json_string(body, "net_protocol", "gubsy-sync-1");
         room.realtime_endpoint = json_string(body, "realtime_endpoint");
         room.game_version = json_string(body, "game_version");
@@ -289,50 +325,69 @@ int main(int argc, char** argv) {
         room.members.push_back(std::move(host));
 
         const std::string member_id = room.members.front().member_id;
+        const std::string room_code = room.room_code;
+        const int privacy = room.privacy;
+        const std::string endpoint = room.realtime_endpoint;
         g_registry.rooms.emplace(room.room_code, room);
 
-        res.set_content(nlohmann::json{
-                            {"room_code", room.room_code},
-                            {"host_secret", room.host_secret},
-                            {"member_id", member_id},
-                        }.dump(),
-                        "application/json");
+        log_event("room_create", {
+                                     {"room_code", room_code},
+                                     {"privacy", privacy},
+                                     {"realtime_endpoint", endpoint},
+                                 });
+        res.set_content(
+            nlohmann::json{
+                {"room_code", room_code},
+                {"host_secret", g_registry.rooms.at(room_code).host_secret},
+                {"member_id", member_id},
+            }
+                .dump(),
+            "application/json");
     });
 
-    server.Post(R"(/rooms/([A-Z0-9]+)/join)", [](const httplib::Request& req, httplib::Response& res) {
-        nlohmann::json body;
-        if (!read_body_json(req, body, res))
-            return;
-        std::lock_guard<std::mutex> lock(g_registry.mutex);
-        g_registry.cleanup_expired_locked();
+    server.Post(
+        R"(/rooms/([A-Z0-9]+)/join)", [](const httplib::Request& req, httplib::Response& res) {
+            nlohmann::json body;
+            if (!read_body_json(req, body, res))
+                return;
+            std::lock_guard<std::mutex> lock(g_registry.mutex);
+            g_registry.cleanup_expired_locked();
 
-        auto it = g_registry.rooms.find(req.matches[1].str());
-        if (it == g_registry.rooms.end()) {
-            res.status = 404;
-            res.set_content("room not found", "text/plain");
-            return;
-        }
-        RoomRecord& room = it->second;
-        if (static_cast<int>(room.members.size()) >= room.max_players) {
-            res.status = 409;
-            res.set_content("room is full", "text/plain");
-            return;
-        }
+            auto it = g_registry.rooms.find(req.matches[1].str());
+            if (it == g_registry.rooms.end()) {
+                res.status = 404;
+                res.set_content("room not found", "text/plain");
+                return;
+            }
+            RoomRecord& room = it->second;
+            if (static_cast<int>(room.members.size()) >= room.max_players) {
+                res.status = 409;
+                res.set_content("room is full", "text/plain");
+                return;
+            }
 
-        RoomMember member;
-        member.member_id = g_registry.random_token(kMemberIdLen);
-        member.display_name = json_string(body, "display_name", "Guest");
-        room.members.push_back(member);
-        room.updated_at = Clock::now();
+            RoomMember member;
+            member.member_id = g_registry.random_token(kMemberIdLen);
+            member.display_name = json_string(body, "display_name", "Guest");
+            room.members.push_back(member);
+            room.updated_at = Clock::now();
 
-        res.set_content(nlohmann::json{
-                            {"member_id", member.member_id},
-                            {"room", room_to_json(room)},
-                        }.dump(),
-                        "application/json");
-    });
+            log_event("room_join", {
+                                       {"room_code", room.room_code},
+                                       {"member_id", member.member_id},
+                                       {"current_players", static_cast<int>(room.members.size())},
+                                   });
+            res.set_content(
+                nlohmann::json{
+                    {"member_id", member.member_id},
+                    {"room", room_to_json(room)},
+                }
+                    .dump(),
+                "application/json");
+        });
 
-    server.Post(R"(/rooms/([A-Z0-9]+)/heartbeat)", [](const httplib::Request& req, httplib::Response& res) {
+    server.Post(R"(/rooms/([A-Z0-9]+)/heartbeat)", [](const httplib::Request& req,
+                                                      httplib::Response& res) {
         nlohmann::json body;
         if (!read_body_json(req, body, res))
             return;
@@ -353,36 +408,49 @@ int main(int argc, char** argv) {
         member->display_name = json_string(body, "display_name", member->display_name.c_str());
 
         const std::string host_secret = json_string(body, "host_secret");
-        if (member->is_host && !host_secret.empty() && host_secret == room.host_secret) {
-            auto room_it = body.find("room");
-            if (room_it != body.end() && room_it->is_object()) {
-                room.session_name = json_string(*room_it, "session_name", room.session_name.c_str());
-                room.host_name = json_string(*room_it, "host_name", room.host_name.c_str());
-                room.session_phase = json_string(*room_it,
-                                                 "session_phase",
-                                                 room.in_game ? "in_game" : room.session_phase.c_str());
-                room.net_protocol = json_string(*room_it, "net_protocol", room.net_protocol.c_str());
-                room.realtime_endpoint = json_string(*room_it, "realtime_endpoint", room.realtime_endpoint.c_str());
-                room.game_version = json_string(*room_it, "game_version", room.game_version.c_str());
-                room.mod_hash = json_string(*room_it, "mod_hash", room.mod_hash.c_str());
-                room.required_mod_ids = json_string_array(*room_it, "required_mod_ids");
-                room.content_revision = std::max<std::uint64_t>(1, json_u64(*room_it, "content_revision", room.content_revision));
-                room.allow_live_mod_reload = json_bool(*room_it, "allow_live_mod_reload", room.allow_live_mod_reload);
-                room.privacy = json_int(*room_it, "privacy", room.privacy);
-                room.max_players = std::max(1, json_int(*room_it, "max_players", room.max_players));
-                room.in_game = room.session_phase == "in_game" || json_bool(*room_it, "in_game", room.in_game);
-                auto game_config_it = room_it->find("game_config");
-                if (game_config_it != room_it->end() && game_config_it->is_object())
-                    room.game_config = *game_config_it;
-                member->display_name = room.host_name;
+        auto room_it = body.find("room");
+        if (room_it != body.end() && room_it->is_object()) {
+            if (!member->is_host || host_secret != room.host_secret) {
+                res.status = 403;
+                res.set_content("host secret mismatch", "text/plain");
+                return;
             }
+            room.session_name = json_string(*room_it, "session_name", room.session_name.c_str());
+            room.host_name = json_string(*room_it, "host_name", room.host_name.c_str());
+            room.session_phase = json_string(*room_it, "session_phase",
+                                             room.in_game ? "in_game" : room.session_phase.c_str());
+            room.net_protocol = json_string(*room_it, "net_protocol", room.net_protocol.c_str());
+            room.realtime_endpoint =
+                json_string(*room_it, "realtime_endpoint", room.realtime_endpoint.c_str());
+            room.game_version = json_string(*room_it, "game_version", room.game_version.c_str());
+            room.mod_hash = json_string(*room_it, "mod_hash", room.mod_hash.c_str());
+            room.required_mod_ids = json_string_array(*room_it, "required_mod_ids");
+            room.content_revision = std::max<std::uint64_t>(
+                1, json_u64(*room_it, "content_revision", room.content_revision));
+            room.allow_live_mod_reload =
+                json_bool(*room_it, "allow_live_mod_reload", room.allow_live_mod_reload);
+            room.privacy = json_int(*room_it, "privacy", room.privacy);
+            room.max_players = std::max(1, json_int(*room_it, "max_players", room.max_players));
+            room.in_game =
+                room.session_phase == "in_game" || json_bool(*room_it, "in_game", room.in_game);
+            auto game_config_it = room_it->find("game_config");
+            if (game_config_it != room_it->end() && game_config_it->is_object())
+                room.game_config = *game_config_it;
+            member->display_name = room.host_name;
+            log_event("room_update", {
+                                         {"room_code", room.room_code},
+                                         {"privacy", room.privacy},
+                                         {"session_phase", room.session_phase},
+                                         {"current_players", static_cast<int>(room.members.size())},
+                                     });
         }
 
         room.updated_at = Clock::now();
         res.set_content(nlohmann::json{{"ok", true}}.dump(), "application/json");
     });
 
-    server.Post(R"(/rooms/([A-Z0-9]+)/leave)", [](const httplib::Request& req, httplib::Response& res) {
+    server.Post(R"(/rooms/([A-Z0-9]+)/leave)", [](const httplib::Request& req,
+                                                  httplib::Response& res) {
         nlohmann::json body;
         if (!read_body_json(req, body, res))
             return;
@@ -398,18 +466,27 @@ int main(int argc, char** argv) {
         const std::string member_id = json_string(body, "member_id");
         const std::string host_secret = json_string(body, "host_secret");
 
-        auto member_it = std::find_if(room.members.begin(), room.members.end(),
-                                      [&](const RoomMember& member) { return member.member_id == member_id; });
+        auto member_it =
+            std::find_if(room.members.begin(), room.members.end(),
+                         [&](const RoomMember& member) { return member.member_id == member_id; });
         if (member_it != room.members.end()) {
             const bool is_host = member_it->is_host;
             room.members.erase(member_it);
-            if (is_host || host_secret == room.host_secret)
+            log_event("room_leave", {
+                                        {"room_code", room.room_code},
+                                        {"member_id", member_id},
+                                        {"current_players", static_cast<int>(room.members.size())},
+                                    });
+            if (is_host || host_secret == room.host_secret) {
+                log_event("room_delete", {{"room_code", room.room_code}});
                 g_registry.rooms.erase(it);
+            }
         }
         res.set_content(R"({"ok":true})", "application/json");
     });
 
-    server.Post(R"(/rooms/([A-Z0-9]+)/remove_member)", [](const httplib::Request& req, httplib::Response& res) {
+    server.Post(R"(/rooms/([A-Z0-9]+)/remove_member)", [](const httplib::Request& req,
+                                                          httplib::Response& res) {
         nlohmann::json body;
         if (!read_body_json(req, body, res))
             return;
@@ -430,8 +507,9 @@ int main(int argc, char** argv) {
         }
 
         const std::string member_id = json_string(body, "member_id");
-        auto member_it = std::find_if(room.members.begin(), room.members.end(),
-                                      [&](const RoomMember& member) { return member.member_id == member_id; });
+        auto member_it =
+            std::find_if(room.members.begin(), room.members.end(),
+                         [&](const RoomMember& member) { return member.member_id == member_id; });
         if (member_it == room.members.end()) {
             res.status = 404;
             res.set_content("member not found", "text/plain");
@@ -445,10 +523,16 @@ int main(int argc, char** argv) {
 
         room.members.erase(member_it);
         room.updated_at = Clock::now();
+        log_event("room_remove_member",
+                  {
+                      {"room_code", room.room_code},
+                      {"member_id", member_id},
+                      {"current_players", static_cast<int>(room.members.size())},
+                  });
         res.set_content(R"({"ok":true})", "application/json");
     });
 
-    std::cout << "[room_server] Listening on 127.0.0.1:" << port << "\n";
-    server.listen("127.0.0.1", port);
+    log_event("roomd_start", {{"host", bind_host}, {"port", port}});
+    server.listen(bind_host, port);
     return 0;
 }

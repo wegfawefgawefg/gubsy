@@ -6,7 +6,7 @@ build_dir="${repo_root}/build"
 server_port="${ROOM_SERVER_PORT:-8789}"
 server_url="http://127.0.0.1:${server_port}"
 
-"${build_dir}/room_server" "--port=${server_port}" >/tmp/gubsy_lobby_online_room_server.log 2>&1 &
+"${build_dir}/gubsy-roomd" "--port=${server_port}" >/tmp/gubsy_lobby_online_room_server.log 2>&1 &
 server_pid=$!
 
 cleanup() {

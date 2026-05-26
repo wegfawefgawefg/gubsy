@@ -298,10 +298,17 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
 
-  add_executable(room_server tools/room_server/main.cpp)
-  target_include_directories(room_server PRIVATE
+  add_executable(gubsy_roomd tools/room_server/main.cpp)
+  set_target_properties(gubsy_roomd PROPERTIES OUTPUT_NAME gubsy-roomd)
+  target_include_directories(gubsy_roomd PRIVATE
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
+  )
+  add_custom_command(
+    TARGET gubsy_roomd POST_BUILD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E create_symlink $<TARGET_FILE_NAME:gubsy_roomd> room_server
+    COMMENT "Creating 'room_server' symlink -> gubsy-roomd"
   )
 
   add_executable(room_smoke

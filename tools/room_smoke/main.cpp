@@ -43,16 +43,38 @@ int main(int argc, char** argv) {
         std::string host_secret = created.host_secret;
         std::string host_member_id = created.member_id;
 
+        MatchmakingRoom unlisted = room;
+        unlisted.session_name = "Unlisted Smoke Lobby";
+        unlisted.privacy = 0;
+        MatchmakingCreateResult unlisted_created;
+        if (!matchmaking.create_room(server_url, unlisted, unlisted_created, err))
+            throw std::runtime_error(err);
+
         std::vector<MatchmakingRoom> listed;
         if (!matchmaking.list_rooms(server_url, listed, err))
             throw std::runtime_error(err);
         bool found_room = false;
+        bool found_unlisted = false;
         for (const auto& listed_room : listed) {
             if (listed_room.room_code == room_code)
                 found_room = true;
+            if (listed_room.room_code == unlisted_created.room_code)
+                found_unlisted = true;
         }
         if (!found_room)
             throw std::runtime_error("created room missing from room list");
+        if (found_unlisted)
+            throw std::runtime_error("unlisted room appeared in room list");
+        MatchmakingRoom fetched_unlisted;
+        if (!matchmaking.fetch_room(server_url, unlisted_created.room_code, fetched_unlisted, err))
+            throw std::runtime_error("unlisted room could not be fetched directly");
+        if (!matchmaking.leave_room(server_url,
+                                    unlisted_created.room_code,
+                                    unlisted_created.member_id,
+                                    unlisted_created.host_secret,
+                                    err)) {
+            throw std::runtime_error(err);
+        }
 
         std::string guest_member_id;
         if (!matchmaking.join_room(server_url, room_code, "Guest", guest_member_id, err))
