@@ -2,6 +2,7 @@
 #include <gubsy/input/binds.hpp>
 #include <gubsy/layout/layout.hpp>
 #include <gubsy/lobby/session.hpp>
+#include <gubsy/lobby/steam.hpp>
 #include <gubsy/menu/menu.hpp>
 #include <gubsy/profiles/profiles.hpp>
 #include <gubsy/run.hpp>
@@ -9,6 +10,17 @@
 #include <gubsy/settings/settings.hpp>
 
 int main() {
+    GubsySteamBackendStatus steam_status = gubsy_steam_backend_status();
+#if GUB_ENABLE_STEAM
+    if (!steam_status.compiled || steam_status.sdk_ready || steam_status.message == nullptr) {
+        return 32;
+    }
+#else
+    if (steam_status.compiled || steam_status.sdk_ready || steam_status.message == nullptr) {
+        return 32;
+    }
+#endif
+
     GubsyAppHooks hooks{};
     if (hooks.config.enable_mods || hooks.config.enable_mod_browser ||
         hooks.config.enable_mod_hot_reload || hooks.config.enable_lua_mod_host) {

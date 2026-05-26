@@ -18,6 +18,7 @@ option(GUB_BUILD_SAMPLE "Build bundled sample game consumer" ${GUB_DEFAULT_BUILD
 option(GUB_BUILD_TOOLS "Build bundled development tools and smokes" ${GUB_DEFAULT_BUILD_EXTRAS})
 option(GUB_COMPILE_IMGUI_SOURCES "Compile bundled Dear ImGui sources into gubsy::engine" ON)
 option(GUB_ENABLE_LUA_MOD_HOST "Build Lua-backed mod hosting support" ${GUB_DEFAULT_BUILD_EXTRAS})
+option(GUB_ENABLE_STEAM "Compile Steam backend scaffolding" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,6 +57,12 @@ file(GLOB_RECURSE GUB_DEMO_SOURCES
 
 add_library(gubsy_engine STATIC ${GUB_ENGINE_SOURCES})
 add_library(gubsy::engine ALIAS gubsy_engine)
+
+if (GUB_ENABLE_STEAM)
+  target_compile_definitions(gubsy_engine PUBLIC GUB_ENABLE_STEAM=1)
+else()
+  target_compile_definitions(gubsy_engine PUBLIC GUB_ENABLE_STEAM=0)
+endif()
 
 if (GUB_ENABLE_LUA_MOD_HOST AND EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lua.h")
   file(GLOB GUB_LUA_SOURCES "${GUB_SOURCE_DIR}/third_party/lua/src/*.c")
