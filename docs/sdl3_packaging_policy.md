@@ -3,9 +3,72 @@
 Gubsy and downstream games should standardize on SDL3. Do not require players
 to install SDL globally before running a game.
 
-## Build Policy
+## Build Modes
 
-Use this dependency order for developer and CI builds:
+Use these terms consistently:
+
+- **Developer mode** means building Gubsy as the active project. It should build
+  `gubsy::engine`, the bundled sample, local tools, smokes, and guard tests.
+  This is the mode for changing Gubsy itself, often while testing a game beside
+  it.
+- **Consumer mode** means another developer's game builds against Gubsy as a
+  library. It should build `gubsy::engine` by default, avoid Gubsy's sample and
+  tool executables unless explicitly requested, and let the top-level game own
+  executable and dependency policy.
+- **Release packaging** means producing a player-facing game/tool bundle. It is
+  not just a CMake consumption mode: it copies or bundles SDL runtime artifacts,
+  assets, configs, and platform metadata into something a player can run without
+  installing development packages.
+
+Current CMake defaults distinguish developer and consumer mode by whether Gubsy
+is the top-level project. Building Gubsy directly enables local extras by
+default; consuming it through another top-level project disables those extras by
+default.
+
+## Mode Matrix
+
+| Concern | Developer Mode | Consumer Mode | Release Packaging |
+| --- | --- | --- | --- |
+| Primary user | Gubsy developer | Game developer | Player |
+| Top-level project | Gubsy | Game, such as Splonks | Game or tool package job |
+| Main target | `gubsy::engine`, sample, tools | `gubsy::engine` | final executable/package |
+| Gubsy sample/tools | on by default | off by default | package only when explicitly shipping a Gubsy tool |
+| Tests/smokes | on by default | off unless requested | package verification only |
+| Dependency owner | Gubsy defaults | top-level game | package preset/job |
+| SDL runtime files | useful for local run convenience | not copied by Gubsy | must be bundled with the shipped executable |
+| Player install requirement | none relevant | none relevant | no global SDL install |
+
+This means consumer mode is not the same thing as release packaging. A game can
+consume Gubsy in consumer mode during development and still need a separate
+release packaging step to produce a player-facing bundle.
+
+## CMake Mode Direction
+
+Keep the existing top-level heuristic as the default behavior, but make the
+intent explicit in CMake before adding more packaging logic:
+
+- `GUB_MODE=developer|consumer|release` should be added as an optional explicit
+  override.
+- `developer` should enable sample/tools/tests by default.
+- `consumer` should build only `gubsy::engine` by default.
+- `release` should be reserved for package-producing builds and should not be
+  inferred merely because `CMAKE_BUILD_TYPE=Release`.
+- Existing options such as `GUB_BUILD_SAMPLE`, `GUB_BUILD_TOOLS`,
+  `GUB_ENABLE_LUA_MOD_HOST`, and `GUB_FETCH_DEPS` should remain explicit
+  overrides after the mode defaults are chosen.
+
+Splonks should get the same vocabulary on its side:
+
+- `SPLONKS_MODE=developer|release` or equivalent presets should distinguish
+  local iteration from package-producing builds.
+- Splonks is the final game executable owner, so Splonks release packaging owns
+  the SDL runtime files for the Splonks package.
+- If Splonks later consumes Gubsy through the same CMake graph, Splonks should
+  set Gubsy to consumer mode and keep one shared SDL target set.
+
+## Dependency Policy
+
+Use this dependency order for developer, consumer, and CI builds:
 
 1. Prefer existing CMake package targets when the build environment provides
    SDL3, SDL3_ttf, SDL3_image, or SDL3_mixer.
@@ -17,8 +80,9 @@ The `GUB_FETCH_DEPS` CMake option exists for this fallback path. It should stay
 enabled by default for normal source builds so a clean machine can build Gubsy
 without a global SDL3 install.
 
-Release and CI builds should pin exact SDL versions. Prefer source archives with
-hashes, submodules, or a lockable dependency mirror over floating branch names.
+Release packaging and CI builds should pin exact SDL versions. Prefer source
+archives with hashes, submodules, or a lockable dependency mirror over floating
+branch names.
 
 ## Shipping Policy
 
@@ -41,6 +105,39 @@ Platform expectations:
 Package managers are fine for developer setup. They are not a player-facing
 runtime requirement.
 
+## Runtime Library Bundling
+
+Distribution code should copy runtime libraries from the CMake targets that are
+actually linked into the executable being packaged. Do not hardcode a global SDL
+install path as the normal package source.
+
+Minimum runtime set when using shared libraries:
+
+- SDL3
+- SDL3_ttf
+- SDL3_image
+- SDL3_mixer
+- any transitive shared libraries required by those SDL extension libraries
+
+Expected ownership:
+
+- Gubsy packages `gubsy-roomd` only as a server tool. It does not need SDL
+  runtime libraries unless the packaged target links SDL.
+- Gubsy packages the bundled sample only for Gubsy developer/demo releases. That
+  package must include the SDL runtime libraries it links.
+- Splonks packages the Splonks game executable and owns copying SDL runtime
+  libraries into the Splonks release bundle.
+
+Platform-specific rules:
+
+- Windows: copy required `.dll` files beside the `.exe`.
+- macOS: put required `.dylib` or framework contents inside the `.app`, fix
+  install names/rpaths, and sign the final bundle.
+- Linux: use the chosen package format's dependency model. If shipping local
+  `.so` files, put them in the bundle and set an rpath such as `$ORIGIN/lib`.
+- Android: the Gradle/APK/AAB build owns native `.so` packaging. Desktop copy
+  rules do not apply.
+
 ## Source Tree Direction
 
 Keep SDL2 compatibility names and local shim headers out of normal source.
@@ -54,10 +151,16 @@ engine and game targets.
 
 ## Open Packaging Work
 
+- Add explicit mode handling to Gubsy CMake.
+- Add matching mode/preset vocabulary to Splonks.
 - Add install/package rules that copy SDL runtime libraries beside Gubsy tools
   and sample executables.
+- Add Splonks install/package rules that copy SDL runtime libraries beside the
+  game executable.
 - Add per-platform release presets for Windows, macOS, Linux, and Android.
 - Decide whether release builds prefer shared SDL libraries or static linking
   per platform.
 - Add CI jobs that prove clean source builds work without preinstalled SDL3.
+- Add package smoke checks that run the packaged executable from the install
+  tree without development-library paths.
 - Add Android packaging once the Gradle project exists.
