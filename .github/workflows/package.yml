@@ -12,6 +12,8 @@ jobs:
   linux-package:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
     steps:
       - uses: actions/checkout@v4
       - name: Install native build dependencies
@@ -53,6 +55,8 @@ jobs:
   macos-package:
     runs-on: macos-latest
     timeout-minutes: 45
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
     steps:
       - uses: actions/checkout@v4
       - name: Install native build dependencies
@@ -70,6 +74,8 @@ jobs:
   windows-package:
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
     defaults:
       run:
         shell: msys2 {0}

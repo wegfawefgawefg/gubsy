@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdbool>
-
 struct EngineState;
 
 // Each helper draws a named ImGui window when the corresponding toggle is true.
