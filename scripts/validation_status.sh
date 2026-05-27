@@ -113,11 +113,22 @@ check_file() {
     fi
 }
 
+host_platform() {
+    case "${OS:-}:$(uname -s)" in
+        Windows_NT:*|*:MINGW*|*:MSYS*|*:CYGWIN*) printf 'windows' ;;
+        *:Darwin) printf 'macos' ;;
+        *:Linux) printf 'linux' ;;
+        *) printf 'unknown' ;;
+    esac
+}
+
 cd "${repo_root}"
 current_revision="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+platform="$(host_platform)"
 
 echo "Gubsy validation status"
 echo "git_revision=${current_revision}"
+echo "platform=${platform}"
 echo
 
 echo "[local]"
@@ -130,7 +141,15 @@ check_latest_log \
     "[validated] room server smoke" \
     "[validated] lobby online smoke" \
     "developer/tooling package"
-check_file "Linux/tool package manifest" "${repo_root}/dist/gubsy-linux/PACKAGE_MANIFEST.txt"
+case "${platform}" in
+    linux|macos|windows)
+        check_file "${platform}/tool package manifest" "${repo_root}/dist/gubsy-${platform}/PACKAGE_MANIFEST.txt"
+        ;;
+    *)
+        printf '[missing] Unsupported host platform for package manifest: %s\n' "${platform}"
+        failures=$((failures + 1))
+        ;;
+esac
 echo
 
 echo "[boundaries]"
