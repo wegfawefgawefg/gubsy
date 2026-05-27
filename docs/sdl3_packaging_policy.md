@@ -3,9 +3,43 @@
 Gubsy and downstream games should standardize on SDL3. Do not require players
 to install SDL globally before running a game.
 
-Goal: set up Gubsy and Splonks so development builds, library consumption, and
-player-facing release packages have explicit modes, reproducible dependency
-resolution, and correct SDL runtime distribution on each supported platform.
+Goal: set up Gubsy and Splonks for practical SDL3-based development and
+distribution without default CI waits. Gubsy is a code-first library/tooling
+dependency with local build/test/consumer validation and manual remote checks
+only. Splonks is the shipped game: it owns developer/release modes, desktop SDL
+runtime bundling, manual/tag-based release packaging, Android runtime
+validation and release signing/AAB, an iOS simulator scaffold based on the
+proven local `how-to-multi-backend-rendering` reference, iOS
+signing/provisioning/TestFlight work, and clean per-platform dev setup for
+Linux, macOS, Windows, Android, and iOS.
+
+The immediate onboarding bar is simple: a new Splonks developer on Linux,
+macOS, or Windows should be able to clone the repo, follow one platform-specific
+setup section, run one build command, and launch the game locally without
+understanding Gubsy internals or waiting on GitHub Actions.
+
+## Developer Onboarding Bar
+
+Before treating the distribution cleanup as complete, Splonks needs a clean
+developer path for each supported development platform:
+
+- Linux: install documented native build packages, run the standard build
+  script or CMake preset, and launch Splonks from the local checkout.
+- macOS: install Xcode command line tools and documented Homebrew basics, run
+  the standard build script or CMake preset, and launch Splonks from the local
+  checkout.
+- Windows: install the documented supported toolchain, currently the MSYS2/UCRT
+  path unless we add a Visual Studio path, run the standard build script or
+  CMake preset, and launch Splonks from the local checkout.
+- Android: install JDK/SDK/NDK prerequisites, run the Android setup/build
+  scripts, install the APK, and run a smoke launch on an emulator or device.
+- iOS: use macOS/Xcode, mirror the proven `how-to-multi-backend-rendering`
+  `ios-sim` scaffold, build the simulator app, and document the later signing
+  and device/TestFlight requirements.
+
+Gubsy developer setup is secondary to this onboarding goal. Splonks developers
+should consume Gubsy through the documented CMake/dependency path and should not
+have to manually package Gubsy during normal game development.
 
 ## Build Modes
 
@@ -310,6 +344,8 @@ engine and game targets.
 
 ## Open Packaging Work
 
+- Add or update Splonks dev setup docs/scripts so Linux, macOS, and Windows
+  developers can clone, setup, build, and run without using GitHub Actions.
 - Validate and harden the macOS scripts on macOS, including full transitive
   dylib/framework copying, install-name fixups, rpaths, app launch smokes,
   signing, and notarization.
