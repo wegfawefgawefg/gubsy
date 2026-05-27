@@ -2,11 +2,17 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
-build_dir="${repo_root}/build"
 mode="${1:-build}"
+preset="${GUB_PRESET:-dev}"
+case "${preset}" in
+    dev) build_dir="${repo_root}/build" ;;
+    consumer) build_dir="${repo_root}/build-consumer" ;;
+    package-linux) build_dir="${repo_root}/build-package-linux" ;;
+    *) build_dir="${repo_root}/build/${preset}" ;;
+esac
 
 configure() {
-    cmake --preset dev
+    cmake --preset "${preset}"
 }
 
 if ! configure; then
@@ -20,4 +26,4 @@ if [ "${mode}" = "--configure-only" ]; then
     exit 0
 fi
 
-cmake --build --preset dev -j
+cmake --build --preset "${preset}" -j

@@ -8,10 +8,37 @@
   "configurePresets": [
     {
       "name": "dev",
-      "displayName": "Debug (dev)",
+      "displayName": "Developer Debug",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "GUB_MODE": "developer",
+        "GUB_REQUIRE_DEPS": true,
+        "GUB_STRICT": true,
+        "GUB_WARN_AS_ERROR": true,
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true
+      }
+    },
+    {
+      "name": "consumer",
+      "displayName": "Consumer Debug",
+      "binaryDir": "${sourceDir}/build-consumer",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GUB_MODE": "consumer",
+        "GUB_REQUIRE_DEPS": true,
+        "GUB_STRICT": true,
+        "GUB_WARN_AS_ERROR": true,
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true
+      }
+    },
+    {
+      "name": "package-linux",
+      "displayName": "Linux Package",
+      "binaryDir": "${sourceDir}/build-package-linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "GUB_MODE": "release",
         "GUB_REQUIRE_DEPS": true,
         "GUB_STRICT": true,
         "GUB_WARN_AS_ERROR": true,
@@ -23,6 +50,16 @@
     {
       "name": "dev",
       "configurePreset": "dev",
+      "jobs": 0
+    },
+    {
+      "name": "consumer",
+      "configurePreset": "consumer",
+      "jobs": 0
+    },
+    {
+      "name": "package-linux",
+      "configurePreset": "package-linux",
       "jobs": 0
     }
   ]

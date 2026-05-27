@@ -3,6 +3,10 @@
 Gubsy and downstream games should standardize on SDL3. Do not require players
 to install SDL globally before running a game.
 
+Goal: set up Gubsy and Splonks so development builds, library consumption, and
+player-facing release packages have explicit modes, reproducible dependency
+resolution, and correct SDL runtime distribution on each supported platform.
+
 ## Build Modes
 
 Use these terms consistently:
@@ -11,10 +15,10 @@ Use these terms consistently:
   `gubsy::engine`, the bundled sample, local tools, smokes, and guard tests.
   This is the mode for changing Gubsy itself, often while testing a game beside
   it.
-- **Consumer mode** means another developer's game builds against Gubsy as a
-  library. It should build `gubsy::engine` by default, avoid Gubsy's sample and
-  tool executables unless explicitly requested, and let the top-level game own
-  executable and dependency policy.
+- **Consumer mode** means Gubsy is being built as a library by another
+  developer's game. It should build `gubsy::engine` by default, avoid Gubsy's
+  sample and tool executables unless explicitly requested, and let the top-level
+  game own executable and dependency policy.
 - **Release packaging** means producing a player-facing game/tool bundle. It is
   not just a CMake consumption mode: it copies or bundles SDL runtime artifacts,
   assets, configs, and platform metadata into something a player can run without
@@ -30,7 +34,7 @@ default.
 | Concern | Developer Mode | Consumer Mode | Release Packaging |
 | --- | --- | --- | --- |
 | Primary user | Gubsy developer | Game developer | Player |
-| Top-level project | Gubsy | Game, such as Splonks | Game or tool package job |
+| Top-level project | Gubsy | Game that embeds Gubsy, such as Splonks | Game or tool package job |
 | Main target | `gubsy::engine`, sample, tools | `gubsy::engine` | final executable/package |
 | Gubsy sample/tools | on by default | off by default | package only when explicitly shipping a Gubsy tool |
 | Tests/smokes | on by default | off unless requested | package verification only |
@@ -41,6 +45,10 @@ default.
 This means consumer mode is not the same thing as release packaging. A game can
 consume Gubsy in consumer mode during development and still need a separate
 release packaging step to produce a player-facing bundle.
+
+Consumer mode is a Gubsy mode, not a Splonks mode. Splonks is an application,
+not a library, so Splonks only needs local developer mode and release packaging
+mode unless it later grows a library target for other games.
 
 ## CMake Mode Direction
 
@@ -61,10 +69,29 @@ Splonks should get the same vocabulary on its side:
 
 - `SPLONKS_MODE=developer|release` or equivalent presets should distinguish
   local iteration from package-producing builds.
+- Splonks does not need a consumer mode while it is only an application.
 - Splonks is the final game executable owner, so Splonks release packaging owns
   the SDL runtime files for the Splonks package.
 - If Splonks later consumes Gubsy through the same CMake graph, Splonks should
   set Gubsy to consumer mode and keep one shared SDL target set.
+
+## Presets And Platform Scaffolds
+
+Use CMake presets as the visible entry points for platform builds. The local
+`how-to-multi-backend-rendering` reference is SDL2-based, but its structure is a
+useful model:
+
+- desktop developer presets, such as Linux debug/release.
+- platform presets, such as `android-arm64`.
+- a separate Android Gradle project that owns APK/AAB packaging.
+- small scripts for Android setup, native build, APK build, install, launch, and
+  logcat.
+
+Gubsy should use presets for engine/tool/sample development and package jobs.
+Splonks should use presets for game developer builds and release package jobs.
+The preset name should describe the intent and platform; `CMAKE_BUILD_TYPE`
+alone is not enough to distinguish local release-optimized development from a
+player-facing package.
 
 ## Dependency Policy
 
@@ -135,8 +162,34 @@ Platform-specific rules:
   install names/rpaths, and sign the final bundle.
 - Linux: use the chosen package format's dependency model. If shipping local
   `.so` files, put them in the bundle and set an rpath such as `$ORIGIN/lib`.
+  The first Linux implementation uses `scripts/package_linux.sh` in each repo to
+  create a local `dist/` bundle with SDL-related shared libraries and a wrapper
+  that sets `LD_LIBRARY_PATH`.
 - Android: the Gradle/APK/AAB build owns native `.so` packaging. Desktop copy
   rules do not apply.
+
+## Android Direction
+
+Android should be treated as a first-class platform scaffold, not as a desktop
+install rule:
+
+- Splonks should eventually own an `android/` Gradle app because Splonks is the
+  final player-facing game.
+- Gradle should call CMake through `externalNativeBuild`.
+- The Android native target should follow SDL's expected app shape for SDL3.
+  SDL2 examples often name the native target `main`; verify the SDL3 Android
+  flow before copying that detail.
+- The Java/Kotlin activity should use SDL3's Android glue or AAR/Prefab path.
+  Do not vendor SDL2 Java glue into the SDL3 stack.
+- Prefer one scripted dev loop: setup SDK/NDK, create/start emulator, build
+  native code, build APK, install, launch, and stream filtered logcat.
+- If the Android build statically links SDL into the app native library, the
+  activity may only need to load the app library. If SDL is packaged as separate
+  `.so` files, the activity/package must load and include those libraries
+  explicitly.
+
+Gubsy should not own Splonks' Android app. Gubsy may keep Android-compatible
+CMake and headers, but the game package owns the APK/AAB.
 
 ## Source Tree Direction
 
@@ -149,18 +202,35 @@ conflicting SDL copies when Gubsy is already part of the same CMake graph. The
 top-level project should arrange for one SDL3 target set to be visible to all
 engine and game targets.
 
+## Current Implementation
+
+- Gubsy has explicit `GUB_MODE=developer|consumer|release` handling. Developer
+  and release modes build local extras by default; consumer mode builds only the
+  engine target unless extras are requested.
+- Splonks has explicit `SPLONKS_MODE=developer|release` handling. Splonks has no
+  consumer mode while it remains only a game executable.
+- Both repos expose Linux package presets and `scripts/package_linux.sh`.
+- The Linux package scripts build release package presets, create local
+  `dist/` bundles, copy SDL-related shared libraries from the linked binaries,
+  and create wrapper scripts that run with the bundled library directory first
+  in `LD_LIBRARY_PATH`.
+- Linux package validation should include an `ldd` check proving SDL resolves
+  from `dist/.../lib` and a packaged executable smoke run through the wrapper.
+
 ## Open Packaging Work
 
-- Add explicit mode handling to Gubsy CMake.
-- Add matching mode/preset vocabulary to Splonks.
-- Add install/package rules that copy SDL runtime libraries beside Gubsy tools
-  and sample executables.
-- Add Splonks install/package rules that copy SDL runtime libraries beside the
-  game executable.
-- Add per-platform release presets for Windows, macOS, Linux, and Android.
+- Add per-platform release presets and package scripts for Windows and macOS.
+- Add macOS `.app` bundle creation, dylib/framework install-name fixups,
+  rpaths, signing, and package smoke checks.
+- Add Windows package creation that copies SDL `.dll` files next to the `.exe`
+  and runs a package smoke from the package directory.
 - Decide whether release builds prefer shared SDL libraries or static linking
   per platform.
-- Add CI jobs that prove clean source builds work without preinstalled SDL3.
-- Add package smoke checks that run the packaged executable from the install
-  tree without development-library paths.
+- Replace the first Linux local-bundle script with the final Linux distribution
+  channel if needed: Steam runtime, Flatpak, AppImage, distro packages, or a
+  stricter local `.so` bundle with rpath/patchelf.
+- Add Android Gradle scaffold and dev-loop scripts for Splonks.
 - Add Android packaging once the Gradle project exists.
+- Add CI jobs that prove clean source builds work without preinstalled SDL3.
+- Add package smoke checks in CI that run packaged executables from the install
+  tree without development-library paths.
