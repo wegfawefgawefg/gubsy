@@ -68,6 +68,9 @@ For a recorded local validation pass, use:
 bash scripts/validate_local.sh all
 ```
 
+The validation log records the host/toolchain versions needed for local
+evidence without depending on GitHub-hosted package jobs.
+
 The GitHub package workflow is manual-only and exists for remote platform
 confidence. It is not the normal development feedback loop.
 

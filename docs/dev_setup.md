@@ -28,6 +28,9 @@ bash scripts/validate_local.sh all
 This writes a timestamped log under `dist/validation/` and covers the normal
 Gubsy code-first gates: developer build/tests, external consumer smoke, room
 server smoke, lobby smoke, and the local developer/tooling package verifier.
+The log records the host platform, git revision, PATH, MSYS2 environment when
+present, CMake, Ninja, pkg-config, Git, compiler, Homebrew, and pacman versions
+when those tools are available.
 
 Linux (Debian/Ubuntu)
 ---------------------

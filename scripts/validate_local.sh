@@ -34,6 +34,19 @@ run_step() {
     "$@"
 }
 
+print_first_line() {
+    local label="$1"
+    shift
+    local cmd="$1"
+    local output
+    local first_line
+    if command -v "${cmd}" >/dev/null 2>&1; then
+        output="$("$@" 2>&1 || true)"
+        IFS= read -r first_line <<< "${output}"
+        echo "${label}=${first_line}"
+    fi
+}
+
 write_environment() {
     local platform="$1"
     echo "[environment]"
@@ -42,12 +55,20 @@ write_environment() {
     echo "timestamp_utc=${timestamp}"
     echo "git_revision=$(git -C "${repo_root}" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
     echo "uname=$(uname -a)"
-    if command -v cmake >/dev/null 2>&1; then
-        cmake --version | head -n 1
-    fi
-    if command -v git >/dev/null 2>&1; then
-        git --version
-    fi
+    echo "msystem=${MSYSTEM:-}"
+    echo "path=${PATH}"
+    print_first_line cmake_version cmake --version
+    print_first_line ninja_version ninja --version
+    print_first_line pkg_config_version pkg-config --version
+    print_first_line git_version git --version
+    print_first_line cc_version cc --version
+    print_first_line cxx_version c++ --version
+    print_first_line gcc_version gcc --version
+    print_first_line gxx_version g++ --version
+    print_first_line clang_version clang --version
+    print_first_line clangxx_version clang++ --version
+    print_first_line brew_version brew --version
+    print_first_line pacman_version pacman --version
 }
 
 validate_dev() {
