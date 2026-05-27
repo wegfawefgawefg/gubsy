@@ -86,8 +86,11 @@ useful model:
 - a separate Android Gradle project that owns APK/AAB packaging.
 - small scripts for Android setup, native build, APK build, install, launch, and
   logcat.
-- iOS should be planned as a separate Xcode/CMake platform path that owns app
-  bundle metadata, signing, provisioning, and TestFlight/App Store packaging.
+- iOS should follow the local `how-to-multi-backend-rendering` reference's
+  working simulator shape: a CMake preset that uses the Xcode generator,
+  `CMAKE_SYSTEM_NAME=iOS`, an iPhone simulator sysroot, arm64 simulator arch,
+  bundled SDL, and `MACOSX_BUNDLE` app metadata. Splonks then owns signing,
+  provisioning, launch scripting, and TestFlight/App Store packaging.
 
 Gubsy should use presets for engine/tool/sample development and package jobs.
 Splonks should use presets for game developer builds and release package jobs.
@@ -206,6 +209,11 @@ automatic CI path during normal development:
   player-facing game.
 - The iOS build should use the SDL3-supported iOS/Xcode path and should not
   introduce SDL2 compatibility glue.
+- Use `/home/vega/Coding/GameDev/how-to-multi-backend-rendering` as the local
+  reference for the first scaffold. Its `ios-sim` preset validates CMake/Xcode
+  project generation and native build.
+- The first Splonks milestone should mirror that proven simulator build shape,
+  then swap in SDL3 and Splonks assets/runtime wiring.
 - The app target owns touch input, safe-area/layout behavior, asset bundling,
   entitlements, signing, provisioning, and TestFlight/App Store packaging.
 - Gubsy should remain portable engine/library code for iOS consumers. It should
