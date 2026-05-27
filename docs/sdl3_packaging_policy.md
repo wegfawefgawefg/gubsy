@@ -227,6 +227,10 @@ engine and game targets.
   CMake preset, and `scripts/android/` dev-loop scripts. The scaffold expects an
   official SDL3 Android AAR in `android/app/libs/` and enables Android Gradle
   Plugin Prefab support so CMake can consume the native SDL package.
+- Splonks' Android activity extracts APK `assets/` into app-private storage,
+  seeds missing `data/` files without overwriting player settings, and starts
+  native code with `--project-root <path>` so the existing filesystem-relative
+  asset loaders can run against a package-local directory.
 - `scripts/android/fetch_sdl3_aar.sh` downloads the pinned official SDL3 Android
   archive for the repo's current SDL pin and verifies its checksum before
   extracting the AAR into the Gradle app.
@@ -263,9 +267,7 @@ engine and game targets.
   where the `.exe` resolves SDL DLLs from the package directory.
 - Android validation now includes native CMake configure/build through Gradle
   `assembleDebug` in CI. It still needs emulator/device install, app launch,
-  and filtered logcat. The first Android runtime pass must verify asset loading
-  because Splonks still expects normal filesystem paths while APK assets are not
-  plain host files.
+  asset extraction/loading, settings writes, and filtered logcat.
 
 ## Open Packaging Work
 
@@ -281,7 +283,7 @@ engine and game targets.
   stricter local `.so` bundle with rpath/patchelf.
 - Validate and harden the Android scaffold on an Android SDK/NDK host with the
   official SDL3 AAR present.
-- Fix Android asset/runtime path handling after the first emulator/device run.
+- Validate Android asset/runtime path handling on the first emulator/device run.
 - Add Android release signing/AAB packaging once debug APK launch is proven.
 - Extend CI beyond desktop package and Android scaffold checks once full Android
   SDK/NDK/emulator validation is available.
