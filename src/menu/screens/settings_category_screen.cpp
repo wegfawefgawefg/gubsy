@@ -41,7 +41,6 @@ constexpr WidgetId kFirstRowWidgetId = 500;
 constexpr const char* kWindowModeSettingKey = "gubsy.video.window_mode";
 constexpr const char* kFullscreenDisplayModeSettingKey = "gubsy.video.fullscreen_display_mode";
 constexpr const char* kFrameCapSettingKey = "gubsy.video.frame_cap";
-constexpr const char* kWindowResolutionSettingKey = "gubsy.video.window_resolution";
 constexpr const char* kMatchRenderToWindowSettingKey = "gubsy.video.match_render_to_window";
 constexpr const char* kRenderResolutionSettingKey = "gubsy.video.render_resolution";
 constexpr const char* kProfileOwnerNameSettingKey = "__gubsy.profile.owner_name";
