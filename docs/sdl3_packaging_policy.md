@@ -86,6 +86,8 @@ useful model:
 - a separate Android Gradle project that owns APK/AAB packaging.
 - small scripts for Android setup, native build, APK build, install, launch, and
   logcat.
+- iOS should be planned as a separate Xcode/CMake platform path that owns app
+  bundle metadata, signing, provisioning, and TestFlight/App Store packaging.
 
 Gubsy should use presets for engine/tool/sample development and package jobs.
 Splonks should use presets for game developer builds and release package jobs.
@@ -125,6 +127,9 @@ Platform expectations:
   complete app bundle.
 - Android: use SDL's Android AAR/Prefab flow or build SDL as part of the
   Gradle/CMake project. The APK/AAB owns the native SDL libraries.
+- iOS: build SDL and the game into the Xcode app target. The `.app` bundle owns
+  native libraries, assets, entitlements, signing, and provisioning. Do not
+  expect player devices to have any global SDL install.
 - Linux: package through the chosen distribution channel. Steam runtime,
   Flatpak, AppImage, or local shared libraries with an rpath are all acceptable.
   Do not assume a player's system has SDL3 development packages installed.
@@ -167,6 +172,8 @@ Platform-specific rules:
   that sets `LD_LIBRARY_PATH`.
 - Android: the Gradle/APK/AAB build owns native `.so` packaging. Desktop copy
   rules do not apply.
+- iOS: the Xcode app bundle owns native library embedding, assets, entitlements,
+  signing, and provisioning. Desktop copy rules do not apply.
 
 ## Android Direction
 
@@ -189,6 +196,22 @@ install rule:
 
 Gubsy should not own Splonks' Android app. Gubsy may keep Android-compatible
 CMake and headers, but the game package owns the APK/AAB.
+
+## iOS Direction
+
+iOS should be treated as a first-class mobile release target, but not as an
+automatic CI path during normal development:
+
+- Splonks should eventually own an iOS app target because Splonks is the final
+  player-facing game.
+- The iOS build should use the SDL3-supported iOS/Xcode path and should not
+  introduce SDL2 compatibility glue.
+- The app target owns touch input, safe-area/layout behavior, asset bundling,
+  entitlements, signing, provisioning, and TestFlight/App Store packaging.
+- Gubsy should remain portable engine/library code for iOS consumers. It should
+  not own the Splonks iOS app project.
+- Remote iOS validation should be manual or tag/release based. Apple signing and
+  provisioning make iOS a poor fit for automatic per-push package builds.
 
 ## Source Tree Direction
 
@@ -258,13 +281,16 @@ engine and game targets.
 - Native macOS and Windows verifiers assert that the package includes SDL3,
   SDL3_image, SDL3_mixer, and SDL3_ttf runtime artifacts before running package
   smoke commands on those hosts.
-- Both repos have a GitHub Actions package workflow that runs package verifiers
-  on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Splonks also has an
-  Android scaffold job that verifies Android script syntax, installs the pinned
-  SDK/NDK/CMake packages, downloads the pinned SDL3 AAR, and builds a debug APK.
-- The package workflows upload their generated native package directories as CI
-  artifacts. Splonks also uploads the Android debug APK artifact after
-  `assembleDebug` succeeds.
+- Gubsy's GitHub Actions package workflow is manual-only. It exists for remote
+  platform confidence when explicitly requested, not for every push.
+- Splonks' GitHub Actions package workflow runs only when manually dispatched or
+  when a `v*` version tag is pushed. It owns release-oriented package
+  validation for Linux, macOS, Windows, and Android.
+- iOS is an explicit target, but no iOS CI/package path exists yet. Add it only
+  after the Xcode/signing/provisioning path is designed.
+- The package workflows upload their generated native package directories as
+  release-check artifacts. Splonks also uploads the Android debug APK artifact
+  after `assembleDebug` succeeds.
 - macOS package validation should include an `otool -L` check, an app launch
   smoke, and signing/notarization checks before real distribution.
 - Windows package validation should include a clean-machine or clean-shell run
@@ -291,5 +317,8 @@ engine and game targets.
 - Run and harden Android runtime smoke validation on the first emulator/device
   pass.
 - Add Android release signing/AAB packaging once debug APK launch is proven.
-- Extend CI beyond desktop package and Android scaffold checks once full Android
-  SDK/NDK/emulator validation is available.
+- Add an iOS Xcode/CMake app scaffold, SDL3 iOS integration, touch/safe-area
+  validation, asset bundling, signing/provisioning docs, and TestFlight/App
+  Store release packaging.
+- Keep remote package checks manual or tag/release based. Do not make mobile or
+  desktop package builds part of the normal push feedback loop.

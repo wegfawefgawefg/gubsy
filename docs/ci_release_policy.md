@@ -15,6 +15,9 @@ on GitHub-hosted runners.
 - The GitHub package workflow is manual-only.
 - Trigger it when we explicitly want remote platform confidence, such as before
   a dependency packaging change is considered done.
+- Expected remote platform targets are Linux, macOS, Windows, Android, and iOS,
+  but mobile targets should be added only when their toolchains and signing
+  paths are intentionally configured.
 - Do not treat the manual workflow as the normal edit/compile/test loop.
 
 ## Release artifacts
