@@ -188,6 +188,18 @@ else
     echo "[missing] macOS package preset arm64-only evidence"
     failures=$((failures + 1))
 fi
+if grep -Fq 'package_macos.sh must run on an Apple Silicon Mac because the package is arm64-only.' scripts/package_macos.sh; then
+    echo "[ok]      macOS package script rejects Intel hosts"
+else
+    echo "[missing] macOS package script Intel-host rejection evidence"
+    failures=$((failures + 1))
+fi
+if grep -Fq 'gubsy-bin should be arm64-only but includes x86_64' scripts/verify_package_macos.sh; then
+    echo "[ok]      macOS package verifier rejects Intel slices"
+else
+    echo "[missing] macOS package verifier Intel-slice rejection evidence"
+    failures=$((failures + 1))
+fi
 echo
 
 if [[ "${failures}" -eq 0 ]]; then
