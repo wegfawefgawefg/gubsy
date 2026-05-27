@@ -244,6 +244,9 @@ engine and game targets.
 - Both repos have `scripts/verify_package_linux.sh` to run the Linux package
   build, file layout assertions, bundled SDL `ldd` checks, and packaged smoke
   commands.
+- Native macOS and Windows verifiers assert that the package includes SDL3,
+  SDL3_image, SDL3_mixer, and SDL3_ttf runtime artifacts before running package
+  smoke commands on those hosts.
 - Both repos have a GitHub Actions package workflow that runs package verifiers
   on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Splonks also has an
   Android scaffold job that verifies Android script syntax, installs the pinned
