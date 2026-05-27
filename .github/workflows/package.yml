@@ -52,7 +52,7 @@ jobs:
           path: dist/gubsy-linux
 
   macos-package:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 45
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 2

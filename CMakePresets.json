@@ -51,6 +51,7 @@
       "binaryDir": "${sourceDir}/build-package-macos",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
         "GUB_MODE": "release",
         "GUB_REQUIRE_DEPS": true,
         "GUB_STRICT": true,

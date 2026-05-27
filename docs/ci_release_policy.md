@@ -23,6 +23,10 @@ on GitHub-hosted runners.
 - Expected remote platform targets are Linux, macOS, Windows, Android, and iOS,
   but mobile targets should be added only when their toolchains and signing
   paths are intentionally configured.
+- macOS package confidence is Apple Silicon only by default. The manual package
+  workflow uses an explicit Apple Silicon runner label and the package preset
+  sets `CMAKE_OSX_ARCHITECTURES=arm64`; do not add universal or Intel package
+  validation unless there is a concrete downstream need.
 - Do not treat the manual workflow as the normal edit/compile/test loop.
 
 ## Release artifacts

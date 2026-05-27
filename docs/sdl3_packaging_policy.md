@@ -161,7 +161,9 @@ Platform expectations:
 - Windows: ship `SDL3.dll` and any SDL extension DLLs next to the game
   executable or in the installer/Steam depot.
 - macOS: bundle SDL frameworks or dylibs inside the `.app` bundle and sign the
-  complete app bundle.
+  complete app bundle. Default macOS release/package validation is Apple
+  Silicon arm64-only; universal or Intel packages are an explicit exception,
+  not the normal path.
 - Android: use SDL's Android AAR/Prefab flow or build SDL as part of the
   Gradle/CMake project. The APK/AAB owns the native SDL libraries.
 - iOS: build SDL and the game into the Xcode app target. The `.app` bundle owns

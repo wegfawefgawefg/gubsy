@@ -89,6 +89,10 @@ not the documented Windows package-verification path yet.
 macOS (Homebrew)
 ----------------
 
+Apple Silicon Macs are the supported macOS package-verification target. Normal
+source development can still follow the local toolchain, but the packaged
+developer/tooling artifact is arm64-only and is not a universal Intel build.
+
 ```
 brew install cmake ninja pkg-config lua
 # Optional if you want system SDL3 instead of FetchContent:

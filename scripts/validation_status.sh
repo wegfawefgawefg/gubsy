@@ -170,6 +170,24 @@ else
     echo "[missing] Package workflow manual trigger evidence"
     failures=$((failures + 1))
 fi
+if grep -Fq 'macos-latest' .github/workflows/package.yml; then
+    echo "[missing] Package workflow uses moving macOS latest label"
+    failures=$((failures + 1))
+else
+    echo "[ok]      Package workflow avoids moving macOS latest label"
+fi
+if grep -Fq 'runs-on: macos-15' .github/workflows/package.yml; then
+    echo "[ok]      Package workflow uses explicit Apple Silicon macOS runner"
+else
+    echo "[missing] Package workflow Apple Silicon runner evidence"
+    failures=$((failures + 1))
+fi
+if grep -Fq '"CMAKE_OSX_ARCHITECTURES": "arm64"' CMakePresets.json; then
+    echo "[ok]      macOS package preset is arm64-only"
+else
+    echo "[missing] macOS package preset arm64-only evidence"
+    failures=$((failures + 1))
+fi
 echo
 
 if [[ "${failures}" -eq 0 ]]; then

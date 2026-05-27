@@ -6,6 +6,11 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
     exit 1
 fi
 
+if [[ "$(uname -m)" != "arm64" ]]; then
+    echo "verify_package_macos.sh must run on an Apple Silicon Mac because the package is arm64-only." >&2
+    exit 1
+fi
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 dist_dir="${repo_root}/dist/gubsy-macos"
 app_dir="${dist_dir}/Gubsy.app"
@@ -51,6 +56,16 @@ require_dylib "SDL3" "*SDL3*.dylib"
 require_dylib "SDL3_image" "*SDL3_image*.dylib"
 require_dylib "SDL3_mixer" "*SDL3_mixer*.dylib"
 require_dylib "SDL3_ttf" "*SDL3_ttf*.dylib"
+
+archs="$(lipo -archs "${app_dir}/Contents/MacOS/gubsy-bin")"
+if [[ " ${archs} " != *" arm64 "* ]]; then
+    echo "[verify-package] gubsy-bin is missing arm64 slice; archs=${archs}" >&2
+    exit 1
+fi
+if [[ " ${archs} " == *" x86_64 "* ]]; then
+    echo "[verify-package] gubsy-bin should be arm64-only but includes x86_64; archs=${archs}" >&2
+    exit 1
+fi
 
 otool -L "${app_dir}/Contents/MacOS/gubsy-bin"
 "${roomd_dir}/run-gubsy-roomd.sh" --help >/tmp/gubsy-roomd-macos-package-help.txt
