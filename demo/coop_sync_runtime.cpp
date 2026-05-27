@@ -394,9 +394,9 @@ void run_client_step(const CoopSequencedInput& local_input, float dt, double now
     int local_index = find_member_index(g_sync, g_sync.local_member_id);
     if (local_index < 0) {
         std::vector<std::string> member_ids = g_sync.member_ids;
-        member_ids.push_back(g_sync.local_member_id);
+        member_ids.emplace_back(g_sync.local_member_id);
         rebuild_member_buffers(member_ids);
-        local_index = static_cast<int>(g_sync.member_ids.size()) - 1;
+        local_index = find_member_index(g_sync, g_sync.local_member_id);
     }
 
     g_sync.current_inputs[static_cast<std::size_t>(local_index)] = local_input.payload;
