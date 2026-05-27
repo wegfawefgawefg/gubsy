@@ -12,6 +12,7 @@ esac
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 build_dir="${repo_root}/build-package-windows"
 dist_dir="${repo_root}/dist/gubsy-windows"
+source "${repo_root}/scripts/package_runtime_libs.sh"
 
 GUB_PRESET=package-windows "${repo_root}/scripts/build.sh"
 
@@ -27,12 +28,7 @@ cp -a "${repo_root}/demo" "${dist_dir}/demo"
 mkdir -p "${dist_dir}/tools"
 cp -a "${repo_root}/tools/mod_repo" "${dist_dir}/tools/mod_repo"
 
-find "${build_dir}" -type f -name "*.dll" \
-    \( -iname "SDL3*.dll" -o -iname "libpng*.dll" -o -iname "freetype*.dll" \
-       -o -iname "harfbuzz*.dll" -o -iname "pluto*.dll" -o -iname "vorbis*.dll" \
-       -o -iname "ogg*.dll" -o -iname "zstd*.dll" -o -iname "brotli*.dll" \
-       -o -iname "bz2*.dll" -o -iname "jpeg*.dll" -o -iname "webp*.dll" \) \
-    -exec cp -f {} "${dist_dir}/" \;
+package_copy_runtime_libs_from_tree "${build_dir}" "${dist_dir}" ".dll"
 
 cat > "${dist_dir}/run-gubsy.bat" <<'EOF'
 @echo off

@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 build_dir="${repo_root}/build-package-linux"
 dist_dir="${repo_root}/dist/gubsy-linux"
+source "${repo_root}/scripts/package_runtime_libs.sh"
 
 GUB_PRESET=package-linux "${repo_root}/scripts/build.sh"
 
@@ -27,26 +28,8 @@ copy_if_exists "${repo_root}/demo" "${dist_dir}/"
 mkdir -p "${dist_dir}/tools"
 copy_if_exists "${repo_root}/tools/mod_repo" "${dist_dir}/tools/"
 
-copy_runtime_deps() {
-    local exe="$1"
-    if [[ ! -x "${exe}" ]]; then
-        return 0
-    fi
-
-    ldd "${exe}" \
-        | awk '/=>/ {print $(NF - 1)}' \
-        | while read -r dep; do
-            [[ -f "${dep}" ]] || continue
-            case "$(basename "${dep}")" in
-                libSDL3*|libpng*|libfreetype*|libharfbuzz*|libpluto*|libvorbis*|libogg*|libzstd*|libbrotli*|libbz2*|libjpeg*|libwebp*)
-                    cp -u "${dep}" "${dist_dir}/lib/"
-                    ;;
-            esac
-        done
-}
-
-copy_runtime_deps "${dist_dir}/bin/gubsy"
-copy_runtime_deps "${dist_dir}/bin/gubsy-roomd"
+package_copy_linux_runtime_deps "${dist_dir}/bin/gubsy" "${dist_dir}/lib"
+package_copy_linux_runtime_deps "${dist_dir}/bin/gubsy-roomd" "${dist_dir}/lib"
 
 cat > "${dist_dir}/run-gubsy.sh" <<'EOF'
 #!/usr/bin/env bash

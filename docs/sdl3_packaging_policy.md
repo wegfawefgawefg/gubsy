@@ -216,6 +216,9 @@ engine and game targets.
   `dist/` bundles, copy SDL-related shared libraries from the linked binaries,
   and create wrapper scripts that run with the bundled library directory first
   in `LD_LIBRARY_PATH`.
+- Each repo keeps SDL/transitive runtime library name matching in
+  `scripts/package_runtime_libs.sh` so Linux, macOS, and Windows package scripts
+  use the same copy policy instead of drifting across platform-specific files.
 - Both repos expose native macOS and Windows package presets plus
   `scripts/package_macos.sh` and `scripts/package_windows.sh`. These are
   platform-host scripts: run the macOS scripts on macOS and the Windows scripts

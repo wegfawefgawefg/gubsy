@@ -9,6 +9,7 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 build_dir="${repo_root}/build-package-macos"
 dist_dir="${repo_root}/dist/gubsy-macos"
+source "${repo_root}/scripts/package_runtime_libs.sh"
 app_dir="${dist_dir}/Gubsy.app"
 contents_dir="${app_dir}/Contents"
 macos_dir="${contents_dir}/MacOS"
@@ -62,31 +63,9 @@ cat > "${contents_dir}/Info.plist" <<'EOF'
 </plist>
 EOF
 
-copy_dylibs() {
-    local exe="$1"
-    local dst="$2"
-    otool -L "${exe}" \
-        | awk 'NR > 1 {print $1}' \
-        | while read -r dep; do
-            case "${dep}" in
-                *SDL3*.dylib|*png*.dylib|*freetype*.dylib|*harfbuzz*.dylib|*pluto*.dylib|*vorbis*.dylib|*ogg*.dylib|*zstd*.dylib|*brotli*.dylib|*bz2*.dylib|*jpeg*.dylib|*webp*.dylib)
-                    if [[ -f "${dep}" ]]; then
-                        cp -f "${dep}" "${dst}/"
-                    fi
-                    ;;
-            esac
-        done
-}
-
-copy_dylibs "${macos_dir}/gubsy-bin" "${frameworks_dir}"
-copy_dylibs "${roomd_dir}/bin/gubsy-roomd" "${roomd_dir}/lib"
-
-find "${build_dir}" -type f -name "*.dylib" \
-    \( -iname "*SDL3*.dylib" -o -iname "*png*.dylib" -o -iname "*freetype*.dylib" \
-       -o -iname "*harfbuzz*.dylib" -o -iname "*pluto*.dylib" -o -iname "*vorbis*.dylib" \
-       -o -iname "*ogg*.dylib" -o -iname "*zstd*.dylib" -o -iname "*brotli*.dylib" \
-       -o -iname "*bz2*.dylib" -o -iname "*jpeg*.dylib" -o -iname "*webp*.dylib" \) \
-    -exec cp -f {} "${frameworks_dir}/" \;
+package_copy_macos_runtime_deps "${macos_dir}/gubsy-bin" "${frameworks_dir}"
+package_copy_macos_runtime_deps "${roomd_dir}/bin/gubsy-roomd" "${roomd_dir}/lib"
+package_copy_runtime_libs_from_tree "${build_dir}" "${frameworks_dir}" ".dylib"
 
 find "${frameworks_dir}" "${roomd_dir}/lib" -type f -name "*.dylib" -exec chmod u+w {} +
 while IFS= read -r dylib; do
