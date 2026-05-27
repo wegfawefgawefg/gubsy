@@ -35,6 +35,7 @@ bool is_string_special(char c) {
     return c == '"' || c == '\\' || c == '\n' || c == '\r';
 }
 
+#if GSEXP_PARSE_SSE2
 int first_set_bit(std::uint32_t mask) {
 #if defined(__GNUC__) || defined(__clang__)
     return __builtin_ctz(mask);
@@ -48,7 +49,6 @@ int first_set_bit(std::uint32_t mask) {
 #endif
 }
 
-#if GSEXP_PARSE_SSE2
 __m128i match_byte(__m128i bytes, char c) {
     return _mm_cmpeq_epi8(bytes, _mm_set1_epi8(c));
 }
