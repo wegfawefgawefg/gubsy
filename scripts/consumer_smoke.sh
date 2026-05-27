@@ -9,4 +9,11 @@ cmake -S "${repo_root}/tools/consumer_smoke" -B "${build_dir}" \
   -DGUB_WARN_AS_ERROR=ON \
   -DGUB_REQUIRE_DEPS=ON
 cmake --build "${build_dir}" --target gubsy_consumer_smoke -j
-"${build_dir}/gubsy_consumer_smoke"
+if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
+  while IFS= read -r -d '' dll; do
+    cp -f "${dll}" "${build_dir}/"
+  done < <(find "${build_dir}" -type f -name '*.dll' -print0)
+  PATH="${build_dir}:${PATH}" "${build_dir}/gubsy_consumer_smoke.exe"
+else
+  "${build_dir}/gubsy_consumer_smoke"
+fi

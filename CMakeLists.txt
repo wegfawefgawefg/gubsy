@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 project(gubsy LANGUAGES C CXX)
 include(CTest)
@@ -98,6 +98,16 @@ function(gub_link_sdl3_mixer_target tgt)
     target_link_libraries(${tgt} PUBLIC SDL3_mixer::SDL3_mixer-static)
   else()
     message(FATAL_ERROR "SDL3_mixer was found, but no supported SDL3_mixer CMake target exists.")
+  endif()
+endfunction()
+
+function(gub_copy_runtime_dlls tgt)
+  if (WIN32)
+    add_custom_command(
+      TARGET ${tgt} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${tgt}> $<TARGET_FILE_DIR:${tgt}>
+      COMMAND_EXPAND_LISTS
+    )
   endif()
 endfunction()
 
@@ -348,6 +358,7 @@ if (GUB_BUILD_SAMPLE)
     ${GUB_SOURCE_DIR}/third_party/lua/src
   )
   target_link_libraries(gubsy PRIVATE gubsy_engine)
+  gub_copy_runtime_dlls(gubsy)
 
   # Developer convenience: alias target and CLI symlink 'arti'
   add_executable(arti ALIAS gubsy)
@@ -363,6 +374,7 @@ if (GUB_BUILD_TOOLS)
   add_executable(public_api_smoke tools/public_api_smoke/main.cpp)
   target_link_libraries(public_api_smoke PRIVATE gubsy_engine)
   target_enable_strict_warnings(public_api_smoke)
+  gub_copy_runtime_dlls(public_api_smoke)
 
   if (BUILD_TESTING)
     add_test(NAME public_api_smoke COMMAND public_api_smoke)
@@ -374,15 +386,15 @@ if (GUB_BUILD_TOOLS)
     )
     add_test(
       NAME consumption_boundary
-      COMMAND "${GUB_SOURCE_DIR}/scripts/check_consumption_boundary.sh"
+      COMMAND bash "${GUB_SOURCE_DIR}/scripts/check_consumption_boundary.sh"
     )
     add_test(
       NAME sdl3_shim_guard
-      COMMAND "${GUB_SOURCE_DIR}/scripts/check_sdl3_shim_cleanup.sh"
+      COMMAND bash "${GUB_SOURCE_DIR}/scripts/check_sdl3_shim_cleanup.sh"
     )
     add_test(
       NAME consumer_smoke
-      COMMAND "${GUB_SOURCE_DIR}/scripts/consumer_smoke.sh"
+      COMMAND bash "${GUB_SOURCE_DIR}/scripts/consumer_smoke.sh"
     )
   endif()
 
@@ -449,6 +461,7 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
   target_enable_strict_warnings(lobby_config_smoke)
+  gub_copy_runtime_dlls(lobby_config_smoke)
 
   add_executable(lobby_input_smoke tools/lobby_input_smoke/main.cpp)
   target_link_libraries(lobby_input_smoke PRIVATE gubsy_engine)
@@ -458,6 +471,7 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
   target_enable_strict_warnings(lobby_input_smoke)
+  gub_copy_runtime_dlls(lobby_input_smoke)
 
   add_executable(lobby_online_smoke tools/lobby_online_smoke/main.cpp)
   target_link_libraries(lobby_online_smoke PRIVATE gubsy_engine)
@@ -467,6 +481,7 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
   target_enable_strict_warnings(lobby_online_smoke)
+  gub_copy_runtime_dlls(lobby_online_smoke)
 
   add_executable(coop_sync_smoke
     tools/coop_sync_smoke/main.cpp
