@@ -235,6 +235,12 @@ engine and game targets.
   `assets/` and `data/` paths resolve inside the package.
 - Linux package validation should include an `ldd` check proving SDL resolves
   from `dist/.../lib` and a packaged executable smoke run through the wrapper.
+- Both repos have `scripts/verify_package_linux.sh` to run the Linux package
+  build, file layout assertions, bundled SDL `ldd` checks, and packaged smoke
+  commands.
+- Both repos have a GitHub Actions package workflow that runs the Linux package
+  verifier on `ubuntu-latest`. Splonks also has an Android scaffold job that
+  verifies Android script syntax and the pinned SDL3 AAR download.
 - macOS package validation should include an `otool -L` check, an app launch
   smoke, and signing/notarization checks before real distribution.
 - Windows package validation should include a clean-machine or clean-shell run
@@ -260,6 +266,5 @@ engine and game targets.
   official SDL3 AAR present.
 - Fix Android asset/runtime path handling after the first emulator/device run.
 - Add Android release signing/AAB packaging once debug APK launch is proven.
-- Add CI jobs that prove clean source builds work without preinstalled SDL3.
-- Add package smoke checks in CI that run packaged executables from the install
-  tree without development-library paths.
+- Extend CI beyond the current Linux package and Android scaffold checks once
+  macOS, Windows, and full Android hosts are available.
