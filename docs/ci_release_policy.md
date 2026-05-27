@@ -11,6 +11,8 @@ on GitHub-hosted runners.
 - Use `./scripts/validate_local.sh all` when a Gubsy task needs a recorded
   local evidence log for developer, consumer, room server, lobby, and
   developer/tooling package validation.
+- Use `./scripts/validation_status.sh --strict` as the local audit gate before
+  treating a Gubsy distribution/policy cleanup as current.
 - Pushes and pull requests should not automatically run package builds.
 
 ## Remote checks

@@ -23,6 +23,7 @@ For a recorded local validation pass, run:
 
 ```
 bash scripts/validate_local.sh all
+bash scripts/validation_status.sh
 ```
 
 This writes a timestamped log under `dist/validation/` and covers the normal
@@ -31,6 +32,10 @@ server smoke, lobby smoke, and the local developer/tooling package verifier.
 The log records the host platform, git revision, PATH, MSYS2 environment when
 present, CMake, Ninja, pkg-config, Git, compiler, Homebrew, and pacman versions
 when those tools are available.
+The status helper is the local audit gate: it checks that the latest full local
+validation log matches the current commit, that the SDL3 shim cleanup and
+consumer boundary guards still pass, and that the package workflow remains
+manual-only.
 
 Linux (Debian/Ubuntu)
 ---------------------

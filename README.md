@@ -66,10 +66,14 @@ For a recorded local validation pass, use:
 
 ```bash
 bash scripts/validate_local.sh all
+bash scripts/validation_status.sh
 ```
 
 The validation log records the host/toolchain versions needed for local
 evidence without depending on GitHub-hosted package jobs.
+The status helper verifies that the latest full local validation was recorded
+for the current commit, that public/consumer boundaries still hold, and that
+the package workflow remains manual-only.
 
 The GitHub package workflow is manual-only and exists for remote platform
 confidence. It is not the normal development feedback loop.
