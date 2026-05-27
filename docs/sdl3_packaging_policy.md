@@ -330,37 +330,43 @@ engine and game targets.
   validation for Linux, macOS, Windows, and Android.
 - iOS is an explicit target, but no iOS CI/package path exists yet. Add it only
   after the Xcode/signing/provisioning path is designed.
-- The package workflows upload their generated native package directories as
-  release-check artifacts. Splonks also uploads the Android debug APK artifact
-  after `assembleDebug` succeeds.
+- Gubsy's package workflow uploads developer/tooling package directories as
+  release-check artifacts only when manually dispatched.
+- Splonks' package workflow uploads versioned Linux/macOS/Windows release
+  archives with SHA-256 files. It also uploads an Android debug APK, and uploads
+  a signed Android release AAB when Android signing secrets are configured.
+- Splonks' Linux developer onboarding has been verified from a fresh clone with
+  no adjacent Gubsy checkout: the dev verifier configures, builds, and runs a
+  headless smoke through the built game binary.
 - macOS package validation should include an `otool -L` check, an app launch
   smoke, and signing/notarization checks before real distribution.
 - Windows package validation should include a clean-machine or clean-shell run
   where the `.exe` resolves SDL DLLs from the package directory.
-- Android validation now includes native CMake configure/build through Gradle
-  `assembleDebug` in CI plus scripts for emulator/device install, smoke launch,
-  asset extraction/loading, and filtered logcat. The runtime smoke still needs
-  to be executed on an Android emulator/device.
+- Android validation now includes native CMake configure/build through Gradle,
+  x86_64 emulator APK smoke, asset extraction/loading, logcat success
+  detection, and signed arm64 release AAB generation with a throwaway upload
+  keystore. Final Play distribution still needs the real upload key and Play
+  Console upload validation.
+- Splonks has iOS simulator and device CMake/Xcode scaffolds, simulator
+  build/install/launch scripting, and a device archive/export script that emits
+  an IPA, checksum, and manifest. These paths still need validation on macOS
+  with Xcode and an Apple Developer team.
 
 ## Open Packaging Work
 
 Priority order for the next phase:
 
-1. Add `splonks-cpp/docs/dev_setup.md` with exact Linux, macOS, and Windows
-   setup/build/run commands.
-2. Add or update Splonks setup scripts, starting with Linux and macOS, then the
-   documented Windows MSYS2/UCRT path unless a Visual Studio path is added.
-3. Confirm `./scripts/build.sh` works from a clean Splonks clone on Linux.
-4. Make macOS and Windows docs match the actual package-manager/toolchain paths
-   we support.
-5. Add a quick dev environment verification script or checklist.
-6. After desktop onboarding is clean, finish Android and iOS as mobile
-   development/release targets.
+1. Validate Splonks macOS developer onboarding and package scripts on a real
+   macOS/Xcode/Homebrew machine.
+2. Validate Splonks Windows developer onboarding and package scripts on a real
+   Windows MSYS2/UCRT64 machine.
+3. Validate Splonks iOS simulator launch and device archive/export on
+   macOS/Xcode with real signing/provisioning.
+4. Validate final Android Play distribution with the real upload key and Play
+   Console upload path.
 
 Detailed remaining work:
 
-- Add or update Splonks dev setup docs/scripts so Linux, macOS, and Windows
-  developers can clone, setup, build, and run without using GitHub Actions.
 - Validate and harden the macOS scripts on macOS, including full transitive
   dylib/framework copying, install-name fixups, rpaths, app launch smokes,
   signing, and notarization.
@@ -371,13 +377,8 @@ Detailed remaining work:
 - Replace the first Linux local-bundle script with the final Linux distribution
   channel if needed: Steam runtime, Flatpak, AppImage, distro packages, or a
   stricter local `.so` bundle with rpath/patchelf.
-- Validate and harden the Android scaffold on an Android SDK/NDK host with the
-  official SDL3 AAR present.
-- Run and harden Android runtime smoke validation on the first emulator/device
-  pass.
-- Add Android release signing/AAB packaging once debug APK launch is proven.
-- Add an iOS Xcode/CMake app scaffold, SDL3 iOS integration, touch/safe-area
-  validation, asset bundling, signing/provisioning docs, and TestFlight/App
-  Store release packaging.
+- Validate Android release upload with production signing material.
+- Validate iOS CMake/Xcode scaffolds, touch/safe-area behavior, asset bundling,
+  signing/provisioning, and TestFlight/App Store release packaging on macOS.
 - Keep remote package checks manual or tag/release based. Do not make mobile or
   desktop package builds part of the normal push feedback loop.

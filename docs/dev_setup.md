@@ -6,13 +6,18 @@ Requirements
 
 - CMake 3.20+
 - C++20 compiler
-- Lua 5.4 (dev headers)
+- Lua 5.4 dev headers for Gubsy developer/sample builds
 - Native window/audio development headers for the platform
 - Optional system SDL3, SDL3_image, SDL3_ttf, and SDL3_mixer packages
 
 Gubsy standardizes on SDL3. By default, the build prefers system SDL3 CMake or
 pkg-config packages when present, then falls back to pinned SDL3 source builds
 through CMake `FetchContent`.
+
+Gubsy is code-first library/tooling infrastructure. The shipped game release
+pipeline belongs to downstream games such as Splonks. Use Gubsy package scripts
+only for developer/demo/server-tool artifacts or explicit remote confidence
+checks.
 
 Linux (Debian/Ubuntu)
 ---------------------

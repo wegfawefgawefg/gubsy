@@ -43,12 +43,9 @@ Build
 Requirements:
 - CMake 3.20+
 - A C++20 compiler
-- SDL3
-- GLM
-- Lua 5.4
-- SDL3_image
-- SDL3_ttf
-- SDL3_mixer
+- GLM, provided by `third_party/glm_upstream` or a system package
+- Lua 5.4 dev headers for Gubsy developer/sample builds
+- Optional system SDL3, SDL3_image, SDL3_ttf, and SDL3_mixer packages
 
 Linux (Debian/Ubuntu):
 - `bash scripts/setup_debian.sh`
@@ -59,6 +56,11 @@ Run:
 - or `bash scripts/run.sh`
 
 The build also creates `./build/arti` as a symlink alias to `gubsy`.
+
+Gubsy prefers system SDL3 packages when they are available, then falls back to
+pinned SDL3 source builds through CMake `FetchContent`. Normal downstream game
+consumers should link `gubsy::engine`; player-facing packaging belongs to the
+game, not to Gubsy.
 
 Using Gubsy From Another Project
 --------------------------------
