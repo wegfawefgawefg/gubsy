@@ -243,16 +243,17 @@ engine and game targets.
   commands.
 - Both repos have a GitHub Actions package workflow that runs package verifiers
   on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Splonks also has an
-  Android scaffold job that verifies Android script syntax and the pinned SDL3
-  AAR download.
+  Android scaffold job that verifies Android script syntax, installs the pinned
+  SDK/NDK/CMake packages, downloads the pinned SDL3 AAR, and builds a debug APK.
 - macOS package validation should include an `otool -L` check, an app launch
   smoke, and signing/notarization checks before real distribution.
 - Windows package validation should include a clean-machine or clean-shell run
   where the `.exe` resolves SDL DLLs from the package directory.
-- Android validation should include native CMake configure/build, Gradle
-  `assembleDebug`, emulator/device install, app launch, and filtered logcat.
-  The first Android runtime pass must verify asset loading because Splonks still
-  expects normal filesystem paths while APK assets are not plain host files.
+- Android validation now includes native CMake configure/build through Gradle
+  `assembleDebug` in CI. It still needs emulator/device install, app launch,
+  and filtered logcat. The first Android runtime pass must verify asset loading
+  because Splonks still expects normal filesystem paths while APK assets are not
+  plain host files.
 
 ## Open Packaging Work
 
