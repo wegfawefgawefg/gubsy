@@ -11,11 +11,11 @@ dont call things manager
 
 Purpose
 -------
-This repo is a C++20 SDL2 + GLM engine scaffold for a moddable 2D top‑down game (Factorio/Terraria‑inspired, Synthetik vibe). We prioritize fast iteration, simple AABB physics, and mod‑defined content via Lua. Discriminants are ints (not enums) to keep data tables/modding flexible.
+This repo is a C++20 SDL3 engine scaffold for a moddable 2D top‑down game (Factorio/Terraria‑inspired, Synthetik vibe). We prioritize fast iteration, simple AABB physics, and mod‑defined content via Lua. Discriminants are ints (not enums) to keep data tables/modding flexible.
 
 Build + Run
 -----------
-- Dependencies: CMake 3.20+, C++20 compiler, SDL2 dev, GLM, Lua 5.4, SDL2_image, SDL2_ttf.
+- Dependencies: CMake 3.20+, C++20 compiler, Lua 5.4, and SDL3/SDL3_image/SDL3_ttf/SDL3_mixer either from system packages or the default pinned FetchContent fallback.
 - Debian setup: bash scripts/setup_debian.sh
 - Configure: cmake -S . -B build
 - Build: cmake --build build -j
@@ -25,7 +25,7 @@ Build + Run
 
 Project Structure (flat under src/)
 -----------------------------------
-- main.cpp: SDL2 window + main loop, fixed 60Hz update. Delegates to render/sim modules.
+- main.cpp: SDL3 window + main loop, fixed 60Hz update. Delegates to render/sim modules.
 - types.hpp: Integer IDs (modes, types) + VID {id, version}.
 - settings.hpp: Engine constants (timestep, maxima, debounce).
 - graphics.hpp: Minimal camera structs, TILE_SIZE.
@@ -87,7 +87,7 @@ Rendering Notes / Sprites
 -------------------------
 - SpriteIdRegistry (string → int) and SpriteStore (rich defs) scan mods/*/graphics/.
 - Manifests: optional .sprite/.sprite.toml sidecars; fallback is whole‑image single frame.
-- Textures: SDL2_image loads PNGs; entities/items/powerups/guns render textures with AABB debug overlays.
+- Textures: SDL3_image loads PNGs; entities/items/powerups/guns render textures with AABB debug overlays.
 - Hot reload: polling detects asset changes and rebuilds sprite data; IDs stay stable by name.
 
 Coding Conventions / Guidelines
@@ -128,7 +128,7 @@ Open Work
 
 Local Run Book (quick)
 ----------------------
-1) Install deps: sudo apt-get install liblua5.4-dev libsdl2-image-dev libsdl2-ttf-dev
+1) Install deps: bash scripts/setup_debian.sh
 2) Build+run: bash scripts/run.sh (or VSCode F5)
 3) Place PNGs under mods/base/graphics/ (filenames match sprite keys)
 4) Remap keys: edit `data/binds_profiles/default.lisp` (or create a new profile) and rerun.

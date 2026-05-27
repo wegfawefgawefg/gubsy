@@ -6,9 +6,13 @@ Requirements
 
 - CMake 3.20+
 - C++20 compiler
-- SDL2, GLM
 - Lua 5.4 (dev headers)
-- SDL2_image, SDL2_ttf, SDL2_mixer
+- Native window/audio development headers for the platform
+- Optional system SDL3, SDL3_image, SDL3_ttf, and SDL3_mixer packages
+
+Gubsy standardizes on SDL3. By default, the build prefers system SDL3 CMake or
+pkg-config packages when present, then falls back to pinned SDL3 source builds
+through CMake `FetchContent`.
 
 Linux (Debian/Ubuntu)
 ---------------------
@@ -23,14 +27,16 @@ Windows (vcpkg)
 ---------------
 
 1) Install and integrate vcpkg.
-2) Install deps: `vcpkg install sdl2 glm lua sdl2-image sdl2-ttf sdl2-mixer`.
+2) Optional system deps: `vcpkg install sdl3 sdl3-image sdl3-ttf sdl3-mixer lua`.
 3) Configure with the toolchain file, e.g. `-DCMAKE_TOOLCHAIN_FILE="/path/to/vcpkg.cmake"`.
 
 macOS (Homebrew)
 ----------------
 
 ```
-brew install sdl2 glm lua sdl2_image sdl2_ttf sdl2_mixer
+brew install cmake ninja pkg-config lua
+# Optional if you want system SDL3 instead of FetchContent:
+brew install sdl3 sdl3_image sdl3_ttf sdl3_mixer
 bash scripts/build.sh
 ./build/gubsy
 ```
@@ -40,6 +46,7 @@ CMake Notes
 
 - Presets: `CMakePresets.json` provides a `dev` preset (Debug, strict warnings).
 - Dependency discovery prefers CMake packages and falls back to pkg‑config when available.
+- `GUB_FETCH_DEPS=ON` is the default fallback for missing SDL3 dependencies.
 - Options (kept for backward compatibility in the codebase):
   - `GUB_REQUIRE_DEPS` (ON by default): fail configure if deps are missing.
   - `GUB_STRICT` and `GUB_WARN_AS_ERROR`: enable strict warnings and treat warnings as errors.
@@ -48,6 +55,6 @@ Troubleshooting
 ---------------
 
 - If CMake can’t find a package, set package dirs explicitly, e.g.:
-  - `-DSDL2_DIR=/path/to/SDL2/lib/cmake/SDL2`
-  - `-Dglm_DIR=/path/to/glm`
+  - `-DSDL3_DIR=/path/to/SDL3/lib/cmake/SDL3`
+  - `-DSDL3_image_DIR=/path/to/SDL3_image/lib/cmake/SDL3_image`
 - Run script prefers X11 on i3 unless `SDL_VIDEODRIVER` is set.

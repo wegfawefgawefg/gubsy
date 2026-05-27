@@ -555,10 +555,10 @@ void on_device_added(int device_index);
 void on_device_removed(int instance_id);
 ```
 
-### SDL2 Limitations
+### SDL Input Source Limitations
 
-- **Keyboard and Mouse**: SDL2 aggregates all keyboards and all mice. You cannot differentiate between multiple keyboards or multiple mice. Both use `id = 0`.
-- **Gamepads**: SDL2 can enumerate multiple gamepads individually. Each gamepad gets a unique SDL joystick index as its ID.
+- **Keyboard and Mouse**: SDL aggregates all keyboards and all mice. You cannot differentiate between multiple keyboards or multiple mice. Both use `id = 0`.
+- **Gamepads**: SDL can enumerate multiple gamepads individually. Each gamepad gets a unique SDL joystick index as its ID.
 
 ### Usage
 

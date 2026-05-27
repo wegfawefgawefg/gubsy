@@ -9,7 +9,7 @@ Core (current session)
 - Inventory UI: slots 1–0; right panel shows selected item details including desc from Lua.
 - Guns: GunsPool + GroundGunsPool; enemies can drop guns (weighted from Lua drops); F equips ground guns; RPM cooldown; per-instance mag/reserve.
 - Drops: content.lua declares weighted drop tables for powerups/items/guns; used on enemy death. Fallback heuristic preserved.
-- Sprites: SDL2_image textures loaded via TextureStore; SpriteIdRegistry + SpriteStore built from mods/*/graphics with manifests + fallback.
+- Sprites: SDL3_image textures loaded via TextureStore; SpriteIdRegistry + SpriteStore built from mods/*/graphics with manifests + fallback.
 - Movement: player speed scales with stats.move_speed baseline 350.
 - Docs: stats_and_triggers.md added. Added modifiers.md (design draft) and assets_we_need.txt (missing assets list).
 
