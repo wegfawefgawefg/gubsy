@@ -251,6 +251,9 @@ engine and game targets.
   on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Splonks also has an
   Android scaffold job that verifies Android script syntax, installs the pinned
   SDK/NDK/CMake packages, downloads the pinned SDL3 AAR, and builds a debug APK.
+- The package workflows upload their generated native package directories as CI
+  artifacts. Splonks also uploads the Android debug APK artifact after
+  `assembleDebug` succeeds.
 - macOS package validation should include an `otool -L` check, an app launch
   smoke, and signing/notarization checks before real distribution.
 - Windows package validation should include a clean-machine or clean-shell run

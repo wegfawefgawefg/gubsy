@@ -40,6 +40,10 @@ jobs:
           ./scripts/build.sh
           ctest --test-dir build --output-on-failure
           ./scripts/verify_package_linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gubsy-linux
+          path: dist/gubsy-linux
 
   macos-package:
     runs-on: macos-latest
@@ -52,6 +56,10 @@ jobs:
           ./scripts/build.sh
           ctest --test-dir build --output-on-failure
           ./scripts/verify_package_macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gubsy-macos
+          path: dist/gubsy-macos
 
   windows-package:
     runs-on: windows-latest
@@ -75,3 +83,7 @@ jobs:
           ./scripts/build.sh
           ctest --test-dir build --output-on-failure
           ./scripts/verify_package_windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gubsy-windows
+          path: dist/gubsy-windows
