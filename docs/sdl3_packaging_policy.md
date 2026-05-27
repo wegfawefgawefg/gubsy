@@ -344,6 +344,21 @@ engine and game targets.
 
 ## Open Packaging Work
 
+Priority order for the next phase:
+
+1. Add `splonks-cpp/docs/dev_setup.md` with exact Linux, macOS, and Windows
+   setup/build/run commands.
+2. Add or update Splonks setup scripts, starting with Linux and macOS, then the
+   documented Windows MSYS2/UCRT path unless a Visual Studio path is added.
+3. Confirm `./scripts/build.sh` works from a clean Splonks clone on Linux.
+4. Make macOS and Windows docs match the actual package-manager/toolchain paths
+   we support.
+5. Add a quick dev environment verification script or checklist.
+6. After desktop onboarding is clean, finish Android and iOS as mobile
+   development/release targets.
+
+Detailed remaining work:
+
 - Add or update Splonks dev setup docs/scripts so Linux, macOS, and Windows
   developers can clone, setup, build, and run without using GitHub Actions.
 - Validate and harden the macOS scripts on macOS, including full transitive
