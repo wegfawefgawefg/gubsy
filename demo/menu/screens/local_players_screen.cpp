@@ -18,7 +18,6 @@ namespace {
 constexpr int kPlayersPerPage = 4;
 constexpr int kMaxLocalPlayers = 64;
 constexpr WidgetId kTitleWidgetId = 900;
-constexpr WidgetId kStatusWidgetId = 901;
 constexpr WidgetId kPageLabelWidgetId = 905;
 constexpr WidgetId kPrevButtonId = 903;
 constexpr WidgetId kNextButtonId = 904;
