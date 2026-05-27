@@ -231,6 +231,10 @@ engine and game targets.
   seeds missing `data/` files without overwriting player settings, and starts
   native code with `--project-root <path>` so the existing filesystem-relative
   asset loaders can run against a package-local directory.
+- Splonks' Android activity accepts a `dev.splonks.game.ARGS` intent extra for
+  native smoke arguments. `scripts/android/run_smoke.sh` launches the installed
+  app with `--check-state-fingerprint-smoke` and verifies the expected logcat
+  success line.
 - `scripts/android/fetch_sdl3_aar.sh` downloads the pinned official SDL3 Android
   archive for the repo's current SDL pin and verifies its checksum before
   extracting the AAR into the Gradle app.
@@ -266,8 +270,9 @@ engine and game targets.
 - Windows package validation should include a clean-machine or clean-shell run
   where the `.exe` resolves SDL DLLs from the package directory.
 - Android validation now includes native CMake configure/build through Gradle
-  `assembleDebug` in CI. It still needs emulator/device install, app launch,
-  asset extraction/loading, settings writes, and filtered logcat.
+  `assembleDebug` in CI plus scripts for emulator/device install, smoke launch,
+  asset extraction/loading, and filtered logcat. The runtime smoke still needs
+  to be executed on an Android emulator/device.
 
 ## Open Packaging Work
 
@@ -283,7 +288,8 @@ engine and game targets.
   stricter local `.so` bundle with rpath/patchelf.
 - Validate and harden the Android scaffold on an Android SDK/NDK host with the
   official SDL3 AAR present.
-- Validate Android asset/runtime path handling on the first emulator/device run.
+- Run and harden Android runtime smoke validation on the first emulator/device
+  pass.
 - Add Android release signing/AAB packaging once debug APK launch is proven.
 - Extend CI beyond desktop package and Android scaffold checks once full Android
   SDK/NDK/emulator validation is available.
