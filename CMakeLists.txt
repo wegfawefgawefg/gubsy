@@ -134,8 +134,15 @@ if (GUB_ENABLE_LUA_MOD_HOST AND EXISTS "${GUB_SOURCE_DIR}/third_party/lua/src/lu
   )
   add_library(gubsy_lua STATIC ${GUB_LUA_SOURCES})
   target_include_directories(gubsy_lua PUBLIC "${GUB_SOURCE_DIR}/third_party/lua/src")
-  target_compile_definitions(gubsy_lua PRIVATE LUA_USE_LINUX)
-  target_link_libraries(gubsy_lua PUBLIC ${CMAKE_DL_LIBS} m)
+  if (WIN32)
+    target_compile_definitions(gubsy_lua PRIVATE LUA_USE_WINDOWS)
+  elseif (APPLE)
+    target_compile_definitions(gubsy_lua PRIVATE LUA_USE_MACOSX)
+    target_link_libraries(gubsy_lua PUBLIC ${CMAKE_DL_LIBS} m)
+  else()
+    target_compile_definitions(gubsy_lua PRIVATE LUA_USE_LINUX)
+    target_link_libraries(gubsy_lua PUBLIC ${CMAKE_DL_LIBS} m)
+  endif()
 endif()
 
 # Dear ImGui sources. Embedders that already compile ImGui can disable this to
