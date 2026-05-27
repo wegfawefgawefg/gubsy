@@ -13,6 +13,7 @@ required_files=(
     "${dist_dir}/lib/libSDL3_image.so.0"
     "${dist_dir}/lib/libSDL3_mixer.so.0"
     "${dist_dir}/lib/libSDL3_ttf.so.0"
+    "${dist_dir}/PACKAGE_MANIFEST.txt"
     "${dist_dir}/run-gubsy.sh"
     "${dist_dir}/run-gubsy-roomd.sh"
     "${dist_dir}/data/settings_profiles/top_level_game_settings.lisp"
@@ -27,6 +28,10 @@ for path in "${required_files[@]}"; do
         exit 1
     fi
 done
+
+grep -q "^app=gubsy$" "${dist_dir}/PACKAGE_MANIFEST.txt"
+grep -q "^platform=linux$" "${dist_dir}/PACKAGE_MANIFEST.txt"
+grep -q "^mode=release$" "${dist_dir}/PACKAGE_MANIFEST.txt"
 
 ldd_output="$(LD_LIBRARY_PATH="${dist_dir}/lib" ldd "${dist_dir}/bin/gubsy")"
 if grep -q "not found" <<<"${ldd_output}"; then

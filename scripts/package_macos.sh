@@ -66,6 +66,7 @@ EOF
 package_copy_macos_runtime_deps "${macos_dir}/gubsy-bin" "${frameworks_dir}"
 package_copy_macos_runtime_deps "${roomd_dir}/bin/gubsy-roomd" "${roomd_dir}/lib"
 package_copy_runtime_libs_from_tree "${build_dir}" "${frameworks_dir}" ".dylib"
+package_write_manifest "gubsy" "macos" "release" "${repo_root}" "${dist_dir}"
 
 find "${frameworks_dir}" "${roomd_dir}/lib" -type f -name "*.dylib" -exec chmod u+w {} +
 while IFS= read -r dylib; do

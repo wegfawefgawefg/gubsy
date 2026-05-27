@@ -239,6 +239,9 @@ engine and game targets.
   of the developer source checkout.
 - Splonks package launchers run from the package resource root so relative
   `assets/` and `data/` paths resolve inside the package.
+- Native package scripts write `PACKAGE_MANIFEST.txt` into each package root
+  with app name, platform, release mode, source revision, and generation time;
+  package verifiers assert the manifest identity fields.
 - Linux package validation should include an `ldd` check proving SDL resolves
   from `dist/.../lib` and a packaged executable smoke run through the wrapper.
 - Both repos have `scripts/verify_package_linux.sh` to run the Linux package

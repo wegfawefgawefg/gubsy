@@ -22,6 +22,7 @@ required_files=(
     "${app_dir}/Contents/Resources/src/assets/fonts"
     "${app_dir}/Contents/Resources/demo/main.cpp"
     "${app_dir}/Contents/Resources/tools/mod_repo"
+    "${dist_dir}/PACKAGE_MANIFEST.txt"
     "${roomd_dir}/bin/gubsy-roomd"
     "${roomd_dir}/run-gubsy-roomd.sh"
 )
@@ -32,6 +33,10 @@ for path in "${required_files[@]}"; do
         exit 1
     fi
 done
+
+grep -q "^app=gubsy$" "${dist_dir}/PACKAGE_MANIFEST.txt"
+grep -q "^platform=macos$" "${dist_dir}/PACKAGE_MANIFEST.txt"
+grep -q "^mode=release$" "${dist_dir}/PACKAGE_MANIFEST.txt"
 
 require_dylib() {
     local label="$1"

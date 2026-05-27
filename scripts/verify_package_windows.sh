@@ -17,6 +17,7 @@ dist_dir="${repo_root}/dist/gubsy-windows"
 required_files=(
     "${dist_dir}/gubsy.exe"
     "${dist_dir}/gubsy-roomd.exe"
+    "${dist_dir}/PACKAGE_MANIFEST.txt"
     "${dist_dir}/run-gubsy.bat"
     "${dist_dir}/run-gubsy-roomd.bat"
     "${dist_dir}/data/settings_profiles/top_level_game_settings.lisp"
@@ -31,6 +32,10 @@ for path in "${required_files[@]}"; do
         exit 1
     fi
 done
+
+grep -q "^app=gubsy$" "${dist_dir}/PACKAGE_MANIFEST.txt"
+grep -q "^platform=windows$" "${dist_dir}/PACKAGE_MANIFEST.txt"
+grep -q "^mode=release$" "${dist_dir}/PACKAGE_MANIFEST.txt"
 
 require_dll() {
     local label="$1"

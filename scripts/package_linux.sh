@@ -30,6 +30,7 @@ copy_if_exists "${repo_root}/tools/mod_repo" "${dist_dir}/tools/"
 
 package_copy_linux_runtime_deps "${dist_dir}/bin/gubsy" "${dist_dir}/lib"
 package_copy_linux_runtime_deps "${dist_dir}/bin/gubsy-roomd" "${dist_dir}/lib"
+package_write_manifest "gubsy" "linux" "release" "${repo_root}" "${dist_dir}"
 
 cat > "${dist_dir}/run-gubsy.sh" <<'EOF'
 #!/usr/bin/env bash

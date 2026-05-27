@@ -29,6 +29,7 @@ mkdir -p "${dist_dir}/tools"
 cp -a "${repo_root}/tools/mod_repo" "${dist_dir}/tools/mod_repo"
 
 package_copy_runtime_libs_from_tree "${build_dir}" "${dist_dir}" ".dll"
+package_write_manifest "gubsy" "windows" "release" "${repo_root}" "${dist_dir}"
 
 cat > "${dist_dir}/run-gubsy.bat" <<'EOF'
 @echo off
