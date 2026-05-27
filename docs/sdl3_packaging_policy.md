@@ -177,8 +177,7 @@ install rule:
   final player-facing game.
 - Gradle should call CMake through `externalNativeBuild`.
 - The Android native target should follow SDL's expected app shape for SDL3.
-  SDL2 examples often name the native target `main`; verify the SDL3 Android
-  flow before copying that detail.
+  Splonks uses an Android output library named `main` for SDL activity loading.
 - The Java/Kotlin activity should use SDL3's Android glue or AAR/Prefab path.
   Do not vendor SDL2 Java glue into the SDL3 stack.
 - Prefer one scripted dev loop: setup SDK/NDK, create/start emulator, build
@@ -218,6 +217,10 @@ engine and game targets.
   `scripts/package_macos.sh` and `scripts/package_windows.sh`. These are
   platform-host scripts: run the macOS scripts on macOS and the Windows scripts
   on Windows through Git Bash/MSYS/MinGW/Cygwin.
+- Splonks has an Android Gradle scaffold under `android/`, an `android-arm64`
+  CMake preset, and `scripts/android/` dev-loop scripts. The scaffold expects an
+  official SDL3 Android AAR in `android/app/libs/` and enables Android Gradle
+  Plugin Prefab support so CMake can consume the native SDL package.
 - Gubsy package launchers set `GUB_PROJECT_ROOT` so packaged sample runs use the
   bundled `data/`, `demo/`, `src/assets/`, and `tools/mod_repo/` trees instead
   of the developer source checkout.
@@ -229,6 +232,10 @@ engine and game targets.
   smoke, and signing/notarization checks before real distribution.
 - Windows package validation should include a clean-machine or clean-shell run
   where the `.exe` resolves SDL DLLs from the package directory.
+- Android validation should include native CMake configure/build, Gradle
+  `assembleDebug`, emulator/device install, app launch, and filtered logcat.
+  The first Android runtime pass must verify asset loading because Splonks still
+  expects normal filesystem paths while APK assets are not plain host files.
 
 ## Open Packaging Work
 
@@ -242,8 +249,10 @@ engine and game targets.
 - Replace the first Linux local-bundle script with the final Linux distribution
   channel if needed: Steam runtime, Flatpak, AppImage, distro packages, or a
   stricter local `.so` bundle with rpath/patchelf.
-- Add Android Gradle scaffold and dev-loop scripts for Splonks.
-- Add Android packaging once the Gradle project exists.
+- Validate and harden the Android scaffold on an Android SDK/NDK host with the
+  official SDL3 AAR present.
+- Fix Android asset/runtime path handling after the first emulator/device run.
+- Add Android release signing/AAB packaging once debug APK launch is proven.
 - Add CI jobs that prove clean source builds work without preinstalled SDL3.
 - Add package smoke checks in CI that run packaged executables from the install
   tree without development-library paths.
