@@ -107,9 +107,9 @@ The `GUB_FETCH_DEPS` CMake option exists for this fallback path. It should stay
 enabled by default for normal source builds so a clean machine can build Gubsy
 without a global SDL3 install.
 
-Release packaging and CI builds should pin exact SDL versions. Prefer source
-archives with hashes, submodules, or a lockable dependency mirror over floating
-branch names.
+Release packaging and CI builds should pin exact dependency revisions. Prefer
+source archives with hashes, submodules, lockable dependency mirrors, or exact
+Git commit SHAs over floating branch or tag names.
 
 ## Shipping Policy
 
@@ -208,6 +208,9 @@ engine and game targets.
   engine target unless extras are requested.
 - Splonks has explicit `SPLONKS_MODE=developer|release` handling. Splonks has no
   consumer mode while it remains only a game executable.
+- Gubsy and Splonks `FetchContent` fallbacks pin SDL3, SDL3_ttf, SDL3_image,
+  and SDL3_mixer to exact upstream release commit SHAs instead of mutable tag
+  names. Splonks also pins its imgui fallback to an exact release commit SHA.
 - Both repos expose Linux package presets and `scripts/package_linux.sh`.
 - The Linux package scripts build release package presets, create local
   `dist/` bundles, copy SDL-related shared libraries from the linked binaries,
