@@ -214,16 +214,29 @@ engine and game targets.
   `dist/` bundles, copy SDL-related shared libraries from the linked binaries,
   and create wrapper scripts that run with the bundled library directory first
   in `LD_LIBRARY_PATH`.
+- Both repos expose native macOS and Windows package presets plus
+  `scripts/package_macos.sh` and `scripts/package_windows.sh`. These are
+  platform-host scripts: run the macOS scripts on macOS and the Windows scripts
+  on Windows through Git Bash/MSYS/MinGW/Cygwin.
+- Gubsy package launchers set `GUB_PROJECT_ROOT` so packaged sample runs use the
+  bundled `data/`, `demo/`, `src/assets/`, and `tools/mod_repo/` trees instead
+  of the developer source checkout.
+- Splonks package launchers run from the package resource root so relative
+  `assets/` and `data/` paths resolve inside the package.
 - Linux package validation should include an `ldd` check proving SDL resolves
   from `dist/.../lib` and a packaged executable smoke run through the wrapper.
+- macOS package validation should include an `otool -L` check, an app launch
+  smoke, and signing/notarization checks before real distribution.
+- Windows package validation should include a clean-machine or clean-shell run
+  where the `.exe` resolves SDL DLLs from the package directory.
 
 ## Open Packaging Work
 
-- Add per-platform release presets and package scripts for Windows and macOS.
-- Add macOS `.app` bundle creation, dylib/framework install-name fixups,
-  rpaths, signing, and package smoke checks.
-- Add Windows package creation that copies SDL `.dll` files next to the `.exe`
-  and runs a package smoke from the package directory.
+- Validate and harden the macOS scripts on macOS, including full transitive
+  dylib/framework copying, install-name fixups, rpaths, app launch smokes,
+  signing, and notarization.
+- Validate and harden the Windows scripts on Windows, including full DLL
+  copying and package smoke runs from the package directory.
 - Decide whether release builds prefer shared SDL libraries or static linking
   per platform.
 - Replace the first Linux local-bundle script with the final Linux distribution

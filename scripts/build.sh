@@ -8,6 +8,8 @@ case "${preset}" in
     dev) build_dir="${repo_root}/build" ;;
     consumer) build_dir="${repo_root}/build-consumer" ;;
     package-linux) build_dir="${repo_root}/build-package-linux" ;;
+    package-macos) build_dir="${repo_root}/build-package-macos" ;;
+    package-windows) build_dir="${repo_root}/build-package-windows" ;;
     *) build_dir="${repo_root}/build/${preset}" ;;
 esac
 

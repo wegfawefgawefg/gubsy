@@ -21,7 +21,11 @@ copy_if_exists() {
 copy_if_exists "${build_dir}/gubsy" "${dist_dir}/bin/"
 copy_if_exists "${build_dir}/gubsy-roomd" "${dist_dir}/bin/"
 copy_if_exists "${repo_root}/data" "${dist_dir}/"
-copy_if_exists "${repo_root}/demo" "${dist_dir}/demo-source"
+mkdir -p "${dist_dir}/src"
+copy_if_exists "${repo_root}/src/assets" "${dist_dir}/src/"
+copy_if_exists "${repo_root}/demo" "${dist_dir}/"
+mkdir -p "${dist_dir}/tools"
+copy_if_exists "${repo_root}/tools/mod_repo" "${dist_dir}/tools/"
 
 copy_runtime_deps() {
     local exe="$1"
@@ -48,6 +52,7 @@ cat > "${dist_dir}/run-gubsy.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export GUB_PROJECT_ROOT="${root}"
 export LD_LIBRARY_PATH="${root}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 exec "${root}/bin/gubsy" "$@"
 EOF
@@ -57,6 +62,7 @@ cat > "${dist_dir}/run-gubsy-roomd.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export GUB_PROJECT_ROOT="${root}"
 export LD_LIBRARY_PATH="${root}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 exec "${root}/bin/gubsy-roomd" "$@"
 EOF
