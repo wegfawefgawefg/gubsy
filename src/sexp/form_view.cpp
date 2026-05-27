@@ -1,10 +1,13 @@
 #include "gsexp/sexp.hpp"
 
 #include <algorithm>
+#include <cerrno>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string>
 
 namespace gsexp {
 namespace {
@@ -279,11 +282,12 @@ std::optional<float> parse_float(std::string_view text) {
     if (!text.empty() && text.front() == '+')
         text.remove_prefix(1);
 
-    float parsed = 0.0f;
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    auto result = std::from_chars(begin, end, parsed);
-    if (result.ec == std::errc{} && result.ptr == end)
+    std::string text_copy(text);
+    const char* begin = text_copy.c_str();
+    char* end = nullptr;
+    errno = 0;
+    float parsed = std::strtof(begin, &end);
+    if (errno == 0 && end == begin + text_copy.size())
         return parsed;
     return std::nullopt;
 }
