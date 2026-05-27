@@ -403,6 +403,9 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+  if (WIN32)
+    target_link_libraries(gubsy_roomd PRIVATE ws2_32)
+  endif()
   add_custom_command(
     TARGET gubsy_roomd POST_BUILD
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -420,6 +423,9 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+  if (WIN32)
+    target_link_libraries(room_smoke PRIVATE ws2_32)
+  endif()
 
   add_executable(room_timeout_smoke
     tools/room_timeout_smoke/main.cpp
@@ -431,6 +437,9 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+  if (WIN32)
+    target_link_libraries(room_timeout_smoke PRIVATE ws2_32)
+  endif()
 
   add_executable(lobby_config_smoke tools/lobby_config_smoke/main.cpp)
   target_link_libraries(lobby_config_smoke PRIVATE gubsy_engine)
