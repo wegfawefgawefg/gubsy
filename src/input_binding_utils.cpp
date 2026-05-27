@@ -4,7 +4,7 @@
 #include "src/imgui_layer.hpp"
 #include "src/layout_editor/layout_editor.hpp"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -30,7 +30,7 @@ struct ButtonDescriptor {
 };
 
 constexpr uint32_t mouse_mask(int button_constant) {
-    return SDL_BUTTON(button_constant);
+    return SDL_BUTTON_MASK(button_constant);
 }
 
 const std::unordered_map<int, ButtonDescriptor> kLegacyButtonMap = {
@@ -170,44 +170,44 @@ const std::unordered_map<int, ButtonDescriptor> kLegacyButtonMap = {
     {static_cast<int>(GubsyButton::MOUSE_X2),
      {DeviceInputKind::Mouse, static_cast<int>(mouse_mask(SDL_BUTTON_X2))}},
 
-    {static_cast<int>(GubsyButton::GP_A), {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_A}},
-    {static_cast<int>(GubsyButton::GP_B), {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_B}},
-    {static_cast<int>(GubsyButton::GP_X), {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_X}},
-    {static_cast<int>(GubsyButton::GP_Y), {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_Y}},
+    {static_cast<int>(GubsyButton::GP_A), {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_SOUTH}},
+    {static_cast<int>(GubsyButton::GP_B), {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_EAST}},
+    {static_cast<int>(GubsyButton::GP_X), {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_WEST}},
+    {static_cast<int>(GubsyButton::GP_Y), {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_NORTH}},
     {static_cast<int>(GubsyButton::GP_BACK),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_BACK}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_BACK}},
     {static_cast<int>(GubsyButton::GP_GUIDE),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_GUIDE}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_GUIDE}},
     {static_cast<int>(GubsyButton::GP_START),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_START}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_START}},
     {static_cast<int>(GubsyButton::GP_LEFT_STICK_BUTTON),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_LEFTSTICK}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_LEFT_STICK}},
     {static_cast<int>(GubsyButton::GP_RIGHT_STICK_BUTTON),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_RIGHTSTICK}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_RIGHT_STICK}},
     {static_cast<int>(GubsyButton::GP_LEFT_SHOULDER),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER}},
     {static_cast<int>(GubsyButton::GP_RIGHT_SHOULDER),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER}},
     {static_cast<int>(GubsyButton::GP_DPAD_UP),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP}},
     {static_cast<int>(GubsyButton::GP_DPAD_DOWN),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN}},
     {static_cast<int>(GubsyButton::GP_DPAD_LEFT),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_DPAD_LEFT}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT}},
     {static_cast<int>(GubsyButton::GP_DPAD_RIGHT),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT}},
     {static_cast<int>(GubsyButton::GP_MISC1),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_MISC1}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_MISC1}},
     {static_cast<int>(GubsyButton::GP_PADDLE1),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_PADDLE1}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1}},
     {static_cast<int>(GubsyButton::GP_PADDLE2),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_PADDLE2}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_LEFT_PADDLE1}},
     {static_cast<int>(GubsyButton::GP_PADDLE3),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_PADDLE3}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2}},
     {static_cast<int>(GubsyButton::GP_PADDLE4),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_PADDLE4}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_LEFT_PADDLE2}},
     {static_cast<int>(GubsyButton::GP_TOUCHPAD),
-     {DeviceInputKind::Gamepad, SDL_CONTROLLER_BUTTON_TOUCHPAD}},
+     {DeviceInputKind::Gamepad, SDL_GAMEPAD_BUTTON_TOUCHPAD}},
 };
 
 bool decode_extended_button(int encoded, DeviceInputKind& kind, int& device_id, int& code) {
@@ -243,8 +243,8 @@ bool decode_extended_analog_2d(int encoded, DeviceInputKind& kind, int& device_i
     return true;
 }
 
-float controller_axis(const DeviceState& state, SDL_GameControllerAxis axis, int device_id) {
-    if (axis < 0 || axis >= SDL_CONTROLLER_AXIS_MAX)
+float controller_axis(const DeviceState& state, SDL_GamepadAxis axis, int device_id) {
+    if (axis < 0 || axis >= SDL_GAMEPAD_AXIS_COUNT)
         return 0.0f;
     auto axis_index = static_cast<size_t>(axis);
     float best = 0.0f;
@@ -258,16 +258,16 @@ float controller_axis(const DeviceState& state, SDL_GameControllerAxis axis, int
     return best;
 }
 
-glm::vec2 controller_stick(const DeviceState& state, SDL_GameControllerAxis axis_x,
-                           SDL_GameControllerAxis axis_y, int device_id) {
+glm::vec2 controller_stick(const DeviceState& state, SDL_GamepadAxis axis_x,
+                           SDL_GamepadAxis axis_y, int device_id) {
     float best_length = 0.0f;
     glm::vec2 best(0.0f);
     for (const auto& controller : state.controllers) {
         if (device_id != kAnyDeviceId && controller.device_id != device_id)
             continue;
-        if (axis_x < 0 || axis_x >= SDL_CONTROLLER_AXIS_MAX)
+        if (axis_x < 0 || axis_x >= SDL_GAMEPAD_AXIS_COUNT)
             continue;
-        if (axis_y < 0 || axis_y >= SDL_CONTROLLER_AXIS_MAX)
+        if (axis_y < 0 || axis_y >= SDL_GAMEPAD_AXIS_COUNT)
             continue;
         auto axis_x_index = static_cast<size_t>(axis_x);
         auto axis_y_index = static_cast<size_t>(axis_y);
@@ -326,7 +326,7 @@ bool device_button_is_down(const EngineState& engine, int encoded_button) {
     case DeviceInputKind::Keyboard:
         if (imgui_want_capture_keyboard() || layout_editor_is_active(engine))
             return false;
-        if (code >= 0 && code < SDL_NUM_SCANCODES)
+        if (code >= 0 && code < SDL_SCANCODE_COUNT)
             return state.keyboard[static_cast<std::size_t>(code)] != 0;
         return false;
     case DeviceInputKind::Mouse:
@@ -336,7 +336,7 @@ bool device_button_is_down(const EngineState& engine, int encoded_button) {
     case DeviceInputKind::Gamepad:
         if (layout_editor_is_active(engine))
             return false;
-        if (code < 0 || code >= SDL_CONTROLLER_BUTTON_MAX)
+        if (code < 0 || code >= SDL_GAMEPAD_BUTTON_COUNT)
             return false;
         for (const auto& controller : state.controllers) {
             if (device_id != kAnyDeviceId && controller.device_id != device_id)
@@ -370,7 +370,7 @@ bool device_button_is_down_for_source(const EngineState& engine, int encoded_but
             return false;
         if (imgui_want_capture_keyboard() || layout_editor_is_active(engine))
             return false;
-        if (code >= 0 && code < SDL_NUM_SCANCODES)
+        if (code >= 0 && code < SDL_SCANCODE_COUNT)
             return state.keyboard[static_cast<std::size_t>(code)] != 0;
         return false;
     case DeviceInputKind::Mouse:
@@ -384,7 +384,7 @@ bool device_button_is_down_for_source(const EngineState& engine, int encoded_but
             return false;
         if (layout_editor_is_active(engine))
             return false;
-        if (code < 0 || code >= SDL_CONTROLLER_BUTTON_MAX)
+        if (code < 0 || code >= SDL_GAMEPAD_BUTTON_COUNT)
             return false;
         for (const auto& controller : state.controllers) {
             if (device_id != kAnyDeviceId && controller.device_id != device_id)
@@ -409,11 +409,11 @@ float sample_analog_1d(const EngineState& engine, int encoded_axis) {
         switch (legacy) {
         case Gubsy1DAnalog::GP_LEFT_TRIGGER:
             kind = DeviceInputKind::Gamepad;
-            axis = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+            axis = SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
             break;
         case Gubsy1DAnalog::GP_RIGHT_TRIGGER:
             kind = DeviceInputKind::Gamepad;
-            axis = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+            axis = SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
             break;
         case Gubsy1DAnalog::MOUSE_WHEEL:
             kind = DeviceInputKind::Mouse;
@@ -440,7 +440,7 @@ float sample_analog_1d(const EngineState& engine, int encoded_axis) {
     case DeviceInputKind::Gamepad:
         if (layout_editor_is_active(engine))
             return 0.0f;
-        return controller_axis(state, static_cast<SDL_GameControllerAxis>(axis), device_id);
+        return controller_axis(state, static_cast<SDL_GamepadAxis>(axis), device_id);
     }
     return 0.0f;
 }
@@ -455,11 +455,11 @@ float sample_analog_1d_for_source(const EngineState& engine, int encoded_axis,
         switch (legacy) {
         case Gubsy1DAnalog::GP_LEFT_TRIGGER:
             kind = DeviceInputKind::Gamepad;
-            axis = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+            axis = SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
             break;
         case Gubsy1DAnalog::GP_RIGHT_TRIGGER:
             kind = DeviceInputKind::Gamepad;
-            axis = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+            axis = SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
             break;
         case Gubsy1DAnalog::MOUSE_WHEEL:
             kind = DeviceInputKind::Mouse;
@@ -483,7 +483,7 @@ float sample_analog_1d_for_source(const EngineState& engine, int encoded_axis,
     case DeviceInputKind::Gamepad:
         if (source_type != InputSourceType::Gamepad || layout_editor_is_active(engine))
             return 0.0f;
-        return controller_axis(engine.device_state, static_cast<SDL_GameControllerAxis>(axis),
+        return controller_axis(engine.device_state, static_cast<SDL_GamepadAxis>(axis),
                                source_id);
     }
     return 0.0f;
@@ -500,13 +500,13 @@ glm::vec2 sample_analog_2d(const EngineState& engine, int encoded_axis) {
         switch (legacy) {
         case Gubsy2DAnalog::GP_LEFT_STICK:
             kind = DeviceInputKind::Gamepad;
-            axis_x = SDL_CONTROLLER_AXIS_LEFTX;
-            axis_y = SDL_CONTROLLER_AXIS_LEFTY;
+            axis_x = SDL_GAMEPAD_AXIS_LEFTX;
+            axis_y = SDL_GAMEPAD_AXIS_LEFTY;
             break;
         case Gubsy2DAnalog::GP_RIGHT_STICK:
             kind = DeviceInputKind::Gamepad;
-            axis_x = SDL_CONTROLLER_AXIS_RIGHTX;
-            axis_y = SDL_CONTROLLER_AXIS_RIGHTY;
+            axis_x = SDL_GAMEPAD_AXIS_RIGHTX;
+            axis_y = SDL_GAMEPAD_AXIS_RIGHTY;
             break;
         case Gubsy2DAnalog::MOUSE_XY:
             kind = DeviceInputKind::Mouse;
@@ -530,8 +530,8 @@ glm::vec2 sample_analog_2d(const EngineState& engine, int encoded_axis) {
     case DeviceInputKind::Gamepad:
         if (layout_editor_is_active(engine))
             return glm::vec2(0.0f);
-        return controller_stick(state, static_cast<SDL_GameControllerAxis>(axis_x),
-                                static_cast<SDL_GameControllerAxis>(axis_y), device_id);
+        return controller_stick(state, static_cast<SDL_GamepadAxis>(axis_x),
+                                static_cast<SDL_GamepadAxis>(axis_y), device_id);
     }
     return glm::vec2(0.0f);
 }

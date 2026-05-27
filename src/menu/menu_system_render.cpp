@@ -21,9 +21,9 @@ void draw_nav_button(SDL_Renderer* renderer,
                      255};
     SDL_Color btn_border{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255};
     SDL_SetRenderDrawColor(renderer, btn_bg.r, btn_bg.g, btn_bg.b, btn_bg.a);
-    SDL_RenderFillRectF(renderer, &btn_rect);
+    SDL_RenderFillRect(renderer, &btn_rect);
     SDL_SetRenderDrawColor(renderer, btn_border.r, btn_border.g, btn_border.b, btn_border.a);
-    SDL_RenderDrawRectF(renderer, &btn_rect);
+    SDL_RenderRect(renderer, &btn_rect);
     float cx = btn_rect.x + btn_rect.w * 0.5f;
     float cy = btn_rect.y + btn_rect.h * 0.5f;
     float wing = btn_rect.h * 0.32f;
@@ -32,9 +32,9 @@ void draw_nav_button(SDL_Renderer* renderer,
     SDL_FPoint tip{cx + dir * head, cy};
     SDL_FPoint wing_top{cx - dir * head * 0.4f, cy - wing};
     SDL_FPoint wing_bottom{cx - dir * head * 0.4f, cy + wing};
-    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
-    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
-    SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
+    SDL_RenderLine(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
+    SDL_RenderLine(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
+    SDL_RenderLine(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
 }
 
 void draw_text_input(const EngineState& engine,
@@ -50,9 +50,9 @@ void draw_text_input(const EngineState& engine,
     if (editing)
         input_border = SDL_Color{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, 255};
     SDL_SetRenderDrawColor(renderer, input_bg.r, input_bg.g, input_bg.b, input_bg.a);
-    SDL_RenderFillRectF(renderer, &rect);
+    SDL_RenderFillRect(renderer, &rect);
     SDL_SetRenderDrawColor(renderer, input_border.r, input_border.g, input_border.b, input_border.a);
-    SDL_RenderDrawRectF(renderer, &rect);
+    SDL_RenderRect(renderer, &rect);
     std::string display;
     if (buffer && !buffer->empty())
         display = *buffer;
@@ -82,7 +82,8 @@ void draw_text_input(const EngineState& engine,
             int caret_top = static_cast<int>(rect.y) + 2;
             int caret_bottom = static_cast<int>(rect.y + rect.h) - 2;
             SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
-            SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
+            SDL_RenderLine(renderer, static_cast<float>(caret_x), static_cast<float>(caret_top),
+                           static_cast<float>(caret_x), static_cast<float>(caret_bottom));
         }
     }
 }
@@ -126,11 +127,11 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
         if (draw_background) {
             SDL_Color bg{widget.style.bg_r, widget.style.bg_g, widget.style.bg_b, widget.style.bg_a};
             SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-            SDL_RenderFillRectF(renderer, &rect);
+            SDL_RenderFillRect(renderer, &rect);
 
             SDL_Color border{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, widget.style.fg_a};
             SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-            SDL_RenderDrawRectF(renderer, &rect);
+            SDL_RenderRect(renderer, &rect);
 
             if (widget.id == state.focus) {
                 SDL_Color focus{widget.style.focus_r, widget.style.focus_g, widget.style.focus_b, widget.style.focus_a};
@@ -147,7 +148,7 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                     adjust(widget.style.bg_b, delta),
                     70};
                 SDL_SetRenderDrawColor(renderer, focus_overlay.r, focus_overlay.g, focus_overlay.b, focus_overlay.a);
-                SDL_RenderFillRectF(renderer, &rect);
+                SDL_RenderFillRect(renderer, &rect);
 
                 SDL_FRect outline = rect;
                 outline.x -= 2.0f;
@@ -155,7 +156,7 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                 outline.w += 4.0f;
                 outline.h += 4.0f;
                 SDL_SetRenderDrawColor(renderer, focus.r, focus.g, focus.b, focus.a);
-                SDL_RenderDrawRectF(renderer, &outline);
+                SDL_RenderRect(renderer, &outline);
 
                 SDL_FRect inner = rect;
                 inner.x += 1.0f;
@@ -168,7 +169,7 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                     adjust(focus.b, 10),
                     focus.a};
                 SDL_SetRenderDrawColor(renderer, inner_col.r, inner_col.g, inner_col.b, inner_col.a);
-                SDL_RenderDrawRectF(renderer, &inner);
+                SDL_RenderRect(renderer, &inner);
     }
 
 }
@@ -246,7 +247,8 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                 int caret_top = input_y - 2;
                 int caret_bottom = caret_top + 18;
                 SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
-                SDL_RenderDrawLine(renderer, caret_x, caret_top, caret_x, caret_bottom);
+                SDL_RenderLine(renderer, static_cast<float>(caret_x), static_cast<float>(caret_top),
+                               static_cast<float>(caret_x), static_cast<float>(caret_bottom));
             }
         }
 
@@ -258,17 +260,17 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
             float track_width = slider_visual.track_right - slider_visual.track_left;
             SDL_FRect track{slider_visual.track_left, slider_visual.track_y - 2.0f, track_width, 4.0f};
             SDL_SetRenderDrawColor(renderer, 55, 60, 78, 255);
-            SDL_RenderFillRectF(renderer, &track);
+            SDL_RenderFillRect(renderer, &track);
             SDL_FRect fill = track;
             fill.w = track_width * norm;
             SDL_SetRenderDrawColor(renderer, 130, 185, 255, 255);
-            SDL_RenderFillRectF(renderer, &fill);
+            SDL_RenderFillRect(renderer, &fill);
             float knob_x = slider_visual.track_left + track_width * norm;
             SDL_FRect knob{knob_x - 6.0f, slider_visual.track_y - 9.0f, 12.0f, 18.0f};
             SDL_SetRenderDrawColor(renderer, 235, 238, 245, 255);
-            SDL_RenderFillRectF(renderer, &knob);
+            SDL_RenderFillRect(renderer, &knob);
             SDL_SetRenderDrawColor(renderer, 30, 35, 46, 255);
-            SDL_RenderDrawRectF(renderer, &knob);
+            SDL_RenderRect(renderer, &knob);
 
             if (slider_has_input) {
                 draw_text_input(engine,

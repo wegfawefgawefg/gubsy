@@ -202,10 +202,12 @@ void playing_draw(EngineState& engine, void* app_context) {
     SDL_SetRenderDrawColor(renderer, 25, 24, 35, 255);
     const int grid = 40;
     for (int x = 0; x < width; x += grid) {
-        SDL_RenderDrawLine(renderer, x, 0, x, height);
+        SDL_RenderLine(renderer, static_cast<float>(x), 0.0f, static_cast<float>(x),
+                       static_cast<float>(height));
     }
     for (int y = 0; y < height; y += grid) {
-        SDL_RenderDrawLine(renderer, 0, y, width, y);
+        SDL_RenderLine(renderer, 0.0f, static_cast<float>(y), static_cast<float>(width),
+                       static_cast<float>(y));
     }
 
     const auto& target = state->bonk;
@@ -237,7 +239,7 @@ void playing_draw(EngineState& engine, void* app_context) {
     } else {
         SDL_Color disabled{60, 50, 40, 180};
         SDL_SetRenderDrawColor(renderer, disabled.r, disabled.g, disabled.b, disabled.a);
-        SDL_RenderDrawRectF(renderer, &target_rect);
+        SDL_RenderRect(renderer, &target_rect);
     }
 
     std::string nearby_label;
@@ -259,7 +261,7 @@ void playing_draw(EngineState& engine, void* app_context) {
             bool drew_sprite = false;
             if (item->sprite_id >= 0) {
                 if (SDL_Texture* tex = get_texture(engine, item->sprite_id)) {
-                    SDL_RenderCopyF(renderer, tex, nullptr, &item_rect);
+                    SDL_RenderTexture(renderer, tex, nullptr, &item_rect);
                     drew_sprite = true;
                 }
             }
@@ -272,7 +274,7 @@ void playing_draw(EngineState& engine, void* app_context) {
             } else if (nearby) {
                 SDL_Color border{255, 240, 180, 255};
                 SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-                SDL_RenderDrawRectF(renderer, &item_rect);
+                SDL_RenderRect(renderer, &item_rect);
             }
             draw_text(renderer, item->label, static_cast<int>(item_rect.x),
                       static_cast<int>(item_rect.y) - 18, SDL_Color{200, 200, 220, 255});
@@ -294,17 +296,17 @@ void playing_draw(EngineState& engine, void* app_context) {
             // Background
             SDL_FRect bar_bg{bar_x, bar_y, bar_width, bar_height};
             SDL_SetRenderDrawColor(renderer, 40, 40, 50, 255);
-            SDL_RenderFillRectF(renderer, &bar_bg);
+            SDL_RenderFillRect(renderer, &bar_bg);
 
             // Filled portion (from bottom)
             SDL_FRect bar_fill{bar_x, bar_y + bar_height - bar_current_height, bar_width,
                                bar_current_height};
             SDL_SetRenderDrawColor(renderer, 120, 200, 100, 255);
-            SDL_RenderFillRectF(renderer, &bar_fill);
+            SDL_RenderFillRect(renderer, &bar_fill);
 
             // Border
             SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-            SDL_RenderDrawRectF(renderer, &bar_bg);
+            SDL_RenderRect(renderer, &bar_bg);
         }
     }
 
@@ -319,16 +321,16 @@ void playing_draw(EngineState& engine, void* app_context) {
         SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
 
         // Horizontal line
-        SDL_RenderDrawLineF(renderer, reticle_screen_x - reticle_size, reticle_screen_y,
+        SDL_RenderLine(renderer, reticle_screen_x - reticle_size, reticle_screen_y,
                             reticle_screen_x + reticle_size, reticle_screen_y);
 
         // Vertical line
-        SDL_RenderDrawLineF(renderer, reticle_screen_x, reticle_screen_y - reticle_size,
+        SDL_RenderLine(renderer, reticle_screen_x, reticle_screen_y - reticle_size,
                             reticle_screen_x, reticle_screen_y + reticle_size);
 
         // Center dot
         SDL_FRect center_dot{reticle_screen_x - 2.0f, reticle_screen_y - 2.0f, 4.0f, 4.0f};
-        SDL_RenderFillRectF(renderer, &center_dot);
+        SDL_RenderFillRect(renderer, &center_dot);
 
         // Mouse pointer marker (little green circle)
         glm::vec2 mouse = state->reticle_pos_mouse;
@@ -336,9 +338,9 @@ void playing_draw(EngineState& engine, void* app_context) {
         float mouse_screen_y = (mouse.y * 0.5f + 0.5f) * height_span;
         SDL_SetRenderDrawColor(renderer, 120, 255, 120, 200);
         SDL_FRect mouse_dot{mouse_screen_x - 4.0f, mouse_screen_y - 4.0f, 8.0f, 8.0f};
-        SDL_RenderFillRectF(renderer, &mouse_dot);
+        SDL_RenderFillRect(renderer, &mouse_dot);
         SDL_SetRenderDrawColor(renderer, 40, 150, 60, 255);
-        SDL_RenderDrawRectF(renderer, &mouse_dot);
+        SDL_RenderRect(renderer, &mouse_dot);
     }
 
     // Alerts + instructions overlay

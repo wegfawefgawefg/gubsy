@@ -1,18 +1,21 @@
 
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #if GUB_ENABLE_SDL_MIXER
-#include <SDL2/SDL_mixer.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #endif
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 // Struct-only audio store; functions operate on it.
 struct Audio {
 #if GUB_ENABLE_SDL_MIXER
-    std::unordered_map<std::string, Mix_Chunk*> chunks;
+    MIX_Mixer* mixer{nullptr};
+    std::vector<MIX_Track*> tracks;
+    std::unordered_map<std::string, MIX_Audio*> chunks;
 #endif
 };
 

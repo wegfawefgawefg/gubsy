@@ -85,7 +85,7 @@ void menu_system_update(EngineState& engine, float dt, int screen_width, int scr
             }
         }
         bool mouse_down =
-            allow_mouse_input && (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+            allow_mouse_input && (mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0;
         bool mouse_clicked = allow_mouse_input && mouse_down && !state.prev_mouse_down;
         if (allow_mouse_input) {
             state.prev_mouse_down = mouse_down;
@@ -595,7 +595,7 @@ void menu_system_reset(EngineState& engine) {
     state.current_input = {};
     state.active_text_buffer = nullptr;
     if (state.text_input_enabled) {
-        SDL_StopTextInput();
+        SDL_StopTextInput(SDL_GetKeyboardFocus());
         state.text_input_enabled = false;
     }
     state.allow_mouse_focus = true;

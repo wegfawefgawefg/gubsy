@@ -9,8 +9,8 @@
 #include "src/mode_registry.hpp"
 #include "src/project_paths.hpp"
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
@@ -84,7 +84,7 @@ std::filesystem::path find_ui_font_path(const std::filesystem::path& fonts_dir) 
 TTF_Font* fallback_draw_font() {
     static TTF_Font* font = []() -> TTF_Font* {
         if (!TTF_WasInit() && !TTF_Init()) {
-            std::fprintf(stderr, "TTF_Init failed in draw_text: %s\n", TTF_GetError());
+            std::fprintf(stderr, "TTF_Init failed in draw_text: %s\n", SDL_GetError());
             return nullptr;
         }
         std::filesystem::path font_path = find_ui_font_path(engine_assets_path("fonts"));
@@ -95,7 +95,7 @@ TTF_Font* fallback_draw_font() {
         }
         TTF_Font* loaded = TTF_OpenFont(font_path.string().c_str(), 20);
         if (!loaded) {
-            std::fprintf(stderr, "TTF_OpenFont failed in draw_text: %s\n", TTF_GetError());
+            std::fprintf(stderr, "TTF_OpenFont failed in draw_text: %s\n", SDL_GetError());
             return nullptr;
         }
         return loaded;
@@ -107,18 +107,18 @@ void draw_text_with_font(TTF_Font* font, SDL_Renderer* renderer, const std::stri
                          int y, SDL_Color color) {
     if (!font || !renderer || text.empty())
         return;
-    SDL_Surface* surf = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+    SDL_Surface* surf = TTF_RenderText_Blended(font, text.c_str(), 0, color);
     if (!surf)
         return;
     SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_FreeSurface(surf);
+    SDL_DestroySurface(surf);
     if (!tex)
         return;
-    int w = 0;
-    int h = 0;
-    SDL_QueryTexture(tex, nullptr, nullptr, &w, &h);
-    SDL_Rect dst{x, y, w, h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
+    float w = 0.0f;
+    float h = 0.0f;
+    SDL_GetTextureSize(tex, &w, &h);
+    SDL_FRect dst{static_cast<float>(x), static_cast<float>(y), w, h};
+    SDL_RenderTexture(renderer, tex, nullptr, &dst);
     SDL_DestroyTexture(tex);
 }
 
@@ -143,9 +143,9 @@ SDL_FRect rect_for(const glm::vec2& pos, const glm::vec2& half, const ScreenSpac
 void fill_and_outline(SDL_Renderer* renderer, const SDL_FRect& rect, SDL_Color fill,
                       SDL_Color border) {
     SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
-    SDL_RenderFillRectF(renderer, &rect);
+    SDL_RenderFillRect(renderer, &rect);
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
-    SDL_RenderDrawRectF(renderer, &rect);
+    SDL_RenderRect(renderer, &rect);
 }
 
 Uint8 channel_from_vec(float v) {
@@ -208,7 +208,7 @@ bool render_frame_to_window(EngineState& engine) {
     SDL_SetRenderTarget(renderer, nullptr);
     int window_w = 0;
     int window_h = 0;
-    SDL_GetRendererOutputSize(renderer, &window_w, &window_h);
+    SDL_GetCurrentRenderOutputSize(renderer, &window_w, &window_h);
     graphics->window_dims = {static_cast<unsigned int>(std::max(window_w, 1)),
                              static_cast<unsigned int>(std::max(window_h, 1))};
 
@@ -217,7 +217,7 @@ bool render_frame_to_window(EngineState& engine) {
 
     SDL_FRect drawn_rect{0.0f, 0.0f, static_cast<float>(window_w), static_cast<float>(window_h)};
     if (graphics->render_scale_mode == RenderScaleMode::Stretch) {
-        SDL_RenderCopy(renderer, target, nullptr, nullptr);
+        SDL_RenderTexture(renderer, target, nullptr, nullptr);
     } else {
         SDL_FRect dst = compute_letterbox_rect(graphics->render_dims, graphics->window_dims);
         const glm::vec4 safe = graphics->safe_area;
@@ -240,7 +240,7 @@ bool render_frame_to_window(EngineState& engine) {
         dst.w = new_w;
         dst.h = new_h;
 
-        SDL_RenderCopyF(renderer, target, nullptr, &dst);
+        SDL_RenderTexture(renderer, target, nullptr, &dst);
         drawn_rect = dst;
     }
 

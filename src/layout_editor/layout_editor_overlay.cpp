@@ -80,7 +80,7 @@ void layout_editor_draw_grid(SDL_Renderer* renderer, int width, int height, floa
     for (int i = 0; i <= steps_x; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
         float x = norm * static_cast<float>(width);
-        SDL_RenderDrawLineF(renderer, origin_x + x, origin_y, origin_x + x,
+        SDL_RenderLine(renderer, origin_x + x, origin_y, origin_x + x,
                             origin_y + static_cast<float>(height));
         char label[16];
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
@@ -96,7 +96,7 @@ void layout_editor_draw_grid(SDL_Renderer* renderer, int width, int height, floa
     for (int i = 0; i <= steps_y; ++i) {
         float norm = std::min(step * static_cast<float>(i), 1.0f);
         float y = norm * static_cast<float>(height);
-        SDL_RenderDrawLineF(renderer, origin_x, origin_y + y, origin_x + static_cast<float>(width),
+        SDL_RenderLine(renderer, origin_x, origin_y + y, origin_x + static_cast<float>(width),
                             origin_y + y);
         char label[16];
         std::snprintf(label, sizeof(label), "%.3f", static_cast<double>(norm));
@@ -170,7 +170,7 @@ void layout_editor_draw_layout(const EngineState& engine, SDL_Renderer* renderer
                              std::max(0.0f, (max_y - min_y) * static_cast<float>(height))};
             SDL_Color outline{180, 210, 255, 200};
             SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
-            SDL_RenderDrawRectF(renderer, &bounds);
+            SDL_RenderRect(renderer, &bounds);
             draw_handles(renderer, bounds, layout_editor_drag_handle(engine));
         }
     }

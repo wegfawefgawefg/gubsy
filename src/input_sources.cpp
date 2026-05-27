@@ -5,10 +5,25 @@
 #include "src/lobby_state.hpp"
 #include "src/render.hpp"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <vector>
+
+namespace {
+
+std::vector<SDL_JoystickID> gamepad_ids() {
+    int count = 0;
+    SDL_JoystickID* ids = SDL_GetGamepads(&count);
+    std::vector<SDL_JoystickID> out;
+    if (ids && count > 0)
+        out.assign(ids, ids + count);
+    SDL_free(ids);
+    return out;
+}
+
+} // namespace
 
 bool detect_input_sources(EngineState& engine) {
     engine.input_sources.clear();
@@ -28,11 +43,9 @@ bool detect_input_sources(EngineState& engine) {
     engine.input_sources.push_back(mouse);
 
     // Enumerate and open gamepads
-    int num_joysticks = SDL_NumJoysticks();
-    for (int i = 0; i < num_joysticks; ++i) {
-        if (SDL_IsGameController(i)) {
-            on_device_added(engine, i);
-        }
+    for (SDL_JoystickID id : gamepad_ids()) {
+        if (SDL_IsGamepad(id))
+            on_device_added(engine, static_cast<int>(id));
     }
 
     std::fprintf(stderr, "[input] Detected %zu input sources (%zu gamepads)\n",
@@ -46,7 +59,7 @@ void refresh_input_sources(EngineState& engine) {
 
     // Close all currently open game controllers
     for (auto const& [id, controller] : engine.open_controllers) {
-        SDL_GameControllerClose(controller);
+        SDL_CloseGamepad(controller);
     }
     engine.open_controllers.clear();
     engine.gamepad_states.clear();
@@ -58,11 +71,9 @@ void refresh_input_sources(EngineState& engine) {
         engine.input_sources.end());
 
     // Re-enumerate and open gamepads
-    int num_joysticks = SDL_NumJoysticks();
-    for (int i = 0; i < num_joysticks; ++i) {
-        if (SDL_IsGameController(i)) {
-            on_device_added(engine, i);
-        }
+    for (SDL_JoystickID id : gamepad_ids()) {
+        if (SDL_IsGamepad(id))
+            on_device_added(engine, static_cast<int>(id));
     }
 
     size_t new_count = engine.open_controllers.size();
@@ -73,7 +84,8 @@ void refresh_input_sources(EngineState& engine) {
 }
 
 void on_device_added(EngineState& engine, int device_index) {
-    if (!SDL_IsGameController(device_index))
+    const SDL_JoystickID joystick_id = static_cast<SDL_JoystickID>(device_index);
+    if (!SDL_IsGamepad(joystick_id))
         return;
 
     // Check if already open
@@ -81,7 +93,7 @@ void on_device_added(EngineState& engine, int device_index) {
         return;
     }
 
-    SDL_GameController* controller = SDL_GameControllerOpen(device_index);
+    SDL_Gamepad* controller = SDL_OpenGamepad(joystick_id);
     if (!controller) {
         std::fprintf(stderr, "[input] Could not open gamecontroller %i: %s\n", device_index,
                      SDL_GetError());
@@ -103,11 +115,11 @@ void on_device_added(EngineState& engine, int device_index) {
 
 void on_device_removed(EngineState& engine, int instance_id) {
     int device_to_remove = -1;
-    SDL_GameController* controller_to_close = nullptr;
+    SDL_Gamepad* controller_to_close = nullptr;
 
     // Find the controller and its device_id from the instance_id
     for (auto const& [device_id, controller] : engine.open_controllers) {
-        if (static_cast<int>(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller))) ==
+        if (static_cast<int>(SDL_GetJoystickID(SDL_GetGamepadJoystick(controller))) ==
             instance_id) {
             device_to_remove = device_id;
             controller_to_close = controller;
@@ -120,7 +132,7 @@ void on_device_removed(EngineState& engine, int instance_id) {
                      instance_id);
 
         // Close handle and remove from maps
-        SDL_GameControllerClose(controller_to_close);
+        SDL_CloseGamepad(controller_to_close);
         engine.open_controllers.erase(device_to_remove);
         engine.gamepad_states.erase(device_to_remove);
         gubsy_lobby_remove_gamepad_device_assignments(engine, device_to_remove);

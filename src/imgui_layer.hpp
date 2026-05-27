@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 bool init_imgui_layer(SDL_Window* window, SDL_Renderer* renderer);
 void shutdown_imgui_layer();

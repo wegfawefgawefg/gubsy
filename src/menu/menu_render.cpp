@@ -1,6 +1,6 @@
 #include "src/menu/menu_render.hpp"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
 #include "src/engine_state.hpp"
 

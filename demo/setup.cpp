@@ -14,7 +14,7 @@
 #include "demo/in_game_menu.hpp"
 #include "demo/mod_api/register_game_mod_apis.hpp"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <filesystem>
 #include <string>
 #include <vector>

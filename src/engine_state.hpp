@@ -22,7 +22,7 @@
 #include "src/ui_layouts.hpp"
 #include "user_profiles.hpp"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -87,11 +87,11 @@ struct EngineState {
 
     // Game Controller state
     struct GamepadState {
-        float axes[SDL_CONTROLLER_AXIS_MAX];
-        float last_axes[SDL_CONTROLLER_AXIS_MAX];
+        float axes[SDL_GAMEPAD_AXIS_COUNT];
+        float last_axes[SDL_GAMEPAD_AXIS_COUNT];
         // We could add buttons here too, but they are handled by the keystate arrays for now
     };
-    std::unordered_map<int, SDL_GameController*> open_controllers;
+    std::unordered_map<int, SDL_Gamepad*> open_controllers;
     std::unordered_map<int, GamepadState> gamepad_states;
 
     std::vector<Alert> alerts{};

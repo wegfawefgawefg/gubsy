@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 
 #include <array>
@@ -10,11 +10,11 @@
 struct DeviceState {
     struct ControllerState {
         int device_id{-1};
-        std::array<float, SDL_CONTROLLER_AXIS_MAX> axes{};
-        std::array<Uint8, SDL_CONTROLLER_BUTTON_MAX> buttons{};
+        std::array<float, SDL_GAMEPAD_AXIS_COUNT> axes{};
+        std::array<Uint8, SDL_GAMEPAD_BUTTON_COUNT> buttons{};
     };
 
-    std::array<Uint8, SDL_NUM_SCANCODES> keyboard{};
+    std::array<Uint8, SDL_SCANCODE_COUNT> keyboard{};
     int mouse_x{0};
     int mouse_y{0};
     int mouse_dx{0};

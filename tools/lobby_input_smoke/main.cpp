@@ -2,7 +2,7 @@
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/lobby_state.hpp"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <cstdio>
 #include <filesystem>
 #include <stdexcept>
@@ -61,7 +61,7 @@ int main() {
 
         DeviceState::ControllerState controller;
         controller.device_id = 42;
-        controller.buttons[SDL_CONTROLLER_BUTTON_A] = 1;
+        controller.buttons[SDL_GAMEPAD_BUTTON_SOUTH] = 1;
         engine.device_state.controllers.push_back(controller);
         require(gubsy_lobby_player_action_down(runtime, 0, kSmokeAction),
                 "gamepad-assigned player did not see matching gamepad action");

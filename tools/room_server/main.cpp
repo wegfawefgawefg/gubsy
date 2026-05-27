@@ -226,6 +226,178 @@ bool body_member_access(RoomRecord& room, const nlohmann::json& body, RoomMember
     return true;
 }
 
+const char* dashboard_html() {
+    return R"(<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gubsy-roomd</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #171914;
+      color: #f5f1df;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(117, 158, 99, 0.22), transparent 32rem),
+        linear-gradient(180deg, #202318 0%, #11130f 100%);
+    }
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0;
+    }
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 48px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .status {
+      color: #c9c0a1;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .rooms {
+      display: grid;
+      gap: 12px;
+    }
+    .room, .empty, .error {
+      border: 1px solid rgba(245, 241, 223, 0.16);
+      border-radius: 8px;
+      background: rgba(17, 19, 15, 0.72);
+      padding: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+    }
+    .room {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .title {
+      min-width: 0;
+      font-weight: 700;
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+    .meta {
+      margin-top: 6px;
+      color: #c9c0a1;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+    .code {
+      border-radius: 6px;
+      background: #d8b85c;
+      color: #18150b;
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .error {
+      border-color: rgba(238, 100, 88, 0.45);
+      color: #ffb6ad;
+    }
+    @media (max-width: 560px) {
+      header, .room {
+        align-items: start;
+        grid-template-columns: 1fr;
+      }
+      header {
+        display: grid;
+      }
+      .status {
+        white-space: normal;
+      }
+      .code {
+        width: max-content;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>gubsy-roomd</h1>
+      <div id="status" class="status">Loading rooms...</div>
+    </header>
+    <section id="rooms" class="rooms" aria-live="polite"></section>
+  </main>
+  <script>
+    const roomsEl = document.getElementById('rooms');
+    const statusEl = document.getElementById('status');
+
+    function text(value, fallback) {
+      return value === undefined || value === null || value === '' ? fallback : String(value);
+    }
+
+    function roomCard(room) {
+      const el = document.createElement('article');
+      el.className = 'room';
+
+      const body = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = text(room.session_name, 'Online Lobby');
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const players = `${text(room.current_players, 0)}/${text(room.max_players, '?')} players`;
+      const host = `hosted by ${text(room.host_name, 'Host')}`;
+      const phase = text(room.session_phase, 'lobby');
+      const endpoint = text(room.realtime_endpoint, 'no endpoint');
+      meta.textContent = `${players} - ${host} - ${phase} - ${endpoint}`;
+      body.append(title, meta);
+
+      const code = document.createElement('div');
+      code.className = 'code';
+      code.textContent = text(room.room_code, '------');
+      el.append(body, code);
+      return el;
+    }
+
+    async function refresh() {
+      try {
+        const res = await fetch('/rooms', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+        roomsEl.replaceChildren(...(rooms.length
+          ? rooms.map(roomCard)
+          : [Object.assign(document.createElement('div'), {
+              className: 'empty',
+              textContent: 'No public games are active.'
+            })]));
+        statusEl.textContent = `${rooms.length} active public game${rooms.length === 1 ? '' : 's'} - updates every 2s`;
+      } catch (err) {
+        const el = document.createElement('div');
+        el.className = 'error';
+        el.textContent = `Failed to load rooms: ${err.message}`;
+        roomsEl.replaceChildren(el);
+        statusEl.textContent = 'Room service error';
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>)";
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -260,6 +432,10 @@ int main(int argc, char** argv) {
         port = kDefaultPort;
 
     httplib::Server server;
+
+    server.Get("/", [](const httplib::Request&, httplib::Response& res) {
+        res.set_content(dashboard_html(), "text/html; charset=utf-8");
+    });
 
     server.Get("/health", [](const httplib::Request&, httplib::Response& res) {
         res.set_content(R"({"ok":true})", "application/json");

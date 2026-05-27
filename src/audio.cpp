@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <system_error>
 #if GUB_ENABLE_SDL_MIXER
-#include <SDL_mixer.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #endif
 
 namespace {
@@ -24,14 +24,18 @@ bool init_audio(EngineState& engine) {
     if (!engine.audio)
         engine.audio = new Audio();
 #if GUB_ENABLE_SDL_MIXER
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) != 0)
+    Audio* audio = current_audio(engine);
+    audio->mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+    if (!audio->mixer)
         return false;
 
-    Mix_AllocateChannels(64);
-    // SFX playback expects channels grouped under id 1; assign them up front.
-    Mix_GroupChannels(0, 63, 1);
-    // Mix_ReserveChannels(2);                  // e.g., 0-1 for UI or music
-    // Mix_GroupChannels(2, 63, 1);             // group 1 = SFX
+    audio->tracks.reserve(64);
+    for (int i = 0; i < 64; ++i) {
+        MIX_Track* track = MIX_CreateTrack(audio->mixer);
+        if (!track)
+            return false;
+        audio->tracks.push_back(track);
+    }
 
     return true;
 #else
@@ -44,11 +48,16 @@ void cleanup_audio(EngineState& engine) {
     if (!audio)
         return;
 #if GUB_ENABLE_SDL_MIXER
+    for (MIX_Track* track : audio->tracks) {
+        MIX_StopTrack(track, 0);
+        MIX_DestroyTrack(track);
+    }
+    audio->tracks.clear();
     for (auto& kv : audio->chunks)
-        Mix_FreeChunk(kv.second);
+        MIX_DestroyAudio(kv.second);
     audio->chunks.clear();
-    if (Mix_QuerySpec(nullptr, nullptr, nullptr))
-        Mix_CloseAudio();
+    MIX_DestroyMixer(audio->mixer);
+    audio->mixer = nullptr;
 #endif
     delete audio;
     engine.audio = nullptr;
@@ -57,12 +66,17 @@ void cleanup_audio(EngineState& engine) {
 bool load_sound(EngineState& engine, const std::string& key, const std::string& path) {
 #if GUB_ENABLE_SDL_MIXER
     Audio* audio = current_audio(engine);
-    if (!audio)
+    if (!audio || !audio->mixer)
         return false;
-    Mix_Chunk* ch = Mix_LoadWAV(path.c_str());
-    if (!ch)
+    MIX_Audio* loaded = MIX_LoadAudio(audio->mixer, path.c_str(), false);
+    if (!loaded)
         return false;
-    audio->chunks[key] = ch;
+    if (auto it = audio->chunks.find(key); it != audio->chunks.end()) {
+        MIX_DestroyAudio(it->second);
+        it->second = loaded;
+    } else {
+        audio->chunks.emplace(key, loaded);
+    }
     return true;
 #else
     (void)engine;
@@ -75,30 +89,45 @@ bool load_sound(EngineState& engine, const std::string& key, const std::string& 
 void play_sound(EngineState& engine, const std::string& key, int loops, int /*channel_hint*/, int volume) {
 #if GUB_ENABLE_SDL_MIXER
     Audio* audio = current_audio(engine);
-    if (!audio)
+    if (!audio || !audio->mixer)
         return;
     auto it = audio->chunks.find(key);
     if (it == audio->chunks.end())
         return;
 
-    int ch = Mix_GroupAvailable(1);
-    if (ch == -1) {
-        ch = Mix_GroupOldest(1);
-        if (ch != -1) Mix_HaltChannel(ch);
+    MIX_Track* track = nullptr;
+    for (MIX_Track* candidate : audio->tracks) {
+        if (!MIX_TrackPlaying(candidate)) {
+            track = candidate;
+            break;
+        }
     }
-    if (ch == -1) return; // nothing to steal
+    if (!track && !audio->tracks.empty()) {
+        track = audio->tracks.front();
+        MIX_StopTrack(track, 0);
+    }
+    if (!track)
+        return;
 
-    if (Mix_PlayChannel(ch, it->second, loops) == -1) return;
-
-    int base_volume = (volume >= 0) ? volume : it->second->volume;
-    base_volume = std::clamp(base_volume, 0, MIX_MAX_VOLUME);
+    int base_volume = (volume >= 0) ? volume : 128;
+    base_volume = std::clamp(base_volume, 0, 128);
     float master = 1.0f;
     float sfx = 1.0f;
     master = std::clamp(engine.audio_settings.vol_master, 0.0f, 1.0f);
     sfx = std::clamp(engine.audio_settings.vol_sfx, 0.0f, 1.0f);
     float scaled = static_cast<float>(base_volume) * master * sfx;
-    int final_volume = static_cast<int>(std::round(std::clamp(scaled, 0.0f, static_cast<float>(MIX_MAX_VOLUME))));
-    Mix_Volume(ch, final_volume); // per-channel, not global
+    const float gain = std::clamp(scaled / 128.0f, 0.0f, 1.0f);
+
+    if (!MIX_SetTrackAudio(track, it->second))
+        return;
+    MIX_SetTrackGain(track, gain);
+
+    SDL_PropertiesID props = SDL_CreateProperties();
+    if (props != 0)
+        SDL_SetNumberProperty(props, MIX_PROP_PLAY_LOOPS_NUMBER, loops);
+    MIX_PlayTrack(track, props);
+    if (props != 0)
+        SDL_DestroyProperties(props);
 #else
     (void)engine;
     (void)key;

@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include <SDL2/SDL_render.h>
+#include <SDL3/SDL_render.h>
 
 #include "src/alerts.hpp"
 #include "src/engine_state.hpp"

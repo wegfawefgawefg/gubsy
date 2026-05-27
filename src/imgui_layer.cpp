@@ -74,16 +74,16 @@ void imgui_process_event(const SDL_Event& event) {
     if (!g_imgui_init)
         return;
     switch (event.type) {
-        case SDL_CONTROLLERAXISMOTION:
-        case SDL_CONTROLLERBUTTONDOWN:
-        case SDL_CONTROLLERBUTTONUP:
-        case SDL_CONTROLLERDEVICEADDED:
-        case SDL_CONTROLLERDEVICEREMOVED:
-        case SDL_CONTROLLERDEVICEREMAPPED:
-        case SDL_CONTROLLERTOUCHPADDOWN:
-        case SDL_CONTROLLERTOUCHPADMOTION:
-        case SDL_CONTROLLERTOUCHPADUP:
-        case SDL_CONTROLLERSENSORUPDATE:
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        case SDL_EVENT_GAMEPAD_ADDED:
+        case SDL_EVENT_GAMEPAD_REMOVED:
+        case SDL_EVENT_GAMEPAD_REMAPPED:
+        case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN:
+        case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:
+        case SDL_EVENT_GAMEPAD_TOUCHPAD_UP:
+        case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
             return; // Controller input is routed through our binds, not ImGui.
         default:
             break;

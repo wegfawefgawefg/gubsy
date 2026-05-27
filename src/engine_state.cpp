@@ -31,7 +31,7 @@
 #include "src/mods.hpp"
 #include "src/project_paths.hpp"
 #include "src/render.hpp"
-#include "src/sdl_shim.hpp"
+#include "src/sdl_event_adapter.hpp"
 #include "src/settings_defaults.hpp"
 #include "src/ui_layouts.hpp"
 

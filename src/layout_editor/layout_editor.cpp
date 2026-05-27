@@ -11,7 +11,7 @@
 #include "src/render.hpp"
 #include "src/ui_layouts.hpp"
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <climits>
 #include <imgui.h>
@@ -174,7 +174,7 @@ void handle_hotkeys(EngineState& engine) {
         return;
 
     float nudge = io.KeyShift ? 0.05f : 0.01f;
-    bool mouse_down = (engine.device_state.mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+    bool mouse_down = (engine.device_state.mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0;
     bool mouse_captured = io.WantCaptureMouse;
 
     glayout::EditorInput input;

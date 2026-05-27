@@ -81,7 +81,7 @@ void in_game_menu_render(EngineState& engine, SDL_Renderer* renderer, int width,
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 6, 8, 12, 160);
-    SDL_Rect backdrop{0, 0, width, height};
+    SDL_FRect backdrop{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)};
     SDL_RenderFillRect(renderer, &backdrop);
     menu_system_render(engine, renderer, width, height);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);

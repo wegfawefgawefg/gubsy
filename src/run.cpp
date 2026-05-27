@@ -13,7 +13,7 @@
 #include "mods.hpp"
 #include "player.hpp"
 #include "render.hpp"
-#include "sdl_shim.hpp"
+#include "sdl_event_adapter.hpp"
 #include "src/audio_settings.hpp"
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/imgui_debug/imgui_debug.hpp"
@@ -27,8 +27,8 @@
 #include "top_level_game_settings.hpp"
 #include "user_profiles.hpp"
 
-#include <SDL.h>
-#include <SDL_mixer.h>
+#include <SDL3/SDL.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include <filesystem>
 
 bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks) {
@@ -59,7 +59,7 @@ bool do_the_gubsy(EngineState& engine, const GubsyAppHooks& hooks) {
 
     if (!init_audio(engine)) {
 #if GUB_ENABLE_SDL_MIXER
-        std::fprintf(stderr, "[audio] SDL_mixer init failed: %s\n", Mix_GetError());
+        std::fprintf(stderr, "[audio] SDL_mixer init failed: %s\n", SDL_GetError());
 #else
         std::fprintf(stderr, "[audio] SDL3_mixer not available; audio disabled.\n");
 #endif

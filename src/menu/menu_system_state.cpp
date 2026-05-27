@@ -6,7 +6,7 @@
 #include "src/render.hpp"
 #include "src/ui_layouts.hpp"
 
-#include <SDL2/SDL_ttf.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -249,7 +249,7 @@ int measure_text_width(const EngineState& engine, const char* text) {
         return 0;
     int w = 0;
     int h = 0;
-    if (TTF_SizeUTF8(graphics->ui_font, text, &w, &h) != 0)
+    if (!TTF_GetStringSize(graphics->ui_font, text, 0, &w, &h))
         return 0;
     return w;
 }
@@ -259,17 +259,17 @@ void draw_text_with_clip(const EngineState&, SDL_Renderer* renderer, const char*
     if (!text)
         return;
     SDL_Rect prev_clip{};
-    SDL_bool had_clip = SDL_RenderIsClipEnabled(renderer);
+    bool had_clip = SDL_RenderClipEnabled(renderer);
     if (had_clip)
-        SDL_RenderGetClipRect(renderer, &prev_clip);
+        SDL_GetRenderClipRect(renderer, &prev_clip);
     if (clip)
-        SDL_RenderSetClipRect(renderer, clip);
+        SDL_SetRenderClipRect(renderer, clip);
     draw_text(renderer, text, x, y, color);
     if (clip) {
         if (had_clip)
-            SDL_RenderSetClipRect(renderer, &prev_clip);
+            SDL_SetRenderClipRect(renderer, &prev_clip);
         else
-            SDL_RenderSetClipRect(renderer, nullptr);
+            SDL_SetRenderClipRect(renderer, nullptr);
     }
 }
 
@@ -289,7 +289,7 @@ void begin_text_edit(MenuRuntimeState& state, MenuWidget& widget, bool use_aux_b
     state.text_edit_using_aux = use_aux_buffer;
     state.caret_time = 0.0f;
     if (!state.text_input_enabled) {
-        SDL_StartTextInput();
+        SDL_StartTextInput(SDL_GetKeyboardFocus());
         state.text_input_enabled = true;
     }
 }
@@ -340,7 +340,7 @@ bool end_text_edit(MenuRuntimeState& state) {
     state.active_text_max = 0;
     state.text_edit_using_aux = false;
     if (state.text_input_enabled) {
-        SDL_StopTextInput();
+        SDL_StopTextInput(SDL_GetKeyboardFocus());
         state.text_input_enabled = false;
     }
     lock_mouse_focus_at(state, state.last_mouse_x, state.last_mouse_y);
@@ -487,10 +487,10 @@ void draw_arrow(SDL_Renderer* renderer, const SDL_FPoint& tip, float dir, SDL_Co
     SDL_FPoint wing_bottom{base.x, base.y + wing};
 
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
-    SDL_RenderDrawLineF(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
-    SDL_RenderDrawLineF(renderer, wing_top.x, wing_top.y, base.x, base.y);
-    SDL_RenderDrawLineF(renderer, wing_bottom.x, wing_bottom.y, base.x, base.y);
+    SDL_RenderLine(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
+    SDL_RenderLine(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
+    SDL_RenderLine(renderer, wing_top.x, wing_top.y, base.x, base.y);
+    SDL_RenderLine(renderer, wing_bottom.x, wing_bottom.y, base.x, base.y);
 }
 
 } // namespace

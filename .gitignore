@@ -42,6 +42,7 @@
 
 openai.key
 build/
+build-consumer-smoke/
 CMakeCache.txt
 CMakeFiles/
 Testing/

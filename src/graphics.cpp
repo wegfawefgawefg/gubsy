@@ -35,7 +35,7 @@ bool init_font_for_graphics(Graphics& graphics, const std::filesystem::path& fon
         return true;
     if (!TTF_WasInit()) {
         if (!TTF_Init()) {
-            std::fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
+            std::fprintf(stderr, "TTF_Init failed: %s\n", SDL_GetError());
             return false;
         }
     }
@@ -66,9 +66,9 @@ bool init_font_for_graphics(Graphics& graphics, const std::filesystem::path& fon
             font_path = fallback_path.string();
     }
     if (!font_path.empty()) {
-        graphics.ui_font = TTF_OpenFont(font_path.c_str(), pt_size);
+        graphics.ui_font = TTF_OpenFont(font_path.c_str(), static_cast<float>(pt_size));
         if (!graphics.ui_font) {
-            std::fprintf(stderr, "TTF_OpenFont failed: %s\n", TTF_GetError());
+            std::fprintf(stderr, "TTF_OpenFont failed: %s\n", SDL_GetError());
             return false;
         }
         return true;
@@ -117,7 +117,7 @@ bool recreate_render_target(Graphics& graphics, int width, int height) {
 } // namespace
 
 bool try_init_video_with_driver(const char* driver) {
-    Uint32 init_flags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS;
+    SDL_InitFlags init_flags = SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS;
     if (!driver || !*driver) {
         if (SDL_InitSubSystem(init_flags))
             return true;
@@ -130,15 +130,15 @@ bool try_init_video_with_driver(const char* driver) {
     if (previous && *previous)
         std::snprintf(previous_buf, sizeof(previous_buf), "%s", previous);
 
-    SDL_setenv("SDL_VIDEODRIVER", driver, 1);
+    SDL_setenv_unsafe("SDL_VIDEODRIVER", driver, 1);
     if (SDL_InitSubSystem(init_flags))
         return true;
 
     std::fprintf(stderr, "SDL_InitSubSystem(%s) failed: %s\n", driver, SDL_GetError());
     if (previous_buf[0] != '\0')
-        SDL_setenv("SDL_VIDEODRIVER", previous_buf, 1);
+        SDL_setenv_unsafe("SDL_VIDEODRIVER", previous_buf, 1);
     else
-        SDL_setenv("SDL_VIDEODRIVER", "", 1);
+        SDL_setenv_unsafe("SDL_VIDEODRIVER", "", 1);
     return false;
 }
 
@@ -184,29 +184,29 @@ bool init_graphics(EngineState& engine) {
     if (!initialized)
         return false;
 
-    Uint32 win_flags = 0;
+    SDL_WindowFlags win_flags = 0;
     if (engine.app_config.resizable_window)
         win_flags |= SDL_WINDOW_RESIZABLE;
     if (engine.app_config.always_on_top)
         win_flags |= SDL_WINDOW_ALWAYS_ON_TOP;
     if (engine.app_config.utility_window)
         win_flags |= SDL_WINDOW_UTILITY;
-    graphics.window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                       window_dims.x, window_dims.y, win_flags);
+    graphics.window = SDL_CreateWindow(title, window_dims.x, window_dims.y, win_flags);
     if (!graphics.window) {
         const char* err = SDL_GetError();
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n",
                      (err && *err) ? err : "(no error text)");
         return false;
     }
+    SDL_SetWindowPosition(graphics.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
     if (engine.app_config.always_on_top)
-        SDL_SetWindowAlwaysOnTop(graphics.window, SDL_TRUE);
+        SDL_SetWindowAlwaysOnTop(graphics.window, true);
 
-    graphics.renderer = SDL_CreateRenderer(graphics.window, -1, SDL_RENDERER_ACCELERATED);
+    graphics.renderer = SDL_CreateRenderer(graphics.window, nullptr);
     if (!graphics.renderer) {
         std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
-        graphics.renderer = SDL_CreateRenderer(graphics.window, -1, 0); // software fallback
+        graphics.renderer = SDL_CreateRenderer(graphics.window, "software");
     }
     if (!graphics.renderer)
         return false;
@@ -248,7 +248,7 @@ bool attach_external_graphics(EngineState& engine, SDL_Window* window, SDL_Rende
 
     int window_w = 0;
     int window_h = 0;
-    SDL_GetRendererOutputSize(renderer, &window_w, &window_h);
+    SDL_GetCurrentRenderOutputSize(renderer, &window_w, &window_h);
     graphics.window_dims = {static_cast<unsigned int>(std::max(window_w, 1)),
                             static_cast<unsigned int>(std::max(window_h, 1))};
     (void)init_font_for_graphics(graphics, {}, 20);
@@ -302,18 +302,18 @@ bool set_window_dimensions(EngineState& engine, int width, int height) {
 bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
     if (!current_graphics(engine) || !current_graphics(engine)->window)
         return false;
-    Uint32 flag = 0;
+    bool fullscreen = false;
     std::string applied_fullscreen_mode = current_graphics(engine)->fullscreen_display_mode;
     switch (mode) {
     case WindowDisplayMode::Windowed:
-        flag = 0;
+        fullscreen = false;
         break;
     case WindowDisplayMode::Borderless:
         if (!apply_fullscreen_display_mode(current_graphics(engine)->window, "desktop",
                                            applied_fullscreen_mode)) {
             return false;
         }
-        flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
+        fullscreen = true;
         break;
     case WindowDisplayMode::Fullscreen:
         if (!apply_fullscreen_display_mode(current_graphics(engine)->window,
@@ -321,10 +321,10 @@ bool set_window_display_mode(EngineState& engine, WindowDisplayMode mode) {
                                            applied_fullscreen_mode)) {
             return false;
         }
-        flag = SDL_WINDOW_FULLSCREEN;
+        fullscreen = true;
         break;
     }
-    if (!SDL_SetWindowFullscreen(current_graphics(engine)->window, flag)) {
+    if (!SDL_SetWindowFullscreen(current_graphics(engine)->window, fullscreen)) {
         std::fprintf(stderr, "Failed to change window mode: %s\n", SDL_GetError());
         return false;
     }
@@ -503,7 +503,7 @@ bool load_all_textures_in_sprite_lookup(EngineState& engine) {
             IMG_LoadTexture(current_graphics(engine)->renderer, def->image_path.c_str());
         if (!tex) {
             std::fprintf(stderr, "IMG_LoadTexture failed for %s: %s\n", def->image_path.c_str(),
-                         IMG_GetError());
+                         SDL_GetError());
             continue;
         }
         current_graphics(engine)->textures_by_id[id] = tex;

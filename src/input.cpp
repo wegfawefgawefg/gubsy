@@ -1,6 +1,6 @@
 #include "src/input_system.hpp"
 
-#include <SDL2/SDL_keyboard.h>
+#include <SDL3/SDL_keyboard.h>
 
 #include <algorithm>
 #include "src/engine_state.hpp"
@@ -97,7 +97,7 @@ void update_mouse_projection(EngineState& engine) {
 void update_device_state_from_sdl(EngineState& engine) {
     auto& state = engine.device_state;
     const bool* sdl_keystate = SDL_GetKeyboardState(nullptr);
-    for (int i = 0; i < SDL_NUM_SCANCODES; ++i)
+    for (int i = 0; i < SDL_SCANCODE_COUNT; ++i)
         state.keyboard[static_cast<std::size_t>(i)] = sdl_keystate[i] ? 1 : 0;
 
     float x = 0.0f;
@@ -114,14 +114,14 @@ void update_device_state_from_sdl(EngineState& engine) {
     for (auto const& [device_id, controller] : engine.open_controllers) {
         DeviceState::ControllerState controller_state{};
         controller_state.device_id = device_id;
-        for (int axis = 0; axis < SDL_CONTROLLER_AXIS_MAX; ++axis) {
-            Sint16 raw_value = SDL_GameControllerGetAxis(controller, static_cast<SDL_GameControllerAxis>(axis));
+        for (int axis = 0; axis < SDL_GAMEPAD_AXIS_COUNT; ++axis) {
+            Sint16 raw_value = SDL_GetGamepadAxis(controller, static_cast<SDL_GamepadAxis>(axis));
             controller_state.axes[static_cast<std::size_t>(axis)] =
                 static_cast<float>(raw_value) / 32767.0f;
         }
-        for (int button = 0; button < SDL_CONTROLLER_BUTTON_MAX; ++button) {
+        for (int button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; ++button) {
             controller_state.buttons[static_cast<std::size_t>(button)] =
-                SDL_GameControllerGetButton(controller, static_cast<SDL_GameControllerButton>(button)) ? 1 : 0;
+                SDL_GetGamepadButton(controller, static_cast<SDL_GamepadButton>(button)) ? 1 : 0;
         }
         state.controllers.push_back(controller_state);
     }
