@@ -19,6 +19,16 @@ pipeline belongs to downstream games such as Splonks. Use Gubsy package scripts
 only for developer/demo/server-tool artifacts or explicit remote confidence
 checks.
 
+For a recorded local validation pass, run:
+
+```
+bash scripts/validate_local.sh all
+```
+
+This writes a timestamped log under `dist/validation/` and covers the normal
+Gubsy code-first gates: developer build/tests, external consumer smoke, room
+server smoke, lobby smoke, and the local developer/tooling package verifier.
+
 Linux (Debian/Ubuntu)
 ---------------------
 

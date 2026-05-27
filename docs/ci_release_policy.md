@@ -8,6 +8,9 @@ on GitHub-hosted runners.
 - Build and test locally before committing.
 - Use local scripts such as `./scripts/build.sh`, `ctest --test-dir build
   --output-on-failure`, and focused smoke scripts for the change being made.
+- Use `./scripts/validate_local.sh all` when a Gubsy task needs a recorded
+  local evidence log for developer, consumer, room server, lobby, and
+  developer/tooling package validation.
 - Pushes and pull requests should not automatically run package builds.
 
 ## Remote checks

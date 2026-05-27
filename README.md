@@ -62,6 +62,15 @@ pinned SDL3 source builds through CMake `FetchContent`. Normal downstream game
 consumers should link `gubsy::engine`; player-facing packaging belongs to the
 game, not to Gubsy.
 
+For a recorded local validation pass, use:
+
+```bash
+bash scripts/validate_local.sh all
+```
+
+The GitHub package workflow is manual-only and exists for remote platform
+confidence. It is not the normal development feedback loop.
+
 Using Gubsy From Another Project
 --------------------------------
 
@@ -127,6 +136,7 @@ Docs
 ----
 
 - Developer setup: `docs/dev_setup.md`
+- CI/release policy: `docs/ci_release_policy.md`
 - Engine roadmap: `docs/engine_roadmap.md`
 - Engine 0.1 checklist: `docs/engine_0_1_checklist.md`
 - Code-first engine intent: `docs/code_first_engine_intent.md`
