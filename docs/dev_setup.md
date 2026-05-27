@@ -46,12 +46,45 @@ bash scripts/build.sh
 ./build/gubsy          # alias: ./build/arti
 ```
 
-Windows (vcpkg)
----------------
+Windows (MSYS2 UCRT64)
+----------------------
 
-1) Install and integrate vcpkg.
-2) Optional system deps: `vcpkg install sdl3 sdl3-image sdl3-ttf sdl3-mixer lua`.
-3) Configure with the toolchain file, e.g. `-DCMAKE_TOOLCHAIN_FILE="/path/to/vcpkg.cmake"`.
+The supported local package-verification path is MSYS2 UCRT64, matching
+`.github/workflows/package.yml` and `scripts/package_windows.sh`.
+Use the **MSYS2 UCRT64** terminal, not PowerShell or cmd.exe:
+
+```
+pacman -Syu
+```
+
+If MSYS2 asks you to close the terminal, reopen **MSYS2 UCRT64**, then install
+the build tools:
+
+```
+pacman -S --needed --noconfirm \
+  git \
+  unzip \
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-gcc \
+  mingw-w64-ucrt-x86_64-pkgconf
+```
+
+Build and run:
+
+```
+bash scripts/build.sh
+./build/gubsy.exe
+```
+
+Validate the Windows developer/tooling package:
+
+```
+bash scripts/validate_local.sh package
+```
+
+vcpkg can still be used for experimental local dependency discovery, but it is
+not the documented Windows package-verification path yet.
 
 macOS (Homebrew)
 ----------------
