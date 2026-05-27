@@ -10,11 +10,19 @@
 #include <utility>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 #include "src/net_transport.hpp"
 #include "src/sync_transport_packet_codec.hpp"
@@ -22,6 +30,67 @@
 namespace {
 
 constexpr std::size_t kMaxPacketBytes = 60 * 1024;
+constexpr std::uintptr_t kInvalidSocket = ~std::uintptr_t{0};
+
+#ifdef _WIN32
+using NativeSocket = SOCKET;
+using SocketResult = int;
+using SendRecvSize = int;
+using SockLen = int;
+
+NativeSocket native_socket(std::uintptr_t handle) {
+    return static_cast<NativeSocket>(handle);
+}
+
+bool ensure_winsock(std::string& err) {
+    static const int startup_result = []() {
+        WSADATA data{};
+        return WSAStartup(MAKEWORD(2, 2), &data);
+    }();
+    if (startup_result != 0) {
+        err = "WSAStartup: winsock error " + std::to_string(startup_result);
+        return false;
+    }
+    return true;
+}
+
+std::string socket_error_text() {
+    return "winsock error " + std::to_string(WSAGetLastError());
+}
+
+bool would_block() {
+    return WSAGetLastError() == WSAEWOULDBLOCK;
+}
+
+void close_socket(NativeSocket socket_fd) {
+    closesocket(socket_fd);
+}
+#else
+using NativeSocket = int;
+using SocketResult = ssize_t;
+using SendRecvSize = std::size_t;
+using SockLen = socklen_t;
+
+NativeSocket native_socket(std::uintptr_t handle) {
+    return static_cast<NativeSocket>(handle);
+}
+
+bool ensure_winsock(std::string&) {
+    return true;
+}
+
+std::string socket_error_text() {
+    return std::strerror(errno);
+}
+
+bool would_block() {
+    return errno == EAGAIN || errno == EWOULDBLOCK;
+}
+
+void close_socket(NativeSocket socket_fd) {
+    close(socket_fd);
+}
+#endif
 
 struct ParsedUdpEndpoint {
     std::string host;
@@ -56,26 +125,36 @@ bool parse_udp_endpoint(const std::string& endpoint, ParsedUdpEndpoint& out, std
     return !out.host.empty();
 }
 
-bool set_nonblocking(int socket_fd, std::string& err) {
-    int flags = fcntl(socket_fd, F_GETFL, 0);
-    if (flags < 0) {
-        err = std::strerror(errno);
-        return false;
-    }
-    if (fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        err = std::strerror(errno);
+bool set_nonblocking(NativeSocket socket_fd, std::string& err) {
+#ifdef _WIN32
+    u_long nonblocking = 1;
+    const long nonblocking_command = static_cast<long>(FIONBIO);
+    if (ioctlsocket(socket_fd, nonblocking_command, &nonblocking) != 0) {
+        err = socket_error_text();
         return false;
     }
     return true;
+#else
+    int flags = fcntl(socket_fd, F_GETFL, 0);
+    if (flags < 0) {
+        err = socket_error_text();
+        return false;
+    }
+    if (fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        err = socket_error_text();
+        return false;
+    }
+    return true;
+#endif
 }
 
-bool bind_udp_socket(int socket_fd, std::uint16_t port, std::string& err) {
+bool bind_udp_socket(NativeSocket socket_fd, std::uint16_t port, std::string& err) {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(port);
     if (bind(socket_fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) < 0) {
-        err = std::strerror(errno);
+        err = socket_error_text();
         return false;
     }
     return true;
@@ -107,27 +186,27 @@ std::string sender_endpoint_string(const sockaddr_in& addr) {
     return std::string(ip) + ":" + std::to_string(ntohs(addr.sin_port));
 }
 
-bool send_packet_bytes(int socket_fd,
+bool send_packet_bytes(std::uintptr_t socket_fd,
                        const ParsedUdpEndpoint& endpoint,
                        const std::vector<std::uint8_t>& packet,
-                      std::string& err) {
+                       std::string& err) {
     sockaddr_in addr{};
     if (!endpoint_to_sockaddr(endpoint, addr, err))
         return false;
-    ssize_t sent = sendto(socket_fd,
-                          packet.data(),
-                          packet.size(),
-                          0,
-                          reinterpret_cast<const sockaddr*>(&addr),
-                          sizeof(addr));
+    SocketResult sent = sendto(native_socket(socket_fd),
+                               reinterpret_cast<const char*>(packet.data()),
+                               static_cast<SendRecvSize>(packet.size()),
+                               0,
+                               reinterpret_cast<const sockaddr*>(&addr),
+                               sizeof(addr));
     if (sent < 0 || static_cast<std::size_t>(sent) != packet.size()) {
-        err = std::strerror(errno);
+        err = socket_error_text();
         return false;
     }
     return true;
 }
 
-bool drain_packet(int socket_fd,
+bool drain_packet(std::uintptr_t socket_fd,
                   std::vector<std::uint8_t>& packet_out,
                   std::string& sender_endpoint,
                   bool& had_packet,
@@ -135,17 +214,17 @@ bool drain_packet(int socket_fd,
     had_packet = false;
     std::vector<char> buffer(kMaxPacketBytes);
     sockaddr_in sender{};
-    socklen_t sender_len = sizeof(sender);
-    ssize_t recv_len = recvfrom(socket_fd,
-                                buffer.data(),
-                                buffer.size(),
-                                0,
-                                reinterpret_cast<sockaddr*>(&sender),
-                                &sender_len);
+    SockLen sender_len = sizeof(sender);
+    SocketResult recv_len = recvfrom(native_socket(socket_fd),
+                                     buffer.data(),
+                                     static_cast<SendRecvSize>(buffer.size()),
+                                     0,
+                                     reinterpret_cast<sockaddr*>(&sender),
+                                     &sender_len);
     if (recv_len < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        if (would_block())
             return true;
-        err = std::strerror(errno);
+        err = socket_error_text();
         return false;
     }
 
@@ -206,11 +285,11 @@ UdpSyncNetTransport::~UdpSyncNetTransport() {
 }
 
 void UdpSyncNetTransport::reset() {
-    if (socket_fd_ >= 0)
-        close(socket_fd_);
+    if (socket_fd_ != kInvalidSocket)
+        close_socket(native_socket(socket_fd_));
     open_ = false;
     is_host_ = false;
-    socket_fd_ = -1;
+    socket_fd_ = kInvalidSocket;
     room_code_.clear();
     remote_endpoint_.clear();
     public_endpoint_.clear();
@@ -231,27 +310,30 @@ bool UdpSyncNetTransport::open_socket(bool is_host,
     reset();
     load_simulation_config();
 
-    int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (socket_fd < 0) {
-        err = std::strerror(errno);
+    if (!ensure_winsock(err))
+        return false;
+
+    NativeSocket socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (socket_fd == native_socket(kInvalidSocket)) {
+        err = socket_error_text();
         return false;
     }
 
     if (!bind_udp_socket(socket_fd, 0, err) || !set_nonblocking(socket_fd, err)) {
-        close(socket_fd);
+        close_socket(socket_fd);
         return false;
     }
 
     open_ = true;
     is_host_ = is_host;
-    socket_fd_ = socket_fd;
+    socket_fd_ = static_cast<std::uintptr_t>(socket_fd);
     room_code_ = room_code;
     remote_endpoint_ = remote_endpoint;
     member_endpoints_.clear();
 
     sockaddr_in local_addr{};
-    socklen_t local_len = sizeof(local_addr);
-    if (getsockname(socket_fd_, reinterpret_cast<sockaddr*>(&local_addr), &local_len) == 0) {
+    SockLen local_len = sizeof(local_addr);
+    if (getsockname(native_socket(socket_fd_), reinterpret_cast<sockaddr*>(&local_addr), &local_len) == 0) {
         public_endpoint_ =
             "udp://" + public_host_name() + ":" + std::to_string(ntohs(local_addr.sin_port));
     }

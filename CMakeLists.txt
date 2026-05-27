@@ -475,6 +475,9 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
   target_include_directories(coop_sync_smoke SYSTEM PRIVATE ${GUB_SOURCE_DIR}/third_party/glm_upstream)
+  if (WIN32)
+    target_link_libraries(coop_sync_smoke PRIVATE ws2_32)
+  endif()
 endif()
 
 # Lua 5.4. Embedders can disable this when they do not want Gubsy's Lua mod
@@ -635,6 +638,9 @@ endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(gubsy_engine PUBLIC Threads::Threads)
+if (WIN32)
+  target_link_libraries(gubsy_engine PUBLIC ws2_32)
+endif()
 if (GUB_BUILD_TOOLS)
   target_link_libraries(mod_server PRIVATE Threads::Threads)
 endif()

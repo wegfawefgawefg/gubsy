@@ -35,7 +35,7 @@ private:
 
     bool open_{false};
     bool is_host_{false};
-    int socket_fd_{-1};
+    std::uintptr_t socket_fd_{~std::uintptr_t{0}};
     std::string room_code_;
     std::string remote_endpoint_;
     std::string public_endpoint_;
