@@ -221,6 +221,13 @@ engine and game targets.
   CMake preset, and `scripts/android/` dev-loop scripts. The scaffold expects an
   official SDL3 Android AAR in `android/app/libs/` and enables Android Gradle
   Plugin Prefab support so CMake can consume the native SDL package.
+- `scripts/android/fetch_sdl3_aar.sh` downloads the pinned official SDL3 Android
+  archive for the repo's current SDL pin and verifies its checksum before
+  extracting the AAR into the Gradle app.
+- Splonks commits a Gradle wrapper under `android/`, so APK builds do not rely
+  on a global Gradle install once the Android SDK/NDK and SDL3 AAR are present.
+- Android setup still requires JDK 17+, Android command-line tools, and the
+  SDK/NDK packages installed by Splonks' `scripts/android/setup_sdk.sh`.
 - Gubsy package launchers set `GUB_PROJECT_ROOT` so packaged sample runs use the
   bundled `data/`, `demo/`, `src/assets/`, and `tools/mod_repo/` trees instead
   of the developer source checkout.
