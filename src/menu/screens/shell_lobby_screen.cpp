@@ -221,8 +221,19 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     MenuWidget start = make_button(205, SettingsObjectID::ACTION, "Start Game",
                                    joined_client ? MenuAction::none()
                                                  : MenuAction::run_command(g_cmd_start_game));
-    if (joined_client)
+    if (joined_client) {
         start.label = "Waiting For Host";
+        start.secondary = "Only the host can start the game.";
+        start.style.bg_r = 30;
+        start.style.bg_g = 30;
+        start.style.bg_b = 36;
+        start.style.fg_r = 150;
+        start.style.fg_g = 150;
+        start.style.fg_b = 165;
+        start.style.focus_r = 120;
+        start.style.focus_g = 120;
+        start.style.focus_b = 135;
+    }
     MenuWidget leave = make_button(208,
                                    SettingsObjectID::CARD4,
                                    ctx.engine.lobby.is_host ? "Stop Hosting" : "Leave Session",

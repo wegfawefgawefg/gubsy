@@ -97,6 +97,18 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
     require(host->secondary != nullptr &&
                 std::string(host->secondary).find("Host-only") != std::string::npos,
             "joined shell lobby should mark host flow host-only");
+
+    const MenuWidget* start = widget_by_slot(engine, SettingsObjectID::ACTION);
+    require(start != nullptr, "missing joined shell lobby start action");
+    require(start->label != nullptr && std::string(start->label) == "Waiting For Host",
+            "joined shell lobby should replace Start Game with waiting state");
+    require(start->secondary != nullptr &&
+                std::string(start->secondary).find("Only the host") != std::string::npos,
+            "joined waiting action should explain host-only start");
+    require(start->on_select.type == MenuActionType::None,
+            "joined waiting action should not start the game");
+    require(start->style.fg_r < 180 && start->style.fg_g < 180 && start->style.fg_b < 180,
+            "joined waiting action should be visually muted");
 }
 
 void verify_own_room_browser_card(GubsyRuntime& runtime) {
