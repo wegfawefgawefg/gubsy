@@ -161,6 +161,30 @@ void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remo
             "remote player detail missing room code");
     require(detail.find("Endpoint ") != std::string::npos,
             "remote player detail missing endpoint");
+    require(detail.find("Select for actions") != std::string::npos,
+            "remote player row should open management actions");
+    require(remote_card->on_select.type == MenuActionType::RunCommand,
+            "remote player row should run the open-actions command");
+
+    require(engine.menu_manager.push_screen(MenuScreenID::LOBBY_REMOTE_PLAYER, 0),
+            "failed to push remote player screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* title = widget_by_slot(engine, SettingsObjectID::TITLE);
+    require(title != nullptr && title->label != nullptr, "missing remote player title");
+    const MenuWidget* info = widget_by_slot(engine, SettingsObjectID::CARD0);
+    require(info != nullptr && info->secondary != nullptr, "missing remote player info");
+    require(std::string(info->secondary).find(remote_member_id) != std::string::npos,
+            "remote player action screen missing selected member context");
+    const MenuWidget* kick = widget_by_slot(engine, SettingsObjectID::CARD1);
+    require(kick != nullptr, "missing remote player action");
+    require(kick->label != nullptr && std::string(kick->label) == "Kick Player",
+            "remote player action screen should expose explicit kick action");
+    require(kick->secondary != nullptr &&
+                std::string(kick->secondary).find("Remove this client") != std::string::npos,
+            "remote player kick action should explain its effect");
+    require(kick->on_select.type == MenuActionType::RunCommand,
+            "remote player kick action should run an explicit command");
 }
 
 nlohmann::json serialize_config(void*, const GubsyLobbyState& lobby) {

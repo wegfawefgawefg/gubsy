@@ -18,6 +18,7 @@ inline constexpr MenuScreenId LOBBY_HOST_SETUP = (1u << 19) + 9;
 inline constexpr MenuScreenId LOBBY_GAME_CONFIG = (1u << 19) + 10;
 inline constexpr MenuScreenId LOBBY_JOIN_GAME = (1u << 19) + 12;
 inline constexpr MenuScreenId LOBBY_JOIN_BY_IP = (1u << 19) + 13;
+inline constexpr MenuScreenId LOBBY_REMOTE_PLAYER = (1u << 19) + 14;
 inline constexpr MenuScreenId MODS = 1u << 20;
 inline constexpr MenuScreenId SETTINGS = (1u << 20) + 1;
 inline constexpr MenuScreenId PROFILES = (1u << 20) + 2;
