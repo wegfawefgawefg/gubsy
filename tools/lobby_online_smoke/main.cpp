@@ -316,6 +316,10 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.room_code.empty(), "direct host should not have room code");
         require(host_engine.lobby.advertised_endpoint == "127.0.0.1:45454",
                 "direct host advertised endpoint mismatch");
+        require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
+                "guest direct/private room refresh failed");
+        require(guest_engine.lobby.discovered_rooms.empty(),
+                "direct/private host should not create a public room listing");
 
         require(gubsy_lobby_join_direct(guest_engine, guest_state.expected_host,
                                         guest_state.expected_port, message),
