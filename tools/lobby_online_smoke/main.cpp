@@ -201,12 +201,31 @@ void verify_browser_render(GubsyRuntime& runtime) {
 
     const EngineState& engine = gubsy_runtime_engine(runtime);
     const auto& menu = menu_system_internal::runtime_state(engine);
+    const MenuWidget* search = widget_by_slot(engine, SettingsObjectID::SEARCH);
+    const MenuWidget* refresh = widget_by_slot(engine, SettingsObjectID::CARD4);
+    SDL_FRect search_rect = widget_rect_by_slot(engine, SettingsObjectID::SEARCH);
+    SDL_FRect refresh_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD4);
+    require(search != nullptr && search->label != nullptr &&
+                std::string(search->label) == "Search Servers",
+            "rendered browser should put Search Servers in the top search slot");
+    require(refresh != nullptr && refresh->label != nullptr &&
+                std::string(refresh->label) == "Refresh",
+            "rendered browser should put Refresh in the bottom action slot");
+    require(rect_has_area(search_rect), "rendered browser missing search rect");
+    require(rect_has_area(refresh_rect), "rendered browser missing refresh rect");
+    require(search_rect.y < refresh_rect.y,
+            "rendered browser search should be above bottom Refresh action");
+
     for (std::size_t i = 0; i < menu.cache.widgets.size() && i < menu.cache.rects.size(); ++i) {
         const MenuWidget& widget = menu.cache.widgets[i];
         if (widget.badge == nullptr || std::string(widget.badge) != "YOUR ROOM")
             continue;
         const SDL_FRect own_rect = menu.cache.rects[i];
         require(rect_has_area(own_rect), "rendered own-room card missing rect");
+        require(search_rect.y + search_rect.h <= own_rect.y,
+                "rendered browser own-room card should sit below search");
+        require(own_rect.y + own_rect.h <= refresh_rect.y,
+                "rendered browser own-room card should sit above Refresh");
         SDL_Color avg = average_rect_color(surface, own_rect);
         if (!(avg.r > avg.g && avg.r > avg.b && avg.g < 120 && avg.b < 130)) {
             std::fprintf(stderr,
@@ -229,6 +248,41 @@ void verify_browser_render(GubsyRuntime& runtime) {
     }
     SDL_DestroySurface(surface);
     require(false, "rendered browser missing own-room card");
+}
+
+void verify_host_setup_render(GubsyRuntime& runtime) {
+    if (!rendered_lobby_smoke_enabled())
+        return;
+
+    SDL_Surface* surface = render_menu_to_surface(runtime);
+    require(count_non_background_pixels(surface) > 200,
+            "rendered host setup should draw substantial non-background UI");
+
+    const EngineState& engine = gubsy_runtime_engine(runtime);
+    SDL_FRect room_name_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD0);
+    SDL_FRect port_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD1);
+    SDL_FRect max_players_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD2);
+    SDL_FRect host_public_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD4);
+    SDL_FRect host_direct_rect = widget_rect_by_slot(engine, SettingsObjectID::ACTION);
+
+    require(rect_has_area(room_name_rect), "rendered host setup missing room-name rect");
+    require(rect_has_area(port_rect), "rendered host setup missing port rect");
+    require(rect_has_area(max_players_rect), "rendered host setup missing max-players rect");
+    require(rect_has_area(host_public_rect), "rendered host setup missing Host Public rect");
+    require(rect_has_area(host_direct_rect), "rendered host setup missing Host Direct rect");
+    require(!rects_overlap(host_public_rect, room_name_rect) &&
+                !rects_overlap(host_public_rect, port_rect) &&
+                !rects_overlap(host_public_rect, max_players_rect),
+            "rendered Host Public should not overlap host setup form rows");
+    require(host_public_rect.y > max_players_rect.y,
+            "rendered Host Public should be below host setup form rows");
+    require(host_direct_rect.y > max_players_rect.y,
+            "rendered Host Direct should be below host setup form rows");
+
+    SDL_Color host_public_px = sample_rect_center(surface, host_public_rect);
+    require(host_public_px.r != 5 || host_public_px.g != 5 || host_public_px.b != 10,
+            "rendered Host Public center should not be background");
+    SDL_DestroySurface(surface);
 }
 
 void verify_players_row_hierarchy(const EngineState& engine, const char* context) {
@@ -484,6 +538,7 @@ void verify_host_screen_layout_and_validation(GubsyRuntime& runtime) {
             "valid host public action should be actionable");
     require(host_direct->on_select.type == MenuActionType::RunCommand,
             "valid host direct action should be actionable");
+    verify_host_setup_render(runtime);
 
     require(port->text_buffer != nullptr, "host screen port missing text buffer");
     *port->text_buffer = "0";
