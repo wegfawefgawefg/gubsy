@@ -9,6 +9,7 @@
 #include "src/menu_layout_ids.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -46,6 +47,7 @@ struct OnlineState {
     std::string host_text{"127.0.0.1"};
     std::string port_text{std::to_string(kDefaultPort)};
     std::string room_code_text;
+    std::string browser_search_text;
     std::string status_text;
     std::string page_text;
     int page{0};
@@ -151,6 +153,35 @@ void update_page(OnlineState& st, int room_count) {
     st.total_pages = std::max(1, (room_count + kRoomsPerPage - 1) / kRoomsPerPage);
     st.page = std::clamp(st.page, 0, st.total_pages - 1);
     st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
+}
+
+std::string lowercase_copy(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return text;
+}
+
+bool room_matches_search(const MatchmakingRoom& room, const std::string& search_lower) {
+    if (search_lower.empty())
+        return true;
+    std::string haystack = room.session_name;
+    haystack += ' ';
+    haystack += room.host_name;
+    haystack += ' ';
+    haystack += room.room_code;
+    return lowercase_copy(std::move(haystack)).find(search_lower) != std::string::npos;
+}
+
+std::vector<int> filtered_room_indices(const std::vector<MatchmakingRoom>& rooms,
+                                       const std::string& search_text) {
+    std::vector<int> indices;
+    const std::string search_lower = lowercase_copy(search_text);
+    for (std::size_t i = 0; i < rooms.size(); ++i) {
+        if (room_matches_search(rooms[i], search_lower))
+            indices.push_back(static_cast<int>(i));
+    }
+    return indices;
 }
 
 bool validate_common(MenuContext& ctx) {
@@ -263,7 +294,9 @@ void command_refresh(MenuContext& ctx, std::int32_t) {
 void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     auto& st = ctx.state<OnlineState>();
     st.page = std::clamp(st.page + delta, 0, std::max(0, st.total_pages - 1));
-    update_page(st, static_cast<int>(ctx.engine.lobby.discovered_rooms.size()));
+    const std::vector<int> filtered_indices =
+        filtered_room_indices(ctx.engine.lobby.discovered_rooms, st.browser_search_text);
+    update_page(st, static_cast<int>(filtered_indices.size()));
 }
 
 void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
@@ -271,8 +304,6 @@ void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
 }
 
 bool room_is_joinable(const MatchmakingRoom& room) {
-    if (session_contract_is_in_game(room.contract))
-        return false;
     return room.max_players <= 0 || room.current_players < room.max_players;
 }
 
@@ -333,10 +364,10 @@ std::string room_card_detail(const GubsyLobbyState& lobby, const MatchmakingRoom
     detail += std::to_string(room.max_players);
     if (is_current_host_room(lobby, room))
         detail += " | Hosting Here | Unavailable";
-    else if (session_contract_is_in_game(room.contract))
-        detail += " | In Game | Unavailable";
     else if (!room_is_joinable(room))
         detail += " | Full | Unavailable";
+    else if (session_contract_is_in_game(room.contract))
+        detail += " | In Game | Joinable";
     else
         detail += " | Lobby | Joinable";
     detail += " | gubsy-roomd";
@@ -539,7 +570,9 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
     sync_state_from_lobby(st, ctx.engine.lobby);
     std::string refresh_message;
     (void)gubsy_lobby_refresh_rooms(ctx.engine, false, refresh_message);
-    update_page(st, static_cast<int>(ctx.engine.lobby.discovered_rooms.size()));
+    std::vector<int> filtered_indices =
+        filtered_room_indices(ctx.engine.lobby.discovered_rooms, st.browser_search_text);
+    update_page(st, static_cast<int>(filtered_indices.size()));
 
     static std::vector<MenuWidget> widgets;
     static std::vector<std::string> text_cache;
@@ -556,23 +589,33 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
         make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label(kPageWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
+    MenuWidget search = make_text(kRefreshWidgetId + 100, SettingsObjectID::SEARCH,
+                                  "Search Servers", &st.browser_search_text, 48);
+    search.placeholder = "Room name";
+    search.secondary = "Filters visible rooms by name.";
+    search.nav_down = kFirstRoomWidgetId;
+    widgets.push_back(search);
+    std::size_t search_idx = widgets.size() - 1;
+
     MenuWidget prev = make_button(kPrevWidgetId, SettingsObjectID::PREV, "<",
                                   st.page > 0 ? MenuAction::run_command(g_cmd_page_delta, -1)
                                               : MenuAction::none());
     prev.role = MenuWidgetRole::PagePrev;
+    prev.nav_down = search.id;
     MenuWidget next =
         make_button(kNextWidgetId, SettingsObjectID::NEXT, ">",
                     st.page + 1 < st.total_pages ? MenuAction::run_command(g_cmd_page_delta, 1)
                                                  : MenuAction::none());
     next.role = MenuWidgetRole::PageNext;
+    next.nav_down = search.id;
     widgets.push_back(prev);
     widgets.push_back(next);
 
     std::vector<WidgetId> room_ids;
     int start = st.page * kRoomsPerPage;
     const bool no_rooms = ctx.engine.lobby.discovered_rooms.empty();
+    const bool no_matches = !no_rooms && filtered_indices.empty();
     for (int i = 0; i < kRoomsPerPage; ++i) {
-        int room_index = start + i;
         WidgetId widget_id = kFirstRoomWidgetId + static_cast<WidgetId>(i);
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
         if (no_rooms && i == 0) {
@@ -583,7 +626,21 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
             card.label = "No Public Games";
             card.secondary = "Refresh to check the room server again.";
             widgets.push_back(card);
-        } else if (room_index < static_cast<int>(ctx.engine.lobby.discovered_rooms.size())) {
+        } else if (no_matches && i == 0) {
+            MenuWidget card;
+            card.id = widget_id;
+            card.slot = slot;
+            card.type = WidgetType::Card;
+            card.label = "No Matching Games";
+            card.secondary = "Clear or change the search text.";
+            widgets.push_back(card);
+        } else if (start + i < static_cast<int>(filtered_indices.size())) {
+            int room_index = filtered_indices[static_cast<std::size_t>(start + i)];
+            if (room_index < 0 ||
+                room_index >= static_cast<int>(ctx.engine.lobby.discovered_rooms.size())) {
+                widgets.push_back(make_label(widget_id, slot, ""));
+                continue;
+            }
             const MatchmakingRoom& room =
                 ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(room_index)];
             text_cache.push_back(room.session_name.empty() ? room.room_code : room.session_name);
@@ -610,7 +667,7 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
         }
     }
 
-    MenuWidget refresh = make_button(kRefreshWidgetId, SettingsObjectID::SEARCH, "Refresh",
+    MenuWidget refresh = make_button(kRefreshWidgetId, SettingsObjectID::CARD4, "Refresh",
                                      MenuAction::run_command(g_cmd_refresh));
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
     widgets.push_back(refresh);
@@ -625,19 +682,22 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != room_ids[i])
                 continue;
-            widget.nav_up = (i == 0) ? refresh_ref.id : room_ids[i - 1];
+            widget.nav_up = (i == 0) ? search.id : room_ids[i - 1];
             widget.nav_down = (i + 1 < room_ids.size()) ? room_ids[i + 1] : refresh_ref.id;
             break;
         }
     }
     refresh_ref.nav_up = room_ids.empty() ? back_ref.id : room_ids.back();
     refresh_ref.nav_down = back_ref.id;
+    refresh_ref.nav_left = back_ref.id;
     back_ref.nav_up = refresh_ref.id;
+    back_ref.nav_right = refresh_ref.id;
+    widgets[search_idx].nav_down = room_ids.empty() ? refresh_ref.id : room_ids.front();
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = room_ids.empty() ? refresh_ref.id : room_ids.front();
+    built.default_focus = search.id;
     return built;
 }
 

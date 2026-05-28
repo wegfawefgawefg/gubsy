@@ -182,16 +182,29 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
         bool drew_option_value = false;
 
         std::string text_storage;
+        std::string text_input_storage;
         const char* text_ptr = widget.label;
         SDL_Color text_color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255};
+        const char* text_input_value_ptr = nullptr;
+        SDL_Color text_input_color{widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255};
         bool is_text_input_widget = widget.type == WidgetType::TextInput && widget.text_buffer;
         if (is_text_input_widget) {
-            if (widget.text_buffer->empty() && widget.placeholder) {
-                text_ptr = widget.placeholder;
-                text_color = SDL_Color{160, 160, 180, 255};
+            if (widget.label == nullptr) {
+                if (widget.text_buffer->empty() && widget.placeholder) {
+                    text_ptr = widget.placeholder;
+                    text_color = SDL_Color{160, 160, 180, 255};
+                } else {
+                    text_storage = *widget.text_buffer;
+                    text_ptr = text_storage.c_str();
+                }
             } else {
-                text_storage = *widget.text_buffer;
-                text_ptr = text_storage.c_str();
+                if (widget.text_buffer->empty() && widget.placeholder) {
+                    text_input_value_ptr = widget.placeholder;
+                    text_input_color = SDL_Color{160, 160, 180, 255};
+                } else {
+                    text_input_storage = *widget.text_buffer;
+                    text_input_value_ptr = text_input_storage.c_str();
+                }
             }
         }
 
@@ -223,6 +236,11 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                                 static_cast<Uint8>(widget.style.fg_b / 2 + 50),
                                 255};
             msi::draw_text_with_clip(engine, renderer, widget.secondary, line_x, line_y, sec_color, clip_ptr);
+            next_line();
+        }
+        if (is_text_input_widget && widget.label != nullptr && text_input_value_ptr) {
+            text_input_value_y = line_y;
+            msi::draw_text_with_clip(engine, renderer, text_input_value_ptr, line_x, line_y, text_input_color, clip_ptr);
             next_line();
         }
         if (widget.tertiary) {

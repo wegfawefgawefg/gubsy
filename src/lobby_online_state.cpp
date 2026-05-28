@@ -250,11 +250,6 @@ bool validate_room_joinable(EngineState& engine, const MatchmakingRoom& room,
         set_lobby_error(engine, message);
         return false;
     }
-    if (session_contract_is_in_game(room.contract)) {
-        message = "Cannot join room: game already in progress";
-        set_lobby_error(engine, message);
-        return false;
-    }
     if (room.max_players > 0 && room.current_players >= room.max_players) {
         message = "Cannot join room: room is full";
         set_lobby_error(engine, message);
