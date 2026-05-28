@@ -363,6 +363,20 @@ int main(int argc, char** argv) {
                 "other host room failed");
         require(!other_host_engine.lobby.room_code.empty(), "other host room code missing");
 
+        require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
+                "multi-host room refresh failed");
+        auto room_listed = [&](const std::string& room_code) {
+            return std::any_of(guest_engine.lobby.discovered_rooms.begin(),
+                               guest_engine.lobby.discovered_rooms.end(),
+                               [&](const MatchmakingRoom& room) {
+                                   return room.room_code == room_code;
+                               });
+        };
+        require(room_listed(host_engine.lobby.room_code),
+                "multi-host list omitted first public room");
+        require(room_listed(other_host_engine.lobby.room_code),
+                "multi-host list omitted second public room");
+
         host_state.expected_port = other_host_state.expected_port;
         host_state.join_called = false;
         host_state.leave_called = false;
