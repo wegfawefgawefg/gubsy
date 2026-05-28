@@ -27,6 +27,37 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
     return widget;
 }
 
+std::string lobby_status_text(const EngineState& engine) {
+    const GubsyLobbyState& lobby = engine.lobby;
+    if (!lobby.online)
+        return "Offline lobby";
+
+    std::string status;
+    if (lobby.is_host) {
+        status = lobby.room_code.empty() ? "Currently Direct Hosting"
+                                         : "Currently Public Hosting via gubsy-roomd";
+    } else {
+        status = lobby.room_code.empty() ? "Joined Direct Game" : "Joined Public Game";
+    }
+
+    if (!lobby.lobby_name.empty()) {
+        status += " | ";
+        status += lobby.lobby_name;
+    }
+    if (!lobby.room_code.empty()) {
+        status += " | ";
+        status += lobby.room_code;
+    }
+    if (!lobby.advertised_endpoint.empty()) {
+        status += " | ";
+        status += lobby.advertised_endpoint;
+    }
+    status += " | ";
+    status += std::to_string(lobby.local_players.size());
+    status += " local";
+    return status;
+}
+
 void command_start_game(MenuContext& ctx, std::int32_t) {
     std::string message;
     if (ctx.engine.lobby.online && !ctx.engine.lobby.is_host) {
@@ -63,6 +94,7 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     widgets.clear();
     frame_actions.clear();
     text_cache.clear();
+    text_cache.reserve(4);
     gubsy_lobby_ensure_ready(ctx.engine);
     const bool joined_client = ctx.engine.lobby.online && !ctx.engine.lobby.is_host;
 
@@ -73,6 +105,14 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     title.label = "Lobby";
     title.secondary = joined_client ? "Joined room. Waiting for host." : "Session setup";
     widgets.push_back(title);
+
+    text_cache.push_back(lobby_status_text(ctx.engine));
+    MenuWidget status;
+    status.id = 207;
+    status.slot = SettingsObjectID::STATUS;
+    status.type = WidgetType::Label;
+    status.label = text_cache.back().c_str();
+    widgets.push_back(status);
 
     MenuWidget players;
     players.id = 201;
