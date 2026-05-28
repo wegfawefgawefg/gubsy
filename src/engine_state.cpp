@@ -1,5 +1,6 @@
 #include "engine_state.hpp"
 
+#include "src/alerts.hpp"
 #include "src/audio.hpp"
 #include "src/audio_settings.hpp"
 #include "src/data.hpp"
@@ -41,6 +42,22 @@
 #include <cmath>
 
 namespace {
+
+AlertSeverity alert_severity_from_public(GubsyAlertSeverity severity) {
+    switch (severity) {
+    case GubsyAlertSeverity::Success:
+        return AlertSeverity::Success;
+    case GubsyAlertSeverity::Warning:
+        return AlertSeverity::Warning;
+    case GubsyAlertSeverity::Error:
+        return AlertSeverity::Error;
+    case GubsyAlertSeverity::Debug:
+        return AlertSeverity::Debug;
+    case GubsyAlertSeverity::Info:
+    default:
+        return AlertSeverity::Info;
+    }
+}
 
 void load_shell_data_pools(EngineState& engine) {
     load_audio_settings(engine, data_path("settings_profiles/audio.lisp").string());
@@ -510,4 +527,11 @@ void gubsy_shutdown_debug(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     layout_editor_shutdown(engine);
     imgui_debug_shutdown();
+}
+
+void gubsy_add_alert(GubsyRuntime& runtime, const std::string& text,
+                     GubsyAlertSeverity severity) {
+    if (text.empty())
+        return;
+    add_alert(gubsy_runtime_engine(runtime), text, alert_severity_from_public(severity));
 }

@@ -42,6 +42,14 @@ enum class GubsyRenderBackend {
     SDLRenderer = 1,
 };
 
+enum class GubsyAlertSeverity {
+    Info = 0,
+    Success = 1,
+    Warning = 2,
+    Error = 3,
+    Debug = 4,
+};
+
 struct GubsyFrame {
     GubsyRenderBackend backend{GubsyRenderBackend::None};
     SDL_Window* window{nullptr};
@@ -121,3 +129,5 @@ void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt);
 void gubsy_render_debug(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                         int screen_height);
 void gubsy_shutdown_debug(GubsyRuntime& runtime);
+void gubsy_add_alert(GubsyRuntime& runtime, const std::string& text,
+                     GubsyAlertSeverity severity = GubsyAlertSeverity::Info);
