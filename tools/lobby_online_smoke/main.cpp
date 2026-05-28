@@ -65,6 +65,32 @@ void verify_shell_lobby_copy(GubsyRuntime& runtime) {
             "players card summary should not contain hosting status text");
 }
 
+void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::SHELL_LOBBY),
+            "failed to push joined shell lobby");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    require(status != nullptr, "missing joined shell lobby status widget");
+    require(status->label != nullptr && std::string(status->label) == "Joined Public Game",
+            "joined shell lobby status should identify public session");
+    require(status->secondary != nullptr, "missing joined shell lobby status detail");
+    const std::string detail = status->secondary;
+    require(detail.find("Host ") != std::string::npos,
+            "joined shell lobby detail missing host context");
+    require(detail.find("Players 2/") != std::string::npos,
+            "joined shell lobby detail missing player count");
+    require(detail.find("1 remote client") != std::string::npos,
+            "joined shell lobby detail missing remote client count");
+
+    const MenuWidget* host = widget_by_slot(engine, SettingsObjectID::CARD2);
+    require(host != nullptr, "missing joined shell lobby host card");
+    require(host->secondary != nullptr &&
+                std::string(host->secondary).find("Host-only") != std::string::npos,
+            "joined shell lobby should mark host flow host-only");
+}
+
 void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remote_member_id) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_LOCAL_PLAYERS),
@@ -342,6 +368,7 @@ int main(int argc, char** argv) {
                 "guest did not fetch joined room membership");
         require(guest_engine.lobby.room_current_players == 2,
                 "guest did not cache joined room player count");
+        verify_joined_shell_lobby_context(guest_runtime);
 
         host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
         gubsy_lobby_tick_online(host_engine);
