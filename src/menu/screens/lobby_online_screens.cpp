@@ -223,6 +223,22 @@ void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
     ctx.engine.lobby.max_players = std::clamp(ctx.engine.lobby.max_players + delta, 1, 32);
 }
 
+std::string room_card_detail(const MatchmakingRoom& room) {
+    std::string detail = "Host: ";
+    detail += room.host_name.empty() ? "Unknown" : room.host_name;
+    detail += " | Players ";
+    detail += std::to_string(room.current_players);
+    detail += "/";
+    detail += std::to_string(room.max_players);
+    detail += session_contract_is_in_game(room.contract) ? " | In Game" : " | Lobby";
+    detail += " | gubsy-roomd";
+    if (!room.contract.realtime_endpoint.empty()) {
+        detail += " | ";
+        detail += room.contract.realtime_endpoint;
+    }
+    return detail;
+}
+
 BuiltScreen build_host_screen(MenuContext& ctx) {
     gubsy_lobby_ensure_ready(ctx.engine);
     auto& st = ctx.state<OnlineState>();
@@ -389,6 +405,7 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
     static std::vector<std::string> text_cache;
     widgets.clear();
     text_cache.clear();
+    text_cache.reserve(static_cast<std::size_t>(kRoomsPerPage) * 2 + 2);
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Browse Servers"));
     st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
@@ -413,21 +430,24 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
 
     std::vector<WidgetId> room_ids;
     int start = st.page * kRoomsPerPage;
+    const bool no_rooms = ctx.engine.lobby.discovered_rooms.empty();
     for (int i = 0; i < kRoomsPerPage; ++i) {
         int room_index = start + i;
         WidgetId widget_id = kFirstRoomWidgetId + static_cast<WidgetId>(i);
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
-        if (room_index < static_cast<int>(ctx.engine.lobby.discovered_rooms.size())) {
+        if (no_rooms && i == 0) {
+            MenuWidget card;
+            card.id = widget_id;
+            card.slot = slot;
+            card.type = WidgetType::Card;
+            card.label = "No Public Games";
+            card.secondary = "Refresh to check the room server again.";
+            widgets.push_back(card);
+        } else if (room_index < static_cast<int>(ctx.engine.lobby.discovered_rooms.size())) {
             const MatchmakingRoom& room =
                 ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(room_index)];
             text_cache.push_back(room.session_name.empty() ? room.room_code : room.session_name);
-            std::string detail = room.host_name + " | " + std::to_string(room.current_players) +
-                                 "/" + std::to_string(room.max_players);
-            if (session_contract_is_in_game(room.contract))
-                detail += " | In Game";
-            else
-                detail += " | Lobby";
-            text_cache.push_back(std::move(detail));
+            text_cache.push_back(room_card_detail(room));
 
             MenuWidget card;
             card.id = widget_id;
