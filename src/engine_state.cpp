@@ -479,12 +479,17 @@ bool gubsy_menu_text_edit_active(GubsyRuntime& runtime) {
     return menu_system_internal::runtime_state(gubsy_runtime_engine(runtime)).text_edit_active;
 }
 
-void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height) {
+void gubsy_update_runtime(GubsyRuntime& runtime, float dt) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     engine.dt = dt;
     engine.now += static_cast<double>(std::max(dt, 0.0f));
     age_and_prune_alerts(engine, engine.dt);
     gubsy_lobby_tick_online(engine);
+}
+
+void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height) {
+    gubsy_update_runtime(runtime, dt);
+    EngineState& engine = gubsy_runtime_engine(runtime);
     menu_system_update(engine, dt, screen_width, screen_height);
 }
 
