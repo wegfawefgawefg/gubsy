@@ -575,6 +575,9 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
     } else if (!ctx.engine.lobby.last_error.empty()) {
         action_secondary = "Edit the address or retry the join.";
         action.secondary = action_secondary.c_str();
+    } else {
+        action_secondary = "Checks for a server at " + endpoint_text + ".";
+        action.secondary = action_secondary.c_str();
     }
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
