@@ -67,6 +67,14 @@ void update_page(LocalPlayersState& st, int count) {
     st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
+std::string remote_member_label(const MatchmakingMember& member) {
+    if (!member.display_name.empty())
+        return member.display_name;
+    if (!member.member_id.empty())
+        return member.member_id;
+    return "Remote Player";
+}
+
 std::vector<const MatchmakingMember*> remote_members(const GubsyLobbyState& lobby) {
     std::vector<const MatchmakingMember*> members;
     members.reserve(lobby.members.size());
@@ -75,15 +83,13 @@ std::vector<const MatchmakingMember*> remote_members(const GubsyLobbyState& lobb
             continue;
         members.push_back(&member);
     }
+    std::stable_sort(members.begin(), members.end(), [](const MatchmakingMember* left,
+                                                        const MatchmakingMember* right) {
+        if (left->client_label != right->client_label)
+            return left->client_label < right->client_label;
+        return remote_member_label(*left) < remote_member_label(*right);
+    });
     return members;
-}
-
-std::string remote_member_label(const MatchmakingMember& member) {
-    if (!member.display_name.empty())
-        return member.display_name;
-    if (!member.member_id.empty())
-        return member.member_id;
-    return "Remote Player";
 }
 
 bool can_manage_remote_member(const EngineState& engine, const MatchmakingMember& member) {
@@ -108,6 +114,7 @@ std::string remote_member_detail(const EngineState& engine, const MatchmakingMem
         detail += " | Client ";
         detail += member.client_label;
     }
+    detail += session_contract_is_in_game(lobby.contract) ? " | State In Game" : " | State Lobby";
     if (!lobby.advertised_endpoint.empty()) {
         detail += " | Endpoint ";
         detail += lobby.advertised_endpoint;

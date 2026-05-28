@@ -159,6 +159,8 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
             "direct remote player detail missing direct backend context");
     require(remote_detail.find("Client 127.0.0.1:45454") != std::string::npos,
             "direct remote player detail missing client label");
+    require(remote_detail.find("State Lobby") != std::string::npos,
+            "direct remote player detail missing lobby state");
     require(remote_detail.find("gubsy-roomd") == std::string::npos,
             "direct remote player detail should not mention room service");
     require(remote_detail.find("Select for actions") != std::string::npos,
@@ -178,6 +180,29 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
             "direct remote player kick action should explain direct disconnection");
     require(kick->on_select.type == MenuActionType::RunCommand,
             "direct remote player kick action should run an explicit command");
+    engine.menu_manager.clear();
+}
+
+void verify_direct_member_sorting(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.menu_manager.clear();
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_LOCAL_PLAYERS),
+            "failed to push direct players screen for sorting");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    std::vector<std::string> remote_labels;
+    for (const MenuWidget& widget : menu.cache.widgets) {
+        if (widget.secondary == nullptr)
+            continue;
+        const std::string detail = widget.secondary;
+        if (detail.find("Direct") == std::string::npos)
+            continue;
+        remote_labels.push_back(widget.label ? widget.label : "");
+    }
+    require(remote_labels.size() >= 2, "direct sorting smoke missing remote rows");
+    require(remote_labels[0] == "Client A Guest" && remote_labels[1] == "Client B Guest",
+            "direct remote rows should sort by client label");
     engine.menu_manager.clear();
 }
 
@@ -337,6 +362,8 @@ void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remo
             "remote player detail missing room code");
     require(detail.find("Endpoint ") != std::string::npos,
             "remote player detail missing endpoint");
+    require(detail.find("State Lobby") != std::string::npos,
+            "remote player detail missing lobby state");
     require(detail.find("Select for actions") != std::string::npos,
             "remote player row should open management actions");
     require(remote_card->on_select.type == MenuActionType::RunCommand,
@@ -566,6 +593,20 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.members.empty(), "direct host did not clear direct members");
         require(has_alert_containing(host_engine, "Direct Guest left from client 127.0.0.1:45454"),
                 "direct host did not alert direct member leave with client label");
+
+        MatchmakingMember client_b;
+        client_b.member_id = "direct:10.0.0.2:5000";
+        client_b.display_name = "Client B Guest";
+        client_b.client_label = "client-b";
+        MatchmakingMember client_a;
+        client_a.member_id = "direct:10.0.0.1:5000";
+        client_a.display_name = "Client A Guest";
+        client_a.client_label = "client-a";
+        gubsy_lobby_set_direct_members(host_engine,
+                                       std::vector<MatchmakingMember>{client_b, client_a},
+                                       false);
+        verify_direct_member_sorting(host_runtime);
+        gubsy_lobby_set_direct_members(host_engine, {}, false);
 
         require(gubsy_lobby_join_direct(guest_engine, guest_state.expected_host,
                                         guest_state.expected_port, message),
