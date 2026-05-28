@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
         guest_state.join_called = false;
         guest_state.leave_called = false;
 
-        const std::string generated_room_name = host_engine.lobby.lobby_name;
+        std::string active_room_name = host_engine.lobby.lobby_name;
         host_engine.lobby.visibility = GubsyLobbyVisibility::Public;
         require(gubsy_lobby_host_room(host_engine, host_state.expected_port, message),
                 "host room failed");
@@ -207,8 +207,33 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.members.size() == 1,
                 "host did not fetch initial room membership");
 
+        const std::string old_room_code = host_engine.lobby.room_code;
+        host_engine.lobby.lobby_name = "Bright Rehosted Tunnel";
+        active_room_name = host_engine.lobby.lobby_name;
+        host_state.host_called = false;
+        host_state.leave_called = false;
+        require(gubsy_lobby_host_room(host_engine, host_state.expected_port, message),
+                "rehost room failed");
+        require(host_state.leave_called, "rehost did not leave previous room");
+        require(host_state.host_called, "rehost did not restart host transport");
+        require(host_engine.lobby.online, "rehost lobby is not online");
+        require(host_engine.lobby.is_host, "rehost lobby is not marked as host");
+        require(!host_engine.lobby.room_code.empty(), "rehost room code missing");
+        require(host_engine.lobby.members.size() == 1,
+                "rehost did not fetch initial room membership");
+
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "guest public room refresh failed");
+        if (old_room_code != host_engine.lobby.room_code) {
+            auto old_listed =
+                std::find_if(guest_engine.lobby.discovered_rooms.begin(),
+                             guest_engine.lobby.discovered_rooms.end(),
+                             [&](const MatchmakingRoom& room) {
+                                 return room.room_code == old_room_code;
+                             });
+            require(old_listed == guest_engine.lobby.discovered_rooms.end(),
+                    "rehost left stale old room listed");
+        }
         auto listed_room =
             std::find_if(guest_engine.lobby.discovered_rooms.begin(),
                          guest_engine.lobby.discovered_rooms.end(),
@@ -217,7 +242,7 @@ int main(int argc, char** argv) {
                          });
         require(listed_room != guest_engine.lobby.discovered_rooms.end(),
                 "public hosted room was not listed");
-        require(listed_room->session_name == generated_room_name,
+        require(listed_room->session_name == active_room_name,
                 "listed room did not keep generated room name");
         require(listed_room->privacy > 0, "listed room was not public");
 

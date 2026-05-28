@@ -210,6 +210,16 @@ bool apply_remote_room_config(EngineState& engine, const MatchmakingRoom& room,
     return false;
 }
 
+bool leave_existing_session_before_host(EngineState& engine, std::string& message) {
+    if (!engine.lobby.online)
+        return true;
+    if (gubsy_lobby_leave_room(engine, message))
+        return true;
+    message = with_prefix("Cannot replace hosted session", message);
+    set_lobby_error(engine, message);
+    return false;
+}
+
 } // namespace
 
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message) {
@@ -222,6 +232,8 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
         set_lobby_error(engine, message);
         return false;
     }
+    if (!leave_existing_session_before_host(engine, message))
+        return false;
 
     engine.lobby.contract = build_lobby_contract(engine);
     GubsyLobbyHostResult result =
@@ -272,6 +284,8 @@ bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::strin
         set_lobby_error(engine, message);
         return false;
     }
+    if (!leave_existing_session_before_host(engine, message))
+        return false;
 
     engine.lobby.contract = build_lobby_contract(engine);
     GubsyLobbyHostResult result =
