@@ -177,6 +177,19 @@ void disconnect_game_transport(EngineState& engine) {
     (void)engine.lobby_commands.leave(engine.lobby_commands.leave_user_data, engine.lobby);
 }
 
+void force_leave_online_session(EngineState& engine, const std::string& status) {
+    disconnect_game_transport(engine);
+    engine.lobby.online = false;
+    engine.lobby.is_host = false;
+    engine.lobby.room_code.clear();
+    engine.lobby.member_id.clear();
+    engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
+    engine.lobby.members.clear();
+    clear_lobby_error(engine, status);
+    add_alert(engine, status);
+}
+
 bool validate_room_contract(EngineState& engine, const MatchmakingRoom& room,
                             std::string& message) {
     const SessionContract local = build_lobby_contract(engine);
@@ -589,10 +602,21 @@ void gubsy_lobby_tick_online(EngineState& engine) {
     if (!matchmaking(engine).heartbeat_room(engine.lobby.room_server_url, engine.lobby.room_code,
                                             engine.lobby.member_id, local_player_name(engine),
                                             engine.lobby.host_secret, update_ptr, err)) {
+        if (!engine.lobby.is_host && err.find("member not found") != std::string::npos) {
+            force_leave_online_session(engine, "Removed from online room");
+            engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+            return;
+        }
         engine.lobby.last_error = err.empty() ? "Room heartbeat failed" : err;
     } else {
         engine.lobby.last_error.clear();
         if (auto current_room = fetch_current_room(engine, err)) {
+            if (!engine.lobby.is_host && !engine.lobby.member_id.empty() &&
+                !find_member_by_id(current_room->members, engine.lobby.member_id)) {
+                force_leave_online_session(engine, "Removed from online room");
+                engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+                return;
+            }
             engine.lobby.max_players = std::max(1, current_room->max_players);
             engine.lobby.contract = current_room->contract;
             engine.lobby.advertised_endpoint = current_room->contract.realtime_endpoint;

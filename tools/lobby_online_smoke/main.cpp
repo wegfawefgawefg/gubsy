@@ -457,6 +457,14 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.room_current_players == 1,
                 "host did not refresh kicked room player count");
         require(has_alert_containing(host_engine, "Kicked"), "host did not alert member kick");
+        guest_state.leave_called = false;
+        guest_engine.now = guest_engine.lobby.next_heartbeat_at + 0.1;
+        gubsy_lobby_tick_online(guest_engine);
+        require(guest_state.leave_called, "kicked guest did not disconnect transport");
+        require(!guest_engine.lobby.online, "kicked guest stayed online");
+        require(guest_engine.lobby.room_code.empty(), "kicked guest kept room code");
+        require(has_alert_containing(guest_engine, "Removed from online room"),
+                "kicked guest did not receive removal alert");
 
         other_host_engine.lobby.visibility = GubsyLobbyVisibility::Public;
         other_host_engine.lobby.lobby_name = "Second Public Tunnel";
