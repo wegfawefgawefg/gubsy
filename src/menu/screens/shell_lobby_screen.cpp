@@ -204,10 +204,12 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     const std::size_t status_detail_index = text_cache.size() - 1;
     MenuWidget status;
     status.id = 207;
-    status.slot = SettingsObjectID::STATUS;
+    status.slot = SettingsObjectID::STATUS_RIGHT;
     status.type = WidgetType::Label;
     status.label = text_cache[status_heading_index].c_str();
     status.secondary = text_cache[status_detail_index].c_str();
+    status.right_align = true;
+    status.wrap_text = true;
     widgets.push_back(status);
 
     MenuWidget players;

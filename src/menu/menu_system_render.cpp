@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace msi = menu_system_internal;
 
@@ -35,6 +38,70 @@ void draw_nav_button(SDL_Renderer* renderer,
     SDL_RenderLine(renderer, tip.x, tip.y, wing_top.x, wing_top.y);
     SDL_RenderLine(renderer, tip.x, tip.y, wing_bottom.x, wing_bottom.y);
     SDL_RenderLine(renderer, wing_top.x, wing_top.y, wing_bottom.x, wing_bottom.y);
+}
+
+std::vector<std::string> wrap_text_lines(const EngineState& engine, const char* text, int max_width) {
+    std::vector<std::string> lines;
+    if (!text || !*text)
+        return lines;
+    if (max_width <= 0) {
+        lines.emplace_back(text);
+        return lines;
+    }
+
+    std::istringstream stream(text);
+    std::string word;
+    std::string line;
+    while (stream >> word) {
+        std::string candidate = line.empty() ? word : line + " " + word;
+        if (!line.empty() && msi::measure_text_width(engine, candidate.c_str()) > max_width) {
+            lines.push_back(line);
+            line = word;
+        } else {
+            line = std::move(candidate);
+        }
+    }
+    if (!line.empty())
+        lines.push_back(line);
+    return lines;
+}
+
+void draw_aligned_text(const EngineState& engine,
+                       SDL_Renderer* renderer,
+                       const char* text,
+                       int x,
+                       int y,
+                       int max_width,
+                       SDL_Color color,
+                       const SDL_Rect* clip,
+                       bool right_align) {
+    int draw_x = x;
+    if (right_align && max_width > 0)
+        draw_x = x + max_width - msi::measure_text_width(engine, text);
+    msi::draw_text_with_clip(engine, renderer, text, draw_x, y, color, clip);
+}
+
+void draw_widget_text(const EngineState& engine,
+                      SDL_Renderer* renderer,
+                      const char* text,
+                      int x,
+                      int& y,
+                      int max_width,
+                      SDL_Color color,
+                      const SDL_Rect* clip,
+                      bool right_align,
+                      bool wrap_text) {
+    if (!text)
+        return;
+    if (wrap_text) {
+        for (const std::string& line : wrap_text_lines(engine, text, max_width)) {
+            draw_aligned_text(engine, renderer, line.c_str(), x, y, max_width, color, clip, right_align);
+            y += 22;
+        }
+    } else {
+        draw_aligned_text(engine, renderer, text, x, y, max_width, color, clip, right_align);
+        y += 22;
+    }
 }
 
 void draw_text_input(const EngineState& engine,
@@ -219,29 +286,53 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
         int line_x = static_cast<int>(rect.x) + (is_label ? 0 : 16);
         int line_y = static_cast<int>(rect.y) + (is_label ? 0 : 6);
         int text_input_value_y = 0;
-        auto next_line = [&]() {
-            line_y += 22;
-        };
+        int text_width = is_label ? std::max(0, static_cast<int>(rect.w))
+                                  : std::max(0, clip.w);
 
         if (text_ptr) {
-            msi::draw_text_with_clip(engine, renderer, text_ptr, line_x, line_y, text_color, clip_ptr);
+            int before_y = line_y;
+            draw_widget_text(engine,
+                             renderer,
+                             text_ptr,
+                             line_x,
+                             line_y,
+                             text_width,
+                             text_color,
+                             clip_ptr,
+                             widget.right_align,
+                             widget.wrap_text);
             if (is_text_input_widget && !widget.label) {
-                text_input_value_y = line_y;
+                text_input_value_y = before_y;
             }
-            next_line();
         }
         if (widget.secondary) {
             SDL_Color sec_color{static_cast<Uint8>(widget.style.fg_r / 2 + 50),
                                 static_cast<Uint8>(widget.style.fg_g / 2 + 50),
                                 static_cast<Uint8>(widget.style.fg_b / 2 + 50),
                                 255};
-            msi::draw_text_with_clip(engine, renderer, widget.secondary, line_x, line_y, sec_color, clip_ptr);
-            next_line();
+            draw_widget_text(engine,
+                             renderer,
+                             widget.secondary,
+                             line_x,
+                             line_y,
+                             text_width,
+                             sec_color,
+                             clip_ptr,
+                             widget.right_align,
+                             widget.wrap_text);
         }
         if (is_text_input_widget && widget.label != nullptr && text_input_value_ptr) {
             text_input_value_y = line_y;
-            msi::draw_text_with_clip(engine, renderer, text_input_value_ptr, line_x, line_y, text_input_color, clip_ptr);
-            next_line();
+            draw_widget_text(engine,
+                             renderer,
+                             text_input_value_ptr,
+                             line_x,
+                             line_y,
+                             text_width,
+                             text_input_color,
+                             clip_ptr,
+                             widget.right_align,
+                             false);
         }
         if (widget.tertiary) {
             SDL_Color tert_color{static_cast<Uint8>(widget.style.fg_r / 3 + 60),
@@ -262,8 +353,8 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
             int input_y = text_input_value_y > 0 ? text_input_value_y : (static_cast<int>(rect.y) + 6);
             if (std::fmod(state.caret_time, 1.0f) < 0.5f) {
                 int caret_x = line_x + msi::measure_text_width(engine, widget.text_buffer->c_str());
-                int caret_top = input_y - 2;
-                int caret_bottom = caret_top + 18;
+                int caret_top = input_y + 1;
+                int caret_bottom = caret_top + 19;
                 SDL_SetRenderDrawColor(renderer, widget.style.fg_r, widget.style.fg_g, widget.style.fg_b, 255);
                 SDL_RenderLine(renderer, static_cast<float>(caret_x), static_cast<float>(caret_top),
                                static_cast<float>(caret_x), static_cast<float>(caret_bottom));

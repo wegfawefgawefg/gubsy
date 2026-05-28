@@ -137,6 +137,8 @@ struct MenuWidget {
     bool show_slider_track{true};
     bool select_enters_text{true};
     bool play_select_sound{true};
+    bool right_align{false};
+    bool wrap_text{false};
 
     MenuAction on_select{};
     MenuAction on_left{};

@@ -152,8 +152,17 @@ void menu_system_update(EngineState& engine, float dt, int screen_width, int scr
         if (focus && editing_focus) {
             up_pressed = down_pressed = left_pressed = right_pressed = false;
             page_prev_pressed = page_next_pressed = false;
-            select_pressed = false;
             select_handled = true;
+            if (select_pressed) {
+                WidgetId editing_id = focus->id;
+                bool modified = msi::end_text_edit(state);
+                if (handle_text_commit(editing_id, modified) || modified) {
+                    needs_rebuild = true;
+                    continue;
+                }
+                select_pressed = false;
+                editing_focus = false;
+            }
             if (back_pressed) {
                 WidgetId editing_id = focus->id;
                 bool modified = msi::end_text_edit(state);

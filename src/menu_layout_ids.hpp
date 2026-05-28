@@ -33,4 +33,5 @@ inline constexpr int CARD3 = 423;
 inline constexpr int CARD4 = 424;
 inline constexpr int BACK = 430;
 inline constexpr int ACTION = 431;
+inline constexpr int STATUS_RIGHT = 432;
 } // namespace SettingsObjectID

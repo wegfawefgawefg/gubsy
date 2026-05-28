@@ -286,7 +286,7 @@ void verify_host_setup_render(GubsyRuntime& runtime) {
 }
 
 void verify_players_row_hierarchy(const EngineState& engine, const char* context) {
-    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS_RIGHT);
     require(status != nullptr && status->label != nullptr && status->secondary != nullptr,
             "missing shell lobby status hierarchy");
     const MenuWidget* players = widget_by_slot(engine, SettingsObjectID::CARD0);
@@ -315,7 +315,7 @@ void verify_shell_lobby_copy(GubsyRuntime& runtime) {
             "failed to push shell lobby");
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
-    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS_RIGHT);
     require(status != nullptr, "missing shell lobby status widget");
     require(status->label != nullptr, "missing shell lobby status label");
     require(std::string(status->label) == "Currently Public Hosting via gubsy-roomd",
@@ -349,7 +349,7 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
             "failed to push joined shell lobby");
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
-    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS_RIGHT);
     require(status != nullptr, "missing joined shell lobby status widget");
     require(status->label != nullptr && std::string(status->label) == "Joined Public Game",
             "joined shell lobby status should identify public session");
@@ -393,7 +393,7 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
             "failed to push direct shell lobby");
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
-    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS_RIGHT);
     require(status != nullptr, "missing direct shell lobby status widget");
     require(status->label != nullptr && std::string(status->label) == "Currently Direct Hosting",
             "direct shell lobby status should identify direct hosting");
