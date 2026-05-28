@@ -111,6 +111,54 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
             "joined waiting action should be visually muted");
 }
 
+void verify_direct_member_shell_context(GubsyRuntime& runtime,
+                                        const std::string& remote_member_id) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.menu_manager.clear();
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::SHELL_LOBBY),
+            "failed to push direct shell lobby");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    require(status != nullptr, "missing direct shell lobby status widget");
+    require(status->label != nullptr && std::string(status->label) == "Currently Direct Hosting",
+            "direct shell lobby status should identify direct hosting");
+    require(status->secondary != nullptr, "missing direct shell lobby status detail");
+    const std::string detail = status->secondary;
+    require(detail.find("Players ") != std::string::npos,
+            "direct shell lobby detail missing player count");
+    require(detail.find("1 remote client") != std::string::npos,
+            "direct shell lobby detail missing remote client count");
+
+    const MenuWidget* players = widget_by_slot(engine, SettingsObjectID::CARD0);
+    require(players != nullptr, "missing direct shell lobby players card");
+    require(players->label != nullptr && std::string(players->label) == "Players",
+            "direct players card title should be Players");
+    require(players->secondary != nullptr &&
+                std::string(players->secondary).find("1 remote client") != std::string::npos,
+            "direct players card summary missing remote client count");
+
+    engine.menu_manager.clear();
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_LOCAL_PLAYERS),
+            "failed to push direct players screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    auto remote_card = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
+                                    [&](const MenuWidget& widget) {
+                                        return widget.secondary != nullptr &&
+                                               std::string(widget.secondary).find(remote_member_id) !=
+                                                   std::string::npos;
+                                    });
+    require(remote_card != menu.cache.widgets.end(), "missing direct remote player card");
+    const std::string remote_detail = remote_card->secondary;
+    require(remote_detail.find("Direct") != std::string::npos,
+            "direct remote player detail missing direct backend context");
+    require(remote_detail.find("gubsy-roomd") == std::string::npos,
+            "direct remote player detail should not mention room service");
+    engine.menu_manager.clear();
+}
+
 void verify_own_room_browser_card(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_SERVER_BROWSER),
@@ -452,6 +500,26 @@ int main(int argc, char** argv) {
                 "guest direct/private room refresh failed");
         require(guest_engine.lobby.discovered_rooms.empty(),
                 "direct/private host should not create a public room listing");
+
+        MatchmakingMember direct_guest;
+        direct_guest.member_id = "direct:127.0.0.1:45454";
+        direct_guest.display_name = "Direct Guest";
+        direct_guest.is_host = false;
+        gubsy_lobby_set_direct_members(host_engine, std::vector<MatchmakingMember>{direct_guest},
+                                       true);
+        require(host_engine.lobby.members.size() == 1,
+                "direct host did not cache direct remote member");
+        require(host_engine.lobby.room_current_players ==
+                    static_cast<int>(host_engine.lobby.local_players.size() + 1),
+                "direct host player count did not include direct remote member");
+        require(has_alert_containing(host_engine, "Direct Guest joined"),
+                "direct host did not alert direct member join");
+        verify_direct_member_shell_context(host_runtime, direct_guest.member_id);
+
+        gubsy_lobby_set_direct_members(host_engine, {}, true);
+        require(host_engine.lobby.members.empty(), "direct host did not clear direct members");
+        require(has_alert_containing(host_engine, "Direct Guest left"),
+                "direct host did not alert direct member leave");
 
         require(gubsy_lobby_join_direct(guest_engine, guest_state.expected_host,
                                         guest_state.expected_port, message),

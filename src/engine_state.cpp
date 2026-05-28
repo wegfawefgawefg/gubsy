@@ -380,6 +380,12 @@ const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime) {
     return gubsy_runtime_engine(runtime).lobby;
 }
 
+void gubsy_set_lobby_direct_members(GubsyRuntime& runtime,
+                                    const std::vector<MatchmakingMember>& members,
+                                    bool alert_changes) {
+    gubsy_lobby_set_direct_members(gubsy_runtime_engine(runtime), members, alert_changes);
+}
+
 bool gubsy_show_main_menu(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     engine.menu_manager.clear();

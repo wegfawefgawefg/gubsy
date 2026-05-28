@@ -94,6 +94,9 @@ bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& mes
 bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& member_id,
                                     std::string& message);
 void gubsy_lobby_tick_online(EngineState& engine);
+void gubsy_lobby_set_direct_members(EngineState& engine,
+                                    const std::vector<MatchmakingMember>& members,
+                                    bool alert_changes);
 std::string gubsy_lobby_player_label(const EngineState& engine, int player_index);
 std::string gubsy_lobby_device_label(GubsyLobbyDeviceAssignment device);
 GubsyLobbyDeviceAssignment gubsy_lobby_device_from_input_source(const InputSource& source);

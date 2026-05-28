@@ -589,6 +589,18 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
     return true;
 }
 
+void gubsy_lobby_set_direct_members(EngineState& engine,
+                                    const std::vector<MatchmakingMember>& members,
+                                    bool alert_changes) {
+    gubsy_lobby_ensure_ready(engine);
+    if (!engine.lobby.online || !engine.lobby.room_code.empty()) {
+        return;
+    }
+    update_lobby_members(engine, members, alert_changes);
+    engine.lobby.room_current_players =
+        static_cast<int>(engine.lobby.local_players.size() + engine.lobby.members.size());
+}
+
 void gubsy_lobby_tick_online(EngineState& engine) {
     ensure_room_defaults(engine);
     if (!engine.lobby.online || engine.lobby.room_code.empty())

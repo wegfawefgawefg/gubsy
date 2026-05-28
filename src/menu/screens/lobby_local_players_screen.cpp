@@ -92,6 +92,8 @@ std::string remote_member_detail(const GubsyLobbyState& lobby, const Matchmaking
         detail += " | gubsy-roomd";
         detail += " | Room ";
         detail += lobby.room_code;
+    } else if (lobby.online) {
+        detail += " | Direct";
     }
     if (!lobby.advertised_endpoint.empty()) {
         detail += " | Endpoint ";

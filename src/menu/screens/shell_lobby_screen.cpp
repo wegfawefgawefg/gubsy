@@ -46,6 +46,9 @@ int room_player_count(const GubsyLobbyState& lobby) {
         if (!lobby.members.empty())
             return static_cast<int>(lobby.members.size());
     }
+    if (lobby.online && !lobby.members.empty()) {
+        return static_cast<int>(lobby.local_players.size()) + remote_member_count(lobby);
+    }
     return static_cast<int>(lobby.local_players.size());
 }
 
@@ -110,7 +113,7 @@ std::string session_detail_text(const EngineState& engine) {
     status += std::to_string(lobby.local_players.size());
     status += " local";
     const int remote_count = remote_member_count(lobby);
-    if (!lobby.room_code.empty()) {
+    if (remote_count > 0) {
         status += ", ";
         status += std::to_string(remote_count);
         status += " remote client";
@@ -195,7 +198,7 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     const std::size_t players_label_index = text_cache.size() - 1;
     std::string player_summary = std::to_string(ctx.engine.lobby.local_players.size()) + " local";
     const int remote_count = remote_member_count(ctx.engine.lobby);
-    if (!ctx.engine.lobby.room_code.empty()) {
+    if (remote_count > 0) {
         player_summary += ", ";
         player_summary += std::to_string(remote_count);
         player_summary += " remote client";
