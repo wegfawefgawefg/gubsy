@@ -63,6 +63,14 @@ void verify_shell_lobby_copy(GubsyRuntime& runtime) {
     require(players->secondary != nullptr, "missing players card summary");
     require(std::string(players->secondary).find("Currently Public Hosting") == std::string::npos,
             "players card summary should not contain hosting status text");
+
+    const MenuWidget* stop = widget_by_slot(engine, SettingsObjectID::CARD4);
+    require(stop != nullptr, "missing bottom stop-hosting command");
+    require(stop->label != nullptr && std::string(stop->label) == "Stop Hosting",
+            "hosted shell lobby should expose Stop Hosting in the bottom command slot");
+    require(stop->secondary != nullptr &&
+                std::string(stop->secondary).find("before joining elsewhere") != std::string::npos,
+            "stop hosting copy should explain join-before-leave behavior");
 }
 
 void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
@@ -89,6 +97,34 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
     require(host->secondary != nullptr &&
                 std::string(host->secondary).find("Host-only") != std::string::npos,
             "joined shell lobby should mark host flow host-only");
+}
+
+void verify_own_room_browser_card(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_SERVER_BROWSER),
+            "failed to push browser screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    auto own_card =
+        std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(), [](const MenuWidget& widget) {
+            return widget.badge != nullptr && std::string(widget.badge) == "YOUR ROOM";
+        });
+    require(own_card != menu.cache.widgets.end(), "missing own-room browser card");
+    require(own_card->on_select.type == MenuActionType::None,
+            "own-room browser card should not have a join action");
+    require(own_card->secondary != nullptr &&
+                std::string(own_card->secondary).find("Hosting Here | Unavailable") !=
+                    std::string::npos,
+            "own-room browser card should explain that it is unavailable");
+    require(own_card->style.bg_r > own_card->style.bg_g &&
+                own_card->style.bg_r > own_card->style.bg_b,
+            "own-room browser card should use a red unavailable background");
+    require(own_card->style.fg_r < 180 && own_card->style.fg_g < 180 &&
+                own_card->style.fg_b < 180,
+            "own-room browser card should be greyed out");
+    require(own_card->badge_color.r > 220 && own_card->badge_color.g < 120,
+            "own-room browser badge should be red");
 }
 
 void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remote_member_id) {
@@ -354,6 +390,7 @@ int main(int argc, char** argv) {
         require(!host_state.leave_called, "own-room join should not leave hosting");
         require(host_engine.lobby.online && host_engine.lobby.is_host,
                 "own-room join rejection should keep host online");
+        verify_own_room_browser_card(host_runtime);
 
         require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
                 "guest join by room code failed");

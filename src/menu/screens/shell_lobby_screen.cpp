@@ -224,11 +224,11 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     if (joined_client)
         start.label = "Waiting For Host";
     MenuWidget leave = make_button(208,
-                                   SettingsObjectID::SEARCH,
+                                   SettingsObjectID::CARD4,
                                    ctx.engine.lobby.is_host ? "Stop Hosting" : "Leave Session",
                                    MenuAction::run_command(g_cmd_leave_session));
     if (ctx.engine.lobby.online) {
-        leave.secondary = ctx.engine.lobby.is_host ? "Close the hosted session."
+        leave.secondary = ctx.engine.lobby.is_host ? "Close the hosted session before joining elsewhere."
                                                    : "Disconnect from the current session.";
     }
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());

@@ -227,6 +227,35 @@ bool is_current_host_room(const GubsyLobbyState& lobby, const MatchmakingRoom& r
            room.room_code == lobby.room_code;
 }
 
+void apply_unavailable_room_style(MenuWidget& card, bool current_host_room,
+                                  const MatchmakingRoom& room) {
+    if (current_host_room) {
+        card.style.bg_r = 48;
+        card.style.bg_g = 20;
+        card.style.bg_b = 24;
+        card.style.fg_r = 155;
+        card.style.fg_g = 145;
+        card.style.fg_b = 150;
+        card.style.focus_r = 185;
+        card.style.focus_g = 70;
+        card.style.focus_b = 75;
+        card.badge_color = SDL_Color{245, 80, 80, 255};
+        return;
+    }
+
+    card.style.bg_r = 32;
+    card.style.bg_g = 30;
+    card.style.bg_b = 34;
+    card.style.fg_r = 150;
+    card.style.fg_g = 145;
+    card.style.fg_b = 155;
+    card.style.focus_r = 120;
+    card.style.focus_g = 100;
+    card.style.focus_b = 120;
+    card.badge_color = session_contract_is_in_game(room.contract) ? SDL_Color{230, 150, 95, 255}
+                                                                  : SDL_Color{220, 115, 115, 255};
+}
+
 const char* room_browser_badge(const GubsyLobbyState& lobby, const MatchmakingRoom& room) {
     if (is_current_host_room(lobby, room))
         return "YOUR ROOM";
@@ -478,20 +507,7 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
                 card.on_select = MenuAction::run_command(g_cmd_join_listed, room_index);
                 card.badge_color = SDL_Color{130, 230, 150, 255};
             } else {
-                card.style.bg_r = 32;
-                card.style.bg_g = 30;
-                card.style.bg_b = 34;
-                card.style.fg_r = 150;
-                card.style.fg_g = 145;
-                card.style.fg_b = 155;
-                card.style.focus_r = 120;
-                card.style.focus_g = 100;
-                card.style.focus_b = 120;
-                card.badge_color = current_host_room
-                                       ? SDL_Color{235, 85, 85, 255}
-                                       : (session_contract_is_in_game(room.contract)
-                                              ? SDL_Color{230, 150, 95, 255}
-                                              : SDL_Color{220, 115, 115, 255});
+                apply_unavailable_room_style(card, current_host_room, room);
             }
             widgets.push_back(card);
             room_ids.push_back(card.id);
