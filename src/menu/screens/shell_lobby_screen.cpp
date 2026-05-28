@@ -142,7 +142,13 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
         ctx.engine.lobby.status_message = message;
         return;
     }
-    ctx.engine.lobby.status_message = "Starting game";
+    if (ctx.engine.lobby.online && ctx.engine.lobby.is_host) {
+        ctx.engine.lobby.contract.session_phase = "in_game";
+        add_alert(ctx.engine, "Host started game", AlertSeverity::Success);
+    }
+    ctx.engine.lobby.status_message = ctx.engine.lobby.online && ctx.engine.lobby.is_host
+                                          ? "Host started game"
+                                          : "Starting local game";
     ctx.engine.menu_commands.invoke(ctx, ctx.engine.main_menu_commands.start_game, 0);
 }
 
