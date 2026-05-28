@@ -639,6 +639,31 @@ int main(int argc, char** argv) {
         verify_direct_member_sorting(host_runtime);
         gubsy_lobby_set_direct_members(host_engine, {}, false);
 
+        host_state.expected_port = other_host_state.expected_port;
+        host_state.join_called = false;
+        host_state.leave_called = false;
+        require(gubsy_lobby_join_direct(host_engine, host_state.expected_host,
+                                        host_state.expected_port, message),
+                "direct host should leave hosting before direct-IP join");
+        require(host_state.leave_called,
+                "direct host-then-direct-join did not leave hosted session");
+        require(host_state.join_called,
+                "direct host-then-direct-join did not call join transport");
+        require(host_engine.lobby.online,
+                "direct host-then-direct-join did not leave runtime online");
+        require(!host_engine.lobby.is_host, "direct host-then-direct-join should become a client");
+        require(host_engine.lobby.room_code.empty(),
+                "direct host-then-direct-join should not keep a public room code");
+        require(gubsy_lobby_leave_room(host_engine, message),
+                "direct host-then-direct-join cleanup leave failed");
+        host_state.expected_port = 45454;
+        host_state.host_called = false;
+        host_state.join_called = false;
+        host_state.leave_called = false;
+        require(gubsy_lobby_host_direct(host_engine, host_state.expected_port, message),
+                "direct host restore after direct-join smoke failed");
+        require(host_state.host_called, "direct host restore did not call host transport");
+
         require(gubsy_lobby_join_direct(guest_engine, guest_state.expected_host,
                                         guest_state.expected_port, message),
                 "guest direct join failed");
@@ -807,18 +832,27 @@ int main(int argc, char** argv) {
                 "multi-host list omitted first public room");
         require(room_listed(other_host_engine.lobby.room_code),
                 "multi-host list omitted second public room");
+        auto other_listed_room =
+            std::find_if(guest_engine.lobby.discovered_rooms.begin(),
+                         guest_engine.lobby.discovered_rooms.end(),
+                         [&](const MatchmakingRoom& room) {
+                             return room.room_code == other_host_engine.lobby.room_code;
+                         });
+        require(other_listed_room != guest_engine.lobby.discovered_rooms.end(),
+                "multi-host list did not expose second room for browser join");
 
         host_state.expected_port = other_host_state.expected_port;
         host_state.join_called = false;
         host_state.leave_called = false;
-        require(gubsy_lobby_join_room_code(host_engine, other_host_engine.lobby.room_code, message),
-                "host should leave old room and join another room");
-        require(host_state.leave_called, "host-then-join did not leave old hosted session");
-        require(host_state.join_called, "host-then-join did not call join transport");
-        require(host_engine.lobby.online, "host-then-join did not leave runtime online");
-        require(!host_engine.lobby.is_host, "host-then-join should become a client");
+        require(gubsy_lobby_join_room(host_engine, *other_listed_room, message),
+                "host should leave old room and join another browser-listed room");
+        require(host_state.leave_called,
+                "host-then-browser-join did not leave old hosted session");
+        require(host_state.join_called, "host-then-browser-join did not call join transport");
+        require(host_engine.lobby.online, "host-then-browser-join did not leave runtime online");
+        require(!host_engine.lobby.is_host, "host-then-browser-join should become a client");
         require(host_engine.lobby.room_code == other_host_engine.lobby.room_code,
-                "host-then-join joined wrong room");
+                "host-then-browser-join joined wrong room");
 
         require(gubsy_lobby_leave_room(host_engine, message), "host leave failed");
         require(host_state.leave_called, "host leave transport was not called");
