@@ -97,15 +97,44 @@ MenuWidget make_option(WidgetId id, UILayoutObjectId slot, const char* label, co
     return widget;
 }
 
-std::uint16_t parse_port(const std::string& text) {
+bool parse_port(const std::string& text, std::uint16_t& port) {
     try {
-        int value = std::stoi(text);
+        std::size_t consumed = 0;
+        int value = std::stoi(text, &consumed);
+        if (consumed != text.size())
+            return false;
         if (value <= 0 || value > 65535)
-            return static_cast<std::uint16_t>(kDefaultPort);
-        return static_cast<std::uint16_t>(value);
+            return false;
+        port = static_cast<std::uint16_t>(value);
+        return true;
     } catch (...) {
-        return static_cast<std::uint16_t>(kDefaultPort);
+        return false;
     }
+}
+
+std::string host_port_error(const OnlineState& st) {
+    std::uint16_t ignored = 0;
+    if (!parse_port(st.port_text, ignored))
+        return "Enter a port from 1 to 65535.";
+    return {};
+}
+
+std::string join_by_ip_error(const OnlineState& st) {
+    if (st.host_text.empty())
+        return "Enter an IP address or host name.";
+    return host_port_error(st);
+}
+
+void set_error_style(MenuWidget& widget) {
+    widget.style.bg_r = 82;
+    widget.style.bg_g = 26;
+    widget.style.bg_b = 28;
+    widget.style.fg_r = 230;
+    widget.style.fg_g = 200;
+    widget.style.fg_b = 205;
+    widget.style.focus_r = 235;
+    widget.style.focus_g = 92;
+    widget.style.focus_b = 92;
 }
 
 void sync_state_from_lobby(OnlineState& st, const GubsyLobbyState& lobby) {
@@ -139,7 +168,15 @@ void command_host_direct(MenuContext& ctx, std::int32_t) {
         return;
 
     ctx.engine.lobby.visibility = GubsyLobbyVisibility::Private;
-    std::uint16_t port = parse_port(st.port_text);
+    std::uint16_t port = 0;
+    std::string input_error = host_port_error(st);
+    if (!input_error.empty()) {
+        ctx.engine.lobby.status_message = input_error;
+        ctx.engine.lobby.last_error = input_error;
+        add_alert(ctx.engine, input_error);
+        return;
+    }
+    (void)parse_port(st.port_text, port);
     std::string message;
     bool ok = gubsy_lobby_host_direct(ctx.engine, port, message);
     add_alert(ctx.engine, message);
@@ -153,7 +190,15 @@ void command_publish_room(MenuContext& ctx, std::int32_t) {
         return;
 
     ctx.engine.lobby.visibility = GubsyLobbyVisibility::Public;
-    std::uint16_t port = parse_port(st.port_text);
+    std::uint16_t port = 0;
+    std::string input_error = host_port_error(st);
+    if (!input_error.empty()) {
+        ctx.engine.lobby.status_message = input_error;
+        ctx.engine.lobby.last_error = input_error;
+        add_alert(ctx.engine, input_error);
+        return;
+    }
+    (void)parse_port(st.port_text, port);
     std::string message;
     bool ok = gubsy_lobby_host_room(ctx.engine, port, message);
     add_alert(ctx.engine, message);
@@ -173,7 +218,16 @@ void command_join_direct(MenuContext& ctx, std::int32_t) {
         return;
 
     std::string message;
-    bool ok = gubsy_lobby_join_direct(ctx.engine, st.host_text, parse_port(st.port_text), message);
+    std::uint16_t port = 0;
+    std::string input_error = join_by_ip_error(st);
+    if (!input_error.empty()) {
+        ctx.engine.lobby.status_message = input_error;
+        ctx.engine.lobby.last_error = input_error;
+        add_alert(ctx.engine, input_error);
+        return;
+    }
+    (void)parse_port(st.port_text, port);
+    bool ok = gubsy_lobby_join_direct(ctx.engine, st.host_text, port, message);
     add_alert(ctx.engine, message);
     if (ok)
         ctx.manager.pop_screen();
@@ -399,11 +453,17 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
     sync_state_from_lobby(st, ctx.engine.lobby);
 
     static std::vector<MenuWidget> widgets;
+    static std::string action_secondary;
     widgets.clear();
+    action_secondary.clear();
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Join By IP"));
-    st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
-                                                         : ctx.engine.lobby.last_error;
+    const std::string input_error = join_by_ip_error(st);
+    if (!input_error.empty())
+        st.status_text = input_error;
+    else
+        st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
+                                                             : ctx.engine.lobby.last_error;
     if (st.status_text.empty())
         st.status_text = "Direct network join";
     widgets.push_back(
@@ -417,6 +477,16 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
     port.placeholder = "35355";
     MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION, "Join",
                                     MenuAction::run_command(g_cmd_join_direct));
+    if (!input_error.empty()) {
+        action.on_select = MenuAction::none();
+        action_secondary = input_error;
+        action.secondary = action_secondary.c_str();
+        set_error_style(action);
+    } else if (!ctx.engine.lobby.last_error.empty()) {
+        action_secondary = "Last join failed. Check the address and try again.";
+        action.secondary = action_secondary.c_str();
+        set_error_style(action);
+    }
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     host.nav_down = port.id;

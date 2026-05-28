@@ -139,6 +139,58 @@ void verify_own_room_browser_card(GubsyRuntime& runtime) {
             "own-room browser badge should be red");
 }
 
+void verify_join_by_ip_validation(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_JOIN_BY_IP),
+            "failed to push join-by-ip screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* host = widget_by_slot(engine, SettingsObjectID::CARD0);
+    const MenuWidget* port = widget_by_slot(engine, SettingsObjectID::CARD1);
+    const MenuWidget* action = widget_by_slot(engine, SettingsObjectID::ACTION);
+    require(host != nullptr && host->label != nullptr && std::string(host->label) == "IP / Host",
+            "join-by-ip host field should be labeled");
+    require(port != nullptr && port->label != nullptr && std::string(port->label) == "Port",
+            "join-by-ip port field should be labeled");
+    require(action != nullptr && action->label != nullptr && std::string(action->label) == "Join",
+            "join-by-ip action should be Join");
+    require(action->on_select.type == MenuActionType::RunCommand,
+            "valid join-by-ip input should be actionable");
+
+    require(port->text_buffer != nullptr, "join-by-ip port missing text buffer");
+    *port->text_buffer = "bad";
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    action = widget_by_slot(engine, SettingsObjectID::ACTION);
+    require(status != nullptr && status->label != nullptr &&
+                std::string(status->label).find("port from 1 to 65535") != std::string::npos,
+            "invalid join-by-ip port should show a status error");
+    require(action != nullptr && action->on_select.type == MenuActionType::None,
+            "invalid join-by-ip input should disable the Join action");
+    require(action->secondary != nullptr &&
+                std::string(action->secondary).find("port from 1 to 65535") != std::string::npos,
+            "invalid join-by-ip action should explain the error");
+    require(action->style.bg_r > action->style.bg_g && action->style.bg_r > action->style.bg_b,
+            "invalid join-by-ip action should be red/error styled");
+
+    *port->text_buffer = "35355";
+    engine.lobby.last_error = "Cannot join direct game: failed to reach host";
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+    action = widget_by_slot(engine, SettingsObjectID::ACTION);
+    require(action != nullptr && action->on_select.type == MenuActionType::RunCommand,
+            "join-by-ip retry should remain actionable after a failed attempt");
+    require(action->secondary != nullptr &&
+                std::string(action->secondary).find("Last join failed") != std::string::npos,
+            "join-by-ip failed attempt should explain retry state");
+    require(action->style.bg_r > action->style.bg_g && action->style.bg_r > action->style.bg_b,
+            "join-by-ip failed attempt should be red/error styled");
+
+    engine.lobby.last_error.clear();
+    engine.lobby.status_message.clear();
+    engine.menu_manager.clear();
+}
+
 void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remote_member_id) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_LOCAL_PLAYERS),
@@ -330,6 +382,7 @@ int main(int argc, char** argv) {
                 "default lobby name should not be Local Game");
         (void)gubsy_lobby_add_local_player(host_engine);
         (void)gubsy_lobby_add_local_player(other_host_engine);
+        verify_join_by_ip_validation(guest_runtime);
         std::string message;
 
         require(gubsy_lobby_host_direct(host_engine, host_state.expected_port, message),
