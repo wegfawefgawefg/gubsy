@@ -435,11 +435,18 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     public_action_secondary = "Lists this game on the configured room server.";
     publish.secondary = public_action_secondary.c_str();
 
+    const char* action_label = "Host Direct";
+    if (ctx.engine.lobby.online)
+        action_label = ctx.engine.lobby.is_host ? "Stop Hosting" : "Leave Session";
     MenuWidget action = make_button(
-        kActionWidgetId, SettingsObjectID::ACTION,
-        ctx.engine.lobby.online ? "Leave Session" : "Host Direct",
+        kActionWidgetId, SettingsObjectID::ACTION, action_label,
         MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave : g_cmd_host_direct));
-    if (!ctx.engine.lobby.online) {
+    if (ctx.engine.lobby.online) {
+        direct_action_secondary = ctx.engine.lobby.is_host
+            ? "Close the hosted session before joining elsewhere."
+            : "Disconnect from the current session.";
+        action.secondary = direct_action_secondary.c_str();
+    } else {
         direct_action_secondary = "Starts direct/private hosting without listing this game.";
         action.secondary = direct_action_secondary.c_str();
     }
