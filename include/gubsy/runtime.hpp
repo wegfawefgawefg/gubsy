@@ -88,6 +88,8 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message);
 bool gubsy_host_lobby_direct(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
 bool gubsy_join_lobby_direct(GubsyRuntime& runtime, const std::string& host, std::uint16_t port,
                              std::string& message);
+void gubsy_confirm_lobby_direct_join(GubsyRuntime& runtime, const std::string& message);
+void gubsy_fail_lobby_direct_join(GubsyRuntime& runtime, const std::string& message);
 bool gubsy_host_lobby_room(GubsyRuntime& runtime, std::uint16_t port, std::string& message);
 bool gubsy_join_lobby_room_code(GubsyRuntime& runtime, const std::string& room_code,
                                 std::string& message);

@@ -46,8 +46,10 @@ struct GubsyLobbyState {
     std::string status_message;
     std::string last_error;
     std::string advertised_endpoint;
+    std::string pending_direct_join_endpoint;
     bool online{false};
     bool is_host{false};
+    bool direct_join_pending{false};
     double next_heartbeat_at{0.0};
     double next_room_refresh_at{0.0};
     int room_current_players{0};
@@ -85,6 +87,8 @@ bool gubsy_lobby_validate_start(EngineState& engine, std::string& message);
 bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::string& message);
 bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::uint16_t port,
                              std::string& message);
+void gubsy_lobby_confirm_direct_join(EngineState& engine, const std::string& message);
+void gubsy_lobby_fail_direct_join(EngineState& engine, const std::string& message);
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message);
 bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_code,
                                 std::string& message);

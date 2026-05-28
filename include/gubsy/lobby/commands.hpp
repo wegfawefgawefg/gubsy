@@ -13,6 +13,7 @@ struct GubsyLobbyHostResult {
 
 struct GubsyLobbyJoinResult {
     bool ok{false};
+    bool pending{false};
     std::string status;
 };
 

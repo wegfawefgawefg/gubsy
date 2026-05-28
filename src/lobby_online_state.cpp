@@ -59,6 +59,11 @@ void clear_lobby_error(EngineState& engine, const std::string& status) {
     engine.lobby.last_error.clear();
 }
 
+void clear_direct_join_pending(EngineState& engine) {
+    engine.lobby.direct_join_pending = false;
+    engine.lobby.pending_direct_join_endpoint.clear();
+}
+
 SessionContract build_lobby_contract(EngineState& engine) {
     SessionContract contract = engine.lobby.contract;
     if (contract.net_protocol.empty())
@@ -259,6 +264,7 @@ bool validate_room_joinable(EngineState& engine, const MatchmakingRoom& room,
 }
 
 bool leave_existing_session_before_host(EngineState& engine, std::string& message) {
+    clear_direct_join_pending(engine);
     if (!engine.lobby.online)
         return true;
     if (gubsy_lobby_leave_room(engine, message))
@@ -269,6 +275,10 @@ bool leave_existing_session_before_host(EngineState& engine, std::string& messag
 }
 
 bool leave_existing_session_before_join(EngineState& engine, std::string& message) {
+    if (engine.lobby.direct_join_pending) {
+        disconnect_game_transport(engine);
+        clear_direct_join_pending(engine);
+    }
     if (!engine.lobby.online)
         return true;
     if (gubsy_lobby_leave_room(engine, message))
@@ -304,6 +314,7 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     }
 
     engine.lobby.advertised_endpoint = result.advertised_endpoint;
+    clear_direct_join_pending(engine);
     engine.lobby.network_port = static_cast<int>(port);
     engine.lobby.contract.session_phase = "lobby";
     engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
@@ -356,6 +367,7 @@ bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::strin
     }
 
     engine.lobby.advertised_endpoint = result.advertised_endpoint;
+    clear_direct_join_pending(engine);
     engine.lobby.network_port = static_cast<int>(port);
     engine.lobby.contract.session_phase = "lobby";
     engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
@@ -400,6 +412,28 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
         return false;
     }
 
+    engine.lobby.join_host = host;
+    engine.lobby.network_port = static_cast<int>(port);
+    engine.lobby.advertised_endpoint = host + ":" + std::to_string(port);
+    engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
+    if (join_result.pending) {
+        engine.lobby.online = false;
+        engine.lobby.is_host = false;
+        engine.lobby.room_code.clear();
+        engine.lobby.member_id.clear();
+        engine.lobby.host_secret.clear();
+        engine.lobby.room_current_players = 0;
+        engine.lobby.members.clear();
+        engine.lobby.direct_join_pending = true;
+        engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
+        clear_lobby_error(engine, join_result.status.empty()
+                                      ? "Joining direct " + engine.lobby.advertised_endpoint
+                                      : join_result.status);
+        message = engine.lobby.status_message;
+        return true;
+    }
+
+    clear_direct_join_pending(engine);
     engine.lobby.online = true;
     engine.lobby.is_host = false;
     engine.lobby.room_code.clear();
@@ -407,13 +441,43 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
     engine.lobby.members.clear();
-    engine.lobby.join_host = host;
-    engine.lobby.network_port = static_cast<int>(port);
-    engine.lobby.advertised_endpoint = host + ":" + std::to_string(port);
-    engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
     clear_lobby_error(engine, "Joined direct " + engine.lobby.advertised_endpoint);
     message = engine.lobby.status_message;
     return true;
+}
+
+void gubsy_lobby_confirm_direct_join(EngineState& engine, const std::string& message) {
+    gubsy_lobby_ensure_ready(engine);
+    if (!engine.lobby.direct_join_pending)
+        return;
+    engine.lobby.online = true;
+    engine.lobby.is_host = false;
+    engine.lobby.room_code.clear();
+    engine.lobby.member_id.clear();
+    engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
+    engine.lobby.members.clear();
+    clear_direct_join_pending(engine);
+    clear_lobby_error(engine, message.empty()
+                                  ? "Joined direct " + engine.lobby.advertised_endpoint
+                                  : message);
+    add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
+}
+
+void gubsy_lobby_fail_direct_join(EngineState& engine, const std::string& message) {
+    gubsy_lobby_ensure_ready(engine);
+    if (!engine.lobby.direct_join_pending)
+        return;
+    engine.lobby.online = false;
+    engine.lobby.is_host = false;
+    engine.lobby.room_code.clear();
+    engine.lobby.member_id.clear();
+    engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
+    engine.lobby.members.clear();
+    clear_direct_join_pending(engine);
+    set_lobby_error(engine, message.empty() ? "No server found" : message);
+    add_alert(engine, engine.lobby.status_message, AlertSeverity::Error);
 }
 
 bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message) {
@@ -507,6 +571,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
         engine.lobby.host_secret.clear();
         engine.lobby.room_current_players = 0;
         engine.lobby.members.clear();
+        clear_direct_join_pending(engine);
         clear_lobby_error(engine, "Left direct session");
         message = engine.lobby.status_message;
         return true;
@@ -528,6 +593,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
     engine.lobby.members.clear();
+    clear_direct_join_pending(engine);
     clear_lobby_error(engine, "Left online room");
     message = engine.lobby.status_message;
     return true;

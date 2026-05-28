@@ -259,8 +259,12 @@ void command_join_direct(MenuContext& ctx, std::int32_t) {
     }
     (void)parse_port(st.port_text, port);
     bool ok = gubsy_lobby_join_direct(ctx.engine, st.host_text, port, message);
-    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
-    if (ok)
+    add_alert(ctx.engine,
+              message,
+              ok ? (ctx.engine.lobby.direct_join_pending ? AlertSeverity::Info
+                                                         : AlertSeverity::Success)
+                 : AlertSeverity::Error);
+    if (ok && !ctx.engine.lobby.direct_join_pending)
         ctx.manager.pop_screen();
 }
 

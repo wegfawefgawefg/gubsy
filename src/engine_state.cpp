@@ -347,6 +347,14 @@ bool gubsy_join_lobby_direct(GubsyRuntime& runtime, const std::string& host, std
     return gubsy_lobby_join_direct(gubsy_runtime_engine(runtime), host, port, message);
 }
 
+void gubsy_confirm_lobby_direct_join(GubsyRuntime& runtime, const std::string& message) {
+    gubsy_lobby_confirm_direct_join(gubsy_runtime_engine(runtime), message);
+}
+
+void gubsy_fail_lobby_direct_join(GubsyRuntime& runtime, const std::string& message) {
+    gubsy_lobby_fail_direct_join(gubsy_runtime_engine(runtime), message);
+}
+
 bool gubsy_join_lobby_room_code(GubsyRuntime& runtime, const std::string& room_code,
                                 std::string& message) {
     return gubsy_lobby_join_room_code(gubsy_runtime_engine(runtime), room_code, message);
