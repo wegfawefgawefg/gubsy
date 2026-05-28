@@ -555,7 +555,7 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
     port.placeholder = "35355";
     port.secondary = "UDP port advertised by the host.";
     MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION,
-                                    failed_current_endpoint ? "Retry Join" : "Join",
+                                    failed_current_endpoint ? "No Server Found" : "Join",
                                     MenuAction::run_command(g_cmd_join_direct));
     if (ctx.engine.lobby.direct_join_pending) {
         action.on_select = MenuAction::none();
@@ -568,6 +568,7 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
         action.secondary = action_secondary.c_str();
         set_error_style(action);
     } else if (failed_current_endpoint) {
+        action.on_select = MenuAction::none();
         action_secondary = "No server found at " + endpoint_text + ".";
         action.secondary = action_secondary.c_str();
         set_error_style(action);
