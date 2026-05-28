@@ -476,7 +476,8 @@ void gubsy_lobby_confirm_direct_join(EngineState& engine, const std::string& mes
         if (auto current_room = fetch_current_room(engine, err))
             apply_room_to_lobby(engine, *current_room);
         clear_direct_join_pending(engine);
-        clear_lobby_error(engine, message.empty() ? "Joined room " + room.room_code : message);
+        (void)message;
+        clear_lobby_error(engine, "Joined room " + room.room_code);
         engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
         add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
         return;
