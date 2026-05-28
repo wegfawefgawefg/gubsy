@@ -102,6 +102,26 @@ int main() {
         SmokeState state;
         install_smoke_hooks(runtime, state);
         std::string message;
+        MatchmakingRoom full_room = make_room();
+        full_room.current_players = full_room.max_players;
+        require(!gubsy_lobby_join_room(engine, full_room, message),
+                "join should fail before transport when room is full");
+        require(!state.validate_remote_called, "full room should not validate remote config");
+        require(!state.apply_remote_called, "full room should not apply remote config");
+        require(!state.join_called, "full room should not call join transport");
+        require(engine.lobby.last_error == "Cannot join room: room is full",
+                "unexpected full-room error message");
+
+        MatchmakingRoom in_game_room = make_room();
+        in_game_room.contract.session_phase = "in_game";
+        require(!gubsy_lobby_join_room(engine, in_game_room, message),
+                "join should fail before transport when game is already in progress");
+        require(!state.validate_remote_called, "in-game room should not validate remote config");
+        require(!state.apply_remote_called, "in-game room should not apply remote config");
+        require(!state.join_called, "in-game room should not call join transport");
+        require(engine.lobby.last_error == "Cannot join room: game already in progress",
+                "unexpected in-game-room error message");
+
         require(!gubsy_lobby_join_room(engine, make_room(), message),
                 "join should fail when remote config is rejected");
         require(state.validate_remote_called, "remote validator was not called");

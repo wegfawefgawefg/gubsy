@@ -210,6 +210,21 @@ bool apply_remote_room_config(EngineState& engine, const MatchmakingRoom& room,
     return false;
 }
 
+bool validate_room_joinable(EngineState& engine, const MatchmakingRoom& room,
+                            std::string& message) {
+    if (session_contract_is_in_game(room.contract)) {
+        message = "Cannot join room: game already in progress";
+        set_lobby_error(engine, message);
+        return false;
+    }
+    if (room.max_players > 0 && room.current_players >= room.max_players) {
+        message = "Cannot join room: room is full";
+        set_lobby_error(engine, message);
+        return false;
+    }
+    return true;
+}
+
 bool leave_existing_session_before_host(EngineState& engine, std::string& message) {
     if (!engine.lobby.online)
         return true;
@@ -356,6 +371,8 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
 bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
+    if (!validate_room_joinable(engine, room, message))
+        return false;
     if (!validate_room_contract(engine, room, message))
         return false;
     if (!apply_remote_room_config(engine, room, message))

@@ -223,6 +223,12 @@ void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
     ctx.engine.lobby.max_players = std::clamp(ctx.engine.lobby.max_players + delta, 1, 32);
 }
 
+bool room_is_joinable(const MatchmakingRoom& room) {
+    if (session_contract_is_in_game(room.contract))
+        return false;
+    return room.max_players <= 0 || room.current_players < room.max_players;
+}
+
 std::string room_card_detail(const MatchmakingRoom& room) {
     std::string detail = "Host: ";
     detail += room.host_name.empty() ? "Unknown" : room.host_name;
@@ -230,7 +236,12 @@ std::string room_card_detail(const MatchmakingRoom& room) {
     detail += std::to_string(room.current_players);
     detail += "/";
     detail += std::to_string(room.max_players);
-    detail += session_contract_is_in_game(room.contract) ? " | In Game" : " | Lobby";
+    if (session_contract_is_in_game(room.contract))
+        detail += " | In Game | Unavailable";
+    else if (!room_is_joinable(room))
+        detail += " | Full | Unavailable";
+    else
+        detail += " | Lobby | Joinable";
     detail += " | gubsy-roomd";
     if (!room.contract.realtime_endpoint.empty()) {
         detail += " | ";
@@ -456,7 +467,16 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
             card.badge = room.room_code.c_str();
-            card.on_select = MenuAction::run_command(g_cmd_join_listed, room_index);
+            if (room_is_joinable(room)) {
+                card.on_select = MenuAction::run_command(g_cmd_join_listed, room_index);
+            } else {
+                card.style.bg_r = 32;
+                card.style.bg_g = 30;
+                card.style.bg_b = 34;
+                card.style.focus_r = 120;
+                card.style.focus_g = 100;
+                card.style.focus_b = 120;
+            }
             widgets.push_back(card);
             room_ids.push_back(card.id);
         } else {
