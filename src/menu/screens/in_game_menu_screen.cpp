@@ -67,7 +67,7 @@ void command_quit_to_main_menu(MenuContext& ctx, std::int32_t) {
         ctx.engine.menu_commands.invoke(ctx, ctx.engine.in_game_menu_commands.quit_to_main_menu, 0);
 }
 
-BuiltScreen build_in_game_menu(MenuContext&) {
+BuiltScreen build_in_game_menu(MenuContext& ctx) {
     static std::vector<MenuWidget> widgets;
     widgets.clear();
 
@@ -81,9 +81,6 @@ BuiltScreen build_in_game_menu(MenuContext&) {
     MenuWidget settings = make_button(kSettingsWidgetId, SettingsObjectID::CARD1, "Settings",
                                       MenuAction::run_command(g_cmd_open_settings));
     settings.secondary = "Audio, video, controls, binds, and profiles.";
-    MenuWidget restart = make_button(kRestartWidgetId, SettingsObjectID::CARD2, "Restart Run",
-                                     MenuAction::run_command(g_cmd_restart_run));
-    restart.secondary = "Restart from the first level.";
     MenuWidget quit = make_button(kQuitWidgetId, SettingsObjectID::CARD3, "Quit to Main Menu",
                                   MenuAction::run_command(g_cmd_quit_to_main_menu));
     quit.secondary = "Leave the current run.";
@@ -91,22 +88,33 @@ BuiltScreen build_in_game_menu(MenuContext&) {
 
     resume.nav_down = settings.id;
     settings.nav_up = resume.id;
-    settings.nav_down = restart.id;
-    restart.nav_up = settings.id;
-    restart.nav_down = quit.id;
-    quit.nav_up = restart.id;
+    const bool restart_available = ctx.engine.in_game_menu_commands.restart_run != kMenuIdInvalid;
+    if (restart_available) {
+        settings.nav_down = kRestartWidgetId;
+        quit.nav_up = kRestartWidgetId;
+    } else {
+        settings.nav_down = quit.id;
+        quit.nav_up = settings.id;
+    }
     quit.nav_down = back.id;
     back.nav_up = quit.id;
 
     resume.on_back = resume_action;
     settings.on_back = resume_action;
-    restart.on_back = resume_action;
     quit.on_back = resume_action;
     back.on_back = resume_action;
 
     widgets.push_back(resume);
     widgets.push_back(settings);
-    widgets.push_back(restart);
+    if (restart_available) {
+        MenuWidget restart = make_button(kRestartWidgetId, SettingsObjectID::CARD2, "Restart Run",
+                                         MenuAction::run_command(g_cmd_restart_run));
+        restart.secondary = "Restart from the first level.";
+        restart.nav_up = settings.id;
+        restart.nav_down = quit.id;
+        restart.on_back = resume_action;
+        widgets.push_back(restart);
+    }
     widgets.push_back(quit);
     widgets.push_back(back);
 
