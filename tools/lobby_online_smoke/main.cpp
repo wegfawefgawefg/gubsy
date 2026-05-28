@@ -139,6 +139,60 @@ void verify_own_room_browser_card(GubsyRuntime& runtime) {
             "own-room browser badge should be red");
 }
 
+void verify_host_screen_layout_and_validation(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_HOST_SETUP),
+            "failed to push host screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* room_name = widget_by_slot(engine, SettingsObjectID::CARD0);
+    const MenuWidget* port = widget_by_slot(engine, SettingsObjectID::CARD1);
+    const MenuWidget* max_players = widget_by_slot(engine, SettingsObjectID::CARD2);
+    const MenuWidget* host_public = widget_by_slot(engine, SettingsObjectID::CARD4);
+    const MenuWidget* host_direct = widget_by_slot(engine, SettingsObjectID::ACTION);
+    require(room_name != nullptr && room_name->label != nullptr &&
+                std::string(room_name->label) == "Room Name",
+            "host screen should label the room name field");
+    require(port != nullptr && port->label != nullptr && std::string(port->label) == "Host Port",
+            "host screen should label the port field");
+    require(max_players != nullptr && max_players->label != nullptr &&
+                std::string(max_players->label) == "Max Players",
+            "host screen should expose max players");
+    require(host_public != nullptr && host_public->label != nullptr &&
+                std::string(host_public->label) == "Host Public",
+            "host public action should be in the bottom-middle slot");
+    require(host_direct != nullptr && host_direct->label != nullptr &&
+                std::string(host_direct->label) == "Host Direct",
+            "host direct action should be in the bottom-right slot");
+    require(host_public->on_select.type == MenuActionType::RunCommand,
+            "valid host public action should be actionable");
+    require(host_direct->on_select.type == MenuActionType::RunCommand,
+            "valid host direct action should be actionable");
+
+    require(port->text_buffer != nullptr, "host screen port missing text buffer");
+    *port->text_buffer = "0";
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    host_public = widget_by_slot(engine, SettingsObjectID::CARD4);
+    host_direct = widget_by_slot(engine, SettingsObjectID::ACTION);
+    require(status != nullptr && status->label != nullptr &&
+                std::string(status->label).find("port from 1 to 65535") != std::string::npos,
+            "invalid host port should show a status error");
+    require(host_public != nullptr && host_public->on_select.type == MenuActionType::None,
+            "invalid host port should disable Host Public");
+    require(host_direct != nullptr && host_direct->on_select.type == MenuActionType::None,
+            "invalid host port should disable Host Direct");
+    require(host_public->style.bg_r > host_public->style.bg_g &&
+                host_public->style.bg_r > host_public->style.bg_b,
+            "invalid Host Public should be red/error styled");
+    require(host_direct->style.bg_r > host_direct->style.bg_g &&
+                host_direct->style.bg_r > host_direct->style.bg_b,
+            "invalid Host Direct should be red/error styled");
+
+    engine.menu_manager.clear();
+}
+
 void verify_join_by_ip_validation(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_JOIN_BY_IP),
@@ -382,6 +436,7 @@ int main(int argc, char** argv) {
                 "default lobby name should not be Local Game");
         (void)gubsy_lobby_add_local_player(host_engine);
         (void)gubsy_lobby_add_local_player(other_host_engine);
+        verify_host_screen_layout_and_validation(host_runtime);
         verify_join_by_ip_validation(guest_runtime);
         std::string message;
 

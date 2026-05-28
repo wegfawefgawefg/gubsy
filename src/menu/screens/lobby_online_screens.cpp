@@ -354,11 +354,19 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
 
     static std::vector<MenuWidget> widgets;
     static std::string max_players_text;
+    static std::string public_action_secondary;
+    static std::string direct_action_secondary;
     widgets.clear();
+    public_action_secondary.clear();
+    direct_action_secondary.clear();
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Host Session"));
-    st.status_text = ctx.engine.lobby.status_message.empty() ? "Network session setup"
-                                                             : ctx.engine.lobby.status_message;
+    const std::string input_error = host_port_error(st);
+    if (!input_error.empty())
+        st.status_text = input_error;
+    else
+        st.status_text = ctx.engine.lobby.status_message.empty() ? "Network session setup"
+                                                                 : ctx.engine.lobby.status_message;
     widgets.push_back(
         make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
 
@@ -377,29 +385,45 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     max_players.secondary = "Session-wide player cap advertised to the room backend.";
 
     MenuWidget publish =
-        make_button(kRefreshWidgetId, SettingsObjectID::CARD3, "Host Public",
+        make_button(kRefreshWidgetId, SettingsObjectID::CARD4, "Host Public",
                     MenuAction::run_command(g_cmd_publish_room));
-    publish.secondary = "Starts hosting and lists this game on the configured room server.";
+    public_action_secondary = "Lists this game on the configured room server.";
+    publish.secondary = public_action_secondary.c_str();
 
     MenuWidget action = make_button(
         kActionWidgetId, SettingsObjectID::ACTION,
         ctx.engine.lobby.online ? "Leave Session" : "Host Direct",
         MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave : g_cmd_host_direct));
-    if (!ctx.engine.lobby.online)
-        action.secondary = "Starts direct/private hosting without listing this game.";
+    if (!ctx.engine.lobby.online) {
+        direct_action_secondary = "Starts direct/private hosting without listing this game.";
+        action.secondary = direct_action_secondary.c_str();
+    }
+    if (!input_error.empty()) {
+        publish.on_select = MenuAction::none();
+        public_action_secondary = input_error;
+        publish.secondary = public_action_secondary.c_str();
+        set_error_style(publish);
+        if (!ctx.engine.lobby.online) {
+            action.on_select = MenuAction::none();
+            direct_action_secondary = input_error;
+            action.secondary = direct_action_secondary.c_str();
+            set_error_style(action);
+        }
+    }
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     lobby_name.nav_down = port_input.id;
     port_input.nav_up = lobby_name.id;
     port_input.nav_down = max_players.id;
     max_players.nav_up = port_input.id;
-    max_players.nav_down = publish.id;
+    max_players.nav_down = back.id;
     publish.nav_up = max_players.id;
-    publish.nav_down = back.id;
-    action.nav_up = publish.id;
-    action.nav_left = back.id;
-    back.nav_up = publish.id;
-    back.nav_right = action.id;
+    publish.nav_left = back.id;
+    publish.nav_right = action.id;
+    action.nav_up = max_players.id;
+    action.nav_left = publish.id;
+    back.nav_up = max_players.id;
+    back.nav_right = publish.id;
     widgets.push_back(lobby_name);
     widgets.push_back(port_input);
     widgets.push_back(max_players);
