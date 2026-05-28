@@ -47,9 +47,11 @@ struct GubsyLobbyState {
     std::string last_error;
     std::string advertised_endpoint;
     std::string pending_direct_join_endpoint;
+    MatchmakingRoom pending_join_room;
     bool online{false};
     bool is_host{false};
     bool direct_join_pending{false};
+    bool room_join_pending{false};
     double next_heartbeat_at{0.0};
     double next_room_refresh_at{0.0};
     int room_current_players{0};

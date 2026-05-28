@@ -61,7 +61,9 @@ void clear_lobby_error(EngineState& engine, const std::string& status) {
 
 void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.direct_join_pending = false;
+    engine.lobby.room_join_pending = false;
     engine.lobby.pending_direct_join_endpoint.clear();
+    engine.lobby.pending_join_room = MatchmakingRoom{};
 }
 
 SessionContract build_lobby_contract(EngineState& engine) {
@@ -425,6 +427,7 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
         engine.lobby.room_current_players = 0;
         engine.lobby.members.clear();
         engine.lobby.direct_join_pending = true;
+        engine.lobby.room_join_pending = false;
         engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
         clear_lobby_error(engine, join_result.status.empty()
                                       ? "Joining direct " + engine.lobby.advertised_endpoint
@@ -450,6 +453,35 @@ void gubsy_lobby_confirm_direct_join(EngineState& engine, const std::string& mes
     gubsy_lobby_ensure_ready(engine);
     if (!engine.lobby.direct_join_pending)
         return;
+
+    if (engine.lobby.room_join_pending) {
+        const MatchmakingRoom room = engine.lobby.pending_join_room;
+        std::string member_id;
+        std::string err;
+        if (!matchmaking(engine).join_room(engine.lobby.room_server_url, room.room_code,
+                                           local_player_name(engine), member_id, err)) {
+            disconnect_game_transport(engine);
+            clear_direct_join_pending(engine);
+            set_lobby_error(engine, err.empty() ? "Cannot join room: room service rejected join"
+                                                : with_prefix("Cannot join room", err));
+            add_alert(engine, engine.lobby.status_message, AlertSeverity::Error);
+            return;
+        }
+
+        apply_room_to_lobby(engine, room);
+        engine.lobby.online = true;
+        engine.lobby.is_host = false;
+        engine.lobby.member_id = member_id;
+        engine.lobby.host_secret.clear();
+        if (auto current_room = fetch_current_room(engine, err))
+            apply_room_to_lobby(engine, *current_room);
+        clear_direct_join_pending(engine);
+        clear_lobby_error(engine, message.empty() ? "Joined room " + room.room_code : message);
+        engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+        add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
+        return;
+    }
+
     engine.lobby.online = true;
     engine.lobby.is_host = false;
     engine.lobby.room_code.clear();
@@ -514,6 +546,28 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         return false;
     }
 
+    engine.lobby.join_host = host;
+    engine.lobby.network_port = static_cast<int>(port);
+    engine.lobby.advertised_endpoint = room.contract.realtime_endpoint;
+    engine.lobby.contract = room.contract;
+    if (join_result.pending) {
+        engine.lobby.online = false;
+        engine.lobby.is_host = false;
+        engine.lobby.room_code.clear();
+        engine.lobby.member_id.clear();
+        engine.lobby.host_secret.clear();
+        engine.lobby.room_current_players = 0;
+        engine.lobby.members.clear();
+        engine.lobby.direct_join_pending = true;
+        engine.lobby.room_join_pending = true;
+        engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
+        engine.lobby.pending_join_room = room;
+        clear_lobby_error(engine, join_result.status.empty() ? "Joining room " + room.room_code
+                                                             : join_result.status);
+        message = engine.lobby.status_message;
+        return true;
+    }
+
     std::string member_id;
     std::string err;
     if (!matchmaking(engine).join_room(engine.lobby.room_server_url, room.room_code,
@@ -530,8 +584,6 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     engine.lobby.is_host = false;
     engine.lobby.member_id = member_id;
     engine.lobby.host_secret.clear();
-    engine.lobby.join_host = host;
-    engine.lobby.network_port = static_cast<int>(port);
     if (auto current_room = fetch_current_room(engine, err))
         apply_room_to_lobby(engine, *current_room);
     clear_lobby_error(engine, "Joined room " + room.room_code);

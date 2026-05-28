@@ -284,8 +284,12 @@ void command_join_listed(MenuContext& ctx, std::int32_t index) {
     const MatchmakingRoom& room =
         ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(index)];
     bool ok = gubsy_lobby_join_room(ctx.engine, room, message);
-    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
-    if (ok)
+    add_alert(ctx.engine,
+              message,
+              ok ? (ctx.engine.lobby.direct_join_pending ? AlertSeverity::Info
+                                                         : AlertSeverity::Success)
+                 : AlertSeverity::Error);
+    if (ok && !ctx.engine.lobby.direct_join_pending)
         ctx.manager.pop_screen();
 }
 
@@ -594,8 +598,13 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
     text_cache.reserve(static_cast<std::size_t>(kRoomsPerPage) * 2 + 2);
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Browse Servers"));
-    st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
-                                                         : ctx.engine.lobby.last_error;
+    if (ctx.engine.lobby.direct_join_pending)
+        st.status_text = ctx.engine.lobby.status_message.empty()
+                             ? "Joining " + ctx.engine.lobby.pending_direct_join_endpoint
+                             : ctx.engine.lobby.status_message;
+    else
+        st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
+                                                             : ctx.engine.lobby.last_error;
     if (st.status_text.empty())
         st.status_text = "Public room browser";
     widgets.push_back(
@@ -665,9 +674,12 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
             card.type = WidgetType::Card;
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
-            card.badge = room_browser_badge(ctx.engine.lobby, room);
+            card.badge = ctx.engine.lobby.direct_join_pending
+                             ? "JOINING"
+                             : room_browser_badge(ctx.engine.lobby, room);
             const bool current_host_room = is_current_host_room(ctx.engine.lobby, room);
-            if (!current_host_room && room_is_joinable(room)) {
+            if (!ctx.engine.lobby.direct_join_pending && !current_host_room &&
+                room_is_joinable(room)) {
                 card.on_select = MenuAction::run_command(g_cmd_join_listed, room_index);
                 card.badge_color = SDL_Color{130, 230, 150, 255};
             } else {
