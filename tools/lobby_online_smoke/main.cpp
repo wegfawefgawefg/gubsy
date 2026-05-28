@@ -161,6 +161,8 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
             "direct remote player detail missing client label");
     require(remote_detail.find("State Lobby") != std::string::npos,
             "direct remote player detail missing lobby state");
+    require(remote_detail.find("Last seen 0s ago") != std::string::npos,
+            "direct remote player detail missing last-seen freshness");
     require(remote_detail.find("gubsy-roomd") == std::string::npos,
             "direct remote player detail should not mention room service");
     require(remote_detail.find("Select for actions") != std::string::npos,
@@ -364,6 +366,8 @@ void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remo
             "remote player detail missing endpoint");
     require(detail.find("State Lobby") != std::string::npos,
             "remote player detail missing lobby state");
+    require(detail.find("Last seen ") != std::string::npos,
+            "remote player detail missing last-seen freshness");
     require(detail.find("Select for actions") != std::string::npos,
             "remote player row should open management actions");
     require(remote_card->on_select.type == MenuActionType::RunCommand,

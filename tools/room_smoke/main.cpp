@@ -119,6 +119,8 @@ int main(int argc, char** argv) {
             throw std::runtime_error("room realtime endpoint did not update");
         if (fetched.contract.session_phase != "in_game")
             throw std::runtime_error("room session_phase did not update");
+        if (fetched.members.empty() || fetched.members.front().last_seen_seconds_ago < 0)
+            throw std::runtime_error("room members missing last-seen freshness");
 
         listed.clear();
         if (!matchmaking.list_rooms(server_url, listed, err))

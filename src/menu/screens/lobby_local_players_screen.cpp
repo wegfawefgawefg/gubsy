@@ -115,6 +115,9 @@ std::string remote_member_detail(const EngineState& engine, const MatchmakingMem
         detail += member.client_label;
     }
     detail += session_contract_is_in_game(lobby.contract) ? " | State In Game" : " | State Lobby";
+    detail += " | Last seen ";
+    detail += std::to_string(std::max(0, member.last_seen_seconds_ago));
+    detail += "s ago";
     if (!lobby.advertised_endpoint.empty()) {
         detail += " | Endpoint ";
         detail += lobby.advertised_endpoint;

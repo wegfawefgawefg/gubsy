@@ -139,6 +139,7 @@ void member_from_json(const nlohmann::json& json, MatchmakingMember& out) {
     out.member_id = json.value("member_id", "");
     out.display_name = json.value("display_name", "");
     out.client_label = json.value("client_label", "");
+    out.last_seen_seconds_ago = json.value("last_seen_seconds_ago", 0);
     out.is_host = json.value("is_host", false);
 }
 

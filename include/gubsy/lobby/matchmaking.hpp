@@ -9,6 +9,7 @@ struct MatchmakingMember {
     std::string member_id;
     std::string display_name;
     std::string client_label;
+    int last_seen_seconds_ago{0};
     bool is_host{false};
 };
 

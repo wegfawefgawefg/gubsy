@@ -132,11 +132,17 @@ RoomMember* find_member(RoomRecord& room, const std::string& member_id) {
 
 nlohmann::json room_to_json(const RoomRecord& room) {
     nlohmann::json members = nlohmann::json::array();
+    const auto now = Clock::now();
     for (const auto& member : room.members) {
+        const int last_seen_seconds_ago = std::max(
+            0,
+            static_cast<int>(
+                std::chrono::duration_cast<std::chrono::seconds>(now - member.last_seen).count()));
         members.push_back({
             {"member_id", member.member_id},
             {"display_name", member.display_name},
             {"client_label", ""},
+            {"last_seen_seconds_ago", last_seen_seconds_ago},
             {"is_host", member.is_host},
         });
     }
