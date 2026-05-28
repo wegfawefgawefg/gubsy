@@ -483,6 +483,7 @@ void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int sc
     EngineState& engine = gubsy_runtime_engine(runtime);
     engine.dt = dt;
     engine.now += static_cast<double>(std::max(dt, 0.0f));
+    age_and_prune_alerts(engine, engine.dt);
     gubsy_lobby_tick_online(engine);
     menu_system_update(engine, dt, screen_width, screen_height);
 }
