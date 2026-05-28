@@ -1,6 +1,7 @@
 #include "src/menu/menu_system.hpp"
 
 #include "src/engine_state.hpp"
+#include "src/menu_layout_ids.hpp"
 #include "src/menu/menu_system_state.hpp"
 
 #include <algorithm>
@@ -49,21 +50,34 @@ std::vector<std::string> wrap_text_lines(const EngineState& engine, const char* 
         return lines;
     }
 
-    std::istringstream stream(text);
-    std::string word;
-    std::string line;
-    while (stream >> word) {
-        std::string candidate = line.empty() ? word : line + " " + word;
-        if (!line.empty() && msi::measure_text_width(engine, candidate.c_str()) > max_width) {
-            lines.push_back(line);
-            line = word;
-        } else {
-            line = std::move(candidate);
+    std::istringstream paragraph_stream(text);
+    std::string paragraph;
+    while (std::getline(paragraph_stream, paragraph)) {
+        if (paragraph.empty()) {
+            lines.emplace_back();
+            continue;
         }
+        std::istringstream stream(paragraph);
+        std::string word;
+        std::string line;
+        while (stream >> word) {
+            std::string candidate = line.empty() ? word : line + " " + word;
+            if (!line.empty() && msi::measure_text_width(engine, candidate.c_str()) > max_width) {
+                lines.push_back(line);
+                line = word;
+            } else {
+                line = std::move(candidate);
+            }
+        }
+        if (!line.empty())
+            lines.push_back(line);
     }
-    if (!line.empty())
-        lines.push_back(line);
     return lines;
+}
+
+bool is_status_slot(UILayoutObjectId slot) {
+    return slot == SettingsObjectID::STATUS || slot == SettingsObjectID::STATUS_RIGHT ||
+           slot == ModsObjectID::STATUS;
 }
 
 void draw_aligned_text(const EngineState& engine,
@@ -288,6 +302,8 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
         int text_input_value_y = 0;
         int text_width = is_label ? std::max(0, static_cast<int>(rect.w))
                                   : std::max(0, clip.w);
+        const bool right_align_text = widget.right_align || is_status_slot(widget.slot);
+        const bool wrap_widget_text = widget.wrap_text || is_status_slot(widget.slot);
 
         if (text_ptr) {
             int before_y = line_y;
@@ -299,8 +315,8 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                              text_width,
                              text_color,
                              clip_ptr,
-                             widget.right_align,
-                             widget.wrap_text);
+                             right_align_text,
+                             wrap_widget_text);
             if (is_text_input_widget && !widget.label) {
                 text_input_value_y = before_y;
             }
@@ -318,8 +334,8 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                              text_width,
                              sec_color,
                              clip_ptr,
-                             widget.right_align,
-                             widget.wrap_text);
+                             right_align_text,
+                             wrap_widget_text);
         }
         if (is_text_input_widget && widget.label != nullptr && text_input_value_ptr) {
             text_input_value_y = line_y;
@@ -331,7 +347,7 @@ void menu_system_render(EngineState& engine, SDL_Renderer* renderer, int screen_
                              text_width,
                              text_input_color,
                              clip_ptr,
-                             widget.right_align,
+                             right_align_text,
                              false);
         }
         if (widget.tertiary) {
