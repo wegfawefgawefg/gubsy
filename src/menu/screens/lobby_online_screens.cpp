@@ -412,9 +412,11 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     MenuWidget lobby_name = make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "Room Name",
                                       &ctx.engine.lobby.lobby_name, 48);
     lobby_name.placeholder = "Room Name";
+    lobby_name.secondary = "Shown in the public server browser.";
     MenuWidget port_input =
         make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Host Port", &st.port_text, 6);
     port_input.placeholder = "35355";
+    port_input.secondary = "UDP port used by direct and public hosting.";
 
     max_players_text = std::to_string(std::clamp(ctx.engine.lobby.max_players, 1, 32));
     MenuWidget max_players =
@@ -539,9 +541,11 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
     MenuWidget host = make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "IP / Host",
                                 &st.host_text, 64);
     host.placeholder = "192.168.1.10";
+    host.secondary = "Address of the host machine.";
     MenuWidget port =
         make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Port", &st.port_text, 6);
     port.placeholder = "35355";
+    port.secondary = "UDP port advertised by the host.";
     MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION, "Join",
                                     MenuAction::run_command(g_cmd_join_direct));
     if (ctx.engine.lobby.direct_join_pending) {
