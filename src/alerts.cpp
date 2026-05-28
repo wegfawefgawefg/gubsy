@@ -3,6 +3,12 @@
 
 #include <algorithm>
 
+namespace {
+
+constexpr std::size_t kMaxAlerts = 8;
+
+} // namespace
+
 void age_and_prune_alerts(EngineState& engine, float dt) {
     for (auto& al : engine.alerts)
         al.age += dt;
@@ -16,8 +22,15 @@ void age_and_prune_alerts(EngineState& engine, float dt) {
 }
 
 void add_alert(EngineState& engine, const std::string& text) {
+    add_alert(engine, text, AlertSeverity::Info);
+}
+
+void add_alert(EngineState& engine, const std::string& text, AlertSeverity severity) {
     Alert al;
     al.text = text;
-    al.ttl = 1.2f;
+    al.ttl = severity == AlertSeverity::Error ? 2.4f : 1.8f;
+    al.severity = severity;
     engine.alerts.push_back(al);
+    while (engine.alerts.size() > kMaxAlerts)
+        engine.alerts.erase(engine.alerts.begin());
 }

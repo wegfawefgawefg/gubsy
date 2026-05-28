@@ -165,6 +165,22 @@ void draw_text(SDL_Renderer* renderer, const std::string& text, int x, int y, SD
     draw_text_with_font(fallback_draw_font(), renderer, text, x, y, color);
 }
 
+SDL_Color alert_color(AlertSeverity severity) {
+    switch (severity) {
+    case AlertSeverity::Success:
+        return SDL_Color{130, 235, 155, 255};
+    case AlertSeverity::Warning:
+        return SDL_Color{245, 205, 105, 255};
+    case AlertSeverity::Error:
+        return SDL_Color{245, 115, 125, 255};
+    case AlertSeverity::Debug:
+        return SDL_Color{185, 165, 235, 255};
+    case AlertSeverity::Info:
+    default:
+        return SDL_Color{210, 230, 255, 255};
+    }
+}
+
 void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width) {
     if (engine.alerts.empty())
         return;
@@ -174,7 +190,7 @@ void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width)
         return;
     for (const auto& alert : engine.alerts) {
         draw_text_with_font(graphics->ui_font ? graphics->ui_font : fallback_draw_font(), renderer,
-                            alert.text, 24, y, SDL_Color{255, 235, 160, 255});
+                            alert.text, 24, y, alert_color(alert.severity));
         y += 22;
         if (y > 200)
             break;

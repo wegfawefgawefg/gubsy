@@ -129,7 +129,7 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
         if (!session_contract_is_in_game(ctx.engine.lobby.contract) ||
             ctx.engine.lobby.contract.realtime_endpoint.empty()) {
             message = "Waiting For Host To Start";
-            add_alert(ctx.engine, message);
+            add_alert(ctx.engine, message, AlertSeverity::Info);
             ctx.engine.lobby.status_message = message;
             return;
         }
@@ -138,7 +138,7 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
         return;
     }
     if (!gubsy_lobby_validate_start(ctx.engine, message)) {
-        add_alert(ctx.engine, message);
+        add_alert(ctx.engine, message, AlertSeverity::Error);
         ctx.engine.lobby.status_message = message;
         return;
     }
@@ -148,7 +148,7 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
 
 void command_host_game(MenuContext& ctx, std::int32_t) {
     if (ctx.engine.lobby.online && !ctx.engine.lobby.is_host) {
-        add_alert(ctx.engine, "Only the host can host another game");
+        add_alert(ctx.engine, "Only the host can host another game", AlertSeverity::Warning);
         return;
     }
     ctx.manager.push_screen(MenuScreenID::LOBBY_HOST_SETUP);
@@ -161,7 +161,7 @@ void command_join_game(MenuContext& ctx, std::int32_t) {
 void command_leave_session(MenuContext& ctx, std::int32_t) {
     std::string message;
     (void)gubsy_lobby_leave_room(ctx.engine, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, AlertSeverity::Info);
     ctx.engine.lobby.status_message = message;
 }
 

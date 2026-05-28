@@ -189,7 +189,7 @@ bool validate_common(MenuContext& ctx) {
     if (gubsy_lobby_validate_start(ctx.engine, message))
         return true;
     ctx.engine.lobby.status_message = message;
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, AlertSeverity::Error);
     return false;
 }
 
@@ -204,13 +204,13 @@ void command_host_direct(MenuContext& ctx, std::int32_t) {
     if (!input_error.empty()) {
         ctx.engine.lobby.status_message = input_error;
         ctx.engine.lobby.last_error = input_error;
-        add_alert(ctx.engine, input_error);
+        add_alert(ctx.engine, input_error, AlertSeverity::Error);
         return;
     }
     (void)parse_port(st.port_text, port);
     std::string message;
     bool ok = gubsy_lobby_host_direct(ctx.engine, port, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
     if (ok)
         ctx.manager.pop_screen();
 }
@@ -226,13 +226,13 @@ void command_publish_room(MenuContext& ctx, std::int32_t) {
     if (!input_error.empty()) {
         ctx.engine.lobby.status_message = input_error;
         ctx.engine.lobby.last_error = input_error;
-        add_alert(ctx.engine, input_error);
+        add_alert(ctx.engine, input_error, AlertSeverity::Error);
         return;
     }
     (void)parse_port(st.port_text, port);
     std::string message;
     bool ok = gubsy_lobby_host_room(ctx.engine, port, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
     if (ok)
         ctx.manager.pop_screen();
 }
@@ -240,7 +240,7 @@ void command_publish_room(MenuContext& ctx, std::int32_t) {
 void command_leave(MenuContext& ctx, std::int32_t) {
     std::string message;
     (void)gubsy_lobby_leave_room(ctx.engine, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, AlertSeverity::Info);
 }
 
 void command_join_direct(MenuContext& ctx, std::int32_t) {
@@ -254,12 +254,12 @@ void command_join_direct(MenuContext& ctx, std::int32_t) {
     if (!input_error.empty()) {
         ctx.engine.lobby.status_message = input_error;
         ctx.engine.lobby.last_error = input_error;
-        add_alert(ctx.engine, input_error);
+        add_alert(ctx.engine, input_error, AlertSeverity::Error);
         return;
     }
     (void)parse_port(st.port_text, port);
     bool ok = gubsy_lobby_join_direct(ctx.engine, st.host_text, port, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
     if (ok)
         ctx.manager.pop_screen();
 }
@@ -268,7 +268,7 @@ void command_join_code(MenuContext& ctx, std::int32_t) {
     auto& st = ctx.state<OnlineState>();
     std::string message;
     bool ok = gubsy_lobby_join_room_code(ctx.engine, st.room_code_text, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
     if (ok)
         ctx.manager.pop_screen();
 }
@@ -280,15 +280,15 @@ void command_join_listed(MenuContext& ctx, std::int32_t index) {
     const MatchmakingRoom& room =
         ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(index)];
     bool ok = gubsy_lobby_join_room(ctx.engine, room, message);
-    add_alert(ctx.engine, message);
+    add_alert(ctx.engine, message, ok ? AlertSeverity::Success : AlertSeverity::Error);
     if (ok)
         ctx.manager.pop_screen();
 }
 
 void command_refresh(MenuContext& ctx, std::int32_t) {
     std::string message;
-    (void)gubsy_lobby_refresh_rooms(ctx.engine, true, message);
-    add_alert(ctx.engine, message);
+    bool ok = gubsy_lobby_refresh_rooms(ctx.engine, true, message);
+    add_alert(ctx.engine, message, ok ? AlertSeverity::Info : AlertSeverity::Error);
 }
 
 void command_page_delta(MenuContext& ctx, std::int32_t delta) {
