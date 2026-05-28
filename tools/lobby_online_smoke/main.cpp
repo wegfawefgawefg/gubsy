@@ -44,6 +44,30 @@ const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slo
     return it == menu.cache.widgets.end() ? nullptr : &*it;
 }
 
+void verify_players_row_hierarchy(const EngineState& engine, const char* context) {
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    require(status != nullptr && status->label != nullptr && status->secondary != nullptr,
+            "missing shell lobby status hierarchy");
+    const MenuWidget* players = widget_by_slot(engine, SettingsObjectID::CARD0);
+    require(players != nullptr && players->label != nullptr && players->secondary != nullptr,
+            "missing shell lobby players row hierarchy");
+    require(std::string(players->label) == "Players",
+            (std::string(context) + " players row title should be Players").c_str());
+    const std::string status_heading = status->label;
+    const std::string players_summary = players->secondary;
+    require(players_summary.find("Currently ") == std::string::npos,
+            (std::string(context) + " players summary should not contain hosting status").c_str());
+    require(players_summary.find("Joined ") == std::string::npos,
+            (std::string(context) + " players summary should not contain joined status").c_str());
+    require(players_summary.find("gubsy-roomd") == std::string::npos,
+            (std::string(context) + " players summary should not contain backend status").c_str());
+    if (status_heading.find("Currently ") != std::string::npos ||
+        status_heading.find("Joined ") != std::string::npos) {
+        require(std::string(players->label) != status_heading,
+                (std::string(context) + " players row should not mirror session status").c_str());
+    }
+}
+
 void verify_shell_lobby_copy(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     require(gubsy_push_menu_screen(runtime, MenuScreenID::SHELL_LOBBY),
@@ -66,6 +90,7 @@ void verify_shell_lobby_copy(GubsyRuntime& runtime) {
     require(players->secondary != nullptr, "missing players card summary");
     require(std::string(players->secondary).find("Currently Public Hosting") == std::string::npos,
             "players card summary should not contain hosting status text");
+    verify_players_row_hierarchy(engine, "public host");
 
     const MenuWidget* stop = widget_by_slot(engine, SettingsObjectID::CARD4);
     require(stop != nullptr, "missing bottom stop-hosting command");
@@ -94,6 +119,7 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
             "joined shell lobby detail missing player count");
     require(detail.find("1 remote client") != std::string::npos,
             "joined shell lobby detail missing remote client count");
+    verify_players_row_hierarchy(engine, "joined public");
 
     const MenuWidget* host = widget_by_slot(engine, SettingsObjectID::CARD2);
     require(host != nullptr, "missing joined shell lobby host card");
@@ -140,6 +166,7 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
     require(players->secondary != nullptr &&
                 std::string(players->secondary).find("1 remote client") != std::string::npos,
             "direct players card summary missing remote client count");
+    verify_players_row_hierarchy(engine, "direct host");
 
     engine.menu_manager.clear();
     require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_LOCAL_PLAYERS),
