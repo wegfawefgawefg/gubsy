@@ -359,8 +359,8 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
             "joined shell lobby detail missing host context");
     require(detail.find("Players 2/") != std::string::npos,
             "joined shell lobby detail missing player count");
-    require(detail.find("1 remote client") != std::string::npos,
-            "joined shell lobby detail missing remote client count");
+    require(detail.find("1 remote player") != std::string::npos,
+            "joined shell lobby detail missing remote player count");
     verify_players_row_hierarchy(engine, "joined public");
 
     const MenuWidget* host = widget_by_slot(engine, SettingsObjectID::CARD2);
@@ -401,16 +401,16 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
     const std::string detail = status->secondary;
     require(detail.find("Players ") != std::string::npos,
             "direct shell lobby detail missing player count");
-    require(detail.find("1 remote client") != std::string::npos,
-            "direct shell lobby detail missing remote client count");
+    require(detail.find("1 remote player") != std::string::npos,
+            "direct shell lobby detail missing remote player count");
 
     const MenuWidget* players = widget_by_slot(engine, SettingsObjectID::CARD0);
     require(players != nullptr, "missing direct shell lobby players card");
     require(players->label != nullptr && std::string(players->label) == "Players",
             "direct players card title should be Players");
     require(players->secondary != nullptr &&
-                std::string(players->secondary).find("1 remote client") != std::string::npos,
-            "direct players card summary missing remote client count");
+                std::string(players->secondary).find("1 remote player") != std::string::npos,
+            "direct players card summary missing remote player count");
     verify_players_row_hierarchy(engine, "direct host");
 
     engine.menu_manager.clear();

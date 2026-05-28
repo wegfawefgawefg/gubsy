@@ -116,7 +116,7 @@ std::string session_detail_text(const EngineState& engine) {
     if (remote_count > 0) {
         status += ", ";
         status += std::to_string(remote_count);
-        status += " remote client";
+        status += " remote player";
         if (remote_count != 1)
             status += "s";
     }
@@ -223,7 +223,7 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     if (remote_count > 0) {
         player_summary += ", ";
         player_summary += std::to_string(remote_count);
-        player_summary += " remote client";
+        player_summary += " remote player";
         if (remote_count != 1)
             player_summary += "s";
     }

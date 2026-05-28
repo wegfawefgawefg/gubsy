@@ -95,6 +95,8 @@ std::vector<const MatchmakingMember*> remote_members(const GubsyLobbyState& lobb
 bool can_manage_remote_member(const EngineState& engine, const MatchmakingMember& member) {
     if (!engine.lobby.online || !engine.lobby.is_host || member.is_host)
         return false;
+    if (member.member_id.rfind("direct:", 0) == 0)
+        return engine.lobby_commands.kick_direct_member != nullptr;
     if (!engine.lobby.room_code.empty())
         return !engine.lobby.host_secret.empty();
     return engine.lobby_commands.kick_direct_member != nullptr;
@@ -102,7 +104,7 @@ bool can_manage_remote_member(const EngineState& engine, const MatchmakingMember
 
 std::string remote_member_detail(const EngineState& engine, const MatchmakingMember& member) {
     const GubsyLobbyState& lobby = engine.lobby;
-    std::string detail = member.is_host ? "Host client" : "Remote client";
+    std::string detail = member.is_host ? "Host player" : "Remote player";
     if (!lobby.room_code.empty()) {
         detail += " | gubsy-roomd";
         detail += " | Room ";
@@ -161,7 +163,8 @@ void command_kick_member(MenuContext& ctx, std::int32_t index) {
         return;
     std::string message;
     const MatchmakingMember* member = remotes[static_cast<std::size_t>(index)];
-    const bool kicked = ctx.engine.lobby.room_code.empty()
+    const bool is_direct_member = member->member_id.rfind("direct:", 0) == 0;
+    const bool kicked = (ctx.engine.lobby.room_code.empty() || is_direct_member)
         ? gubsy_lobby_kick_direct_member(ctx.engine, *member, message)
         : gubsy_lobby_remove_room_member(ctx.engine, member->member_id, message);
     if (kicked)
@@ -189,7 +192,7 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     if (remote_count > 0) {
         st.status_text += ", ";
         st.status_text += std::to_string(remote_count);
-        st.status_text += remote_count == 1 ? " remote client" : " remote clients";
+        st.status_text += remote_count == 1 ? " remote player" : " remote players";
     }
     widgets.push_back(
         make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));

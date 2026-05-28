@@ -725,8 +725,8 @@ bool gubsy_lobby_kick_direct_member(EngineState& engine, const MatchmakingMember
                                     std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
-    if (!engine.lobby.online || !engine.lobby.room_code.empty() || !engine.lobby.is_host) {
-        message = "Only the direct host can kick players";
+    if (!engine.lobby.online || !engine.lobby.is_host) {
+        message = "Only the host can kick direct players";
         set_lobby_error(engine, message);
         return false;
     }
@@ -761,12 +761,13 @@ void gubsy_lobby_set_direct_members(EngineState& engine,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes) {
     gubsy_lobby_ensure_ready(engine);
-    if (!engine.lobby.online || !engine.lobby.room_code.empty()) {
+    if (!engine.lobby.online || (!engine.lobby.room_code.empty() && !engine.lobby.is_host)) {
         return;
     }
     update_lobby_members(engine, members, alert_changes);
-    engine.lobby.room_current_players =
-        static_cast<int>(engine.lobby.local_players.size() + engine.lobby.members.size());
+    engine.lobby.room_current_players = engine.lobby.room_code.empty()
+        ? static_cast<int>(engine.lobby.local_players.size() + engine.lobby.members.size())
+        : static_cast<int>(engine.lobby.members.size());
 }
 
 void gubsy_lobby_tick_online(EngineState& engine) {
