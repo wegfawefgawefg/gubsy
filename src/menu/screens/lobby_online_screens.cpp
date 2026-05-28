@@ -23,6 +23,8 @@ constexpr WidgetId kPortInputWidgetId = 2721;
 constexpr WidgetId kActionWidgetId = 2723;
 constexpr WidgetId kRefreshWidgetId = 2724;
 constexpr WidgetId kFirstRoomWidgetId = 2725;
+constexpr WidgetId kJoinByIpWidgetId = 2726;
+constexpr WidgetId kBrowseServersWidgetId = 2727;
 constexpr WidgetId kVisibilityWidgetId = 2731;
 constexpr WidgetId kMaxPlayersWidgetId = 2732;
 constexpr WidgetId kPrevWidgetId = 2728;
@@ -151,6 +153,7 @@ void command_publish_room(MenuContext& ctx, std::int32_t) {
     if (!validate_common(ctx))
         return;
 
+    ctx.engine.lobby.visibility = GubsyLobbyVisibility::Public;
     std::uint16_t port = parse_port(st.port_text);
     std::string message;
     bool ok = gubsy_lobby_host_room(ctx.engine, port, message);
@@ -235,11 +238,11 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     widgets.push_back(
         make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
 
-    MenuWidget lobby_name = make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "Lobby Name",
+    MenuWidget lobby_name = make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "Room Name",
                                       &ctx.engine.lobby.lobby_name, 48);
-    lobby_name.placeholder = "Local Game";
+    lobby_name.placeholder = "Room Name";
     MenuWidget port_input =
-        make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Port", &st.port_text, 6);
+        make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Host Port", &st.port_text, 6);
     port_input.placeholder = "35355";
 
     const char* visibility_text =
@@ -247,7 +250,7 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     MenuAction visibility_delta = MenuAction::run_command(g_cmd_visibility_delta);
     MenuWidget visibility = make_option(kVisibilityWidgetId, SettingsObjectID::CARD2, "Visibility",
                                         visibility_text, visibility_delta, visibility_delta);
-    visibility.secondary = "Advertise the room when the backend supports room visibility.";
+    visibility.secondary = "Public rooms appear in browser lists; private rooms stay hidden.";
 
     max_players_text = std::to_string(std::clamp(ctx.engine.lobby.max_players, 1, 32));
     MenuWidget max_players =
@@ -257,9 +260,9 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     max_players.secondary = "Session-wide player cap advertised to the room backend.";
 
     MenuWidget publish =
-        make_button(kRefreshWidgetId, SettingsObjectID::CARD4, "Publish To Browser",
+        make_button(kRefreshWidgetId, SettingsObjectID::CARD4, "Host Public",
                     MenuAction::run_command(g_cmd_publish_room));
-    publish.secondary = "Starts hosting and advertises this game to the configured room server.";
+    publish.secondary = "Starts hosting and lists this game on the configured room server.";
 
     MenuWidget action = make_button(
         kActionWidgetId, SettingsObjectID::ACTION,
@@ -295,7 +298,86 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     return built;
 }
 
-BuiltScreen build_join_screen(MenuContext& ctx) {
+BuiltScreen build_join_menu_screen(MenuContext&) {
+    static std::vector<MenuWidget> widgets;
+    widgets.clear();
+
+    widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Join Game"));
+    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS,
+                                 "Choose how to connect to a hosted game"));
+
+    MenuWidget join_by_ip = make_button(kJoinByIpWidgetId, SettingsObjectID::CARD0, "Join By IP",
+                                        MenuAction::push(MenuScreenID::LOBBY_JOIN_BY_IP));
+    join_by_ip.secondary = "Connect directly to a host address and port.";
+    MenuWidget browse = make_button(kBrowseServersWidgetId, SettingsObjectID::CARD1,
+                                    "Browse Servers",
+                                    MenuAction::push(MenuScreenID::LOBBY_SERVER_BROWSER));
+    browse.secondary = "Find public rooms listed by the configured room server.";
+    MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+
+    join_by_ip.nav_down = browse.id;
+    browse.nav_up = join_by_ip.id;
+    browse.nav_down = back.id;
+    back.nav_up = browse.id;
+
+    widgets.push_back(join_by_ip);
+    widgets.push_back(browse);
+    widgets.push_back(back);
+
+    BuiltScreen built;
+    built.layout = UILayoutID::SETTINGS_SCREEN;
+    built.widgets = MenuWidgetList{widgets};
+    built.default_focus = join_by_ip.id;
+    return built;
+}
+
+BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
+    gubsy_lobby_ensure_ready(ctx.engine);
+    auto& st = ctx.state<OnlineState>();
+    sync_state_from_lobby(st, ctx.engine.lobby);
+
+    static std::vector<MenuWidget> widgets;
+    widgets.clear();
+
+    widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Join By IP"));
+    st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
+                                                         : ctx.engine.lobby.last_error;
+    if (st.status_text.empty())
+        st.status_text = "Direct network join";
+    widgets.push_back(
+        make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
+
+    MenuWidget host = make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "IP / Host",
+                                &st.host_text, 64);
+    host.placeholder = "192.168.1.10";
+    MenuWidget port =
+        make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Port", &st.port_text, 6);
+    port.placeholder = "35355";
+    MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION, "Join",
+                                    MenuAction::run_command(g_cmd_join_direct));
+    MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
+
+    host.nav_down = port.id;
+    port.nav_up = host.id;
+    port.nav_down = action.id;
+    action.nav_up = port.id;
+    action.nav_left = back.id;
+    back.nav_up = port.id;
+    back.nav_right = action.id;
+
+    widgets.push_back(host);
+    widgets.push_back(port);
+    widgets.push_back(action);
+    widgets.push_back(back);
+
+    BuiltScreen built;
+    built.layout = UILayoutID::SETTINGS_SCREEN;
+    built.widgets = MenuWidgetList{widgets};
+    built.default_focus = host.id;
+    return built;
+}
+
+BuiltScreen build_browser_screen(MenuContext& ctx) {
     gubsy_lobby_ensure_ready(ctx.engine);
     auto& st = ctx.state<OnlineState>();
     sync_state_from_lobby(st, ctx.engine.lobby);
@@ -312,7 +394,7 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
                                                          : ctx.engine.lobby.last_error;
     if (st.status_text.empty())
-        st.status_text = "Room browser";
+        st.status_text = "Public room browser";
     widgets.push_back(
         make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label(kPageWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
@@ -329,21 +411,12 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     widgets.push_back(prev);
     widgets.push_back(next);
 
-    MenuWidget host =
-        make_text(kHostInputWidgetId, SettingsObjectID::CARD0, "Direct Host", &st.host_text, 64);
-    host.placeholder = "127.0.0.1";
-    MenuWidget port =
-        make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Direct Port", &st.port_text, 6);
-    port.placeholder = "35355";
-    MenuWidget join_direct = make_button(kActionWidgetId, SettingsObjectID::CARD2, "Join Direct",
-                                         MenuAction::run_command(g_cmd_join_direct));
-
     std::vector<WidgetId> room_ids;
     int start = st.page * kRoomsPerPage;
     for (int i = 0; i < kRoomsPerPage; ++i) {
         int room_index = start + i;
         WidgetId widget_id = kFirstRoomWidgetId + static_cast<WidgetId>(i);
-        UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD3 + i);
+        UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
         if (room_index < static_cast<int>(ctx.engine.lobby.discovered_rooms.size())) {
             const MatchmakingRoom& room =
                 ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(room_index)];
@@ -382,33 +455,23 @@ BuiltScreen build_join_screen(MenuContext& ctx) {
     MenuWidget& refresh_ref = widgets[refresh_idx];
     MenuWidget& back_ref = widgets[back_idx];
 
-    host.nav_down = port.id;
-    port.nav_up = host.id;
-    port.nav_down = join_direct.id;
-    join_direct.nav_up = port.id;
-    join_direct.nav_down = room_ids.empty() ? refresh_ref.id : room_ids.front();
-
-    widgets.push_back(host);
-    widgets.push_back(port);
-    widgets.push_back(join_direct);
-
     for (std::size_t i = 0; i < room_ids.size(); ++i) {
         for (MenuWidget& widget : widgets) {
             if (widget.id != room_ids[i])
                 continue;
-            widget.nav_up = (i == 0) ? join_direct.id : room_ids[i - 1];
+            widget.nav_up = (i == 0) ? refresh_ref.id : room_ids[i - 1];
             widget.nav_down = (i + 1 < room_ids.size()) ? room_ids[i + 1] : refresh_ref.id;
             break;
         }
     }
-    refresh_ref.nav_up = room_ids.empty() ? join_direct.id : room_ids.back();
+    refresh_ref.nav_up = room_ids.empty() ? back_ref.id : room_ids.back();
     refresh_ref.nav_down = back_ref.id;
     back_ref.nav_up = refresh_ref.id;
 
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = host.id;
+    built.default_focus = room_ids.empty() ? refresh_ref.id : room_ids.front();
     return built;
 }
 
@@ -436,5 +499,7 @@ void register_lobby_online_screens(EngineState& engine) {
     g_cmd_max_players_delta = engine.menu_commands.register_command(command_max_players_delta);
 
     register_screen(engine, MenuScreenID::LOBBY_HOST_SETUP, build_host_screen);
-    register_screen(engine, MenuScreenID::LOBBY_SERVER_BROWSER, build_join_screen);
+    register_screen(engine, MenuScreenID::LOBBY_JOIN_GAME, build_join_menu_screen);
+    register_screen(engine, MenuScreenID::LOBBY_JOIN_BY_IP, build_join_by_ip_screen);
+    register_screen(engine, MenuScreenID::LOBBY_SERVER_BROWSER, build_browser_screen);
 }

@@ -15,7 +15,7 @@ namespace {
 
 MenuCommandId g_cmd_start_game = kMenuIdInvalid;
 MenuCommandId g_cmd_host_game = kMenuIdInvalid;
-MenuCommandId g_cmd_browse_servers = kMenuIdInvalid;
+MenuCommandId g_cmd_join_game = kMenuIdInvalid;
 
 MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
     MenuWidget widget;
@@ -42,8 +42,8 @@ void command_host_game(MenuContext& ctx, std::int32_t) {
     ctx.manager.push_screen(MenuScreenID::LOBBY_HOST_SETUP);
 }
 
-void command_browse_servers(MenuContext& ctx, std::int32_t) {
-    ctx.manager.push_screen(MenuScreenID::LOBBY_SERVER_BROWSER);
+void command_join_game(MenuContext& ctx, std::int32_t) {
+    ctx.manager.push_screen(MenuScreenID::LOBBY_JOIN_GAME);
 }
 
 BuiltScreen build_shell_lobby(MenuContext& ctx) {
@@ -67,9 +67,9 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     players.id = 201;
     players.slot = SettingsObjectID::CARD0;
     players.type = WidgetType::Card;
-    text_cache.push_back("Local Players");
+    text_cache.push_back("Players");
     text_cache.push_back(std::to_string(ctx.engine.lobby.local_players.size()) +
-                         " joined. Select to manage profiles, binds, and devices.");
+                         " local. Select to manage profiles, binds, and devices.");
     players.label = text_cache[0].c_str();
     players.secondary = text_cache[1].c_str();
     players.on_select = MenuAction::push(MenuScreenID::LOBBY_LOCAL_PLAYERS);
@@ -78,8 +78,8 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
                                       MenuAction::push(MenuScreenID::LOBBY_GAME_CONFIG));
     MenuWidget host = make_button(203, SettingsObjectID::CARD2, "Host Game",
                                   MenuAction::run_command(g_cmd_host_game));
-    MenuWidget browse = make_button(204, SettingsObjectID::CARD3, "Browse Servers",
-                                    MenuAction::run_command(g_cmd_browse_servers));
+    MenuWidget join = make_button(204, SettingsObjectID::CARD3, "Join Game",
+                                  MenuAction::run_command(g_cmd_join_game));
     MenuWidget start = make_button(205, SettingsObjectID::ACTION, "Start Game",
                                    MenuAction::run_command(g_cmd_start_game));
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());
@@ -88,18 +88,18 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     settings.nav_up = players.id;
     settings.nav_down = host.id;
     host.nav_up = settings.id;
-    host.nav_down = browse.id;
-    browse.nav_up = host.id;
-    browse.nav_down = back.id;
-    start.nav_up = browse.id;
+    host.nav_down = join.id;
+    join.nav_up = host.id;
+    join.nav_down = back.id;
+    start.nav_up = join.id;
     start.nav_left = back.id;
-    back.nav_up = browse.id;
+    back.nav_up = join.id;
     back.nav_right = start.id;
 
     widgets.push_back(players);
     widgets.push_back(settings);
     widgets.push_back(host);
-    widgets.push_back(browse);
+    widgets.push_back(join);
     widgets.push_back(start);
     widgets.push_back(back);
 
@@ -116,7 +116,7 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
 void register_shell_lobby_screen(EngineState& engine) {
     g_cmd_start_game = engine.menu_commands.register_command(command_start_game);
     g_cmd_host_game = engine.menu_commands.register_command(command_host_game);
-    g_cmd_browse_servers = engine.menu_commands.register_command(command_browse_servers);
+    g_cmd_join_game = engine.menu_commands.register_command(command_join_game);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SHELL_LOBBY;
