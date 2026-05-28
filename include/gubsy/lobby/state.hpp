@@ -90,6 +90,8 @@ bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_cod
 bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std::string& message);
 bool gubsy_lobby_leave_room(EngineState& engine, std::string& message);
 bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& message);
+bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& member_id,
+                                    std::string& message);
 void gubsy_lobby_tick_online(EngineState& engine);
 std::string gubsy_lobby_player_label(const EngineState& engine, int player_index);
 std::string gubsy_lobby_device_label(GubsyLobbyDeviceAssignment device);

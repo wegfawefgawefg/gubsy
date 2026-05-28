@@ -272,6 +272,22 @@ int main(int argc, char** argv) {
                 "host did not refresh left room membership");
         require(has_alert_containing(host_engine, "left"), "host did not alert member leave");
 
+        guest_state.join_called = false;
+        guest_state.leave_called = false;
+        require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
+                "guest rejoin by room code failed");
+        require(guest_state.join_called, "guest rejoin transport was not called");
+        host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
+        gubsy_lobby_tick_online(host_engine);
+        require(host_engine.lobby.members.size() == 2,
+                "host did not refresh rejoined room membership");
+
+        require(gubsy_lobby_remove_room_member(host_engine, guest_engine.lobby.member_id, message),
+                "host kick failed");
+        require(host_engine.lobby.members.size() == 1,
+                "host did not refresh kicked room membership");
+        require(has_alert_containing(host_engine, "Kicked"), "host did not alert member kick");
+
         require(gubsy_lobby_leave_room(host_engine, message), "host leave failed");
         require(host_state.leave_called, "host leave transport was not called");
 

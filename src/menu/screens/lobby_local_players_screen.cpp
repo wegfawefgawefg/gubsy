@@ -27,6 +27,7 @@ constexpr WidgetId kFirstCardWidgetId = 2420;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_add_player = kMenuIdInvalid;
 MenuCommandId g_cmd_open_player = kMenuIdInvalid;
+MenuCommandId g_cmd_kick_member = kMenuIdInvalid;
 
 struct LocalPlayersState {
     int page{0};
@@ -79,13 +80,16 @@ std::string remote_member_label(const MatchmakingMember& member) {
     return "Remote Player";
 }
 
-std::string remote_member_detail(const MatchmakingMember& member) {
+std::string remote_member_detail(const GubsyLobbyState& lobby, const MatchmakingMember& member) {
     std::string detail = member.is_host ? "Host client" : "Remote client";
     if (!member.member_id.empty()) {
         detail += " | ";
         detail += member.member_id;
     }
-    detail += " | Management actions pending.";
+    if (lobby.is_host && !lobby.host_secret.empty() && !member.is_host)
+        detail += " | Select to kick.";
+    else
+        detail += " | Host-managed.";
     return detail;
 }
 
@@ -105,6 +109,15 @@ void command_add_player(MenuContext& ctx, std::int32_t) {
 void command_open_player(MenuContext& ctx, std::int32_t index) {
     gubsy_lobby_select_player(ctx.engine, index);
     ctx.manager.push_screen(MenuScreenID::LOBBY_PLAYER_SETTINGS, index);
+}
+
+void command_kick_member(MenuContext& ctx, std::int32_t index) {
+    const std::vector<const MatchmakingMember*> remotes = remote_members(ctx.engine.lobby);
+    if (index < 0 || index >= static_cast<int>(remotes.size()))
+        return;
+    std::string message;
+    const MatchmakingMember* member = remotes[static_cast<std::size_t>(index)];
+    (void)gubsy_lobby_remove_room_member(ctx.engine, member->member_id, message);
 }
 
 BuiltScreen build_local_players(MenuContext& ctx) {
@@ -199,9 +212,13 @@ BuiltScreen build_local_players(MenuContext& ctx) {
             card.slot = slot;
             card.type = WidgetType::Card;
             text_cache.push_back(remote_member_label(*member));
-            text_cache.push_back(remote_member_detail(*member));
+            text_cache.push_back(remote_member_detail(ctx.engine.lobby, *member));
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
+            if (ctx.engine.lobby.is_host && !ctx.engine.lobby.host_secret.empty() &&
+                !member->is_host) {
+                card.on_select = MenuAction::run_command(g_cmd_kick_member, remote_index);
+            }
             card.on_left = prev_action;
             card.on_right = next_action;
             widgets.push_back(card);
@@ -259,6 +276,7 @@ void register_lobby_local_players_screen(EngineState& engine) {
     g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
     g_cmd_add_player = engine.menu_commands.register_command(command_add_player);
     g_cmd_open_player = engine.menu_commands.register_command(command_open_player);
+    g_cmd_kick_member = engine.menu_commands.register_command(command_kick_member);
 
     MenuScreenDef def;
     def.id = MenuScreenID::LOBBY_LOCAL_PLAYERS;

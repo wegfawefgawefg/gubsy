@@ -492,6 +492,46 @@ bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& mes
     return true;
 }
 
+bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& member_id,
+                                    std::string& message) {
+    gubsy_lobby_ensure_ready(engine);
+    ensure_room_defaults(engine);
+    if (!engine.lobby.online || engine.lobby.room_code.empty() || !engine.lobby.is_host ||
+        engine.lobby.host_secret.empty()) {
+        message = "Only the public room host can kick players";
+        set_lobby_error(engine, message);
+        return false;
+    }
+    if (member_id.empty() || member_id == engine.lobby.member_id) {
+        message = "Cannot kick that player";
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    const MatchmakingMember* target = find_member_by_id(engine.lobby.members, member_id);
+    const std::string target_name = target ? member_name(*target) : member_id;
+
+    std::string err;
+    if (!matchmaking(engine).remove_member(engine.lobby.room_server_url, engine.lobby.room_code,
+                                           engine.lobby.host_secret, member_id, err)) {
+        message = err.empty() ? "Cannot kick player: room service rejected removal"
+                              : with_prefix("Cannot kick player", err);
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    if (auto current_room = fetch_current_room(engine, err)) {
+        update_lobby_members(engine, current_room->members, false);
+    } else if (!err.empty()) {
+        engine.lobby.last_error = err;
+    }
+
+    message = "Kicked " + target_name;
+    clear_lobby_error(engine, message);
+    add_alert(engine, message);
+    return true;
+}
+
 void gubsy_lobby_tick_online(EngineState& engine) {
     ensure_room_defaults(engine);
     if (!engine.lobby.online || engine.lobby.room_code.empty())
