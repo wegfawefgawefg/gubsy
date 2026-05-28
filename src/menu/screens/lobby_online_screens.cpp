@@ -518,7 +518,11 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Join By IP"));
     const std::string input_error = join_by_ip_error(st);
-    if (!input_error.empty())
+    if (ctx.engine.lobby.direct_join_pending)
+        st.status_text = ctx.engine.lobby.status_message.empty()
+                             ? "Joining direct " + ctx.engine.lobby.pending_direct_join_endpoint
+                             : ctx.engine.lobby.status_message;
+    else if (!input_error.empty())
         st.status_text = input_error;
     else
         st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
@@ -536,7 +540,12 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
     port.placeholder = "35355";
     MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION, "Join",
                                     MenuAction::run_command(g_cmd_join_direct));
-    if (!input_error.empty()) {
+    if (ctx.engine.lobby.direct_join_pending) {
+        action.on_select = MenuAction::none();
+        action.label = "Joining";
+        action_secondary = "Waiting for host response...";
+        action.secondary = action_secondary.c_str();
+    } else if (!input_error.empty()) {
         action.on_select = MenuAction::none();
         action_secondary = input_error;
         action.secondary = action_secondary.c_str();
