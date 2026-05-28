@@ -25,6 +25,12 @@ void require(bool condition, const char* message) {
         throw std::runtime_error(message);
 }
 
+bool has_alert_containing(const EngineState& engine, const std::string& needle) {
+    return std::any_of(engine.alerts.begin(), engine.alerts.end(), [&](const Alert& alert) {
+        return alert.text.find(needle) != std::string::npos;
+    });
+}
+
 nlohmann::json serialize_config(void*, const GubsyLobbyState& lobby) {
     nlohmann::json players = nlohmann::json::array();
     for (int i = 0; i < static_cast<int>(lobby.local_players.size()); ++i)
@@ -198,6 +204,8 @@ int main(int argc, char** argv) {
         require(!host_engine.lobby.room_code.empty(), "host room code missing");
         require(host_engine.lobby.contract.game_config.value("mode", "") == "campaign",
                 "host contract missing game config");
+        require(host_engine.lobby.members.size() == 1,
+                "host did not fetch initial room membership");
 
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "guest public room refresh failed");
@@ -222,9 +230,23 @@ int main(int argc, char** argv) {
         require(!guest_engine.lobby.is_host, "guest lobby is marked as host");
         require(guest_engine.lobby.room_code == host_engine.lobby.room_code,
                 "guest joined wrong room");
+        require(guest_engine.lobby.members.size() == 2,
+                "guest did not fetch joined room membership");
+
+        host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
+        gubsy_lobby_tick_online(host_engine);
+        require(host_engine.lobby.members.size() == 2,
+                "host did not refresh joined room membership");
+        require(has_alert_containing(host_engine, "joined"), "host did not alert member join");
 
         require(gubsy_lobby_leave_room(guest_engine, message), "guest leave failed");
         require(guest_state.leave_called, "guest leave transport was not called");
+        host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
+        gubsy_lobby_tick_online(host_engine);
+        require(host_engine.lobby.members.size() == 1,
+                "host did not refresh left room membership");
+        require(has_alert_containing(host_engine, "left"), "host did not alert member leave");
+
         require(gubsy_lobby_leave_room(host_engine, message), "host leave failed");
         require(host_state.leave_called, "host leave transport was not called");
 
