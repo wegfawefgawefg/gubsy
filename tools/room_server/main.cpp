@@ -136,6 +136,7 @@ nlohmann::json room_to_json(const RoomRecord& room) {
         members.push_back({
             {"member_id", member.member_id},
             {"display_name", member.display_name},
+            {"client_label", ""},
             {"is_host", member.is_host},
         });
     }

@@ -125,6 +125,24 @@ std::string member_name(const MatchmakingMember& member) {
     return "Remote player";
 }
 
+std::string member_joined_alert(const MatchmakingMember& member) {
+    std::string message = member_name(member) + " joined";
+    if (!member.client_label.empty()) {
+        message += " from client ";
+        message += member.client_label;
+    }
+    return message;
+}
+
+std::string member_left_alert(const MatchmakingMember& member) {
+    std::string message = member_name(member) + " left";
+    if (!member.client_label.empty()) {
+        message += " from client ";
+        message += member.client_label;
+    }
+    return message;
+}
+
 const MatchmakingMember* find_member_by_id(const std::vector<MatchmakingMember>& members,
                                            const std::string& member_id) {
     auto it = std::find_if(members.begin(), members.end(), [&](const MatchmakingMember& member) {
@@ -140,13 +158,13 @@ void update_lobby_members(EngineState& engine, const std::vector<MatchmakingMemb
             if (next.member_id.empty())
                 continue;
             if (!find_member_by_id(engine.lobby.members, next.member_id))
-                add_alert(engine, member_name(next) + " joined");
+                add_alert(engine, member_joined_alert(next));
         }
         for (const MatchmakingMember& old : engine.lobby.members) {
             if (old.member_id.empty())
                 continue;
             if (!find_member_by_id(next_members, old.member_id))
-                add_alert(engine, member_name(old) + " left");
+                add_alert(engine, member_left_alert(old));
         }
     }
     engine.lobby.members = next_members;

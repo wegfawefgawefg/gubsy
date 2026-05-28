@@ -157,6 +157,8 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
     const std::string remote_detail = remote_card->secondary;
     require(remote_detail.find("Direct") != std::string::npos,
             "direct remote player detail missing direct backend context");
+    require(remote_detail.find("Client 127.0.0.1:45454") != std::string::npos,
+            "direct remote player detail missing client label");
     require(remote_detail.find("gubsy-roomd") == std::string::npos,
             "direct remote player detail should not mention room service");
     require(remote_detail.find("Select for actions") != std::string::npos,
@@ -538,6 +540,7 @@ int main(int argc, char** argv) {
         MatchmakingMember direct_guest;
         direct_guest.member_id = "direct:127.0.0.1:45454";
         direct_guest.display_name = "Direct Guest";
+        direct_guest.client_label = "127.0.0.1:45454";
         direct_guest.is_host = false;
         gubsy_lobby_set_direct_members(host_engine, std::vector<MatchmakingMember>{direct_guest},
                                        true);
@@ -546,8 +549,8 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.room_current_players ==
                     static_cast<int>(host_engine.lobby.local_players.size() + 1),
                 "direct host player count did not include direct remote member");
-        require(has_alert_containing(host_engine, "Direct Guest joined"),
-                "direct host did not alert direct member join");
+        require(has_alert_containing(host_engine, "Direct Guest joined from client 127.0.0.1:45454"),
+                "direct host did not alert direct member join with client label");
         verify_direct_member_shell_context(host_runtime, direct_guest.member_id);
         require(gubsy_lobby_kick_direct_member(host_engine, direct_guest, message),
                 "direct host kick failed");
@@ -561,8 +564,8 @@ int main(int argc, char** argv) {
 
         gubsy_lobby_set_direct_members(host_engine, {}, true);
         require(host_engine.lobby.members.empty(), "direct host did not clear direct members");
-        require(has_alert_containing(host_engine, "Direct Guest left"),
-                "direct host did not alert direct member leave");
+        require(has_alert_containing(host_engine, "Direct Guest left from client 127.0.0.1:45454"),
+                "direct host did not alert direct member leave with client label");
 
         require(gubsy_lobby_join_direct(guest_engine, guest_state.expected_host,
                                         guest_state.expected_port, message),

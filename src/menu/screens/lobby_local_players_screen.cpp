@@ -104,6 +104,10 @@ std::string remote_member_detail(const EngineState& engine, const MatchmakingMem
     } else if (lobby.online) {
         detail += " | Direct";
     }
+    if (!member.client_label.empty()) {
+        detail += " | Client ";
+        detail += member.client_label;
+    }
     if (!lobby.advertised_endpoint.empty()) {
         detail += " | Endpoint ";
         detail += lobby.advertised_endpoint;

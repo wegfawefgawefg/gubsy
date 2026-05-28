@@ -138,6 +138,7 @@ nlohmann::json room_to_json(const MatchmakingRoom& room) {
 void member_from_json(const nlohmann::json& json, MatchmakingMember& out) {
     out.member_id = json.value("member_id", "");
     out.display_name = json.value("display_name", "");
+    out.client_label = json.value("client_label", "");
     out.is_host = json.value("is_host", false);
 }
 
