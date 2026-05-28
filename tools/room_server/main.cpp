@@ -445,11 +445,19 @@ int main(int argc, char** argv) {
         std::lock_guard<std::mutex> lock(g_registry.mutex);
         g_registry.cleanup_expired_locked();
         nlohmann::json rooms = nlohmann::json::array();
+        int public_rooms = 0;
+        int hidden_rooms = 0;
         for (const auto& [_, room] : g_registry.rooms) {
-            if (!room_is_public(room))
+            if (!room_is_public(room)) {
+                ++hidden_rooms;
                 continue;
+            }
+            ++public_rooms;
             rooms.push_back(room_to_json(room));
         }
+        log_event("room_list", {{"total_rooms", static_cast<int>(g_registry.rooms.size())},
+                                {"public_rooms", public_rooms},
+                                {"hidden_rooms", hidden_rooms}});
         res.set_content(nlohmann::json{{"rooms", std::move(rooms)}}.dump(), "application/json");
     });
 

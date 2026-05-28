@@ -92,6 +92,7 @@ int main(int argc, char** argv) {
         updated.contract.mod_hash = "ccccdddd";
         updated.contract.required_mod_ids = {"base", "smoke_b"};
         updated.contract.realtime_endpoint = "udp://127.0.0.1:9000";
+        updated.contract.session_phase = "in_game";
         if (!matchmaking.heartbeat_room(server_url,
                                         room_code,
                                         host_member_id,
@@ -116,6 +117,22 @@ int main(int argc, char** argv) {
             throw std::runtime_error("room required_mod_ids did not update");
         if (fetched.contract.realtime_endpoint != "udp://127.0.0.1:9000")
             throw std::runtime_error("room realtime endpoint did not update");
+        if (fetched.contract.session_phase != "in_game")
+            throw std::runtime_error("room session_phase did not update");
+
+        listed.clear();
+        if (!matchmaking.list_rooms(server_url, listed, err))
+            throw std::runtime_error(err);
+        bool found_in_game_room = false;
+        for (const auto& listed_room : listed) {
+            if (listed_room.room_code == room_code &&
+                listed_room.contract.session_phase == "in_game") {
+                found_in_game_room = true;
+                break;
+            }
+        }
+        if (!found_in_game_room)
+            throw std::runtime_error("public in-game room missing from room list");
 
         if (!matchmaking.remove_member(server_url, room_code, host_secret, second_guest_member_id, err))
             throw std::runtime_error(err);
