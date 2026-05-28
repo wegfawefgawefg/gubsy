@@ -29,6 +29,12 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
 
 void command_start_game(MenuContext& ctx, std::int32_t) {
     std::string message;
+    if (ctx.engine.lobby.online && !ctx.engine.lobby.is_host) {
+        message = "Waiting For Host To Start";
+        add_alert(ctx.engine, message);
+        ctx.engine.lobby.status_message = message;
+        return;
+    }
     if (!gubsy_lobby_validate_start(ctx.engine, message)) {
         add_alert(ctx.engine, message);
         ctx.engine.lobby.status_message = message;
@@ -39,6 +45,10 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
 }
 
 void command_host_game(MenuContext& ctx, std::int32_t) {
+    if (ctx.engine.lobby.online && !ctx.engine.lobby.is_host) {
+        add_alert(ctx.engine, "Only the host can host another game");
+        return;
+    }
     ctx.manager.push_screen(MenuScreenID::LOBBY_HOST_SETUP);
 }
 
@@ -54,13 +64,14 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     frame_actions.clear();
     text_cache.clear();
     gubsy_lobby_ensure_ready(ctx.engine);
+    const bool joined_client = ctx.engine.lobby.online && !ctx.engine.lobby.is_host;
 
     MenuWidget title;
     title.id = 200;
     title.slot = SettingsObjectID::TITLE;
     title.type = WidgetType::Label;
     title.label = "Lobby";
-    title.secondary = "Session setup";
+    title.secondary = joined_client ? "Joined room. Waiting for host." : "Session setup";
     widgets.push_back(title);
 
     MenuWidget players;
@@ -77,11 +88,17 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     MenuWidget settings = make_button(202, SettingsObjectID::CARD1, "Game Settings",
                                       MenuAction::push(MenuScreenID::LOBBY_GAME_CONFIG));
     MenuWidget host = make_button(203, SettingsObjectID::CARD2, "Host Game",
-                                  MenuAction::run_command(g_cmd_host_game));
+                                  joined_client ? MenuAction::none()
+                                                : MenuAction::run_command(g_cmd_host_game));
+    if (joined_client)
+        host.secondary = "Host-only while joined to another lobby.";
     MenuWidget join = make_button(204, SettingsObjectID::CARD3, "Join Game",
                                   MenuAction::run_command(g_cmd_join_game));
     MenuWidget start = make_button(205, SettingsObjectID::ACTION, "Start Game",
-                                   MenuAction::run_command(g_cmd_start_game));
+                                   joined_client ? MenuAction::none()
+                                                 : MenuAction::run_command(g_cmd_start_game));
+    if (joined_client)
+        start.label = "Waiting For Host";
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     players.nav_down = settings.id;

@@ -9,6 +9,18 @@
 #include <gubsy/runtime.hpp>
 #include <gubsy/settings/settings.hpp>
 
+namespace {
+
+GubsyLobbyJoinResult public_api_join_transport(void*, const GubsyLobbyState&, const char*,
+                                               std::uint16_t) {
+    GubsyLobbyJoinResult result;
+    result.ok = true;
+    result.status = "joined";
+    return result;
+}
+
+} // namespace
+
 int main() {
     GubsySteamBackendStatus steam_status = gubsy_steam_backend_status();
 #if GUB_ENABLE_STEAM
@@ -186,6 +198,22 @@ int main() {
     if (lobby_start_message != "Starting game") {
         cleanup_gubsy_runtime(no_mod_engine);
         return 17;
+    }
+    GubsyLobbyCommands lobby_commands{};
+    lobby_commands.join = public_api_join_transport;
+    gubsy_set_lobby_commands(no_mod_engine, lobby_commands);
+    if (!gubsy_join_lobby_direct(no_mod_engine, "127.0.0.1", 35355, lobby_start_message)) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 33;
+    }
+    lobby_start_called = false;
+    if (gubsy_start_lobby_game(no_mod_engine, lobby_start_message) || lobby_start_called) {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 34;
+    }
+    if (lobby_start_message != "Waiting For Host To Start") {
+        cleanup_gubsy_runtime(no_mod_engine);
+        return 35;
     }
     cleanup_gubsy_runtime(no_mod_engine);
 

@@ -314,6 +314,12 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     gubsy_lobby_ensure_ready(engine);
 
+    if (engine.lobby.online && !engine.lobby.is_host) {
+        message = "Waiting For Host To Start";
+        engine.lobby.status_message = message;
+        return false;
+    }
+
     if (!gubsy_lobby_validate_start(engine, message))
         return false;
 
