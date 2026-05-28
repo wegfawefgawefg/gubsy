@@ -25,7 +25,6 @@ constexpr WidgetId kRefreshWidgetId = 2724;
 constexpr WidgetId kFirstRoomWidgetId = 2725;
 constexpr WidgetId kJoinByIpWidgetId = 2726;
 constexpr WidgetId kBrowseServersWidgetId = 2727;
-constexpr WidgetId kVisibilityWidgetId = 2731;
 constexpr WidgetId kMaxPlayersWidgetId = 2732;
 constexpr WidgetId kPrevWidgetId = 2728;
 constexpr WidgetId kNextWidgetId = 2729;
@@ -41,7 +40,6 @@ MenuCommandId g_cmd_join_code = kMenuIdInvalid;
 MenuCommandId g_cmd_join_listed = kMenuIdInvalid;
 MenuCommandId g_cmd_refresh = kMenuIdInvalid;
 MenuCommandId g_cmd_page_delta = kMenuIdInvalid;
-MenuCommandId g_cmd_visibility_delta = kMenuIdInvalid;
 MenuCommandId g_cmd_max_players_delta = kMenuIdInvalid;
 
 struct OnlineState {
@@ -140,6 +138,7 @@ void command_host_direct(MenuContext& ctx, std::int32_t) {
     if (!validate_common(ctx))
         return;
 
+    ctx.engine.lobby.visibility = GubsyLobbyVisibility::Private;
     std::uint16_t port = parse_port(st.port_text);
     std::string message;
     bool ok = gubsy_lobby_host_direct(ctx.engine, port, message);
@@ -213,12 +212,6 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     update_page(st, static_cast<int>(ctx.engine.lobby.discovered_rooms.size()));
 }
 
-void command_visibility_delta(MenuContext& ctx, std::int32_t) {
-    ctx.engine.lobby.visibility = ctx.engine.lobby.visibility == GubsyLobbyVisibility::Public
-                                      ? GubsyLobbyVisibility::Private
-                                      : GubsyLobbyVisibility::Public;
-}
-
 void command_max_players_delta(MenuContext& ctx, std::int32_t delta) {
     ctx.engine.lobby.max_players = std::clamp(ctx.engine.lobby.max_players + delta, 1, 32);
 }
@@ -272,22 +265,15 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
         make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Host Port", &st.port_text, 6);
     port_input.placeholder = "35355";
 
-    const char* visibility_text =
-        ctx.engine.lobby.visibility == GubsyLobbyVisibility::Public ? "Public" : "Private";
-    MenuAction visibility_delta = MenuAction::run_command(g_cmd_visibility_delta);
-    MenuWidget visibility = make_option(kVisibilityWidgetId, SettingsObjectID::CARD2, "Visibility",
-                                        visibility_text, visibility_delta, visibility_delta);
-    visibility.secondary = "Public rooms appear in browser lists; private rooms stay hidden.";
-
     max_players_text = std::to_string(std::clamp(ctx.engine.lobby.max_players, 1, 32));
     MenuWidget max_players =
-        make_option(kMaxPlayersWidgetId, SettingsObjectID::CARD3, "Max Players",
+        make_option(kMaxPlayersWidgetId, SettingsObjectID::CARD2, "Max Players",
                     max_players_text.c_str(), MenuAction::run_command(g_cmd_max_players_delta, -1),
                     MenuAction::run_command(g_cmd_max_players_delta, 1));
     max_players.secondary = "Session-wide player cap advertised to the room backend.";
 
     MenuWidget publish =
-        make_button(kRefreshWidgetId, SettingsObjectID::CARD4, "Host Public",
+        make_button(kRefreshWidgetId, SettingsObjectID::CARD3, "Host Public",
                     MenuAction::run_command(g_cmd_publish_room));
     publish.secondary = "Starts hosting and lists this game on the configured room server.";
 
@@ -295,14 +281,14 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
         kActionWidgetId, SettingsObjectID::ACTION,
         ctx.engine.lobby.online ? "Leave Session" : "Host Direct",
         MenuAction::run_command(ctx.engine.lobby.online ? g_cmd_leave : g_cmd_host_direct));
+    if (!ctx.engine.lobby.online)
+        action.secondary = "Starts direct/private hosting without listing this game.";
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     lobby_name.nav_down = port_input.id;
     port_input.nav_up = lobby_name.id;
-    port_input.nav_down = visibility.id;
-    visibility.nav_up = port_input.id;
-    visibility.nav_down = max_players.id;
-    max_players.nav_up = visibility.id;
+    port_input.nav_down = max_players.id;
+    max_players.nav_up = port_input.id;
     max_players.nav_down = publish.id;
     publish.nav_up = max_players.id;
     publish.nav_down = back.id;
@@ -312,7 +298,6 @@ BuiltScreen build_host_screen(MenuContext& ctx) {
     back.nav_right = action.id;
     widgets.push_back(lobby_name);
     widgets.push_back(port_input);
-    widgets.push_back(visibility);
     widgets.push_back(max_players);
     widgets.push_back(publish);
     widgets.push_back(action);
@@ -535,7 +520,6 @@ void register_lobby_online_screens(EngineState& engine) {
     g_cmd_join_listed = engine.menu_commands.register_command(command_join_listed);
     g_cmd_refresh = engine.menu_commands.register_command(command_refresh);
     g_cmd_page_delta = engine.menu_commands.register_command(command_page_delta);
-    g_cmd_visibility_delta = engine.menu_commands.register_command(command_visibility_delta);
     g_cmd_max_players_delta = engine.menu_commands.register_command(command_max_players_delta);
 
     register_screen(engine, MenuScreenID::LOBBY_HOST_SETUP, build_host_screen);

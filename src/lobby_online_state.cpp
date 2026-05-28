@@ -316,6 +316,7 @@ bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::strin
     engine.lobby.network_port = static_cast<int>(port);
     engine.lobby.contract.session_phase = "lobby";
     engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
+    engine.lobby.visibility = GubsyLobbyVisibility::Private;
     engine.lobby.online = true;
     engine.lobby.is_host = true;
     engine.lobby.room_code.clear();
