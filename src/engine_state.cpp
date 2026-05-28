@@ -490,7 +490,9 @@ void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int sc
 
 void gubsy_render_menu(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                        int screen_height) {
-    menu_system_render(gubsy_runtime_engine(runtime), renderer, screen_width, screen_height);
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    menu_system_render(engine, renderer, screen_width, screen_height);
+    render_alerts(engine, renderer, screen_width);
 }
 
 void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt) {
