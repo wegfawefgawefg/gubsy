@@ -1,6 +1,9 @@
 #include "gubsy/runtime.hpp"
+#include "gubsy/menu/ids.hpp"
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/lobby_state.hpp"
+#include "src/menu/menu_system_state.hpp"
+#include "src/menu_layout_ids.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -29,6 +32,37 @@ bool has_alert_containing(const EngineState& engine, const std::string& needle) 
     return std::any_of(engine.alerts.begin(), engine.alerts.end(), [&](const Alert& alert) {
         return alert.text.find(needle) != std::string::npos;
     });
+}
+
+const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slot) {
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    auto it = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
+                           [&](const MenuWidget& widget) { return widget.slot == slot; });
+    return it == menu.cache.widgets.end() ? nullptr : &*it;
+}
+
+void verify_shell_lobby_copy(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::SHELL_LOBBY),
+            "failed to push shell lobby");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const MenuWidget* status = widget_by_slot(engine, SettingsObjectID::STATUS);
+    require(status != nullptr, "missing shell lobby status widget");
+    require(status->label != nullptr, "missing shell lobby status label");
+    require(std::string(status->label) == "Currently Public Hosting via gubsy-roomd",
+            "shell lobby status heading should own hosting text");
+    require(status->secondary != nullptr, "missing shell lobby status detail");
+    require(std::string(status->secondary).find("Players ") != std::string::npos,
+            "shell lobby status detail should include room player count");
+
+    const MenuWidget* players = widget_by_slot(engine, SettingsObjectID::CARD0);
+    require(players != nullptr, "missing shell lobby players card");
+    require(players->label != nullptr && std::string(players->label) == "Players",
+            "players card title should be Players");
+    require(players->secondary != nullptr, "missing players card summary");
+    require(std::string(players->secondary).find("Currently Public Hosting") == std::string::npos,
+            "players card summary should not contain hosting status text");
 }
 
 nlohmann::json serialize_config(void*, const GubsyLobbyState& lobby) {
@@ -217,6 +251,7 @@ int main(int argc, char** argv) {
                 "host did not fetch initial room membership");
         require(host_engine.lobby.room_current_players == 1,
                 "host did not cache initial room player count");
+        verify_shell_lobby_copy(host_runtime);
 
         const std::string old_room_code = host_engine.lobby.room_code;
         host_engine.lobby.lobby_name = "Bright Rehosted Tunnel";

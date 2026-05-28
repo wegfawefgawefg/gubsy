@@ -66,25 +66,27 @@ const char* joinability_text(const GubsyLobbyState& lobby) {
     return "Lobby Joinable";
 }
 
-std::string lobby_status_text(const EngineState& engine) {
-    const GubsyLobbyState& lobby = engine.lobby;
+std::string session_heading(const GubsyLobbyState& lobby) {
     if (!lobby.online)
         return "Offline lobby";
+    if (lobby.is_host)
+        return lobby.room_code.empty() ? "Currently Direct Hosting"
+                                       : "Currently Public Hosting via gubsy-roomd";
+    return lobby.room_code.empty() ? "Joined Direct Game" : "Joined Public Game";
+}
+
+std::string session_detail_text(const EngineState& engine) {
+    const GubsyLobbyState& lobby = engine.lobby;
+    if (!lobby.online)
+        return "Set up local players, host a session, or join a game.";
 
     std::string status;
-    if (lobby.is_host) {
-        status = lobby.room_code.empty() ? "Currently Direct Hosting"
-                                         : "Currently Public Hosting via gubsy-roomd";
-    } else {
-        status = lobby.room_code.empty() ? "Joined Direct Game" : "Joined Public Game";
-    }
-
     if (!lobby.lobby_name.empty()) {
-        status += " | ";
         status += lobby.lobby_name;
     }
     if (!lobby.room_code.empty()) {
-        status += " | ";
+        if (!status.empty())
+            status += " | ";
         status += lobby.room_code;
         if (!lobby.is_host) {
             status += " | Host ";
@@ -92,10 +94,13 @@ std::string lobby_status_text(const EngineState& engine) {
         }
     }
     if (!lobby.advertised_endpoint.empty()) {
-        status += " | ";
+        if (!status.empty())
+            status += " | ";
         status += lobby.advertised_endpoint;
     }
-    status += " | Players ";
+    if (!status.empty())
+        status += " | ";
+    status += "Players ";
     status += std::to_string(room_player_count(lobby));
     status += "/";
     status += std::to_string(std::max(1, lobby.max_players));
@@ -170,12 +175,16 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     title.secondary = joined_client ? "Joined room. Waiting for host." : "Session setup";
     widgets.push_back(title);
 
-    text_cache.push_back(lobby_status_text(ctx.engine));
+    text_cache.push_back(session_heading(ctx.engine.lobby));
+    const std::size_t status_heading_index = text_cache.size() - 1;
+    text_cache.push_back(session_detail_text(ctx.engine));
+    const std::size_t status_detail_index = text_cache.size() - 1;
     MenuWidget status;
     status.id = 207;
     status.slot = SettingsObjectID::STATUS;
     status.type = WidgetType::Label;
-    status.label = text_cache.back().c_str();
+    status.label = text_cache[status_heading_index].c_str();
+    status.secondary = text_cache[status_detail_index].c_str();
     widgets.push_back(status);
 
     MenuWidget players;
