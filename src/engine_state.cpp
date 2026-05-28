@@ -418,6 +418,18 @@ const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime) {
     return gubsy_runtime_engine(runtime).lobby;
 }
 
+bool gubsy_set_lobby_session_phase(GubsyRuntime& runtime, const std::string& session_phase) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+    const std::string next_phase = session_phase.empty() ? "lobby" : session_phase;
+    if (engine.lobby.contract.session_phase == next_phase)
+        return false;
+    engine.lobby.contract.session_phase = next_phase;
+    if (engine.lobby.online && engine.lobby.is_host && !engine.lobby.room_code.empty())
+        gubsy_lobby_force_online_tick(engine);
+    return true;
+}
+
 void gubsy_set_lobby_direct_members(GubsyRuntime& runtime,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes) {
