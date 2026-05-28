@@ -60,10 +60,41 @@ void update_page(LocalPlayersState& st, int count) {
     st.page_text = "Page " + std::to_string(st.page + 1) + " / " + std::to_string(st.total_pages);
 }
 
+std::vector<const MatchmakingMember*> remote_members(const GubsyLobbyState& lobby) {
+    std::vector<const MatchmakingMember*> members;
+    members.reserve(lobby.members.size());
+    for (const MatchmakingMember& member : lobby.members) {
+        if (!lobby.member_id.empty() && member.member_id == lobby.member_id)
+            continue;
+        members.push_back(&member);
+    }
+    return members;
+}
+
+std::string remote_member_label(const MatchmakingMember& member) {
+    if (!member.display_name.empty())
+        return member.display_name;
+    if (!member.member_id.empty())
+        return member.member_id;
+    return "Remote Player";
+}
+
+std::string remote_member_detail(const MatchmakingMember& member) {
+    std::string detail = member.is_host ? "Host client" : "Remote client";
+    if (!member.member_id.empty()) {
+        detail += " | ";
+        detail += member.member_id;
+    }
+    detail += " | Management actions pending.";
+    return detail;
+}
+
 void command_page_delta(MenuContext& ctx, std::int32_t delta) {
     auto& st = ctx.state<LocalPlayersState>();
+    const std::vector<const MatchmakingMember*> remotes = remote_members(ctx.engine.lobby);
+    const int count = static_cast<int>(ctx.engine.lobby.local_players.size() + remotes.size());
     st.page = std::clamp(st.page + delta, 0, std::max(0, st.total_pages - 1));
-    update_page(st, static_cast<int>(ctx.engine.lobby.local_players.size()));
+    update_page(st, count);
 }
 
 void command_add_player(MenuContext& ctx, std::int32_t) {
@@ -79,16 +110,26 @@ void command_open_player(MenuContext& ctx, std::int32_t index) {
 BuiltScreen build_local_players(MenuContext& ctx) {
     gubsy_lobby_ensure_ready(ctx.engine);
     auto& st = ctx.state<LocalPlayersState>();
-    int count = static_cast<int>(ctx.engine.lobby.local_players.size());
+    const int local_count = static_cast<int>(ctx.engine.lobby.local_players.size());
+    const std::vector<const MatchmakingMember*> remotes = remote_members(ctx.engine.lobby);
+    const int remote_count = static_cast<int>(remotes.size());
+    int count = local_count + remote_count;
     update_page(st, count);
 
     static std::vector<MenuWidget> widgets;
     static std::vector<std::string> text_cache;
     widgets.clear();
     text_cache.clear();
+    text_cache.reserve(static_cast<std::size_t>(kRowsPerPage) * 2 + 4);
 
-    widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Local Players"));
-    st.status_text = std::to_string(count) + (count == 1 ? " local player" : " local players");
+    widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Players"));
+    st.status_text = std::to_string(local_count) +
+                     (local_count == 1 ? " local player" : " local players");
+    if (remote_count > 0) {
+        st.status_text += ", ";
+        st.status_text += std::to_string(remote_count);
+        st.status_text += remote_count == 1 ? " remote client" : " remote clients";
+    }
     widgets.push_back(
         make_label(kStatusWidgetId, SettingsObjectID::STATUS, st.status_text.c_str()));
     widgets.push_back(make_label(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
@@ -128,14 +169,15 @@ BuiltScreen build_local_players(MenuContext& ctx) {
     std::size_t add_idx = widgets.size() - 1;
 
     for (int i = 0; i < kRowsPerPage; ++i) {
-        int player_index = start + i;
+        int row_index = start + i;
         WidgetId widget_id = kFirstCardWidgetId + static_cast<WidgetId>(i);
         UILayoutObjectId slot = static_cast<UILayoutObjectId>(SettingsObjectID::CARD0 + i);
-        if (player_index < count) {
+        if (row_index < local_count) {
             MenuWidget card;
             card.id = widget_id;
             card.slot = slot;
             card.type = WidgetType::Card;
+            int player_index = row_index;
             text_cache.push_back(gubsy_lobby_player_label(ctx.engine, player_index));
             const GubsyLobbyPlayer* player = gubsy_lobby_player(ctx.engine, player_index);
             std::string detail = "Devices: ";
@@ -145,6 +187,21 @@ BuiltScreen build_local_players(MenuContext& ctx) {
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
             card.on_select = MenuAction::run_command(g_cmd_open_player, player_index);
+            card.on_left = prev_action;
+            card.on_right = next_action;
+            widgets.push_back(card);
+            card_ids.push_back(widget_id);
+        } else if (row_index < count) {
+            const int remote_index = row_index - local_count;
+            const MatchmakingMember* member = remotes[static_cast<std::size_t>(remote_index)];
+            MenuWidget card;
+            card.id = widget_id;
+            card.slot = slot;
+            card.type = WidgetType::Card;
+            text_cache.push_back(remote_member_label(*member));
+            text_cache.push_back(remote_member_detail(*member));
+            card.label = text_cache[text_cache.size() - 2].c_str();
+            card.secondary = text_cache[text_cache.size() - 1].c_str();
             card.on_left = prev_action;
             card.on_right = next_action;
             widgets.push_back(card);

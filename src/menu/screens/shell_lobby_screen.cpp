@@ -27,6 +27,16 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
     return widget;
 }
 
+int remote_member_count(const GubsyLobbyState& lobby) {
+    int count = 0;
+    for (const MatchmakingMember& member : lobby.members) {
+        if (!lobby.member_id.empty() && member.member_id == lobby.member_id)
+            continue;
+        ++count;
+    }
+    return count;
+}
+
 std::string lobby_status_text(const EngineState& engine) {
     const GubsyLobbyState& lobby = engine.lobby;
     if (!lobby.online)
@@ -55,6 +65,12 @@ std::string lobby_status_text(const EngineState& engine) {
     status += " | ";
     status += std::to_string(lobby.local_players.size());
     status += " local";
+    const int remote_count = remote_member_count(lobby);
+    if (remote_count > 0) {
+        status += ", ";
+        status += std::to_string(remote_count);
+        status += " remote";
+    }
     return status;
 }
 
@@ -119,8 +135,15 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     players.slot = SettingsObjectID::CARD0;
     players.type = WidgetType::Card;
     text_cache.push_back("Players");
-    text_cache.push_back(std::to_string(ctx.engine.lobby.local_players.size()) +
-                         " local. Select to manage profiles, binds, and devices.");
+    std::string player_summary = std::to_string(ctx.engine.lobby.local_players.size()) + " local";
+    const int remote_count = remote_member_count(ctx.engine.lobby);
+    if (remote_count > 0) {
+        player_summary += ", ";
+        player_summary += std::to_string(remote_count);
+        player_summary += " remote";
+    }
+    player_summary += ". Select to manage profiles, binds, devices, and connected players.";
+    text_cache.push_back(std::move(player_summary));
     players.label = text_cache[0].c_str();
     players.secondary = text_cache[1].c_str();
     players.on_select = MenuAction::push(MenuScreenID::LOBBY_LOCAL_PLAYERS);
