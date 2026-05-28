@@ -21,6 +21,11 @@ struct GubsyLobbyLeaveResult {
     std::string status;
 };
 
+struct GubsyLobbyKickResult {
+    bool ok{false};
+    std::string status;
+};
+
 using GubsyLobbyHostFn = GubsyLobbyHostResult (*)(void* user_data,
                                                  const GubsyLobbyState& lobby,
                                                  std::uint16_t port);
@@ -30,6 +35,11 @@ using GubsyLobbyJoinFn = GubsyLobbyJoinResult (*)(void* user_data,
                                                  std::uint16_t port);
 using GubsyLobbyLeaveFn = GubsyLobbyLeaveResult (*)(void* user_data,
                                                    const GubsyLobbyState& lobby);
+using GubsyLobbyKickDirectMemberFn = GubsyLobbyKickResult (*)(
+    void* user_data,
+    const GubsyLobbyState& lobby,
+    const MatchmakingMember& member
+);
 
 struct GubsyLobbyCommands {
     GubsyLobbyHostFn host{nullptr};
@@ -38,4 +48,6 @@ struct GubsyLobbyCommands {
     void* join_user_data{nullptr};
     GubsyLobbyLeaveFn leave{nullptr};
     void* leave_user_data{nullptr};
+    GubsyLobbyKickDirectMemberFn kick_direct_member{nullptr};
+    void* kick_direct_member_user_data{nullptr};
 };

@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -17,8 +18,10 @@ struct SmokeState {
     bool host_called{false};
     bool join_called{false};
     bool leave_called{false};
+    bool direct_kick_called{false};
     bool validate_remote_called{false};
     bool apply_remote_called{false};
+    std::string direct_kicked_member_id;
     std::string expected_host{"127.0.0.1"};
     std::uint16_t expected_port{45454};
 };
@@ -156,6 +159,23 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
             "direct remote player detail missing direct backend context");
     require(remote_detail.find("gubsy-roomd") == std::string::npos,
             "direct remote player detail should not mention room service");
+    require(remote_detail.find("Select for actions") != std::string::npos,
+            "direct remote player row should open management actions");
+    require(remote_card->on_select.type == MenuActionType::RunCommand,
+            "direct remote player row should run the open-actions command");
+
+    require(engine.menu_manager.push_screen(MenuScreenID::LOBBY_REMOTE_PLAYER, 0),
+            "failed to push direct remote player screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+    const MenuWidget* kick = widget_by_slot(engine, SettingsObjectID::CARD1);
+    require(kick != nullptr, "missing direct remote player action");
+    require(kick->label != nullptr && std::string(kick->label) == "Kick Player",
+            "direct remote player action screen should expose kick action");
+    require(kick->secondary != nullptr &&
+                std::string(kick->secondary).find("direct session") != std::string::npos,
+            "direct remote player kick action should explain direct disconnection");
+    require(kick->on_select.type == MenuActionType::RunCommand,
+            "direct remote player kick action should run an explicit command");
     engine.menu_manager.clear();
 }
 
@@ -420,6 +440,18 @@ GubsyLobbyLeaveResult leave_transport(void* user_data, const GubsyLobbyState&) {
     return result;
 }
 
+GubsyLobbyKickResult kick_direct_member(void* user_data, const GubsyLobbyState&,
+                                        const MatchmakingMember& member) {
+    auto* state = static_cast<SmokeState*>(user_data);
+    state->direct_kick_called = true;
+    state->direct_kicked_member_id = member.member_id;
+
+    GubsyLobbyKickResult result;
+    result.ok = true;
+    result.status = "direct kick transport disconnected";
+    return result;
+}
+
 void install_smoke_hooks(GubsyRuntime& runtime, SmokeState& state) {
     GubsyLobbyConfigProvider provider;
     provider.user_data = &state;
@@ -436,6 +468,8 @@ void install_smoke_hooks(GubsyRuntime& runtime, SmokeState& state) {
     commands.join_user_data = &state;
     commands.leave = leave_transport;
     commands.leave_user_data = &state;
+    commands.kick_direct_member = kick_direct_member;
+    commands.kick_direct_member_user_data = &state;
     gubsy_set_lobby_commands(runtime, commands);
 }
 
@@ -515,6 +549,15 @@ int main(int argc, char** argv) {
         require(has_alert_containing(host_engine, "Direct Guest joined"),
                 "direct host did not alert direct member join");
         verify_direct_member_shell_context(host_runtime, direct_guest.member_id);
+        require(gubsy_lobby_kick_direct_member(host_engine, direct_guest, message),
+                "direct host kick failed");
+        require(host_state.direct_kick_called, "direct host kick transport was not called");
+        require(host_state.direct_kicked_member_id == direct_guest.member_id,
+                "direct host kicked wrong member");
+        require(message == "direct kick transport disconnected",
+                "direct host kick did not surface transport status");
+        require(has_alert_containing(host_engine, "direct kick transport disconnected"),
+                "direct host did not alert direct kick");
 
         gubsy_lobby_set_direct_members(host_engine, {}, true);
         require(host_engine.lobby.members.empty(), "direct host did not clear direct members");

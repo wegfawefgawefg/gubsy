@@ -86,7 +86,16 @@ std::string remote_member_label(const MatchmakingMember& member) {
     return "Remote Player";
 }
 
-std::string remote_member_detail(const GubsyLobbyState& lobby, const MatchmakingMember& member) {
+bool can_manage_remote_member(const EngineState& engine, const MatchmakingMember& member) {
+    if (!engine.lobby.online || !engine.lobby.is_host || member.is_host)
+        return false;
+    if (!engine.lobby.room_code.empty())
+        return !engine.lobby.host_secret.empty();
+    return engine.lobby_commands.kick_direct_member != nullptr;
+}
+
+std::string remote_member_detail(const EngineState& engine, const MatchmakingMember& member) {
+    const GubsyLobbyState& lobby = engine.lobby;
     std::string detail = member.is_host ? "Host client" : "Remote client";
     if (!lobby.room_code.empty()) {
         detail += " | gubsy-roomd";
@@ -103,7 +112,7 @@ std::string remote_member_detail(const GubsyLobbyState& lobby, const Matchmaking
         detail += " | ";
         detail += member.member_id;
     }
-    if (lobby.is_host && !lobby.host_secret.empty() && !member.is_host)
+    if (can_manage_remote_member(engine, member))
         detail += " | Select for actions.";
     else
         detail += " | Host-managed.";
@@ -138,7 +147,10 @@ void command_kick_member(MenuContext& ctx, std::int32_t index) {
         return;
     std::string message;
     const MatchmakingMember* member = remotes[static_cast<std::size_t>(index)];
-    if (gubsy_lobby_remove_room_member(ctx.engine, member->member_id, message))
+    const bool kicked = ctx.engine.lobby.room_code.empty()
+        ? gubsy_lobby_kick_direct_member(ctx.engine, *member, message)
+        : gubsy_lobby_remove_room_member(ctx.engine, member->member_id, message);
+    if (kicked)
         ctx.manager.pop_screen();
 }
 
@@ -234,11 +246,10 @@ BuiltScreen build_local_players(MenuContext& ctx) {
             card.slot = slot;
             card.type = WidgetType::Card;
             text_cache.push_back(remote_member_label(*member));
-            text_cache.push_back(remote_member_detail(ctx.engine.lobby, *member));
+            text_cache.push_back(remote_member_detail(ctx.engine, *member));
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
-            if (ctx.engine.lobby.is_host && !ctx.engine.lobby.host_secret.empty() &&
-                !member->is_host) {
+            if (can_manage_remote_member(ctx.engine, *member)) {
                 card.on_select = MenuAction::run_command(g_cmd_open_remote_member, remote_index);
             }
             card.on_left = prev_action;
@@ -299,8 +310,7 @@ BuiltScreen build_remote_player(MenuContext& ctx) {
         (remote_index >= 0 && remote_index < static_cast<int>(remotes.size()))
             ? remotes[static_cast<std::size_t>(remote_index)]
             : nullptr;
-    const bool can_kick = member && ctx.engine.lobby.is_host && !ctx.engine.lobby.host_secret.empty() &&
-                          !member->is_host;
+    const bool can_kick = member && can_manage_remote_member(ctx.engine, *member);
 
     static std::vector<MenuWidget> widgets;
     static std::vector<std::string> text_cache;
@@ -312,7 +322,7 @@ BuiltScreen build_remote_player(MenuContext& ctx) {
     widgets.push_back(make_label(kRemoteTitleWidgetId, SettingsObjectID::TITLE,
                                  text_cache.back().c_str()));
 
-    text_cache.push_back(member ? remote_member_detail(ctx.engine.lobby, *member)
+    text_cache.push_back(member ? remote_member_detail(ctx.engine, *member)
                                 : std::string("This remote player is no longer connected."));
     widgets.push_back(make_label(kRemoteStatusWidgetId, SettingsObjectID::STATUS,
                                  text_cache.back().c_str()));
@@ -329,7 +339,9 @@ BuiltScreen build_remote_player(MenuContext& ctx) {
     if (can_kick) {
         action = make_button(kRemoteKickWidgetId, SettingsObjectID::CARD1, "Kick Player",
                              MenuAction::run_command(g_cmd_kick_member, remote_index));
-        action.secondary = "Remove this client from the public room.";
+        action.secondary = ctx.engine.lobby.room_code.empty()
+            ? "Disconnect this client from the direct session."
+            : "Remove this client from the public room.";
         action.style.bg_r = 82;
         action.style.bg_g = 26;
         action.style.bg_b = 28;
@@ -339,7 +351,7 @@ BuiltScreen build_remote_player(MenuContext& ctx) {
     } else {
         action = make_label(kRemoteKickWidgetId, SettingsObjectID::CARD1, "Host Managed");
         action.secondary =
-            member ? "Only the public room host can manage this client."
+            member ? "Only the host can manage this client."
                    : "This remote player is no longer available.";
         action.style.fg_r = 150;
         action.style.fg_g = 150;

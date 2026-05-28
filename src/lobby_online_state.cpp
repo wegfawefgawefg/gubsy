@@ -589,6 +589,42 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
     return true;
 }
 
+bool gubsy_lobby_kick_direct_member(EngineState& engine, const MatchmakingMember& member,
+                                    std::string& message) {
+    gubsy_lobby_ensure_ready(engine);
+    ensure_room_defaults(engine);
+    if (!engine.lobby.online || !engine.lobby.room_code.empty() || !engine.lobby.is_host) {
+        message = "Only the direct host can kick players";
+        set_lobby_error(engine, message);
+        return false;
+    }
+    if (member.member_id.empty() || member.member_id == engine.lobby.member_id ||
+        member.is_host) {
+        message = "Cannot kick that player";
+        set_lobby_error(engine, message);
+        return false;
+    }
+    if (!engine.lobby_commands.kick_direct_member) {
+        message = "Direct kick is not available for this game";
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    GubsyLobbyKickResult result = engine.lobby_commands.kick_direct_member(
+        engine.lobby_commands.kick_direct_member_user_data, engine.lobby, member);
+    if (!result.ok) {
+        message = result.status.empty() ? "Cannot kick player" : result.status;
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    const std::string target_name = member_name(member);
+    message = result.status.empty() ? "Kicked " + target_name : result.status;
+    clear_lobby_error(engine, message);
+    add_alert(engine, message);
+    return true;
+}
+
 void gubsy_lobby_set_direct_members(EngineState& engine,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes) {
