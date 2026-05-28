@@ -102,6 +102,7 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
 bool gubsy_lobby_kick_direct_member(EngineState& engine, const MatchmakingMember& member,
                                     std::string& message);
 void gubsy_lobby_tick_online(EngineState& engine);
+void gubsy_lobby_force_online_tick(EngineState& engine);
 void gubsy_lobby_set_direct_members(EngineState& engine,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes);

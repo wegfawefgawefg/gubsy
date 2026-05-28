@@ -345,8 +345,10 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
         !gubsy_lobby_validate_start(engine, message))
         return false;
 
-    if (engine.lobby.online && engine.lobby.is_host)
+    if (engine.lobby.online && engine.lobby.is_host) {
         engine.lobby.contract.session_phase = "in_game";
+        gubsy_lobby_force_online_tick(engine);
+    }
 
     if (!engine.menu_commands.invoke_host(engine.main_menu_commands.start_game, 0)) {
         message = "Cannot start game: no start callback registered";

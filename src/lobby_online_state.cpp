@@ -808,3 +808,8 @@ void gubsy_lobby_tick_online(EngineState& engine) {
     }
     engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
 }
+
+void gubsy_lobby_force_online_tick(EngineState& engine) {
+    engine.lobby.next_heartbeat_at = 0.0;
+    gubsy_lobby_tick_online(engine);
+}

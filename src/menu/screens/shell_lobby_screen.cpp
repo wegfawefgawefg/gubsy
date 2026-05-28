@@ -144,6 +144,7 @@ void command_start_game(MenuContext& ctx, std::int32_t) {
     }
     if (ctx.engine.lobby.online && ctx.engine.lobby.is_host) {
         ctx.engine.lobby.contract.session_phase = "in_game";
+        gubsy_lobby_force_online_tick(ctx.engine);
         add_alert(ctx.engine, "Host started game", AlertSeverity::Success);
     }
     ctx.engine.lobby.status_message = ctx.engine.lobby.online && ctx.engine.lobby.is_host
