@@ -5,7 +5,10 @@
 #include "src/menu/menu_system_state.hpp"
 #include "src/menu_layout_ids.hpp"
 
+#include <glayout/layout.hpp>
+
 #include <algorithm>
+#include <cstdlib>
 #include <cstdio>
 #include <filesystem>
 #include <stdexcept>
@@ -42,6 +45,190 @@ const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slo
     auto it = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
                            [&](const MenuWidget& widget) { return widget.slot == slot; });
     return it == menu.cache.widgets.end() ? nullptr : &*it;
+}
+
+SDL_FRect widget_rect_by_slot(const EngineState& engine, UILayoutObjectId slot) {
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    for (std::size_t i = 0; i < menu.cache.widgets.size() && i < menu.cache.rects.size(); ++i) {
+        if (menu.cache.widgets[i].slot == slot)
+            return menu.cache.rects[i];
+    }
+    return SDL_FRect{};
+}
+
+bool rect_has_area(const SDL_FRect& rect) {
+    return rect.w > 1.0f && rect.h > 1.0f;
+}
+
+bool rects_overlap(const SDL_FRect& a, const SDL_FRect& b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+bool rendered_lobby_smoke_enabled() {
+    const char* value = std::getenv("GUBSY_RENDER_SMOKE");
+    return value != nullptr && std::string(value) == "1";
+}
+
+void ensure_renderer(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    if (engine.ui_layouts.layouts.empty()) {
+        glayout::ParseResult layouts =
+            glayout::load_layout_file(std::filesystem::current_path() / "data" / "ui_layouts" /
+                                      "layouts.lisp");
+        require(layouts.ok && !layouts.layouts.empty(),
+                "render smoke failed to load project UI layouts");
+        engine.ui_layouts.layouts = std::move(layouts.layouts);
+    }
+
+    GubsyFrame frame = gubsy_get_frame(runtime);
+    if (frame.renderer != nullptr)
+        return;
+    require(gubsy_init_sdl_renderer(runtime), "failed to initialize renderer for lobby render smoke");
+}
+
+SDL_Surface* render_menu_to_surface(GubsyRuntime& runtime) {
+    ensure_renderer(runtime);
+    GubsyFrame frame = gubsy_get_frame(runtime);
+    require(frame.renderer != nullptr, "render smoke missing SDL renderer");
+    require(frame.window_width > 0 && frame.window_height > 0, "render smoke missing window size");
+
+    SDL_SetRenderTarget(frame.renderer, nullptr);
+    SDL_SetRenderDrawColor(frame.renderer, 5, 5, 10, 255);
+    SDL_RenderClear(frame.renderer);
+    gubsy_update_menu(runtime, 0.016f, frame.window_width, frame.window_height);
+    gubsy_render_menu(runtime, frame.renderer, frame.window_width, frame.window_height);
+    SDL_RenderPresent(frame.renderer);
+
+    SDL_Surface* surface = SDL_RenderReadPixels(frame.renderer, nullptr);
+    require(surface != nullptr, "render smoke failed to read rendered pixels");
+    require(surface->w == frame.window_width && surface->h == frame.window_height,
+            "render smoke readback size mismatch");
+    return surface;
+}
+
+SDL_Color sample_surface(SDL_Surface* surface, int x, int y) {
+    x = std::clamp(x, 0, surface->w - 1);
+    y = std::clamp(y, 0, surface->h - 1);
+    Uint8 r = 0;
+    Uint8 g = 0;
+    Uint8 b = 0;
+    Uint8 a = 0;
+    require(SDL_ReadSurfacePixel(surface, x, y, &r, &g, &b, &a),
+            "render smoke failed to sample pixel");
+    return SDL_Color{r, g, b, a};
+}
+
+int count_non_background_pixels(SDL_Surface* surface) {
+    int count = 0;
+    for (int y = 0; y < surface->h; y += 8) {
+        for (int x = 0; x < surface->w; x += 8) {
+            SDL_Color px = sample_surface(surface, x, y);
+            if (px.r != 5 || px.g != 5 || px.b != 10)
+                ++count;
+        }
+    }
+    return count;
+}
+
+SDL_Color sample_rect_center(SDL_Surface* surface, const SDL_FRect& rect) {
+    return sample_surface(surface,
+                          static_cast<int>(rect.x + rect.w * 0.5f),
+                          static_cast<int>(rect.y + rect.h * 0.5f));
+}
+
+SDL_Color average_rect_color(SDL_Surface* surface, const SDL_FRect& rect) {
+    int samples = 0;
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    int a = 0;
+    const int x0 = std::clamp(static_cast<int>(rect.x), 0, surface->w - 1);
+    const int y0 = std::clamp(static_cast<int>(rect.y), 0, surface->h - 1);
+    const int x1 = std::clamp(static_cast<int>(rect.x + rect.w), x0 + 1, surface->w);
+    const int y1 = std::clamp(static_cast<int>(rect.y + rect.h), y0 + 1, surface->h);
+    for (int y = y0; y < y1; y += 6) {
+        for (int x = x0; x < x1; x += 6) {
+            SDL_Color px = sample_surface(surface, x, y);
+            r += px.r;
+            g += px.g;
+            b += px.b;
+            a += px.a;
+            ++samples;
+        }
+    }
+    if (samples == 0)
+        return SDL_Color{};
+    return SDL_Color{
+        static_cast<Uint8>(r / samples),
+        static_cast<Uint8>(g / samples),
+        static_cast<Uint8>(b / samples),
+        static_cast<Uint8>(a / samples),
+    };
+}
+
+void verify_shell_lobby_render(GubsyRuntime& runtime) {
+    if (!rendered_lobby_smoke_enabled())
+        return;
+
+    SDL_Surface* surface = render_menu_to_surface(runtime);
+    require(count_non_background_pixels(surface) > 200,
+            "rendered shell lobby should draw substantial non-background UI");
+
+    const EngineState& engine = gubsy_runtime_engine(runtime);
+    SDL_FRect players_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD0);
+    SDL_FRect stop_rect = widget_rect_by_slot(engine, SettingsObjectID::CARD4);
+    require(rect_has_area(players_rect), "rendered shell lobby missing players rect");
+    require(rect_has_area(stop_rect), "rendered shell lobby missing stop-hosting rect");
+    require(!rects_overlap(players_rect, stop_rect),
+            "rendered shell lobby players row and stop-hosting action should be separate");
+
+    SDL_Color players_px = sample_rect_center(surface, players_rect);
+    SDL_Color stop_px = sample_rect_center(surface, stop_rect);
+    require(players_px.r != 5 || players_px.g != 5 || players_px.b != 10,
+            "rendered players row center should not be background");
+    require(stop_px.r != 5 || stop_px.g != 5 || stop_px.b != 10,
+            "rendered stop-hosting action center should not be background");
+    SDL_DestroySurface(surface);
+}
+
+void verify_browser_render(GubsyRuntime& runtime) {
+    if (!rendered_lobby_smoke_enabled())
+        return;
+
+    SDL_Surface* surface = render_menu_to_surface(runtime);
+    require(count_non_background_pixels(surface) > 200,
+            "rendered browser should draw substantial non-background UI");
+
+    const EngineState& engine = gubsy_runtime_engine(runtime);
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    for (std::size_t i = 0; i < menu.cache.widgets.size() && i < menu.cache.rects.size(); ++i) {
+        const MenuWidget& widget = menu.cache.widgets[i];
+        if (widget.badge == nullptr || std::string(widget.badge) != "YOUR ROOM")
+            continue;
+        const SDL_FRect own_rect = menu.cache.rects[i];
+        require(rect_has_area(own_rect), "rendered own-room card missing rect");
+        SDL_Color avg = average_rect_color(surface, own_rect);
+        if (!(avg.r > avg.g && avg.r > avg.b && avg.g < 120 && avg.b < 130)) {
+            std::fprintf(stderr,
+                         "[lobby_online_smoke] own-room rendered avg rgb=(%u,%u,%u) style=(%u,%u,%u) rect=(%.1f,%.1f %.1fx%.1f)\n",
+                         static_cast<unsigned>(avg.r),
+                         static_cast<unsigned>(avg.g),
+                         static_cast<unsigned>(avg.b),
+                         static_cast<unsigned>(widget.style.bg_r),
+                         static_cast<unsigned>(widget.style.bg_g),
+                         static_cast<unsigned>(widget.style.bg_b),
+                         static_cast<double>(own_rect.x),
+                         static_cast<double>(own_rect.y),
+                         static_cast<double>(own_rect.w),
+                         static_cast<double>(own_rect.h));
+        }
+        require(avg.r > avg.g && avg.r > avg.b && avg.g < 120 && avg.b < 130,
+                "rendered own-room card should read as red/error unavailable");
+        SDL_DestroySurface(surface);
+        return;
+    }
+    SDL_DestroySurface(surface);
+    require(false, "rendered browser missing own-room card");
 }
 
 void verify_players_row_hierarchy(const EngineState& engine, const char* context) {
@@ -99,6 +286,7 @@ void verify_shell_lobby_copy(GubsyRuntime& runtime) {
     require(stop->secondary != nullptr &&
                 std::string(stop->secondary).find("before joining elsewhere") != std::string::npos,
             "stop hosting copy should explain join-before-leave behavior");
+    verify_shell_lobby_render(runtime);
 }
 
 void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
@@ -261,6 +449,7 @@ void verify_own_room_browser_card(GubsyRuntime& runtime) {
             "own-room browser card should be greyed out");
     require(own_card->badge_color.r > 220 && own_card->badge_color.g < 120,
             "own-room browser badge should be red");
+    verify_browser_render(runtime);
 }
 
 void verify_host_screen_layout_and_validation(GubsyRuntime& runtime) {
