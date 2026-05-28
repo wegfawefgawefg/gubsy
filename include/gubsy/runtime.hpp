@@ -112,6 +112,7 @@ void gubsy_set_lobby_direct_members(GubsyRuntime& runtime,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes = true);
 bool gubsy_show_main_menu(GubsyRuntime& runtime);
+bool gubsy_show_lobby_menu(GubsyRuntime& runtime);
 bool gubsy_open_in_game_menu(GubsyRuntime& runtime);
 void gubsy_close_in_game_menu(GubsyRuntime& runtime);
 bool gubsy_in_game_menu_open(const GubsyRuntime& runtime);

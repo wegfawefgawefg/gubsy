@@ -431,6 +431,13 @@ bool gubsy_show_main_menu(GubsyRuntime& runtime) {
     return engine.menu_manager.push_screen(MenuScreenID::SHELL_MAIN);
 }
 
+bool gubsy_show_lobby_menu(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    engine.menu_manager.clear();
+    engine.menu_context = GubsyMenuContext::Lobby;
+    return engine.menu_manager.push_screen(MenuScreenID::SHELL_LOBBY);
+}
+
 bool gubsy_open_in_game_menu(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     engine.menu_manager.clear();
