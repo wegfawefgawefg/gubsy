@@ -127,6 +127,10 @@ std::string join_by_ip_error(const OnlineState& st) {
     return host_port_error(st);
 }
 
+std::string join_endpoint_text(const OnlineState& st) {
+    return st.host_text + ":" + st.port_text;
+}
+
 void set_error_style(MenuWidget& widget) {
     widget.style.bg_r = 82;
     widget.style.bg_g = 26;
@@ -524,6 +528,10 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
 
     widgets.push_back(make_label(kTitleWidgetId, SettingsObjectID::TITLE, "Join By IP"));
     const std::string input_error = join_by_ip_error(st);
+    const std::string endpoint_text = join_endpoint_text(st);
+    const bool failed_current_endpoint =
+        !ctx.engine.lobby.last_error.empty() &&
+        ctx.engine.lobby.last_error.find(endpoint_text) != std::string::npos;
     if (ctx.engine.lobby.direct_join_pending)
         st.status_text = ctx.engine.lobby.status_message.empty()
                              ? "Joining direct " + ctx.engine.lobby.pending_direct_join_endpoint
@@ -546,7 +554,8 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
         make_text(kPortInputWidgetId, SettingsObjectID::CARD1, "Port", &st.port_text, 6);
     port.placeholder = "35355";
     port.secondary = "UDP port advertised by the host.";
-    MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION, "Join",
+    MenuWidget action = make_button(kActionWidgetId, SettingsObjectID::ACTION,
+                                    failed_current_endpoint ? "Retry Join" : "Join",
                                     MenuAction::run_command(g_cmd_join_direct));
     if (ctx.engine.lobby.direct_join_pending) {
         action.on_select = MenuAction::none();
@@ -558,10 +567,13 @@ BuiltScreen build_join_by_ip_screen(MenuContext& ctx) {
         action_secondary = input_error;
         action.secondary = action_secondary.c_str();
         set_error_style(action);
-    } else if (!ctx.engine.lobby.last_error.empty()) {
-        action_secondary = "Last join failed. Check the address and try again.";
+    } else if (failed_current_endpoint) {
+        action_secondary = "No server found at " + endpoint_text + ".";
         action.secondary = action_secondary.c_str();
         set_error_style(action);
+    } else if (!ctx.engine.lobby.last_error.empty()) {
+        action_secondary = "Edit the address or retry the join.";
+        action.secondary = action_secondary.c_str();
     }
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
