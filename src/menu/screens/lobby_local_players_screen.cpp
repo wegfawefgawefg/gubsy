@@ -82,6 +82,15 @@ std::string remote_member_label(const MatchmakingMember& member) {
 
 std::string remote_member_detail(const GubsyLobbyState& lobby, const MatchmakingMember& member) {
     std::string detail = member.is_host ? "Host client" : "Remote client";
+    if (!lobby.room_code.empty()) {
+        detail += " | gubsy-roomd";
+        detail += " | Room ";
+        detail += lobby.room_code;
+    }
+    if (!lobby.advertised_endpoint.empty()) {
+        detail += " | Endpoint ";
+        detail += lobby.advertised_endpoint;
+    }
     if (!member.member_id.empty()) {
         detail += " | ";
         detail += member.member_id;

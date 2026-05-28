@@ -65,6 +65,30 @@ void verify_shell_lobby_copy(GubsyRuntime& runtime) {
             "players card summary should not contain hosting status text");
 }
 
+void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remote_member_id) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_LOCAL_PLAYERS),
+            "failed to push players screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+
+    const auto& menu = menu_system_internal::runtime_state(engine);
+    auto remote_card =
+        std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(), [&](const MenuWidget& widget) {
+            if (!widget.secondary)
+                return false;
+            const std::string detail = widget.secondary;
+            return detail.find(remote_member_id) != std::string::npos;
+        });
+    require(remote_card != menu.cache.widgets.end(), "missing remote player card");
+    const std::string detail = remote_card->secondary;
+    require(detail.find("gubsy-roomd") != std::string::npos,
+            "remote player detail missing backend");
+    require(detail.find("Room ") != std::string::npos,
+            "remote player detail missing room code");
+    require(detail.find("Endpoint ") != std::string::npos,
+            "remote player detail missing endpoint");
+}
+
 nlohmann::json serialize_config(void*, const GubsyLobbyState& lobby) {
     nlohmann::json players = nlohmann::json::array();
     for (int i = 0; i < static_cast<int>(lobby.local_players.size()); ++i)
@@ -348,6 +372,7 @@ int main(int argc, char** argv) {
                 "host did not refresh rejoined room membership");
         require(host_engine.lobby.room_current_players == 2,
                 "host did not refresh rejoined room player count");
+        verify_players_remote_detail(host_runtime, guest_engine.lobby.member_id);
 
         require(gubsy_lobby_remove_room_member(host_engine, guest_engine.lobby.member_id, message),
                 "host kick failed");
