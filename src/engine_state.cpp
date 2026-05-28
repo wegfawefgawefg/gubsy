@@ -345,11 +345,6 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
         !gubsy_lobby_validate_start(engine, message))
         return false;
 
-    if (engine.lobby.online && engine.lobby.is_host) {
-        engine.lobby.contract.session_phase = "in_game";
-        gubsy_lobby_force_online_tick(engine);
-    }
-
     if (!engine.menu_commands.invoke_host(engine.main_menu_commands.start_game, 0)) {
         message = "Cannot start game: no start callback registered";
         engine.lobby.status_message = message;
@@ -358,10 +353,13 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
 
     if (engine.lobby.online && !engine.lobby.is_host)
         message = "Entering hosted game";
-    else if (engine.lobby.online && engine.lobby.is_host)
+    else if (engine.lobby.online && engine.lobby.is_host) {
+        engine.lobby.contract.session_phase = "in_game";
+        gubsy_lobby_force_online_tick(engine);
         message = "Starting hosted game";
-    else
+    } else {
         message = "Starting local game";
+    }
     engine.lobby.status_message = message;
     return true;
 }
