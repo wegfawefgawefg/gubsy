@@ -50,6 +50,7 @@ struct GubsyLobbyState {
     bool is_host{false};
     double next_heartbeat_at{0.0};
     double next_room_refresh_at{0.0};
+    int room_current_players{0};
     std::vector<std::string> browse_room_codes;
     std::vector<MatchmakingRoom> discovered_rooms;
     std::vector<MatchmakingMember> members;

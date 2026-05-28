@@ -8,6 +8,7 @@
 #include "src/menu/menu_screen.hpp"
 #include "src/menu_layout_ids.hpp"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,33 @@ int remote_member_count(const GubsyLobbyState& lobby) {
     return count;
 }
 
+int room_player_count(const GubsyLobbyState& lobby) {
+    if (!lobby.room_code.empty()) {
+        if (lobby.room_current_players > 0)
+            return lobby.room_current_players;
+        if (!lobby.members.empty())
+            return static_cast<int>(lobby.members.size());
+    }
+    return static_cast<int>(lobby.local_players.size());
+}
+
+std::string host_display_name(const GubsyLobbyState& lobby) {
+    for (const MatchmakingMember& member : lobby.members) {
+        if (member.is_host)
+            return member.display_name.empty() ? "Host" : member.display_name;
+    }
+    return "Host";
+}
+
+const char* joinability_text(const GubsyLobbyState& lobby) {
+    if (session_contract_is_in_game(lobby.contract))
+        return "In Game";
+    if (!lobby.room_code.empty() && lobby.max_players > 0 &&
+        room_player_count(lobby) >= lobby.max_players)
+        return "Full";
+    return "Lobby Joinable";
+}
+
 std::string lobby_status_text(const EngineState& engine) {
     const GubsyLobbyState& lobby = engine.lobby;
     if (!lobby.online)
@@ -57,19 +85,31 @@ std::string lobby_status_text(const EngineState& engine) {
     if (!lobby.room_code.empty()) {
         status += " | ";
         status += lobby.room_code;
+        if (!lobby.is_host) {
+            status += " | Host ";
+            status += host_display_name(lobby);
+        }
     }
     if (!lobby.advertised_endpoint.empty()) {
         status += " | ";
         status += lobby.advertised_endpoint;
     }
+    status += " | Players ";
+    status += std::to_string(room_player_count(lobby));
+    status += "/";
+    status += std::to_string(std::max(1, lobby.max_players));
+    status += " | ";
+    status += joinability_text(lobby);
     status += " | ";
     status += std::to_string(lobby.local_players.size());
     status += " local";
     const int remote_count = remote_member_count(lobby);
-    if (remote_count > 0) {
+    if (!lobby.room_code.empty()) {
         status += ", ";
         status += std::to_string(remote_count);
-        status += " remote";
+        status += " remote client";
+        if (remote_count != 1)
+            status += "s";
     }
     return status;
 }
@@ -110,7 +150,7 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     widgets.clear();
     frame_actions.clear();
     text_cache.clear();
-    text_cache.reserve(4);
+    text_cache.reserve(8);
     gubsy_lobby_ensure_ready(ctx.engine);
     const bool joined_client = ctx.engine.lobby.online && !ctx.engine.lobby.is_host;
 
@@ -135,17 +175,21 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     players.slot = SettingsObjectID::CARD0;
     players.type = WidgetType::Card;
     text_cache.push_back("Players");
+    const std::size_t players_label_index = text_cache.size() - 1;
     std::string player_summary = std::to_string(ctx.engine.lobby.local_players.size()) + " local";
     const int remote_count = remote_member_count(ctx.engine.lobby);
-    if (remote_count > 0) {
+    if (!ctx.engine.lobby.room_code.empty()) {
         player_summary += ", ";
         player_summary += std::to_string(remote_count);
-        player_summary += " remote";
+        player_summary += " remote client";
+        if (remote_count != 1)
+            player_summary += "s";
     }
     player_summary += ". Select to manage profiles, binds, devices, and connected players.";
     text_cache.push_back(std::move(player_summary));
-    players.label = text_cache[0].c_str();
-    players.secondary = text_cache[1].c_str();
+    const std::size_t players_summary_index = text_cache.size() - 1;
+    players.label = text_cache[players_label_index].c_str();
+    players.secondary = text_cache[players_summary_index].c_str();
     players.on_select = MenuAction::push(MenuScreenID::LOBBY_LOCAL_PLAYERS);
 
     MenuWidget settings = make_button(202, SettingsObjectID::CARD1, "Game Settings",

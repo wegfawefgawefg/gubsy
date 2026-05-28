@@ -113,6 +113,7 @@ void apply_room_to_lobby(EngineState& engine, const MatchmakingRoom& room) {
     engine.lobby.max_players = std::max(1, room.max_players);
     engine.lobby.contract = room.contract;
     engine.lobby.members = room.members;
+    engine.lobby.room_current_players = std::max(0, room.current_players);
     engine.lobby.advertised_endpoint = room.contract.realtime_endpoint;
 }
 
@@ -322,6 +323,7 @@ bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::strin
     engine.lobby.room_code.clear();
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
     engine.lobby.members.clear();
     clear_lobby_error(engine, "Hosting direct " + engine.lobby.advertised_endpoint);
     message = engine.lobby.status_message;
@@ -359,6 +361,7 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
     engine.lobby.room_code.clear();
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
     engine.lobby.members.clear();
     engine.lobby.join_host = host;
     engine.lobby.network_port = static_cast<int>(port);
@@ -456,6 +459,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
         engine.lobby.is_host = false;
         engine.lobby.member_id.clear();
         engine.lobby.host_secret.clear();
+        engine.lobby.room_current_players = 0;
         engine.lobby.members.clear();
         clear_lobby_error(engine, "Left direct session");
         message = engine.lobby.status_message;
@@ -476,6 +480,7 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     engine.lobby.room_code.clear();
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
     engine.lobby.members.clear();
     clear_lobby_error(engine, "Left online room");
     message = engine.lobby.status_message;
@@ -539,6 +544,7 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
     }
 
     if (auto current_room = fetch_current_room(engine, err)) {
+        engine.lobby.room_current_players = std::max(0, current_room->current_players);
         update_lobby_members(engine, current_room->members, false);
     } else if (!err.empty()) {
         engine.lobby.last_error = err;
@@ -570,6 +576,7 @@ void gubsy_lobby_tick_online(EngineState& engine) {
             engine.lobby.max_players = std::max(1, current_room->max_players);
             engine.lobby.contract = current_room->contract;
             engine.lobby.advertised_endpoint = current_room->contract.realtime_endpoint;
+            engine.lobby.room_current_players = std::max(0, current_room->current_players);
             update_lobby_members(engine, current_room->members, true);
         } else if (!err.empty()) {
             engine.lobby.last_error = err;

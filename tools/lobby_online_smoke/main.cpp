@@ -206,6 +206,8 @@ int main(int argc, char** argv) {
                 "host contract missing game config");
         require(host_engine.lobby.members.size() == 1,
                 "host did not fetch initial room membership");
+        require(host_engine.lobby.room_current_players == 1,
+                "host did not cache initial room player count");
 
         const std::string old_room_code = host_engine.lobby.room_code;
         host_engine.lobby.lobby_name = "Bright Rehosted Tunnel";
@@ -221,6 +223,8 @@ int main(int argc, char** argv) {
         require(!host_engine.lobby.room_code.empty(), "rehost room code missing");
         require(host_engine.lobby.members.size() == 1,
                 "rehost did not fetch initial room membership");
+        require(host_engine.lobby.room_current_players == 1,
+                "rehost did not cache initial room player count");
 
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "guest public room refresh failed");
@@ -257,11 +261,15 @@ int main(int argc, char** argv) {
                 "guest joined wrong room");
         require(guest_engine.lobby.members.size() == 2,
                 "guest did not fetch joined room membership");
+        require(guest_engine.lobby.room_current_players == 2,
+                "guest did not cache joined room player count");
 
         host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
         gubsy_lobby_tick_online(host_engine);
         require(host_engine.lobby.members.size() == 2,
                 "host did not refresh joined room membership");
+        require(host_engine.lobby.room_current_players == 2,
+                "host did not refresh joined room player count");
         require(has_alert_containing(host_engine, "joined"), "host did not alert member join");
 
         require(gubsy_lobby_leave_room(guest_engine, message), "guest leave failed");
@@ -270,6 +278,8 @@ int main(int argc, char** argv) {
         gubsy_lobby_tick_online(host_engine);
         require(host_engine.lobby.members.size() == 1,
                 "host did not refresh left room membership");
+        require(host_engine.lobby.room_current_players == 1,
+                "host did not refresh left room player count");
         require(has_alert_containing(host_engine, "left"), "host did not alert member leave");
 
         guest_state.join_called = false;
@@ -281,11 +291,15 @@ int main(int argc, char** argv) {
         gubsy_lobby_tick_online(host_engine);
         require(host_engine.lobby.members.size() == 2,
                 "host did not refresh rejoined room membership");
+        require(host_engine.lobby.room_current_players == 2,
+                "host did not refresh rejoined room player count");
 
         require(gubsy_lobby_remove_room_member(host_engine, guest_engine.lobby.member_id, message),
                 "host kick failed");
         require(host_engine.lobby.members.size() == 1,
                 "host did not refresh kicked room membership");
+        require(host_engine.lobby.room_current_players == 1,
+                "host did not refresh kicked room player count");
         require(has_alert_containing(host_engine, "Kicked"), "host did not alert member kick");
 
         require(gubsy_lobby_leave_room(host_engine, message), "host leave failed");
