@@ -222,9 +222,21 @@ bool room_is_joinable(const MatchmakingRoom& room) {
     return room.max_players <= 0 || room.current_players < room.max_players;
 }
 
+const char* room_browser_badge(const MatchmakingRoom& room) {
+    if (session_contract_is_in_game(room.contract))
+        return "IN GAME";
+    if (!room_is_joinable(room))
+        return "FULL";
+    return "JOIN";
+}
+
 std::string room_card_detail(const MatchmakingRoom& room) {
     std::string detail = "Host: ";
     detail += room.host_name.empty() ? "Unknown" : room.host_name;
+    if (!room.room_code.empty()) {
+        detail += " | Code ";
+        detail += room.room_code;
+    }
     detail += " | Players ";
     detail += std::to_string(room.current_players);
     detail += "/";
@@ -451,16 +463,23 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
             card.type = WidgetType::Card;
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
-            card.badge = room.room_code.c_str();
+            card.badge = room_browser_badge(room);
             if (room_is_joinable(room)) {
                 card.on_select = MenuAction::run_command(g_cmd_join_listed, room_index);
+                card.badge_color = SDL_Color{130, 230, 150, 255};
             } else {
                 card.style.bg_r = 32;
                 card.style.bg_g = 30;
                 card.style.bg_b = 34;
+                card.style.fg_r = 150;
+                card.style.fg_g = 145;
+                card.style.fg_b = 155;
                 card.style.focus_r = 120;
                 card.style.focus_g = 100;
                 card.style.focus_b = 120;
+                card.badge_color = session_contract_is_in_game(room.contract)
+                                       ? SDL_Color{230, 150, 95, 255}
+                                       : SDL_Color{220, 115, 115, 255};
             }
             widgets.push_back(card);
             room_ids.push_back(card.id);
