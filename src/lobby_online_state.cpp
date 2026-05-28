@@ -74,9 +74,10 @@ SessionContract build_lobby_contract(EngineState& engine) {
 }
 
 MatchmakingRoom build_room_metadata(EngineState& engine) {
+    gubsy_lobby_ensure_ready(engine);
     MatchmakingRoom room;
     room.room_code = engine.lobby.room_code;
-    room.session_name = engine.lobby.lobby_name.empty() ? "Local Game" : engine.lobby.lobby_name;
+    room.session_name = engine.lobby.lobby_name;
     room.host_name = local_player_name(engine);
     room.privacy = lobby_visibility_value(engine.lobby.visibility);
     room.max_players = std::max(1, engine.lobby.max_players);

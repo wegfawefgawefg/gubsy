@@ -31,7 +31,7 @@ struct GubsyLobbyPlayer {
 };
 
 struct GubsyLobbyState {
-    std::string lobby_name{"Local Game"};
+    std::string lobby_name;
     GubsyLobbyVisibility visibility{GubsyLobbyVisibility::Private};
     int max_players{8};
     int selected_player_index{0};

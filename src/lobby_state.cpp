@@ -9,10 +9,60 @@
 #include "src/user_profiles.hpp"
 
 #include <algorithm>
+#include <array>
+#include <random>
+#include <string>
+#include <string_view>
 
 namespace {
 
 constexpr int kMaxLocalPlayers = 32;
+
+const std::array<std::string_view, 64> kRoomNameAdjectives{
+    "Brave",  "Bright", "Bouncy", "Calm",   "Cheery", "Clever", "Cozy",   "Curious",
+    "Daring", "Dizzy",  "Dreamy", "Fancy",  "Fuzzy",  "Gentle", "Golden", "Happy",
+    "Jolly",  "Kind",   "Lucky",  "Merry",  "Mighty", "Nimble", "Odd",    "Peppy",
+    "Plucky", "Quick",  "Quiet",  "Rapid",  "Round",  "Shiny",  "Sleepy", "Snappy",
+    "Soft",   "Sunny",  "Tiny",   "Toasty", "Wavy",   "Wild",   "Witty",  "Wobbly",
+    "Zesty",  "Bold",   "Chilly", "Dapper", "Eager",  "Feisty", "Frosty", "Glowing",
+    "Humble", "Jumpy",  "Loopy",  "Misty",  "Nifty",  "Proud",  "Rusty",  "Silly",
+    "Swift",  "Tidy",   "Velvet", "Warm",   "Wise",   "Zippy",  "Lunar",  "Magic",
+};
+
+const std::array<std::string_view, 64> kRoomNameNouns{
+    "Anchor", "Apple",  "Beacon", "Bridge", "Bucket", "Button", "Candle", "Canyon",
+    "Castle", "Cloud",  "Comet",  "Cookie", "Drum",   "Feather", "Garden", "Gear",
+    "Harbor", "Hat",    "Hill",   "Kettle", "Key",    "Lantern", "Lemon",  "Marble",
+    "Meadow", "Moon",   "Mushroom", "Noodle", "Pebble", "Penny",  "Pickle", "Pillow",
+    "Planet", "Puddle", "Ribbon", "River",  "Rocket", "Rope",   "Shell",  "Spoon",
+    "Star",   "Stone",  "Tunnel", "Umbrella", "Vault", "Wagon", "Walnut", "Window",
+    "Wizard", "Yarn",   "Zipper", "Bell",   "Branch", "Cup",    "Door",   "Flute",
+    "Hammer", "Island", "Jacket", "Ladder", "Pumpkin", "Sail",  "Torch",  "Tower",
+};
+
+std::string generated_lobby_name() {
+    static std::random_device random_device;
+    static std::mt19937 rng(random_device());
+    std::uniform_int_distribution<std::size_t> adjective_dist(0, kRoomNameAdjectives.size() - 1);
+    std::uniform_int_distribution<std::size_t> noun_dist(0, kRoomNameNouns.size() - 1);
+
+    std::size_t first = adjective_dist(rng);
+    std::size_t second = adjective_dist(rng);
+    if (second == first)
+        second = (second + 1) % kRoomNameAdjectives.size();
+
+    std::string name(kRoomNameAdjectives[first]);
+    name += ' ';
+    name += kRoomNameAdjectives[second];
+    name += ' ';
+    name += kRoomNameNouns[noun_dist(rng)];
+    return name;
+}
+
+void ensure_lobby_name(EngineState& engine) {
+    if (engine.lobby.lobby_name.empty())
+        engine.lobby.lobby_name = generated_lobby_name();
+}
 
 template <typename T, typename Pred> T* find_if_ptr(std::vector<T>& items, Pred pred) {
     auto it = std::find_if(items.begin(), items.end(), pred);
@@ -153,6 +203,7 @@ void gubsy_lobby_ensure_ready(EngineState& engine) {
     ensure_default_user_profile(engine);
     ensure_default_binds_profile(engine);
     ensure_default_input_settings_profile(engine);
+    ensure_lobby_name(engine);
     if (engine.lobby.contract.net_protocol.empty())
         engine.lobby.contract.net_protocol = session_contract_default_net_protocol();
     if (engine.lobby.contract.session_phase.empty())

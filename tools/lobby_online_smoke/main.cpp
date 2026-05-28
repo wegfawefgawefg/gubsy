@@ -2,6 +2,7 @@
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/lobby_state.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <stdexcept>
@@ -154,6 +155,9 @@ int main(int argc, char** argv) {
         install_smoke_hooks(guest_runtime, guest_state);
 
         gubsy_lobby_ensure_ready(host_engine);
+        require(!host_engine.lobby.lobby_name.empty(), "default lobby name was not generated");
+        require(host_engine.lobby.lobby_name != "Local Game",
+                "default lobby name should not be Local Game");
         (void)gubsy_lobby_add_local_player(host_engine);
         std::string message;
 
@@ -184,6 +188,8 @@ int main(int argc, char** argv) {
         guest_state.join_called = false;
         guest_state.leave_called = false;
 
+        const std::string generated_room_name = host_engine.lobby.lobby_name;
+        host_engine.lobby.visibility = GubsyLobbyVisibility::Public;
         require(gubsy_lobby_host_room(host_engine, host_state.expected_port, message),
                 "host room failed");
         require(host_state.host_called, "host transport was not called");
@@ -192,6 +198,20 @@ int main(int argc, char** argv) {
         require(!host_engine.lobby.room_code.empty(), "host room code missing");
         require(host_engine.lobby.contract.game_config.value("mode", "") == "campaign",
                 "host contract missing game config");
+
+        require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
+                "guest public room refresh failed");
+        auto listed_room =
+            std::find_if(guest_engine.lobby.discovered_rooms.begin(),
+                         guest_engine.lobby.discovered_rooms.end(),
+                         [&](const MatchmakingRoom& room) {
+                             return room.room_code == host_engine.lobby.room_code;
+                         });
+        require(listed_room != guest_engine.lobby.discovered_rooms.end(),
+                "public hosted room was not listed");
+        require(listed_room->session_name == generated_room_name,
+                "listed room did not keep generated room name");
+        require(listed_room->privacy > 0, "listed room was not public");
 
         require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
                 "guest join by room code failed");
