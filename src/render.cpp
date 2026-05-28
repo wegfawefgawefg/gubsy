@@ -122,6 +122,16 @@ void draw_text_with_font(TTF_Font* font, SDL_Renderer* renderer, const std::stri
     SDL_DestroyTexture(tex);
 }
 
+int measure_text_width(TTF_Font* font, const std::string& text) {
+    if (!font || text.empty())
+        return 0;
+    int w = 0;
+    int h = 0;
+    if (!TTF_GetStringSize(font, text.c_str(), 0, &w, &h))
+        return 0;
+    return w;
+}
+
 } // namespace
 
 ScreenSpace make_space(int width, int height) {
@@ -184,22 +194,42 @@ SDL_Color alert_color(AlertSeverity severity) {
 void render_alerts(const EngineState& engine, SDL_Renderer* renderer, int width) {
     if (engine.alerts.empty())
         return;
-    int y = 20;
     Graphics* graphics = engine.graphics;
     if (!graphics)
         return;
+    TTF_Font* font = graphics->ui_font ? graphics->ui_font : fallback_draw_font();
+    if (!font)
+        return;
+
+    SDL_BlendMode previous_blend = SDL_BLENDMODE_NONE;
+    SDL_GetRenderDrawBlendMode(renderer, &previous_blend);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    int y = 18;
     for (const auto& alert : engine.alerts) {
-        draw_text_with_font(graphics->ui_font ? graphics->ui_font : fallback_draw_font(), renderer,
-                            alert.text, 24, y, alert_color(alert.severity));
-        y += 22;
-        if (y > 200)
+        constexpr int kPaddingX = 14;
+        constexpr int kPaddingY = 7;
+        constexpr int kToastHeight = 34;
+        const int text_width = measure_text_width(font, alert.text);
+        const int toast_width = std::clamp(text_width + kPaddingX * 2, 220, std::max(220, width - 48));
+        const int x = std::max(12, (width - toast_width) / 2);
+        SDL_FRect rect{static_cast<float>(x),
+                       static_cast<float>(y),
+                       static_cast<float>(toast_width),
+                       static_cast<float>(kToastHeight)};
+        SDL_SetRenderDrawColor(renderer, 16, 18, 26, 205);
+        SDL_RenderFillRect(renderer, &rect);
+        SDL_Color edge = alert_color(alert.severity);
+        SDL_SetRenderDrawColor(renderer, edge.r, edge.g, edge.b, 230);
+        SDL_RenderRect(renderer, &rect);
+        draw_text_with_font(font, renderer, alert.text, x + kPaddingX, y + kPaddingY,
+                            alert_color(alert.severity));
+        y += kToastHeight + 6;
+        if (y > 260)
             break;
     }
 
-    // Mode label
-    std::string mode = "Mode: " + engine.mode;
-    draw_text_with_font(graphics->ui_font ? graphics->ui_font : fallback_draw_font(), renderer,
-                        mode, width - 220, 20, SDL_Color{180, 180, 200, 255});
+    SDL_SetRenderDrawBlendMode(renderer, previous_blend);
 }
 
 void render_fps_counter(const EngineState& engine, SDL_Renderer* renderer) {
