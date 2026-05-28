@@ -158,6 +158,12 @@ const MatchmakingMember* find_member_by_id(const std::vector<MatchmakingMember>&
     return it == members.end() ? nullptr : &*it;
 }
 
+bool has_direct_members(const std::vector<MatchmakingMember>& members) {
+    return std::any_of(members.begin(), members.end(), [](const MatchmakingMember& member) {
+        return member.member_id.rfind("direct:", 0) == 0;
+    });
+}
+
 void update_lobby_members(EngineState& engine, const std::vector<MatchmakingMember>& next_members,
                           bool alert_changes) {
     if (alert_changes) {
@@ -802,7 +808,9 @@ void gubsy_lobby_tick_online(EngineState& engine) {
             engine.lobby.contract = current_room->contract;
             engine.lobby.advertised_endpoint = current_room->contract.realtime_endpoint;
             engine.lobby.room_current_players = std::max(0, current_room->current_players);
-            update_lobby_members(engine, current_room->members, true);
+            if (!engine.lobby.is_host || !has_direct_members(engine.lobby.members)) {
+                update_lobby_members(engine, current_room->members, true);
+            }
         } else if (!err.empty()) {
             engine.lobby.last_error = err;
         }
