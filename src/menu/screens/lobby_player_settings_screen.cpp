@@ -99,6 +99,10 @@ void command_open_devices(MenuContext& ctx, std::int32_t) {
 }
 
 void command_remove_player(MenuContext& ctx, std::int32_t) {
+    if (ctx.engine.lobby.player_roster_locked) {
+        ctx.engine.lobby.status_message = "Player changes locked while game is running";
+        return;
+    }
     gubsy_lobby_remove_local_player(ctx.engine, ctx.player_index);
     ctx.manager.pop_screen();
 }
@@ -125,7 +129,9 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     gubsy_lobby_ensure_ready(ctx.engine);
     gubsy_lobby_select_player(ctx.engine, ctx.player_index);
     auto& st = ctx.state<PlayerSettingsState>();
-    bool can_remove_player = ctx.engine.lobby.local_players.size() > 1;
+    const bool roster_locked = ctx.engine.lobby.player_roster_locked;
+    const bool show_remove_player = ctx.engine.lobby.local_players.size() > 1;
+    const bool can_remove_player = show_remove_player && !roster_locked;
     update_page(st, 4);
 
     static std::vector<MenuWidget> widgets;
@@ -136,7 +142,9 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     text_cache.push_back(gubsy_lobby_player_label(ctx.engine, ctx.player_index));
     widgets.push_back(
         make_label(kTitleWidgetId, SettingsObjectID::TITLE, text_cache.back().c_str()));
-    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS, "Player setup"));
+    widgets.push_back(make_label(kStatusWidgetId, SettingsObjectID::STATUS,
+                                 roster_locked ? "Player changes locked while game is running"
+                                               : "Player setup"));
     widgets.push_back(make_label(kPageLabelWidgetId, SettingsObjectID::PAGE, st.page_text.c_str()));
 
     MenuAction prev_action =
@@ -182,17 +190,31 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
         make_card(kDeviceWidgetId, SettingsObjectID::CARD3, "Input Devices",
                   text_cache.back().c_str(), MenuAction::run_command(g_cmd_open_devices));
     MenuWidget remove = make_button(kRemoveWidgetId, SettingsObjectID::SEARCH, "Remove Player",
-                                    MenuAction::run_command(g_cmd_remove_player));
+                                    can_remove_player ? MenuAction::run_command(g_cmd_remove_player)
+                                                      : MenuAction::none());
+    remove.secondary = roster_locked ? "Player changes locked while game is running."
+                                     : "Remove this local player.";
     remove.style.bg_r = 74;
     remove.style.bg_g = 26;
     remove.style.bg_b = 30;
     remove.style.focus_r = 255;
     remove.style.focus_g = 120;
     remove.style.focus_b = 120;
-    if (can_remove_player) {
+    if (roster_locked) {
+        remove.style.bg_r = 30;
+        remove.style.bg_g = 30;
+        remove.style.bg_b = 36;
+        remove.style.fg_r = 150;
+        remove.style.fg_g = 150;
+        remove.style.fg_b = 165;
+        remove.style.focus_r = 120;
+        remove.style.focus_g = 120;
+        remove.style.focus_b = 135;
+    }
+    if (show_remove_player) {
         widgets.push_back(remove);
     }
-    std::size_t remove_idx = can_remove_player ? widgets.size() - 1 : 0;
+    std::size_t remove_idx = show_remove_player ? widgets.size() - 1 : 0;
     MenuWidget back = make_button(kBackWidgetId, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     std::vector<MenuWidget> rows;
@@ -230,7 +252,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     prev_ref.nav_down = first_row;
     next_ref.nav_left = prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid;
     next_ref.nav_down = first_row;
-    if (can_remove_player) {
+    if (show_remove_player) {
         MenuWidget& remove_ref = widgets[remove_idx];
         remove_ref.nav_right =
             next_ref.type == WidgetType::Button
@@ -244,7 +266,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
                 continue;
             widget.nav_up =
                 (i == 0)
-                    ? (can_remove_player
+                    ? (show_remove_player
                            ? kRemoveWidgetId
                            : (prev_ref.type == WidgetType::Button ? prev_ref.id : kMenuIdInvalid))
                     : row_ids[i - 1];
@@ -257,7 +279,7 @@ BuiltScreen build_player_settings(MenuContext& ctx) {
     BuiltScreen built;
     built.layout = UILayoutID::SETTINGS_SCREEN;
     built.widgets = MenuWidgetList{widgets};
-    built.default_focus = can_remove_player ? kRemoveWidgetId : first_row;
+    built.default_focus = show_remove_player ? kRemoveWidgetId : first_row;
     return built;
 }
 

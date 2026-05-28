@@ -430,6 +430,15 @@ bool gubsy_set_lobby_session_phase(GubsyRuntime& runtime, const std::string& ses
     return true;
 }
 
+bool gubsy_set_lobby_player_roster_locked(GubsyRuntime& runtime, bool locked) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+    if (engine.lobby.player_roster_locked == locked)
+        return false;
+    engine.lobby.player_roster_locked = locked;
+    return true;
+}
+
 void gubsy_set_lobby_direct_members(GubsyRuntime& runtime,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes) {

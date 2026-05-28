@@ -146,6 +146,10 @@ void command_page_delta(MenuContext& ctx, std::int32_t delta) {
 }
 
 void command_add_player(MenuContext& ctx, std::int32_t) {
+    if (ctx.engine.lobby.player_roster_locked) {
+        ctx.engine.lobby.status_message = "Player changes locked while game is running";
+        return;
+    }
     int index = gubsy_lobby_add_local_player(ctx.engine);
     ctx.manager.push_screen(MenuScreenID::LOBBY_PLAYER_SETTINGS, index);
 }
@@ -223,14 +227,29 @@ BuiltScreen build_local_players(MenuContext& ctx) {
 
     std::vector<WidgetId> card_ids;
     int start = st.page * kRowsPerPage;
+    const bool roster_locked = ctx.engine.lobby.player_roster_locked;
     MenuWidget add = make_button(kAddButtonId, SettingsObjectID::SEARCH, "Add Local Player",
-                                 MenuAction::run_command(g_cmd_add_player));
+                                 roster_locked ? MenuAction::none()
+                                               : MenuAction::run_command(g_cmd_add_player));
+    add.secondary = roster_locked ? "Player changes locked while game is running."
+                                  : "Add another local player before play starts.";
     add.style.bg_r = 22;
     add.style.bg_g = 58;
     add.style.bg_b = 34;
     add.style.focus_r = 110;
     add.style.focus_g = 230;
     add.style.focus_b = 140;
+    if (roster_locked) {
+        add.style.bg_r = 30;
+        add.style.bg_g = 30;
+        add.style.bg_b = 36;
+        add.style.fg_r = 150;
+        add.style.fg_g = 150;
+        add.style.fg_b = 165;
+        add.style.focus_r = 120;
+        add.style.focus_g = 120;
+        add.style.focus_b = 135;
+    }
 
     widgets.push_back(add);
     std::size_t add_idx = widgets.size() - 1;

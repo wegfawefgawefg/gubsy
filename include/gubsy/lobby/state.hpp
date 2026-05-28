@@ -60,6 +60,7 @@ struct GubsyLobbyState {
     std::vector<MatchmakingMember> room_members;
     std::vector<MatchmakingMember> game_members;
     bool game_members_authoritative{false};
+    bool player_roster_locked{false};
     SessionContract contract{};
 };
 

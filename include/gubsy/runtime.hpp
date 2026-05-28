@@ -109,6 +109,7 @@ void gubsy_set_lobby_config_provider(GubsyRuntime& runtime, GubsyLobbyConfigProv
 void gubsy_set_lobby_matchmaking_backend(GubsyRuntime& runtime, IMatchmaking* matchmaking);
 const GubsyLobbyState& gubsy_get_lobby_state(GubsyRuntime& runtime);
 bool gubsy_set_lobby_session_phase(GubsyRuntime& runtime, const std::string& session_phase);
+bool gubsy_set_lobby_player_roster_locked(GubsyRuntime& runtime, bool locked);
 void gubsy_set_lobby_direct_members(GubsyRuntime& runtime,
                                     const std::vector<MatchmakingMember>& members,
                                     bool alert_changes = true);

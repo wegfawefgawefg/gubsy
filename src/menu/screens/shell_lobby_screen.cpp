@@ -232,6 +232,8 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
             player_summary += "s";
     }
     player_summary += ". Select to manage profiles, binds, devices, and connected players.";
+    if (ctx.engine.lobby.player_roster_locked)
+        player_summary += " Player add/remove is locked while the game is running.";
     text_cache.push_back(std::move(player_summary));
     const std::size_t players_summary_index = text_cache.size() - 1;
     players.label = text_cache[players_label_index].c_str();
