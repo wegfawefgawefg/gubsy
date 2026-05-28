@@ -310,10 +310,13 @@ void verify_joined_shell_lobby_context(GubsyRuntime& runtime) {
     verify_players_row_hierarchy(engine, "joined public");
 
     const MenuWidget* host = widget_by_slot(engine, SettingsObjectID::CARD2);
-    require(host != nullptr, "missing joined shell lobby host card");
-    require(host->secondary != nullptr &&
-                std::string(host->secondary).find("Host-only") != std::string::npos,
-            "joined shell lobby should mark host flow host-only");
+    const MenuWidget* join = widget_by_slot(engine, SettingsObjectID::CARD3);
+    require(host == nullptr, "joined shell lobby should hide Host Game while in a session");
+    require(join == nullptr, "joined shell lobby should hide Join Game while in a session");
+    const MenuWidget* leave = widget_by_slot(engine, SettingsObjectID::CARD4);
+    require(leave != nullptr, "missing joined shell lobby leave-session command");
+    require(leave->label != nullptr && std::string(leave->label) == "Leave Session",
+            "joined shell lobby should expose Leave Session in the bottom command slot");
 
     const MenuWidget* start = widget_by_slot(engine, SettingsObjectID::ACTION);
     require(start != nullptr, "missing joined shell lobby start action");
@@ -542,14 +545,16 @@ void verify_join_by_ip_validation(GubsyRuntime& runtime) {
             "invalid join-by-ip action should be red/error styled");
 
     *port->text_buffer = "35355";
-    engine.lobby.last_error = "Cannot join direct game: failed to reach host";
+    engine.lobby.last_error = "No server found at 127.0.0.1:35355";
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
     action = widget_by_slot(engine, SettingsObjectID::ACTION);
-    require(action != nullptr && action->on_select.type == MenuActionType::RunCommand,
-            "join-by-ip retry should remain actionable after a failed attempt");
+    require(action != nullptr && action->on_select.type == MenuActionType::None,
+            "join-by-ip failed endpoint should disable the Join action");
+    require(action->label != nullptr && std::string(action->label) == "No Server Found",
+            "join-by-ip failed endpoint should label the unavailable action");
     require(action->secondary != nullptr &&
-                std::string(action->secondary).find("Last join failed") != std::string::npos,
-            "join-by-ip failed attempt should explain retry state");
+                std::string(action->secondary).find("No server found") != std::string::npos,
+            "join-by-ip failed attempt should explain unreachable state");
     require(action->style.bg_r > action->style.bg_g && action->style.bg_r > action->style.bg_b,
             "join-by-ip failed attempt should be red/error styled");
 

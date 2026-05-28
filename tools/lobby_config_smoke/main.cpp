@@ -112,16 +112,24 @@ int main() {
         require(engine.lobby.last_error == "Cannot join room: room is full",
                 "unexpected full-room error message");
 
+        state.reject_remote = false;
+        state.validate_remote_called = false;
+        state.apply_remote_called = false;
+        state.join_called = false;
         MatchmakingRoom in_game_room = make_room();
         in_game_room.contract.session_phase = "in_game";
         require(!gubsy_lobby_join_room(engine, in_game_room, message),
-                "join should fail before transport when game is already in progress");
-        require(!state.validate_remote_called, "in-game room should not validate remote config");
-        require(!state.apply_remote_called, "in-game room should not apply remote config");
-        require(!state.join_called, "in-game room should not call join transport");
-        require(engine.lobby.last_error == "Cannot join room: game already in progress",
-                "unexpected in-game-room error message");
+                "in-game room should be joinable until fake transport stops it");
+        require(state.validate_remote_called, "in-game room should validate remote config");
+        require(state.apply_remote_called, "in-game room should apply remote config");
+        require(state.join_called, "in-game room should call join transport");
+        require(engine.lobby.last_error == "Cannot join room: smoke stops before real room service",
+                "unexpected in-game-room transport error message");
 
+        state.reject_remote = true;
+        state.validate_remote_called = false;
+        state.apply_remote_called = false;
+        state.join_called = false;
         require(!gubsy_lobby_join_room(engine, make_room(), message),
                 "join should fail when remote config is rejected");
         require(state.validate_remote_called, "remote validator was not called");

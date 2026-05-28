@@ -195,7 +195,7 @@ int main() {
         cleanup_gubsy_runtime(no_mod_engine);
         return 16;
     }
-    if (lobby_start_message != "Starting game") {
+    if (lobby_start_message != "Starting local game") {
         cleanup_gubsy_runtime(no_mod_engine);
         return 17;
     }
