@@ -57,7 +57,9 @@ struct GubsyLobbyState {
     int room_current_players{0};
     std::vector<std::string> browse_room_codes;
     std::vector<MatchmakingRoom> discovered_rooms;
-    std::vector<MatchmakingMember> members;
+    std::vector<MatchmakingMember> room_members;
+    std::vector<MatchmakingMember> game_members;
+    bool game_members_authoritative{false};
     SessionContract contract{};
 };
 

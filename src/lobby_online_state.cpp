@@ -1,5 +1,5 @@
-#include "src/engine_state.hpp"
 #include "src/alerts.hpp"
+#include "src/engine_state.hpp"
 #include "src/lobby_state.hpp"
 #include "src/room_matchmaking.hpp"
 #include "src/user_profiles.hpp"
@@ -90,7 +90,8 @@ MatchmakingRoom build_room_metadata(EngineState& engine) {
     room.host_name = local_player_name(engine);
     room.privacy = lobby_visibility_value(engine.lobby.visibility);
     room.max_players = std::max(1, engine.lobby.max_players);
-    room.current_players = static_cast<int>(engine.lobby.local_players.size());
+    room.current_players =
+        static_cast<int>(engine.lobby.local_players.size() + engine.lobby.game_members.size());
     room.contract = build_lobby_contract(engine);
     return room;
 }
@@ -119,7 +120,7 @@ void apply_room_to_lobby(EngineState& engine, const MatchmakingRoom& room) {
         room.session_name.empty() ? engine.lobby.lobby_name : room.session_name;
     engine.lobby.max_players = std::max(1, room.max_players);
     engine.lobby.contract = room.contract;
-    engine.lobby.members = room.members;
+    engine.lobby.room_members = room.members;
     engine.lobby.room_current_players = std::max(0, room.current_players);
     engine.lobby.advertised_endpoint = room.contract.realtime_endpoint;
 }
@@ -158,29 +159,35 @@ const MatchmakingMember* find_member_by_id(const std::vector<MatchmakingMember>&
     return it == members.end() ? nullptr : &*it;
 }
 
-bool has_direct_members(const std::vector<MatchmakingMember>& members) {
-    return std::any_of(members.begin(), members.end(), [](const MatchmakingMember& member) {
-        return member.member_id.rfind("direct:", 0) == 0;
-    });
-}
-
-void update_lobby_members(EngineState& engine, const std::vector<MatchmakingMember>& next_members,
-                          bool alert_changes) {
+void update_members(EngineState& engine, std::vector<MatchmakingMember>& current_members,
+                    const std::vector<MatchmakingMember>& next_members, bool alert_changes) {
     if (alert_changes) {
         for (const MatchmakingMember& next : next_members) {
             if (next.member_id.empty())
                 continue;
-            if (!find_member_by_id(engine.lobby.members, next.member_id))
+            if (!find_member_by_id(current_members, next.member_id))
                 add_alert(engine, member_joined_alert(next));
         }
-        for (const MatchmakingMember& old : engine.lobby.members) {
+        for (const MatchmakingMember& old : current_members) {
             if (old.member_id.empty())
                 continue;
             if (!find_member_by_id(next_members, old.member_id))
                 add_alert(engine, member_left_alert(old));
         }
     }
-    engine.lobby.members = next_members;
+    current_members = next_members;
+}
+
+void update_room_members(EngineState& engine, const std::vector<MatchmakingMember>& next_members,
+                         bool alert_changes) {
+    if (engine.lobby.game_members_authoritative)
+        alert_changes = false;
+    update_members(engine, engine.lobby.room_members, next_members, alert_changes);
+}
+
+void update_game_members(EngineState& engine, const std::vector<MatchmakingMember>& next_members,
+                         bool alert_changes) {
+    update_members(engine, engine.lobby.game_members, next_members, alert_changes);
 }
 
 std::optional<MatchmakingRoom> fetch_current_room(EngineState& engine, std::string& err) {
@@ -216,7 +223,9 @@ void force_leave_online_session(EngineState& engine, const std::string& status) 
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
-    engine.lobby.members.clear();
+    engine.lobby.room_members.clear();
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
     clear_lobby_error(engine, status);
     add_alert(engine, status);
 }
@@ -386,7 +395,9 @@ bool gubsy_lobby_host_direct(EngineState& engine, std::uint16_t port, std::strin
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
-    engine.lobby.members.clear();
+    engine.lobby.room_members.clear();
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
     clear_lobby_error(engine, "Hosting direct " + engine.lobby.advertised_endpoint);
     message = engine.lobby.status_message;
     return true;
@@ -431,7 +442,9 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
         engine.lobby.member_id.clear();
         engine.lobby.host_secret.clear();
         engine.lobby.room_current_players = 0;
-        engine.lobby.members.clear();
+        engine.lobby.room_members.clear();
+        engine.lobby.game_members.clear();
+        engine.lobby.game_members_authoritative = false;
         engine.lobby.direct_join_pending = true;
         engine.lobby.room_join_pending = false;
         engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
@@ -449,7 +462,9 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
-    engine.lobby.members.clear();
+    engine.lobby.room_members.clear();
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
     clear_lobby_error(engine, "Joined direct " + engine.lobby.advertised_endpoint);
     message = engine.lobby.status_message;
     return true;
@@ -495,11 +510,12 @@ void gubsy_lobby_confirm_direct_join(EngineState& engine, const std::string& mes
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
-    engine.lobby.members.clear();
+    engine.lobby.room_members.clear();
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
     clear_direct_join_pending(engine);
-    clear_lobby_error(engine, message.empty()
-                                  ? "Joined direct " + engine.lobby.advertised_endpoint
-                                  : message);
+    clear_lobby_error(engine, message.empty() ? "Joined direct " + engine.lobby.advertised_endpoint
+                                              : message);
     add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
 }
 
@@ -513,7 +529,9 @@ void gubsy_lobby_fail_direct_join(EngineState& engine, const std::string& messag
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
-    engine.lobby.members.clear();
+    engine.lobby.room_members.clear();
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
     clear_direct_join_pending(engine);
     set_lobby_error(engine, message.empty() ? "No server found" : message);
     add_alert(engine, engine.lobby.status_message, AlertSeverity::Error);
@@ -564,7 +582,9 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         engine.lobby.member_id.clear();
         engine.lobby.host_secret.clear();
         engine.lobby.room_current_players = 0;
-        engine.lobby.members.clear();
+        engine.lobby.room_members.clear();
+        engine.lobby.game_members.clear();
+        engine.lobby.game_members_authoritative = false;
         engine.lobby.direct_join_pending = true;
         engine.lobby.room_join_pending = true;
         engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
@@ -629,7 +649,9 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
         engine.lobby.member_id.clear();
         engine.lobby.host_secret.clear();
         engine.lobby.room_current_players = 0;
-        engine.lobby.members.clear();
+        engine.lobby.room_members.clear();
+        engine.lobby.game_members.clear();
+        engine.lobby.game_members_authoritative = false;
         clear_direct_join_pending(engine);
         clear_lobby_error(engine, "Left direct session");
         message = engine.lobby.status_message;
@@ -651,7 +673,9 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
     engine.lobby.member_id.clear();
     engine.lobby.host_secret.clear();
     engine.lobby.room_current_players = 0;
-    engine.lobby.members.clear();
+    engine.lobby.room_members.clear();
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
     clear_direct_join_pending(engine);
     clear_lobby_error(engine, "Left online room");
     message = engine.lobby.status_message;
@@ -702,7 +726,7 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
         return false;
     }
 
-    const MatchmakingMember* target = find_member_by_id(engine.lobby.members, member_id);
+    const MatchmakingMember* target = find_member_by_id(engine.lobby.room_members, member_id);
     const std::string target_name = target ? member_name(*target) : member_id;
 
     std::string err;
@@ -716,7 +740,7 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
 
     if (auto current_room = fetch_current_room(engine, err)) {
         engine.lobby.room_current_players = std::max(0, current_room->current_players);
-        update_lobby_members(engine, current_room->members, false);
+        update_room_members(engine, current_room->members, false);
     } else if (!err.empty()) {
         engine.lobby.last_error = err;
     }
@@ -736,8 +760,7 @@ bool gubsy_lobby_kick_direct_member(EngineState& engine, const MatchmakingMember
         set_lobby_error(engine, message);
         return false;
     }
-    if (member.member_id.empty() || member.member_id == engine.lobby.member_id ||
-        member.is_host) {
+    if (member.member_id.empty() || member.member_id == engine.lobby.member_id || member.is_host) {
         message = "Cannot kick that player";
         set_lobby_error(engine, message);
         return false;
@@ -770,10 +793,10 @@ void gubsy_lobby_set_direct_members(EngineState& engine,
     if (!engine.lobby.online || (!engine.lobby.room_code.empty() && !engine.lobby.is_host)) {
         return;
     }
-    update_lobby_members(engine, members, alert_changes);
-    engine.lobby.room_current_players = engine.lobby.room_code.empty()
-        ? static_cast<int>(engine.lobby.local_players.size() + engine.lobby.members.size())
-        : static_cast<int>(engine.lobby.members.size());
+    engine.lobby.game_members_authoritative = true;
+    update_game_members(engine, members, alert_changes);
+    engine.lobby.room_current_players =
+        static_cast<int>(engine.lobby.local_players.size() + engine.lobby.game_members.size());
 }
 
 void gubsy_lobby_tick_online(EngineState& engine) {
@@ -808,9 +831,7 @@ void gubsy_lobby_tick_online(EngineState& engine) {
             engine.lobby.contract = current_room->contract;
             engine.lobby.advertised_endpoint = current_room->contract.realtime_endpoint;
             engine.lobby.room_current_players = std::max(0, current_room->current_players);
-            if (!engine.lobby.is_host || !has_direct_members(engine.lobby.members)) {
-                update_lobby_members(engine, current_room->members, true);
-            }
+            update_room_members(engine, current_room->members, true);
         } else if (!err.empty()) {
             engine.lobby.last_error = err;
         }

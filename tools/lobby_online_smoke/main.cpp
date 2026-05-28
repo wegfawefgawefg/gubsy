@@ -1,16 +1,15 @@
-#include "gubsy/runtime.hpp"
 #include "gubsy/menu/ids.hpp"
+#include "gubsy/runtime.hpp"
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/lobby_state.hpp"
 #include "src/menu/menu_system_state.hpp"
 #include "src/menu_layout_ids.hpp"
 
-#include <glayout/layout.hpp>
-
 #include <algorithm>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <glayout/layout.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -72,9 +71,8 @@ bool rendered_lobby_smoke_enabled() {
 void ensure_renderer(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     if (engine.ui_layouts.layouts.empty()) {
-        glayout::ParseResult layouts =
-            glayout::load_layout_file(std::filesystem::current_path() / "data" / "ui_layouts" /
-                                      "layouts.lisp");
+        glayout::ParseResult layouts = glayout::load_layout_file(
+            std::filesystem::current_path() / "data" / "ui_layouts" / "layouts.lisp");
         require(layouts.ok && !layouts.layouts.empty(),
                 "render smoke failed to load project UI layouts");
         engine.ui_layouts.layouts = std::move(layouts.layouts);
@@ -83,7 +81,8 @@ void ensure_renderer(GubsyRuntime& runtime) {
     GubsyFrame frame = gubsy_get_frame(runtime);
     if (frame.renderer != nullptr)
         return;
-    require(gubsy_init_sdl_renderer(runtime), "failed to initialize renderer for lobby render smoke");
+    require(gubsy_init_sdl_renderer(runtime),
+            "failed to initialize renderer for lobby render smoke");
 }
 
 SDL_Surface* render_menu_to_surface(GubsyRuntime& runtime) {
@@ -131,8 +130,7 @@ int count_non_background_pixels(SDL_Surface* surface) {
 }
 
 SDL_Color sample_rect_center(SDL_Surface* surface, const SDL_FRect& rect) {
-    return sample_surface(surface,
-                          static_cast<int>(rect.x + rect.w * 0.5f),
+    return sample_surface(surface, static_cast<int>(rect.x + rect.w * 0.5f),
                           static_cast<int>(rect.y + rect.h * 0.5f));
 }
 
@@ -229,16 +227,13 @@ void verify_browser_render(GubsyRuntime& runtime) {
         SDL_Color avg = average_rect_color(surface, own_rect);
         if (!(avg.r > avg.g && avg.r > avg.b && avg.g < 120 && avg.b < 130)) {
             std::fprintf(stderr,
-                         "[lobby_online_smoke] own-room rendered avg rgb=(%u,%u,%u) style=(%u,%u,%u) rect=(%.1f,%.1f %.1fx%.1f)\n",
-                         static_cast<unsigned>(avg.r),
-                         static_cast<unsigned>(avg.g),
-                         static_cast<unsigned>(avg.b),
-                         static_cast<unsigned>(widget.style.bg_r),
+                         "[lobby_online_smoke] own-room rendered avg rgb=(%u,%u,%u) "
+                         "style=(%u,%u,%u) rect=(%.1f,%.1f %.1fx%.1f)\n",
+                         static_cast<unsigned>(avg.r), static_cast<unsigned>(avg.g),
+                         static_cast<unsigned>(avg.b), static_cast<unsigned>(widget.style.bg_r),
                          static_cast<unsigned>(widget.style.bg_g),
-                         static_cast<unsigned>(widget.style.bg_b),
-                         static_cast<double>(own_rect.x),
-                         static_cast<double>(own_rect.y),
-                         static_cast<double>(own_rect.w),
+                         static_cast<unsigned>(widget.style.bg_b), static_cast<double>(own_rect.x),
+                         static_cast<double>(own_rect.y), static_cast<double>(own_rect.w),
                          static_cast<double>(own_rect.h));
         }
         require(avg.r > avg.g && avg.r > avg.b && avg.g < 120 && avg.b < 130,
@@ -419,12 +414,11 @@ void verify_direct_member_shell_context(GubsyRuntime& runtime,
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
     const auto& menu = menu_system_internal::runtime_state(engine);
-    auto remote_card = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
-                                    [&](const MenuWidget& widget) {
-                                        return widget.secondary != nullptr &&
-                                               std::string(widget.secondary).find(remote_member_id) !=
-                                                   std::string::npos;
-                                    });
+    auto remote_card = std::find_if(
+        menu.cache.widgets.begin(), menu.cache.widgets.end(), [&](const MenuWidget& widget) {
+            return widget.secondary != nullptr &&
+                   std::string(widget.secondary).find(remote_member_id) != std::string::npos;
+        });
     require(remote_card != menu.cache.widgets.end(), "missing direct remote player card");
     const std::string remote_detail = remote_card->secondary;
     require(remote_detail.find("Direct") != std::string::npos,
@@ -487,8 +481,8 @@ void verify_own_room_browser_card(GubsyRuntime& runtime) {
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
     const auto& menu = menu_system_internal::runtime_state(engine);
-    auto own_card =
-        std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(), [](const MenuWidget& widget) {
+    auto own_card = std::find_if(
+        menu.cache.widgets.begin(), menu.cache.widgets.end(), [](const MenuWidget& widget) {
             return widget.badge != nullptr && std::string(widget.badge) == "YOUR ROOM";
         });
     require(own_card != menu.cache.widgets.end(), "missing own-room browser card");
@@ -501,8 +495,7 @@ void verify_own_room_browser_card(GubsyRuntime& runtime) {
     require(own_card->style.bg_r > own_card->style.bg_g &&
                 own_card->style.bg_r > own_card->style.bg_b,
             "own-room browser card should use a red unavailable background");
-    require(own_card->style.fg_r < 180 && own_card->style.fg_g < 180 &&
-                own_card->style.fg_b < 180,
+    require(own_card->style.fg_r < 180 && own_card->style.fg_g < 180 && own_card->style.fg_b < 180,
             "own-room browser card should be greyed out");
     require(own_card->badge_color.r > 220 && own_card->badge_color.g < 120,
             "own-room browser badge should be red");
@@ -625,21 +618,19 @@ void verify_players_remote_detail(GubsyRuntime& runtime, const std::string& remo
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
     const auto& menu = menu_system_internal::runtime_state(engine);
-    auto remote_card =
-        std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(), [&](const MenuWidget& widget) {
-            if (!widget.secondary)
-                return false;
-            const std::string detail = widget.secondary;
-            return detail.find(remote_member_id) != std::string::npos;
-        });
+    auto remote_card = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
+                                    [&](const MenuWidget& widget) {
+                                        if (!widget.secondary)
+                                            return false;
+                                        const std::string detail = widget.secondary;
+                                        return detail.find(remote_member_id) != std::string::npos;
+                                    });
     require(remote_card != menu.cache.widgets.end(), "missing remote player card");
     const std::string detail = remote_card->secondary;
     require(detail.find("gubsy-roomd") != std::string::npos,
             "remote player detail missing backend");
-    require(detail.find("Room ") != std::string::npos,
-            "remote player detail missing room code");
-    require(detail.find("Endpoint ") != std::string::npos,
-            "remote player detail missing endpoint");
+    require(detail.find("Room ") != std::string::npos, "remote player detail missing room code");
+    require(detail.find("Endpoint ") != std::string::npos, "remote player detail missing endpoint");
     require(detail.find("State Lobby") != std::string::npos,
             "remote player detail missing lobby state");
     require(detail.find("Last seen ") != std::string::npos,
@@ -851,13 +842,14 @@ int main(int argc, char** argv) {
         direct_guest.is_host = false;
         gubsy_lobby_set_direct_members(host_engine, std::vector<MatchmakingMember>{direct_guest},
                                        true);
-        require(host_engine.lobby.members.size() == 1,
+        require(host_engine.lobby.game_members.size() == 1,
                 "direct host did not cache direct remote member");
         require(host_engine.lobby.room_current_players ==
                     static_cast<int>(host_engine.lobby.local_players.size() + 1),
                 "direct host player count did not include direct remote member");
-        require(has_alert_containing(host_engine, "Direct Guest joined from client 127.0.0.1:45454"),
-                "direct host did not alert direct member join with client label");
+        require(
+            has_alert_containing(host_engine, "Direct Guest joined from client 127.0.0.1:45454"),
+            "direct host did not alert direct member join with client label");
         verify_direct_member_shell_context(host_runtime, direct_guest.member_id);
         require(gubsy_lobby_kick_direct_member(host_engine, direct_guest, message),
                 "direct host kick failed");
@@ -870,7 +862,7 @@ int main(int argc, char** argv) {
                 "direct host did not alert direct kick");
 
         gubsy_lobby_set_direct_members(host_engine, {}, true);
-        require(host_engine.lobby.members.empty(), "direct host did not clear direct members");
+        require(host_engine.lobby.game_members.empty(), "direct host did not clear direct members");
         require(has_alert_containing(host_engine, "Direct Guest left from client 127.0.0.1:45454"),
                 "direct host did not alert direct member leave with client label");
 
@@ -883,8 +875,7 @@ int main(int argc, char** argv) {
         client_a.display_name = "Client A Guest";
         client_a.client_label = "client-a";
         gubsy_lobby_set_direct_members(host_engine,
-                                       std::vector<MatchmakingMember>{client_b, client_a},
-                                       false);
+                                       std::vector<MatchmakingMember>{client_b, client_a}, false);
         verify_direct_member_sorting(host_runtime);
         gubsy_lobby_set_direct_members(host_engine, {}, false);
 
@@ -896,8 +887,7 @@ int main(int argc, char** argv) {
                 "direct host should leave hosting before direct-IP join");
         require(host_state.leave_called,
                 "direct host-then-direct-join did not leave hosted session");
-        require(host_state.join_called,
-                "direct host-then-direct-join did not call join transport");
+        require(host_state.join_called, "direct host-then-direct-join did not call join transport");
         require(host_engine.lobby.online,
                 "direct host-then-direct-join did not leave runtime online");
         require(!host_engine.lobby.is_host, "direct host-then-direct-join should become a client");
@@ -941,7 +931,7 @@ int main(int argc, char** argv) {
         require(!host_engine.lobby.room_code.empty(), "host room code missing");
         require(host_engine.lobby.contract.game_config.value("mode", "") == "campaign",
                 "host contract missing game config");
-        require(host_engine.lobby.members.size() == 1,
+        require(host_engine.lobby.room_members.size() == 1,
                 "host did not fetch initial room membership");
         require(host_engine.lobby.room_current_players == 1,
                 "host did not cache initial room player count");
@@ -959,7 +949,7 @@ int main(int argc, char** argv) {
         require(host_engine.lobby.online, "rehost lobby is not online");
         require(host_engine.lobby.is_host, "rehost lobby is not marked as host");
         require(!host_engine.lobby.room_code.empty(), "rehost room code missing");
-        require(host_engine.lobby.members.size() == 1,
+        require(host_engine.lobby.room_members.size() == 1,
                 "rehost did not fetch initial room membership");
         require(host_engine.lobby.room_current_players == 1,
                 "rehost did not cache initial room player count");
@@ -967,21 +957,18 @@ int main(int argc, char** argv) {
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "guest public room refresh failed");
         if (old_room_code != host_engine.lobby.room_code) {
-            auto old_listed =
-                std::find_if(guest_engine.lobby.discovered_rooms.begin(),
-                             guest_engine.lobby.discovered_rooms.end(),
-                             [&](const MatchmakingRoom& room) {
-                                 return room.room_code == old_room_code;
-                             });
+            auto old_listed = std::find_if(
+                guest_engine.lobby.discovered_rooms.begin(),
+                guest_engine.lobby.discovered_rooms.end(),
+                [&](const MatchmakingRoom& room) { return room.room_code == old_room_code; });
             require(old_listed == guest_engine.lobby.discovered_rooms.end(),
                     "rehost left stale old room listed");
         }
-        auto listed_room =
-            std::find_if(guest_engine.lobby.discovered_rooms.begin(),
-                         guest_engine.lobby.discovered_rooms.end(),
-                         [&](const MatchmakingRoom& room) {
-                             return room.room_code == host_engine.lobby.room_code;
-                         });
+        auto listed_room = std::find_if(guest_engine.lobby.discovered_rooms.begin(),
+                                        guest_engine.lobby.discovered_rooms.end(),
+                                        [&](const MatchmakingRoom& room) {
+                                            return room.room_code == host_engine.lobby.room_code;
+                                        });
         require(listed_room != guest_engine.lobby.discovered_rooms.end(),
                 "public hosted room was not listed");
         require(listed_room->session_name == active_room_name,
@@ -1009,7 +996,7 @@ int main(int argc, char** argv) {
         require(!guest_engine.lobby.is_host, "guest lobby is marked as host");
         require(guest_engine.lobby.room_code == host_engine.lobby.room_code,
                 "guest joined wrong room");
-        require(guest_engine.lobby.members.size() == 2,
+        require(guest_engine.lobby.room_members.size() == 2,
                 "guest did not fetch joined room membership");
         require(guest_engine.lobby.room_current_players == 2,
                 "guest did not cache joined room player count");
@@ -1017,7 +1004,7 @@ int main(int argc, char** argv) {
 
         host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
         gubsy_lobby_tick_online(host_engine);
-        require(host_engine.lobby.members.size() == 2,
+        require(host_engine.lobby.room_members.size() == 2,
                 "host did not refresh joined room membership");
         require(host_engine.lobby.room_current_players == 2,
                 "host did not refresh joined room player count");
@@ -1027,7 +1014,7 @@ int main(int argc, char** argv) {
         require(guest_state.leave_called, "guest leave transport was not called");
         host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
         gubsy_lobby_tick_online(host_engine);
-        require(host_engine.lobby.members.size() == 1,
+        require(host_engine.lobby.room_members.size() == 1,
                 "host did not refresh left room membership");
         require(host_engine.lobby.room_current_players == 1,
                 "host did not refresh left room player count");
@@ -1040,7 +1027,7 @@ int main(int argc, char** argv) {
         require(guest_state.join_called, "guest rejoin transport was not called");
         host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
         gubsy_lobby_tick_online(host_engine);
-        require(host_engine.lobby.members.size() == 2,
+        require(host_engine.lobby.room_members.size() == 2,
                 "host did not refresh rejoined room membership");
         require(host_engine.lobby.room_current_players == 2,
                 "host did not refresh rejoined room player count");
@@ -1048,7 +1035,7 @@ int main(int argc, char** argv) {
 
         require(gubsy_lobby_remove_room_member(host_engine, guest_engine.lobby.member_id, message),
                 "host kick failed");
-        require(host_engine.lobby.members.size() == 1,
+        require(host_engine.lobby.room_members.size() == 1,
                 "host did not refresh kicked room membership");
         require(host_engine.lobby.room_current_players == 1,
                 "host did not refresh kicked room player count");
@@ -1071,22 +1058,20 @@ int main(int argc, char** argv) {
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "multi-host room refresh failed");
         auto room_listed = [&](const std::string& room_code) {
-            return std::any_of(guest_engine.lobby.discovered_rooms.begin(),
-                               guest_engine.lobby.discovered_rooms.end(),
-                               [&](const MatchmakingRoom& room) {
-                                   return room.room_code == room_code;
-                               });
+            return std::any_of(
+                guest_engine.lobby.discovered_rooms.begin(),
+                guest_engine.lobby.discovered_rooms.end(),
+                [&](const MatchmakingRoom& room) { return room.room_code == room_code; });
         };
         require(room_listed(host_engine.lobby.room_code),
                 "multi-host list omitted first public room");
         require(room_listed(other_host_engine.lobby.room_code),
                 "multi-host list omitted second public room");
-        auto other_listed_room =
-            std::find_if(guest_engine.lobby.discovered_rooms.begin(),
-                         guest_engine.lobby.discovered_rooms.end(),
-                         [&](const MatchmakingRoom& room) {
-                             return room.room_code == other_host_engine.lobby.room_code;
-                         });
+        auto other_listed_room = std::find_if(
+            guest_engine.lobby.discovered_rooms.begin(), guest_engine.lobby.discovered_rooms.end(),
+            [&](const MatchmakingRoom& room) {
+                return room.room_code == other_host_engine.lobby.room_code;
+            });
         require(other_listed_room != guest_engine.lobby.discovered_rooms.end(),
                 "multi-host list did not expose second room for browser join");
 
@@ -1095,8 +1080,7 @@ int main(int argc, char** argv) {
         host_state.leave_called = false;
         require(gubsy_lobby_join_room(host_engine, *other_listed_room, message),
                 "host should leave old room and join another browser-listed room");
-        require(host_state.leave_called,
-                "host-then-browser-join did not leave old hosted session");
+        require(host_state.leave_called, "host-then-browser-join did not leave old hosted session");
         require(host_state.join_called, "host-then-browser-join did not call join transport");
         require(host_engine.lobby.online, "host-then-browser-join did not leave runtime online");
         require(!host_engine.lobby.is_host, "host-then-browser-join should become a client");

@@ -31,7 +31,9 @@ MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, Me
 
 int remote_member_count(const GubsyLobbyState& lobby) {
     int count = 0;
-    for (const MatchmakingMember& member : lobby.members) {
+    const std::vector<MatchmakingMember>& source =
+        lobby.game_members_authoritative ? lobby.game_members : lobby.room_members;
+    for (const MatchmakingMember& member : source) {
         if (!lobby.member_id.empty() && member.member_id == lobby.member_id)
             continue;
         ++count;
@@ -40,20 +42,23 @@ int remote_member_count(const GubsyLobbyState& lobby) {
 }
 
 int room_player_count(const GubsyLobbyState& lobby) {
+    if (lobby.game_members_authoritative) {
+        return static_cast<int>(lobby.local_players.size()) + remote_member_count(lobby);
+    }
     if (!lobby.room_code.empty()) {
         if (lobby.room_current_players > 0)
             return lobby.room_current_players;
-        if (!lobby.members.empty())
-            return static_cast<int>(lobby.members.size());
+        if (!lobby.room_members.empty())
+            return static_cast<int>(lobby.room_members.size());
     }
-    if (lobby.online && !lobby.members.empty()) {
+    if (lobby.online && !lobby.room_members.empty()) {
         return static_cast<int>(lobby.local_players.size()) + remote_member_count(lobby);
     }
     return static_cast<int>(lobby.local_players.size());
 }
 
 std::string host_display_name(const GubsyLobbyState& lobby) {
-    for (const MatchmakingMember& member : lobby.members) {
+    for (const MatchmakingMember& member : lobby.room_members) {
         if (member.is_host)
             return member.display_name.empty() ? "Host" : member.display_name;
     }
@@ -183,19 +188,18 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     gubsy_lobby_ensure_ready(ctx.engine);
     const bool joined_client = ctx.engine.lobby.online && !ctx.engine.lobby.is_host;
     const bool in_online_session = ctx.engine.lobby.online;
-    const bool joined_client_can_play =
-        joined_client && session_contract_is_in_game(ctx.engine.lobby.contract) &&
-        !ctx.engine.lobby.contract.realtime_endpoint.empty();
+    const bool joined_client_can_play = joined_client &&
+                                        session_contract_is_in_game(ctx.engine.lobby.contract) &&
+                                        !ctx.engine.lobby.contract.realtime_endpoint.empty();
 
     MenuWidget title;
     title.id = 200;
     title.slot = SettingsObjectID::TITLE;
     title.type = WidgetType::Label;
     title.label = "Lobby";
-    title.secondary = joined_client
-                          ? (joined_client_can_play ? "Joined room. Ready to play."
-                                                    : "Joined room. Waiting for host.")
-                          : "Session setup";
+    title.secondary = joined_client ? (joined_client_can_play ? "Joined room. Ready to play."
+                                                              : "Joined room. Waiting for host.")
+                                    : "Session setup";
     widgets.push_back(title);
 
     text_cache.push_back(session_heading(ctx.engine.lobby));
@@ -271,19 +275,20 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
             start.style.focus_b = 135;
         }
     }
-    MenuWidget leave = make_button(208,
-                                   SettingsObjectID::CARD4,
+    MenuWidget leave = make_button(208, SettingsObjectID::CARD4,
                                    ctx.engine.lobby.is_host ? "Stop Hosting" : "Leave Session",
                                    MenuAction::run_command(g_cmd_leave_session));
     if (ctx.engine.lobby.online) {
-        leave.secondary = ctx.engine.lobby.is_host ? "Close the hosted session before joining elsewhere."
-                                                   : "Disconnect from the current session.";
+        leave.secondary = ctx.engine.lobby.is_host
+                              ? "Close the hosted session before joining elsewhere."
+                              : "Disconnect from the current session.";
     }
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     players.nav_down = settings.id;
     settings.nav_up = players.id;
-    settings.nav_down = in_online_session ? (ctx.engine.lobby.online ? leave.id : back.id) : host.id;
+    settings.nav_down =
+        in_online_session ? (ctx.engine.lobby.online ? leave.id : back.id) : host.id;
     host.nav_up = settings.id;
     host.nav_down = join.id;
     join.nav_up = host.id;
