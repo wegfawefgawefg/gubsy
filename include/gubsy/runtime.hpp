@@ -125,6 +125,7 @@ bool gubsy_menu_text_edit_active(GubsyRuntime& runtime);
 void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height);
 void gubsy_render_menu(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                        int screen_height);
+void gubsy_render_alerts(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width);
 void gubsy_begin_debug_frame(GubsyRuntime& runtime, float dt);
 void gubsy_render_debug(GubsyRuntime& runtime, SDL_Renderer* renderer, int screen_width,
                         int screen_height);
