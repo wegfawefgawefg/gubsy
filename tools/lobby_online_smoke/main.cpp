@@ -147,24 +147,33 @@ int main(int argc, char** argv) {
 
         GubsyRuntime host_runtime;
         GubsyRuntime guest_runtime;
+        GubsyRuntime other_host_runtime;
         init_runtime(host_runtime, "lobby_online_smoke_host_data");
         init_runtime(guest_runtime, "lobby_online_smoke_guest_data");
+        init_runtime(other_host_runtime, "lobby_online_smoke_other_host_data");
 
         EngineState& host_engine = gubsy_runtime_engine(host_runtime);
         EngineState& guest_engine = gubsy_runtime_engine(guest_runtime);
+        EngineState& other_host_engine = gubsy_runtime_engine(other_host_runtime);
         host_engine.lobby.room_server_url = server_url;
         guest_engine.lobby.room_server_url = server_url;
+        other_host_engine.lobby.room_server_url = server_url;
 
         SmokeState host_state;
         SmokeState guest_state;
+        SmokeState other_host_state;
+        other_host_state.expected_port = 46464;
         install_smoke_hooks(host_runtime, host_state);
         install_smoke_hooks(guest_runtime, guest_state);
+        install_smoke_hooks(other_host_runtime, other_host_state);
 
         gubsy_lobby_ensure_ready(host_engine);
+        gubsy_lobby_ensure_ready(other_host_engine);
         require(!host_engine.lobby.lobby_name.empty(), "default lobby name was not generated");
         require(host_engine.lobby.lobby_name != "Local Game",
                 "default lobby name should not be Local Game");
         (void)gubsy_lobby_add_local_player(host_engine);
+        (void)gubsy_lobby_add_local_player(other_host_engine);
         std::string message;
 
         require(gubsy_lobby_host_direct(host_engine, host_state.expected_port, message),
@@ -250,6 +259,17 @@ int main(int argc, char** argv) {
                 "listed room did not keep generated room name");
         require(listed_room->privacy > 0, "listed room was not public");
 
+        host_state.join_called = false;
+        host_state.leave_called = false;
+        require(!gubsy_lobby_join_room(host_engine, *listed_room, message),
+                "host should not join its own public room");
+        require(message == "Cannot join room: already hosting this room",
+                "unexpected own-room join error");
+        require(!host_state.join_called, "own-room join should not call join transport");
+        require(!host_state.leave_called, "own-room join should not leave hosting");
+        require(host_engine.lobby.online && host_engine.lobby.is_host,
+                "own-room join rejection should keep host online");
+
         require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
                 "guest join by room code failed");
         require(guest_state.validate_remote_called, "guest did not validate remote config");
@@ -302,9 +322,29 @@ int main(int argc, char** argv) {
                 "host did not refresh kicked room player count");
         require(has_alert_containing(host_engine, "Kicked"), "host did not alert member kick");
 
+        other_host_engine.lobby.visibility = GubsyLobbyVisibility::Public;
+        other_host_engine.lobby.lobby_name = "Second Public Tunnel";
+        require(gubsy_lobby_host_room(other_host_engine, other_host_state.expected_port, message),
+                "other host room failed");
+        require(!other_host_engine.lobby.room_code.empty(), "other host room code missing");
+
+        host_state.expected_port = other_host_state.expected_port;
+        host_state.join_called = false;
+        host_state.leave_called = false;
+        require(gubsy_lobby_join_room_code(host_engine, other_host_engine.lobby.room_code, message),
+                "host should leave old room and join another room");
+        require(host_state.leave_called, "host-then-join did not leave old hosted session");
+        require(host_state.join_called, "host-then-join did not call join transport");
+        require(host_engine.lobby.online, "host-then-join did not leave runtime online");
+        require(!host_engine.lobby.is_host, "host-then-join should become a client");
+        require(host_engine.lobby.room_code == other_host_engine.lobby.room_code,
+                "host-then-join joined wrong room");
+
         require(gubsy_lobby_leave_room(host_engine, message), "host leave failed");
         require(host_state.leave_called, "host leave transport was not called");
+        require(gubsy_lobby_leave_room(other_host_engine, message), "other host leave failed");
 
+        cleanup_gubsy_runtime(other_host_runtime);
         cleanup_gubsy_runtime(guest_runtime);
         cleanup_gubsy_runtime(host_runtime);
         std::puts("[lobby_online_smoke] ok");

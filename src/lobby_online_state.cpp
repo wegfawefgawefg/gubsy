@@ -213,6 +213,12 @@ bool apply_remote_room_config(EngineState& engine, const MatchmakingRoom& room,
 
 bool validate_room_joinable(EngineState& engine, const MatchmakingRoom& room,
                             std::string& message) {
+    if (engine.lobby.online && engine.lobby.is_host && !engine.lobby.room_code.empty() &&
+        room.room_code == engine.lobby.room_code) {
+        message = "Cannot join room: already hosting this room";
+        set_lobby_error(engine, message);
+        return false;
+    }
     if (session_contract_is_in_game(room.contract)) {
         message = "Cannot join room: game already in progress";
         set_lobby_error(engine, message);
@@ -232,6 +238,16 @@ bool leave_existing_session_before_host(EngineState& engine, std::string& messag
     if (gubsy_lobby_leave_room(engine, message))
         return true;
     message = with_prefix("Cannot replace hosted session", message);
+    set_lobby_error(engine, message);
+    return false;
+}
+
+bool leave_existing_session_before_join(EngineState& engine, std::string& message) {
+    if (!engine.lobby.online)
+        return true;
+    if (gubsy_lobby_leave_room(engine, message))
+        return true;
+    message = with_prefix("Cannot join while leaving current session", message);
     set_lobby_error(engine, message);
     return false;
 }
@@ -344,6 +360,8 @@ bool gubsy_lobby_join_direct(EngineState& engine, const std::string& host, std::
         set_lobby_error(engine, message);
         return false;
     }
+    if (!leave_existing_session_before_join(engine, message))
+        return false;
 
     engine.lobby.contract = build_lobby_contract(engine);
     GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
@@ -379,8 +397,6 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         return false;
     if (!validate_room_contract(engine, room, message))
         return false;
-    if (!apply_remote_room_config(engine, room, message))
-        return false;
 
     std::string host;
     std::uint16_t port = 0;
@@ -394,6 +410,10 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         set_lobby_error(engine, message);
         return false;
     }
+    if (!leave_existing_session_before_join(engine, message))
+        return false;
+    if (!apply_remote_room_config(engine, room, message))
+        return false;
 
     GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
         engine.lobby_commands.join_user_data, engine.lobby, host.c_str(), port);

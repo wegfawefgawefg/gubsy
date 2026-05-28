@@ -222,7 +222,14 @@ bool room_is_joinable(const MatchmakingRoom& room) {
     return room.max_players <= 0 || room.current_players < room.max_players;
 }
 
-const char* room_browser_badge(const MatchmakingRoom& room) {
+bool is_current_host_room(const GubsyLobbyState& lobby, const MatchmakingRoom& room) {
+    return lobby.online && lobby.is_host && !lobby.room_code.empty() &&
+           room.room_code == lobby.room_code;
+}
+
+const char* room_browser_badge(const GubsyLobbyState& lobby, const MatchmakingRoom& room) {
+    if (is_current_host_room(lobby, room))
+        return "YOUR ROOM";
     if (session_contract_is_in_game(room.contract))
         return "IN GAME";
     if (!room_is_joinable(room))
@@ -230,7 +237,7 @@ const char* room_browser_badge(const MatchmakingRoom& room) {
     return "JOIN";
 }
 
-std::string room_card_detail(const MatchmakingRoom& room) {
+std::string room_card_detail(const GubsyLobbyState& lobby, const MatchmakingRoom& room) {
     std::string detail = "Host: ";
     detail += room.host_name.empty() ? "Unknown" : room.host_name;
     if (!room.room_code.empty()) {
@@ -241,7 +248,9 @@ std::string room_card_detail(const MatchmakingRoom& room) {
     detail += std::to_string(room.current_players);
     detail += "/";
     detail += std::to_string(room.max_players);
-    if (session_contract_is_in_game(room.contract))
+    if (is_current_host_room(lobby, room))
+        detail += " | Hosting Here | Unavailable";
+    else if (session_contract_is_in_game(room.contract))
         detail += " | In Game | Unavailable";
     else if (!room_is_joinable(room))
         detail += " | Full | Unavailable";
@@ -455,7 +464,7 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
             const MatchmakingRoom& room =
                 ctx.engine.lobby.discovered_rooms[static_cast<std::size_t>(room_index)];
             text_cache.push_back(room.session_name.empty() ? room.room_code : room.session_name);
-            text_cache.push_back(room_card_detail(room));
+            text_cache.push_back(room_card_detail(ctx.engine.lobby, room));
 
             MenuWidget card;
             card.id = widget_id;
@@ -463,8 +472,9 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
             card.type = WidgetType::Card;
             card.label = text_cache[text_cache.size() - 2].c_str();
             card.secondary = text_cache[text_cache.size() - 1].c_str();
-            card.badge = room_browser_badge(room);
-            if (room_is_joinable(room)) {
+            card.badge = room_browser_badge(ctx.engine.lobby, room);
+            const bool current_host_room = is_current_host_room(ctx.engine.lobby, room);
+            if (!current_host_room && room_is_joinable(room)) {
                 card.on_select = MenuAction::run_command(g_cmd_join_listed, room_index);
                 card.badge_color = SDL_Color{130, 230, 150, 255};
             } else {
@@ -477,9 +487,11 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
                 card.style.focus_r = 120;
                 card.style.focus_g = 100;
                 card.style.focus_b = 120;
-                card.badge_color = session_contract_is_in_game(room.contract)
-                                       ? SDL_Color{230, 150, 95, 255}
-                                       : SDL_Color{220, 115, 115, 255};
+                card.badge_color = current_host_room
+                                       ? SDL_Color{235, 85, 85, 255}
+                                       : (session_contract_is_in_game(room.contract)
+                                              ? SDL_Color{230, 150, 95, 255}
+                                              : SDL_Color{220, 115, 115, 255});
             }
             widgets.push_back(card);
             room_ids.push_back(card.id);

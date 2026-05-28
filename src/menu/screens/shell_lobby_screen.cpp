@@ -17,6 +17,7 @@ namespace {
 MenuCommandId g_cmd_start_game = kMenuIdInvalid;
 MenuCommandId g_cmd_host_game = kMenuIdInvalid;
 MenuCommandId g_cmd_join_game = kMenuIdInvalid;
+MenuCommandId g_cmd_leave_session = kMenuIdInvalid;
 
 MenuWidget make_button(WidgetId id, UILayoutObjectId slot, const char* label, MenuAction action) {
     MenuWidget widget;
@@ -143,6 +144,13 @@ void command_join_game(MenuContext& ctx, std::int32_t) {
     ctx.manager.push_screen(MenuScreenID::LOBBY_JOIN_GAME);
 }
 
+void command_leave_session(MenuContext& ctx, std::int32_t) {
+    std::string message;
+    (void)gubsy_lobby_leave_room(ctx.engine, message);
+    add_alert(ctx.engine, message);
+    ctx.engine.lobby.status_message = message;
+}
+
 BuiltScreen build_shell_lobby(MenuContext& ctx) {
     static std::vector<MenuWidget> widgets;
     static std::vector<MenuAction> frame_actions;
@@ -206,6 +214,14 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
                                                  : MenuAction::run_command(g_cmd_start_game));
     if (joined_client)
         start.label = "Waiting For Host";
+    MenuWidget leave = make_button(208,
+                                   SettingsObjectID::SEARCH,
+                                   ctx.engine.lobby.is_host ? "Stop Hosting" : "Leave Session",
+                                   MenuAction::run_command(g_cmd_leave_session));
+    if (ctx.engine.lobby.online) {
+        leave.secondary = ctx.engine.lobby.is_host ? "Close the hosted session."
+                                                   : "Disconnect from the current session.";
+    }
     MenuWidget back = make_button(206, SettingsObjectID::BACK, "Back", MenuAction::pop());
 
     players.nav_down = settings.id;
@@ -214,16 +230,20 @@ BuiltScreen build_shell_lobby(MenuContext& ctx) {
     host.nav_up = settings.id;
     host.nav_down = join.id;
     join.nav_up = host.id;
-    join.nav_down = back.id;
+    join.nav_down = ctx.engine.lobby.online ? leave.id : back.id;
     start.nav_up = join.id;
     start.nav_left = back.id;
-    back.nav_up = join.id;
+    leave.nav_up = join.id;
+    leave.nav_down = back.id;
+    back.nav_up = ctx.engine.lobby.online ? leave.id : join.id;
     back.nav_right = start.id;
 
     widgets.push_back(players);
     widgets.push_back(settings);
     widgets.push_back(host);
     widgets.push_back(join);
+    if (ctx.engine.lobby.online)
+        widgets.push_back(leave);
     widgets.push_back(start);
     widgets.push_back(back);
 
@@ -241,6 +261,7 @@ void register_shell_lobby_screen(EngineState& engine) {
     g_cmd_start_game = engine.menu_commands.register_command(command_start_game);
     g_cmd_host_game = engine.menu_commands.register_command(command_host_game);
     g_cmd_join_game = engine.menu_commands.register_command(command_join_game);
+    g_cmd_leave_session = engine.menu_commands.register_command(command_leave_session);
 
     MenuScreenDef def;
     def.id = MenuScreenID::SHELL_LOBBY;
