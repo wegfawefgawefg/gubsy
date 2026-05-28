@@ -35,6 +35,8 @@
 #include "src/settings_defaults.hpp"
 #include "src/ui_layouts.hpp"
 
+#include "gubsy/lobby/session_contract.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -314,14 +316,20 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     gubsy_lobby_ensure_ready(engine);
 
-    if (engine.lobby.online && !engine.lobby.is_host) {
+    if (engine.lobby.online && !engine.lobby.is_host &&
+        (!session_contract_is_in_game(engine.lobby.contract) ||
+         engine.lobby.contract.realtime_endpoint.empty())) {
         message = "Waiting For Host To Start";
         engine.lobby.status_message = message;
         return false;
     }
 
-    if (!gubsy_lobby_validate_start(engine, message))
+    if ((!engine.lobby.online || engine.lobby.is_host) &&
+        !gubsy_lobby_validate_start(engine, message))
         return false;
+
+    if (engine.lobby.online && engine.lobby.is_host)
+        engine.lobby.contract.session_phase = "in_game";
 
     if (!engine.menu_commands.invoke_host(engine.main_menu_commands.start_game, 0)) {
         message = "Cannot start game: no start callback registered";
@@ -329,7 +337,12 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
         return false;
     }
 
-    message = "Starting game";
+    if (engine.lobby.online && !engine.lobby.is_host)
+        message = "Entering hosted game";
+    else if (engine.lobby.online && engine.lobby.is_host)
+        message = "Starting hosted game";
+    else
+        message = "Starting local game";
     engine.lobby.status_message = message;
     return true;
 }
