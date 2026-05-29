@@ -140,7 +140,12 @@ void assign_default_devices(EngineState& engine, GubsyLobbyPlayer& player, bool 
     }
 }
 
-void persist_user_profile_choice(UserProfile& profile, const GubsyLobbyPlayer& player) {
+void persist_user_profile_choice_if_changed(UserProfile& profile, const GubsyLobbyPlayer& player) {
+    if (profile.last_binds_profile_id == player.binds_profile_id &&
+        profile.last_input_settings_profile_id == player.input_settings_profile_id) {
+        return;
+    }
+
     profile.last_binds_profile_id = player.binds_profile_id;
     profile.last_input_settings_profile_id = player.input_settings_profile_id;
     (void)save_user_profile(profile);
@@ -186,7 +191,7 @@ void fill_missing_player_choices(EngineState& engine, GubsyLobbyPlayer& player,
     }
     assign_default_devices(engine, player, primary_player);
     if (selected_user)
-        persist_user_profile_choice(*selected_user, player);
+        persist_user_profile_choice_if_changed(*selected_user, player);
 }
 
 } // namespace
@@ -305,7 +310,7 @@ bool gubsy_lobby_set_user_profile(EngineState& engine, int player_index, int pro
         find_input_settings_profile(engine, profile->last_input_settings_profile_id)
             ? profile->last_input_settings_profile_id
             : ensure_default_input_settings_profile(engine).id;
-    persist_user_profile_choice(*profile, *player);
+    persist_user_profile_choice_if_changed(*profile, *player);
     sync_engine_players_from_lobby(engine);
     return true;
 }
@@ -318,7 +323,7 @@ bool gubsy_lobby_set_binds_profile(EngineState& engine, int player_index, int pr
         return false;
     player->binds_profile_id = binds->id;
     if (UserProfile* user = find_user_profile(engine, player->user_profile_id))
-        persist_user_profile_choice(*user, *player);
+        persist_user_profile_choice_if_changed(*user, *player);
     sync_engine_players_from_lobby(engine);
     return true;
 }
@@ -331,7 +336,7 @@ bool gubsy_lobby_set_input_settings_profile(EngineState& engine, int player_inde
         return false;
     player->input_settings_profile_id = input->id;
     if (UserProfile* user = find_user_profile(engine, player->user_profile_id))
-        persist_user_profile_choice(*user, *player);
+        persist_user_profile_choice_if_changed(*user, *player);
     sync_engine_players_from_lobby(engine);
     return true;
 }
