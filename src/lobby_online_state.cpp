@@ -162,18 +162,55 @@ const MatchmakingMember* find_member_by_id(const std::vector<MatchmakingMember>&
 void update_members(EngineState& engine, std::vector<MatchmakingMember>& current_members,
                     const std::vector<MatchmakingMember>& next_members, bool alert_changes) {
     if (alert_changes) {
+        std::vector<const MatchmakingMember*> joined_members;
+        std::vector<const MatchmakingMember*> left_members;
         for (const MatchmakingMember& next : next_members) {
             if (next.member_id.empty())
                 continue;
             if (!find_member_by_id(current_members, next.member_id))
-                add_alert(engine, member_joined_alert(next));
+                joined_members.push_back(&next);
         }
         for (const MatchmakingMember& old : current_members) {
             if (old.member_id.empty())
                 continue;
             if (!find_member_by_id(next_members, old.member_id))
-                add_alert(engine, member_left_alert(old));
+                left_members.push_back(&old);
         }
+        auto alert_grouped = [&](const std::vector<const MatchmakingMember*>& members,
+                                 const char* verb) {
+            std::vector<bool> consumed(members.size(), false);
+            for (std::size_t i = 0; i < members.size(); ++i) {
+                if (consumed[i])
+                    continue;
+                const MatchmakingMember& member = *members[i];
+                if (member.client_label.empty()) {
+                    add_alert(engine, std::string(verb) == "joined"
+                                          ? member_joined_alert(member)
+                                          : member_left_alert(member));
+                    consumed[i] = true;
+                    continue;
+                }
+                std::size_t group_count = 1;
+                for (std::size_t j = i + 1; j < members.size(); ++j) {
+                    if (!consumed[j] && members[j]->client_label == member.client_label) {
+                        consumed[j] = true;
+                        ++group_count;
+                    }
+                }
+                consumed[i] = true;
+                if (group_count == 1) {
+                    add_alert(engine, std::string(verb) == "joined"
+                                          ? member_joined_alert(member)
+                                          : member_left_alert(member));
+                } else {
+                    add_alert(engine,
+                              std::to_string(group_count) + " players " + verb +
+                                  " from client " + member.client_label);
+                }
+            }
+        };
+        alert_grouped(joined_members, "joined");
+        alert_grouped(left_members, "left");
     }
     current_members = next_members;
 }
