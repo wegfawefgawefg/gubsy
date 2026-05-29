@@ -506,6 +506,7 @@ bool load_all_textures_in_sprite_lookup(EngineState& engine) {
                          SDL_GetError());
             continue;
         }
+        SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
         current_graphics(engine)->textures_by_id[id] = tex;
     }
     return true;

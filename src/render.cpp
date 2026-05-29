@@ -114,6 +114,7 @@ void draw_text_with_font(TTF_Font* font, SDL_Renderer* renderer, const std::stri
     SDL_DestroySurface(surf);
     if (!tex)
         return;
+    SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
     float w = 0.0f;
     float h = 0.0f;
     SDL_GetTextureSize(tex, &w, &h);
