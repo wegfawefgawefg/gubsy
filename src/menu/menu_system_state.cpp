@@ -375,6 +375,8 @@ bool execute_action(MenuRuntimeState& state, const MenuAction& action, MenuConte
         return true;
     }
     case MenuActionType::PopScreen:
+        if (ctx.manager.stack().size() <= 1)
+            return false;
         ctx.manager.pop_screen();
         stack_changed = true;
         state.focus = kMenuIdInvalid;
