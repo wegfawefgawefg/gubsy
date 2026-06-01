@@ -33,6 +33,7 @@ struct MatchmakingCreateResult {
 struct MatchmakingJoinAttemptResult {
     std::string join_attempt_id;
     std::string join_token;
+    std::string punch_secret;
     MatchmakingRoom room;
 };
 

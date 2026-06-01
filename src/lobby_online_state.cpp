@@ -66,6 +66,7 @@ void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.pending_direct_join_endpoint.clear();
     engine.lobby.pending_join_attempt_id.clear();
     engine.lobby.pending_join_token.clear();
+    engine.lobby.pending_punch_secret.clear();
     engine.lobby.connect_phase = ConnectPhase::Idle;
     engine.lobby.selected_transport.clear();
     engine.lobby.pending_join_room = MatchmakingRoom{};
@@ -85,6 +86,13 @@ SessionContract build_lobby_contract(EngineState& engine) {
         candidate.priority = 100;
         candidate.endpoint = engine.lobby.advertised_endpoint;
         candidate.label = "Direct UDP";
+        contract.connection_candidates.push_back(std::move(candidate));
+    }
+    if (engine.lobby.visibility == GubsyLobbyVisibility::Public) {
+        ConnectionCandidate candidate;
+        candidate.kind = ConnectionCandidateKind::NatPunch;
+        candidate.priority = 200;
+        candidate.label = "NAT traversal";
         contract.connection_candidates.push_back(std::move(candidate));
     }
     GubsyLobbyConfigProvider& provider = engine.lobby_config_provider;
@@ -681,6 +689,7 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
         engine.lobby.pending_join_attempt_id = join_attempt.join_attempt_id;
         engine.lobby.pending_join_token = join_attempt.join_token;
+        engine.lobby.pending_punch_secret = join_attempt.punch_secret;
         engine.lobby.pending_join_room = room_for_join;
         clear_lobby_error(engine, join_result.status.empty() ? "Joining room " + room_for_join.room_code
                                                              : join_result.status);

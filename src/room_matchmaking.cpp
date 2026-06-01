@@ -217,6 +217,7 @@ bool RoomServerMatchmaking::create_join_attempt(const std::string& server_url,
     out = MatchmakingJoinAttemptResult{};
     out.join_attempt_id = (*json).value("join_attempt_id", "");
     out.join_token = (*json).value("join_token", "");
+    out.punch_secret = (*json).value("punch_secret", "");
     auto room_it = json->find("room");
     if (room_it != json->end())
         (void)room_from_json(*room_it, out.room);

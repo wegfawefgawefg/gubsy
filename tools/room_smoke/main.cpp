@@ -88,7 +88,8 @@ int main(int argc, char** argv) {
         MatchmakingJoinAttemptResult guest_attempt;
         if (!matchmaking.create_join_attempt(server_url, room_code, "Guest", guest_attempt, err))
             throw std::runtime_error(err);
-        if (guest_attempt.join_attempt_id.empty() || guest_attempt.join_token.empty())
+        if (guest_attempt.join_attempt_id.empty() || guest_attempt.join_token.empty() ||
+            guest_attempt.punch_secret.empty())
             throw std::runtime_error("join attempt did not return token");
         if (guest_attempt.room.room_code != room_code)
             throw std::runtime_error("join attempt did not return room");

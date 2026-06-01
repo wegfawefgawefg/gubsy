@@ -330,6 +330,22 @@ nlohmann::json json_array_or_empty(const nlohmann::json& body, const char* key) 
     return nlohmann::json::array();
 }
 
+void ensure_nat_punch_candidate(RoomRecord& room) {
+    if (!room_is_public(room))
+        return;
+    if (!room.connection_candidates.is_array())
+        room.connection_candidates = nlohmann::json::array();
+    for (const auto& candidate : room.connection_candidates) {
+        if (candidate.is_object() && candidate.value("kind", "") == "nat_punch")
+            return;
+    }
+    room.connection_candidates.push_back({
+        {"kind", "nat_punch"},
+        {"priority", 200},
+        {"label", "NAT traversal"},
+    });
+}
+
 bool body_member_access(RoomRecord& room, const nlohmann::json& body, RoomMember*& member_out,
                         httplib::Response& res) {
     RoomMember* member = find_member(room, json_string(body, "member_id"));
@@ -977,6 +993,7 @@ int main(int argc, char** argv) {
         room.privacy = json_int(body, "privacy", 0);
         room.max_players = std::max(1, json_int(body, "max_players", 4));
         room.in_game = room.session_phase == "in_game" || json_bool(body, "in_game", false);
+        ensure_nat_punch_candidate(room);
         auto game_config_it = body.find("game_config");
         if (game_config_it != body.end() && game_config_it->is_object())
             room.game_config = *game_config_it;
@@ -1165,6 +1182,7 @@ int main(int argc, char** argv) {
             room.max_players = std::max(1, json_int(*room_it, "max_players", room.max_players));
             room.in_game =
                 room.session_phase == "in_game" || json_bool(*room_it, "in_game", room.in_game);
+            ensure_nat_punch_candidate(room);
             auto game_config_it = room_it->find("game_config");
             if (game_config_it != room_it->end() && game_config_it->is_object())
                 room.game_config = *game_config_it;

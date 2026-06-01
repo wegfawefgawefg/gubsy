@@ -49,6 +49,7 @@ struct GubsyLobbyState {
     std::string pending_direct_join_endpoint;
     std::string pending_join_attempt_id;
     std::string pending_join_token;
+    std::string pending_punch_secret;
     ConnectPhase connect_phase{ConnectPhase::Idle};
     std::string selected_transport;
     MatchmakingRoom pending_join_room;
