@@ -23,11 +23,18 @@ Already implemented:
 8. Splonks public browser join routed through Gubsy candidates.
 9. Two-machine LAN validation proving `roomd -> join attempt -> LAN direct`.
 
-Next target:
+Implemented in the current foundation:
 
 ```text
-roomd -> join attempt -> LAN direct fails -> NAT punch rendezvous -> direct UDP
+roomd -> join attempt -> NAT punch rendezvous -> direct UDP
 ```
+
+`gubsy-roomd` now opens the UDP rendezvous socket, issues per-attempt punch
+secrets, signs/verifies host and joiner rendezvous packets, observes endpoints
+from UDP source addresses, sends endpoint hints, accepts punch results, rate
+limits per source and room, and exposes localhost-only debug state. Splonks uses
+those helpers from its gameplay UDP socket so the punch path and game packet path
+share the same NAT mapping.
 
 Relay remains the fallback after this phase.
 
