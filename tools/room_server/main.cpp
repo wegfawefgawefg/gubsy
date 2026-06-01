@@ -7,7 +7,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include "realnet_rendezvous.hpp"
+#include "gubsy/realnet/rendezvous.hpp"
 
 #if defined(_WIN32)
 #ifndef NOMINMAX

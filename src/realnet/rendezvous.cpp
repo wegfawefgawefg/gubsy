@@ -1,6 +1,6 @@
-#include "realnet_rendezvous.hpp"
+#include "gubsy/realnet/rendezvous.hpp"
 
-#include "realnet_crypto.hpp"
+#include "gubsy/realnet/crypto.hpp"
 
 #include <algorithm>
 #include <chrono>

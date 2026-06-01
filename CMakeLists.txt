@@ -417,20 +417,15 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
 
-  set(GUB_ROOMD_REALNET_SOURCES
-    tools/room_server/realnet_crypto.cpp
-    tools/room_server/realnet_rendezvous.cpp
-  )
-
   add_executable(gubsy_roomd
     tools/room_server/main.cpp
-    ${GUB_ROOMD_REALNET_SOURCES}
   )
   set_target_properties(gubsy_roomd PROPERTIES OUTPUT_NAME gubsy-roomd)
   target_include_directories(gubsy_roomd PRIVATE
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+  target_link_libraries(gubsy_roomd PRIVATE gubsy_engine)
   if (WIN32)
     target_link_libraries(gubsy_roomd PRIVATE ws2_32)
   endif()
@@ -458,21 +453,21 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(room_rendezvous_smoke
     tools/room_rendezvous_smoke/main.cpp
-    ${GUB_ROOMD_REALNET_SOURCES}
   )
   target_include_directories(room_rendezvous_smoke PRIVATE
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+  target_link_libraries(room_rendezvous_smoke PRIVATE gubsy_engine)
 
   add_executable(room_punch_smoke
     tools/room_punch_smoke/main.cpp
-    ${GUB_ROOMD_REALNET_SOURCES}
   )
   target_include_directories(room_punch_smoke PRIVATE
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+  target_link_libraries(room_punch_smoke PRIVATE gubsy_engine)
   if (WIN32)
     target_link_libraries(room_punch_smoke PRIVATE ws2_32)
   endif()
