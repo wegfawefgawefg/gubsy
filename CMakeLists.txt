@@ -389,6 +389,10 @@ if (GUB_BUILD_TOOLS)
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/lobby_online_smoke.sh"
     )
     add_test(
+      NAME room_punch_smoke
+      COMMAND bash "${GUB_SOURCE_DIR}/scripts/room_punch_smoke.sh"
+    )
+    add_test(
       NAME consumption_boundary
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/check_consumption_boundary.sh"
     )
@@ -460,6 +464,18 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
+
+  add_executable(room_punch_smoke
+    tools/room_punch_smoke/main.cpp
+    ${GUB_ROOMD_REALNET_SOURCES}
+  )
+  target_include_directories(room_punch_smoke PRIVATE
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
+  )
+  if (WIN32)
+    target_link_libraries(room_punch_smoke PRIVATE ws2_32)
+  endif()
 
   add_executable(room_timeout_smoke
     tools/room_timeout_smoke/main.cpp

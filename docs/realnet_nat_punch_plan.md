@@ -489,6 +489,9 @@ The first roomd rendezvous foundation is implemented in `gubsy-roomd`:
   `/debug/realnet/attempts/:join_attempt_id` expose current rendezvous state.
 - `room_rendezvous_smoke` covers packet signing, tamper rejection, and rate
   limiter behavior.
+- `room_punch_smoke.sh` starts a local `gubsy-roomd`, creates a public room,
+  creates a join attempt, sends signed host/joiner UDP hellos, verifies both
+  endpoint hints, and checks the localhost debug state.
 
 Remaining work in this phase is to expose rendezvous data through the client
 API, send host/joiner hellos from Gubsy, send peer-to-peer punch probes/acks
