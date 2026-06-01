@@ -165,6 +165,12 @@ These decisions are the working defaults for the first implementation.
 10. Validate first with a VPS roomd plus desktop/laptop on different networks
     where possible. Local simulation and same-LAN smoke tests are necessary but
     not sufficient.
+11. Use a small vendored SHA-256/HMAC-SHA256 implementation for first-pass
+    rendezvous authentication instead of adding a system OpenSSL requirement.
+    The dependency must be portable to Linux, macOS, Windows, Android, and iOS.
+12. Expose read-only diagnostics through localhost/admin HTTP endpoints in
+    developer deployments. Logs remain the durable evidence stream, but live
+    endpoints make debugging active punch attempts much easier.
 
 ## Wire Format
 
@@ -234,6 +240,8 @@ Minimum first implementation:
 3. Reject expired attempts.
 4. Reject packet sizes above a small configured maximum.
 5. Reject packets whose room/join attempt is unknown.
+6. Keep the HMAC helper private to roomd/rendezvous internals until the public
+   transport API needs cryptographic helpers.
 
 ## Host Flow
 
@@ -304,11 +312,19 @@ Initial defaults:
 ```text
 join_attempt_ttl_sec = 30
 host_hello_interval_ms = 500
+host_hello_active_interval_ms = 100
 joiner_hello_interval_ms = 100
 endpoint_hint_interval_ms = 100
 punch_probe_interval_ms = 50
 punch_window_ms = 3000
 max_udp_packet_bytes = 1200
+udp_rate_limit_per_ip_per_sec = 100
+udp_rate_limit_per_ip_burst = 200
+udp_rate_limit_per_room_per_sec = 200
+udp_rate_limit_per_room_burst = 400
+active_join_attempts_per_room = 16
+join_attempts_per_room_per_min = 64
+join_attempts_per_ip_per_min = 120
 ```
 
 These should be configurable for testing.
@@ -404,6 +420,23 @@ punch_attempt_fail
 Avoid logging raw secrets or full MAC keys. Logging room code, attempt id,
 member id, endpoint, phase, timing, and failure reason is useful.
 
+Read-only diagnostics should also be available through admin/debug HTTP
+endpoints when explicitly enabled:
+
+```text
+GET /debug/realnet
+GET /debug/realnet/rooms/:room_code
+GET /debug/realnet/attempts/:join_attempt_id
+```
+
+Default policy:
+
+1. Bind diagnostics to `127.0.0.1`.
+2. Disable public binding unless explicitly configured.
+3. Never return raw tokens, HMAC keys, or full MAC secrets.
+4. Include current phase, endpoint observations, selected candidate, counters,
+   timings, and failure reasons.
+
 ## Security Limits
 
 First implementation should include:
@@ -415,6 +448,8 @@ First implementation should include:
 5. HMAC verification.
 6. No gameplay relay in roomd.
 7. No acceptance of unauthenticated game traffic as a punch success.
+8. Read-only admin endpoints bound to localhost by default.
+9. No secrets in logs or diagnostics.
 
 ## Implementation Checklist
 
@@ -432,6 +467,7 @@ First implementation should include:
 12. Wire Splonks public browser join to attempt NAT punch after direct failure.
 13. Add smoke tools and logs.
 14. Validate with a VPS roomd across two networks.
+15. Add localhost-only admin/debug endpoints for active rooms and punch attempts.
 
 ## Decisions Needed
 
@@ -450,9 +486,9 @@ Resolved for the first pass:
 
 Still open:
 
-1. Exact rate limits per IP and per room.
-2. Exact HMAC library/dependency choice.
-3. Whether the first public validation uses a laptop hotspot, phone hotspot, or
-   a second fixed network.
-4. How much roomd diagnostic data should be exposed through HTTP admin/debug
-   endpoints versus logs only.
+1. Exact public validation setup. Desktop and laptop on the same home LAN are
+   not enough for a real NAT punch proof, even with a VPS roomd, because they
+   usually share the same public NAT. Use home internet plus laptop/phone
+   hotspot, or two fixed networks, with the VPS running roomd.
+2. Whether a later production relay should share the same process as roomd or
+   split into a dedicated relay service immediately.
