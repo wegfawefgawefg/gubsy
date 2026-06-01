@@ -7,14 +7,34 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include "realnet_rendezvous.hpp"
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
+
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -29,6 +49,26 @@ constexpr int kMemberIdLen = 8;
 constexpr int kSecretLen = 24;
 constexpr int kJoinAttemptIdLen = 10;
 constexpr int kDefaultPort = 8788;
+constexpr int kDefaultRendezvousPortOffset = 1;
+constexpr auto kJoinAttemptTimeout = std::chrono::seconds(30);
+
+#if defined(_WIN32)
+using SocketHandle = SOCKET;
+constexpr SocketHandle kInvalidSocket = INVALID_SOCKET;
+#else
+using SocketHandle = int;
+constexpr SocketHandle kInvalidSocket = -1;
+#endif
+
+void close_socket(SocketHandle socket) {
+    if (socket == kInvalidSocket)
+        return;
+#if defined(_WIN32)
+    closesocket(socket);
+#else
+    close(socket);
+#endif
+}
 
 struct RoomMember {
     std::string member_id;
@@ -40,8 +80,14 @@ struct RoomMember {
 struct JoinAttempt {
     std::string attempt_id;
     std::string token;
+    std::string punch_secret;
     std::string display_name;
+    std::string joiner_observed_endpoint;
+    sockaddr_storage joiner_sockaddr{};
+    socklen_t joiner_sockaddr_len{0};
+    bool has_joiner_endpoint{false};
     Clock::time_point created_at{Clock::now()};
+    Clock::time_point joiner_seen_at{};
 };
 
 struct RoomRecord {
@@ -65,13 +111,20 @@ struct RoomRecord {
     nlohmann::json game_config;
     std::vector<RoomMember> members;
     std::unordered_map<std::string, JoinAttempt> join_attempts;
+    std::string host_observed_endpoint;
+    sockaddr_storage host_sockaddr{};
+    socklen_t host_sockaddr_len{0};
+    bool has_host_rendezvous_endpoint{false};
     Clock::time_point created_at{Clock::now()};
     Clock::time_point updated_at{Clock::now()};
+    Clock::time_point host_rendezvous_seen_at{};
 };
 
 bool room_is_public(const RoomRecord& room) {
     return room.privacy > 0;
 }
+
+void log_event(const char* event, const nlohmann::json& fields = nlohmann::json::object());
 
 struct RoomRegistry {
     std::mutex mutex;
@@ -100,6 +153,16 @@ struct RoomRegistry {
         const auto now = Clock::now();
         std::vector<std::string> dead_rooms;
         for (auto& [room_code, room] : rooms) {
+            for (auto it = room.join_attempts.begin(); it != room.join_attempts.end();) {
+                if (now - it->second.created_at > kJoinAttemptTimeout) {
+                    log_event("punch_attempt_expire",
+                              {{"room_code", room_code},
+                               {"join_attempt_id", it->second.attempt_id}});
+                    it = room.join_attempts.erase(it);
+                } else {
+                    ++it;
+                }
+            }
             std::vector<std::string> dead_members;
             room.members.erase(std::remove_if(room.members.begin(), room.members.end(),
                                               [&](const RoomMember& member) {
@@ -120,13 +183,38 @@ struct RoomRegistry {
 
 RoomRegistry g_registry;
 
+std::string sockaddr_to_endpoint(const sockaddr_storage& storage, socklen_t len) {
+    char host[NI_MAXHOST]{};
+    char service[NI_MAXSERV]{};
+    const int rc = getnameinfo(reinterpret_cast<const sockaddr*>(&storage), len, host, sizeof(host),
+                               service, sizeof(service),
+                               NI_NUMERICHOST | NI_NUMERICSERV);
+    if (rc != 0)
+        return {};
+    return std::string(host) + ":" + service;
+}
+
+realnet::Endpoint sockaddr_to_realnet_endpoint(const sockaddr_storage& storage, socklen_t len) {
+    const std::string text = sockaddr_to_endpoint(storage, len);
+    const auto parsed = realnet::parse_endpoint(text);
+    return parsed.value_or(realnet::Endpoint{});
+}
+
+JoinAttempt* find_join_attempt_by_id(RoomRecord& room, const std::string& attempt_id) {
+    for (auto& [_, attempt] : room.join_attempts) {
+        if (attempt.attempt_id == attempt_id)
+            return &attempt;
+    }
+    return nullptr;
+}
+
 std::uint64_t ms_since_epoch() {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
 }
 
-void log_event(const char* event, const nlohmann::json& fields = nlohmann::json::object()) {
+void log_event(const char* event, const nlohmann::json& fields) {
     nlohmann::json line = fields.is_object() ? fields : nlohmann::json::object();
     line["event"] = event;
     line["ts_ms"] = ms_since_epoch();
@@ -428,11 +516,244 @@ const char* dashboard_html() {
 </html>)";
 }
 
+class RendezvousUdpServer {
+public:
+    ~RendezvousUdpServer() { stop(); }
+
+    bool start(const std::string& bind_host, int port, std::string& err) {
+#if defined(_WIN32)
+        WSADATA data{};
+        const int wsa_rc = WSAStartup(MAKEWORD(2, 2), &data);
+        if (wsa_rc != 0) {
+            err = "WSAStartup failed";
+            return false;
+        }
+#endif
+        port_ = port;
+        socket_ = open_bound_socket(bind_host, port, err);
+        if (socket_ == kInvalidSocket)
+            return false;
+        running_.store(true);
+        thread_ = std::thread([this]() { run(); });
+        return true;
+    }
+
+    void stop() {
+        running_.store(false);
+        close_socket(socket_);
+        socket_ = kInvalidSocket;
+        if (thread_.joinable())
+            thread_.join();
+#if defined(_WIN32)
+        WSACleanup();
+#endif
+    }
+
+    int port() const { return port_; }
+
+    void send_packet(const sockaddr_storage& to, socklen_t to_len, realnet::Packet packet,
+                     const std::string& key) {
+        if (socket_ == kInvalidSocket)
+            return;
+        if (packet.ts_ms == 0)
+            packet.ts_ms = realnet::unix_time_ms();
+        realnet::sign_packet(packet, key);
+        const std::string bytes = realnet::encode_packet(packet);
+        sendto(socket_, bytes.data(), static_cast<int>(bytes.size()), 0,
+               reinterpret_cast<const sockaddr*>(&to), to_len);
+    }
+
+private:
+    SocketHandle open_bound_socket(const std::string& bind_host, int port, std::string& err) {
+        addrinfo hints{};
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        hints.ai_flags = AI_PASSIVE;
+        addrinfo* result = nullptr;
+        const std::string port_text = std::to_string(port);
+        const char* host_arg = bind_host.empty() || bind_host == "0.0.0.0" ? nullptr : bind_host.c_str();
+        const int gai = getaddrinfo(host_arg, port_text.c_str(), &hints, &result);
+        if (gai != 0 || !result) {
+            err = "could not resolve UDP bind endpoint";
+            return kInvalidSocket;
+        }
+
+        SocketHandle out = kInvalidSocket;
+        for (addrinfo* it = result; it; it = it->ai_next) {
+            out = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
+            if (out == kInvalidSocket)
+                continue;
+            if (bind(out, it->ai_addr, static_cast<int>(it->ai_addrlen)) == 0)
+                break;
+            close_socket(out);
+            out = kInvalidSocket;
+        }
+        freeaddrinfo(result);
+        if (out == kInvalidSocket)
+            err = "could not bind UDP rendezvous socket";
+        return out;
+    }
+
+    void run() {
+        std::array<char, realnet::kMaxRendezvousPacketBytes + 1> buffer{};
+        while (running_.load()) {
+            sockaddr_storage from{};
+            socklen_t from_len = sizeof(from);
+            const int received = recvfrom(socket_, buffer.data(),
+                                          static_cast<int>(realnet::kMaxRendezvousPacketBytes), 0,
+                                          reinterpret_cast<sockaddr*>(&from), &from_len);
+            if (received <= 0)
+                continue;
+            handle_datagram(std::string(buffer.data(), static_cast<std::size_t>(received)), from,
+                            from_len);
+        }
+    }
+
+    void maybe_send_endpoint_hints(RoomRecord& room, JoinAttempt& attempt) {
+        if (!room.has_host_rendezvous_endpoint || !attempt.has_joiner_endpoint)
+            return;
+
+        realnet::Packet host_hint;
+        host_hint.kind = realnet::PacketKind::EndpointHint;
+        host_hint.room_code = room.room_code;
+        host_hint.join_attempt_id = attempt.attempt_id;
+        host_hint.role = "host";
+        host_hint.peer_endpoint =
+            sockaddr_to_realnet_endpoint(attempt.joiner_sockaddr, attempt.joiner_sockaddr_len);
+        host_hint.punch_secret = attempt.punch_secret;
+        send_packet(room.host_sockaddr, room.host_sockaddr_len, host_hint, room.host_secret);
+
+        realnet::Packet joiner_hint;
+        joiner_hint.kind = realnet::PacketKind::EndpointHint;
+        joiner_hint.room_code = room.room_code;
+        joiner_hint.join_attempt_id = attempt.attempt_id;
+        joiner_hint.role = "joiner";
+        joiner_hint.peer_endpoint =
+            sockaddr_to_realnet_endpoint(room.host_sockaddr, room.host_sockaddr_len);
+        send_packet(attempt.joiner_sockaddr, attempt.joiner_sockaddr_len, joiner_hint,
+                    attempt.punch_secret);
+
+        log_event("punch_endpoint_hint",
+                  {{"room_code", room.room_code},
+                   {"join_attempt_id", attempt.attempt_id},
+                   {"host_endpoint", room.host_observed_endpoint},
+                   {"joiner_endpoint", attempt.joiner_observed_endpoint}});
+    }
+
+    void handle_datagram(const std::string& bytes, const sockaddr_storage& from, socklen_t from_len) {
+        const auto now = Clock::now();
+        const std::string source = sockaddr_to_endpoint(from, from_len);
+        if (!ip_limiter_.allow(source, now)) {
+            log_event("punch_rate_limit", {{"scope", "ip"}, {"source", source}});
+            return;
+        }
+
+        realnet::Packet packet;
+        std::string err;
+        if (!realnet::decode_packet(bytes, packet, err)) {
+            log_event("punch_packet_reject", {{"source", source}, {"reason", err}});
+            return;
+        }
+        if (!room_limiter_.allow(packet.room_code, now)) {
+            log_event("punch_rate_limit", {{"scope", "room"}, {"room_code", packet.room_code}});
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+        auto room_it = g_registry.rooms.find(packet.room_code);
+        if (room_it == g_registry.rooms.end()) {
+            log_event("punch_packet_reject",
+                      {{"source", source}, {"room_code", packet.room_code}, {"reason", "room"}});
+            return;
+        }
+        RoomRecord& room = room_it->second;
+
+        if (packet.kind == realnet::PacketKind::HostHello) {
+            if (!realnet::verify_packet(packet, room.host_secret)) {
+                log_event("punch_packet_reject", {{"source", source},
+                                                   {"room_code", room.room_code},
+                                                   {"reason", "host_mac"}});
+                return;
+            }
+            room.host_sockaddr = from;
+            room.host_sockaddr_len = from_len;
+            room.host_observed_endpoint = source;
+            room.has_host_rendezvous_endpoint = true;
+            room.host_rendezvous_seen_at = now;
+            log_event("punch_host_hello",
+                      {{"room_code", room.room_code}, {"observed_endpoint", source}});
+            for (auto& [_, attempt] : room.join_attempts)
+                maybe_send_endpoint_hints(room, attempt);
+            return;
+        }
+
+        if (packet.kind == realnet::PacketKind::JoinerHello) {
+            JoinAttempt* attempt = find_join_attempt_by_id(room, packet.join_attempt_id);
+            if (!attempt) {
+                log_event("punch_packet_reject", {{"source", source},
+                                                   {"room_code", room.room_code},
+                                                   {"join_attempt_id", packet.join_attempt_id},
+                                                   {"reason", "attempt"}});
+                return;
+            }
+            if (!realnet::verify_packet(packet, attempt->punch_secret)) {
+                log_event("punch_packet_reject", {{"source", source},
+                                                   {"room_code", room.room_code},
+                                                   {"join_attempt_id", attempt->attempt_id},
+                                                   {"reason", "joiner_mac"}});
+                return;
+            }
+            attempt->joiner_sockaddr = from;
+            attempt->joiner_sockaddr_len = from_len;
+            attempt->joiner_observed_endpoint = source;
+            attempt->has_joiner_endpoint = true;
+            attempt->joiner_seen_at = now;
+            log_event("punch_joiner_hello", {{"room_code", room.room_code},
+                                             {"join_attempt_id", attempt->attempt_id},
+                                             {"observed_endpoint", source}});
+            maybe_send_endpoint_hints(room, *attempt);
+            return;
+        }
+
+        if (packet.kind == realnet::PacketKind::PunchResult) {
+            JoinAttempt* attempt = find_join_attempt_by_id(room, packet.join_attempt_id);
+            const std::string key = attempt ? attempt->punch_secret : room.host_secret;
+            if (!realnet::verify_packet(packet, key)) {
+                log_event("punch_packet_reject", {{"source", source},
+                                                   {"room_code", room.room_code},
+                                                   {"join_attempt_id", packet.join_attempt_id},
+                                                   {"reason", "result_mac"}});
+                return;
+            }
+            log_event("punch_probe_result", {{"room_code", room.room_code},
+                                             {"join_attempt_id", packet.join_attempt_id},
+                                             {"result", packet.result},
+                                             {"source", source}});
+            return;
+        }
+
+        log_event("punch_packet_reject", {{"source", source},
+                                           {"room_code", room.room_code},
+                                           {"reason", "unexpected_kind"},
+                                           {"kind", realnet::packet_kind_name(packet.kind)}});
+    }
+
+    SocketHandle socket_{kInvalidSocket};
+    std::atomic<bool> running_{false};
+    std::thread thread_;
+    int port_{0};
+    realnet::TokenBucketRateLimiter ip_limiter_{{100.0, 200.0}};
+    realnet::TokenBucketRateLimiter room_limiter_{{200.0, 400.0}};
+};
+
 } // namespace
 
 int main(int argc, char** argv) {
     std::string bind_host = "127.0.0.1";
     int port = kDefaultPort;
+    int rendezvous_port = 0;
+    bool rendezvous_enabled = true;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--port=", 0) == 0) {
@@ -451,8 +772,23 @@ int main(int argc, char** argv) {
             bind_host = arg.substr(7);
         } else if (arg == "--host" && i + 1 < argc) {
             bind_host = argv[++i];
+        } else if (arg.rfind("--rendezvous-port=", 0) == 0) {
+            try {
+                rendezvous_port = std::stoi(arg.substr(18));
+            } catch (...) {
+                rendezvous_port = 0;
+            }
+        } else if (arg == "--rendezvous-port" && i + 1 < argc) {
+            try {
+                rendezvous_port = std::stoi(argv[++i]);
+            } catch (...) {
+                rendezvous_port = 0;
+            }
+        } else if (arg == "--no-rendezvous") {
+            rendezvous_enabled = false;
         } else if (arg == "--help") {
-            std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n";
+            std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n"
+                         "                    [--rendezvous-port=<udp-port>] [--no-rendezvous]\n";
             return 0;
         }
     }
@@ -460,16 +796,127 @@ int main(int argc, char** argv) {
         bind_host = "127.0.0.1";
     if (port <= 0 || port > 65535)
         port = kDefaultPort;
+    if (rendezvous_port <= 0 || rendezvous_port > 65535)
+        rendezvous_port = port + kDefaultRendezvousPortOffset;
 
     httplib::Server server;
+    RendezvousUdpServer rendezvous;
+    if (rendezvous_enabled) {
+        std::string udp_err;
+        if (!rendezvous.start(bind_host, rendezvous_port, udp_err)) {
+            log_event("punch_rendezvous_start_failed",
+                      {{"host", bind_host}, {"port", rendezvous_port}, {"error", udp_err}});
+            rendezvous_enabled = false;
+        }
+    }
 
     server.Get("/", [](const httplib::Request&, httplib::Response& res) {
         res.set_content(dashboard_html(), "text/html; charset=utf-8");
     });
 
-    server.Get("/health", [](const httplib::Request&, httplib::Response& res) {
-        res.set_content(R"({"ok":true})", "application/json");
+    server.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        nlohmann::json capabilities = {
+            {"ok", true},
+            {"realnet",
+             {{"rendezvous_udp",
+               {{"enabled", rendezvous_enabled},
+                {"host", bind_host},
+                {"port", rendezvous_enabled ? rendezvous.port() : 0},
+                {"protocol", "gubsy-rendezvous-v1"}}}}},
+        };
+        res.set_content(capabilities.dump(), "application/json");
     });
+
+    server.Get("/debug/realnet", [](const httplib::Request& req, httplib::Response& res) {
+        if (req.remote_addr != "127.0.0.1" && req.remote_addr != "::1") {
+            res.status = 403;
+            res.set_content("debug endpoints are localhost-only", "text/plain");
+            return;
+        }
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+        nlohmann::json rooms = nlohmann::json::array();
+        int attempts = 0;
+        for (const auto& [_, room] : g_registry.rooms) {
+            attempts += static_cast<int>(room.join_attempts.size());
+            rooms.push_back({
+                {"room_code", room.room_code},
+                {"has_host_endpoint", room.has_host_rendezvous_endpoint},
+                {"host_observed_endpoint", room.host_observed_endpoint},
+                {"join_attempts", static_cast<int>(room.join_attempts.size())},
+            });
+        }
+        res.set_content(nlohmann::json{{"rooms", rooms}, {"join_attempts", attempts}}.dump(),
+                        "application/json");
+    });
+
+    server.Get(R"(/debug/realnet/rooms/([A-Z0-9]+))",
+               [](const httplib::Request& req, httplib::Response& res) {
+                   if (req.remote_addr != "127.0.0.1" && req.remote_addr != "::1") {
+                       res.status = 403;
+                       res.set_content("debug endpoints are localhost-only", "text/plain");
+                       return;
+                   }
+                   std::lock_guard<std::mutex> lock(g_registry.mutex);
+                   g_registry.cleanup_expired_locked();
+                   auto it = g_registry.rooms.find(req.matches[1].str());
+                   if (it == g_registry.rooms.end()) {
+                       res.status = 404;
+                       res.set_content("room not found", "text/plain");
+                       return;
+                   }
+                   const RoomRecord& room = it->second;
+                   nlohmann::json attempts = nlohmann::json::array();
+                   for (const auto& [_, attempt] : room.join_attempts) {
+                       attempts.push_back({
+                           {"join_attempt_id", attempt.attempt_id},
+                           {"display_name", attempt.display_name},
+                           {"has_joiner_endpoint", attempt.has_joiner_endpoint},
+                           {"joiner_observed_endpoint", attempt.joiner_observed_endpoint},
+                       });
+                   }
+                   res.set_content(nlohmann::json{{"room_code", room.room_code},
+                                                  {"has_host_endpoint",
+                                                   room.has_host_rendezvous_endpoint},
+                                                  {"host_observed_endpoint",
+                                                   room.host_observed_endpoint},
+                                                  {"join_attempts", attempts}}
+                                       .dump(),
+                                   "application/json");
+               });
+
+    server.Get(R"(/debug/realnet/attempts/([A-Z0-9]+))",
+               [](const httplib::Request& req, httplib::Response& res) {
+                   if (req.remote_addr != "127.0.0.1" && req.remote_addr != "::1") {
+                       res.status = 403;
+                       res.set_content("debug endpoints are localhost-only", "text/plain");
+                       return;
+                   }
+                   std::lock_guard<std::mutex> lock(g_registry.mutex);
+                   g_registry.cleanup_expired_locked();
+                   for (const auto& [_, room] : g_registry.rooms) {
+                       for (const auto& [__, attempt] : room.join_attempts) {
+                           if (attempt.attempt_id != req.matches[1].str())
+                               continue;
+                           res.set_content(nlohmann::json{{"room_code", room.room_code},
+                                                          {"join_attempt_id",
+                                                           attempt.attempt_id},
+                                                          {"has_host_endpoint",
+                                                           room.has_host_rendezvous_endpoint},
+                                                          {"host_observed_endpoint",
+                                                           room.host_observed_endpoint},
+                                                          {"has_joiner_endpoint",
+                                                           attempt.has_joiner_endpoint},
+                                                          {"joiner_observed_endpoint",
+                                                           attempt.joiner_observed_endpoint}}
+                                               .dump(),
+                                           "application/json");
+                           return;
+                       }
+                   }
+                   res.status = 404;
+                   res.set_content("attempt not found", "text/plain");
+               });
 
     server.Get("/rooms", [](const httplib::Request&, httplib::Response& res) {
         std::lock_guard<std::mutex> lock(g_registry.mutex);
@@ -590,9 +1037,11 @@ int main(int argc, char** argv) {
             JoinAttempt attempt;
             attempt.attempt_id = g_registry.random_token(kJoinAttemptIdLen);
             attempt.token = g_registry.random_token(kSecretLen);
+            attempt.punch_secret = g_registry.random_token(kSecretLen);
             attempt.display_name = json_string(body, "display_name", "Guest");
             const std::string attempt_id = attempt.attempt_id;
             const std::string token = attempt.token;
+            const std::string punch_secret = attempt.punch_secret;
             room.join_attempts.emplace(token, std::move(attempt));
             room.updated_at = Clock::now();
 
@@ -600,10 +1049,13 @@ int main(int argc, char** argv) {
                                                {"room_code", room.room_code},
                                                {"join_attempt_id", attempt_id},
                                            });
+            log_event("punch_attempt_create",
+                      {{"room_code", room.room_code}, {"join_attempt_id", attempt_id}});
             res.set_content(
                 nlohmann::json{
                     {"join_attempt_id", attempt_id},
                     {"join_token", token},
+                    {"punch_secret", punch_secret},
                     {"room", room_to_json(room)},
                 }
                     .dump(),

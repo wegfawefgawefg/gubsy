@@ -469,6 +469,31 @@ First implementation should include:
 14. Validate with a VPS roomd across two networks.
 15. Add localhost-only admin/debug endpoints for active rooms and punch attempts.
 
+## Current Implementation Notes
+
+The first roomd rendezvous foundation is implemented in `gubsy-roomd`:
+
+- `--rendezvous-port=<udp-port>` binds a UDP rendezvous socket.
+- `--no-rendezvous` disables the UDP socket for debugging.
+- `/health` advertises `realnet.rendezvous_udp` with the configured endpoint
+  and `gubsy-rendezvous-v1` protocol name.
+- Join attempts now receive a per-attempt `punch_secret`.
+- UDP `host_hello` packets are HMAC-authenticated with the room host secret.
+- UDP `joiner_hello` packets are HMAC-authenticated with the join attempt
+  punch secret.
+- When both sides have sent valid hellos, roomd sends signed `endpoint_hint`
+  packets to both sides with observed endpoints.
+- `punch_result` packets are accepted for diagnostics.
+- Per-source and per-room token-bucket rate limits protect the UDP path.
+- Localhost-only `/debug/realnet`, `/debug/realnet/rooms/:room_code`, and
+  `/debug/realnet/attempts/:join_attempt_id` expose current rendezvous state.
+- `room_rendezvous_smoke` covers packet signing, tamper rejection, and rate
+  limiter behavior.
+
+Remaining work in this phase is to expose rendezvous data through the client
+API, send host/joiner hellos from Gubsy, send peer-to-peer punch probes/acks
+during the punch window, and wire Splonks browser joins into the cascade.
+
 ## Decisions Needed
 
 Resolved for the first pass:

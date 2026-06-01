@@ -383,6 +383,7 @@ if (GUB_BUILD_TOOLS)
     add_test(NAME public_api_smoke COMMAND public_api_smoke)
     add_test(NAME lobby_config_smoke COMMAND lobby_config_smoke)
     add_test(NAME lobby_input_smoke COMMAND lobby_input_smoke)
+    add_test(NAME room_rendezvous_smoke COMMAND room_rendezvous_smoke)
     add_test(
       NAME lobby_online_smoke
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/lobby_online_smoke.sh"
@@ -412,7 +413,15 @@ if (GUB_BUILD_TOOLS)
     ${GUB_SOURCE_DIR}/third_party
   )
 
-  add_executable(gubsy_roomd tools/room_server/main.cpp)
+  set(GUB_ROOMD_REALNET_SOURCES
+    tools/room_server/realnet_crypto.cpp
+    tools/room_server/realnet_rendezvous.cpp
+  )
+
+  add_executable(gubsy_roomd
+    tools/room_server/main.cpp
+    ${GUB_ROOMD_REALNET_SOURCES}
+  )
   set_target_properties(gubsy_roomd PROPERTIES OUTPUT_NAME gubsy-roomd)
   target_include_directories(gubsy_roomd PRIVATE
     ${GUB_SOURCE_DIR}
@@ -442,6 +451,15 @@ if (GUB_BUILD_TOOLS)
   if (WIN32)
     target_link_libraries(room_smoke PRIVATE ws2_32)
   endif()
+
+  add_executable(room_rendezvous_smoke
+    tools/room_rendezvous_smoke/main.cpp
+    ${GUB_ROOMD_REALNET_SOURCES}
+  )
+  target_include_directories(room_rendezvous_smoke PRIVATE
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
+  )
 
   add_executable(room_timeout_smoke
     tools/room_timeout_smoke/main.cpp
@@ -671,4 +689,5 @@ if (WIN32)
 endif()
 if (GUB_BUILD_TOOLS)
   target_link_libraries(mod_server PRIVATE Threads::Threads)
+  target_link_libraries(gubsy_roomd PRIVATE Threads::Threads)
 endif()
