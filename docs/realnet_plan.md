@@ -248,6 +248,7 @@ attempt. Room update tokens and join tokens must be separate.
 ## UDP Punch-Through
 
 NAT traversal needs a UDP rendezvous path. HTTP room listing is not enough.
+The detailed implementation plan lives in `realnet_nat_punch_plan.md`.
 
 Rendezvous responsibilities:
 
@@ -402,6 +403,9 @@ public endpoint claimed by the client.
 4. Add standalone punch smoke utility.
 5. Log candidate attempt timelines.
 
+Use `realnet_nat_punch_plan.md` as the code-facing checklist for this
+milestone.
+
 ### Milestone 4: Gubsy Client Cascade
 
 1. Add reusable connection state machine.
@@ -446,6 +450,6 @@ flow. NAT punch, relay, and packet-transport return are later milestones.
 
 ## Immediate Next Step
 
-Implement Milestone 1 as code-facing docs and schema sketches, then make the
-smallest roomd/client changes that let Splonks attempt a real public
-cross-network join without router port forwarding.
+Resolve the decisions listed in `realnet_nat_punch_plan.md`, then implement the
+UDP rendezvous milestone in `gubsy-roomd` with a standalone punch smoke before
+full Splonks UI wiring.
