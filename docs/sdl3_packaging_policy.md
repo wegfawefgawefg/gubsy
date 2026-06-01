@@ -134,17 +134,21 @@ player-facing package.
 
 ## Dependency Policy
 
-Use this dependency order for developer, consumer, and CI builds:
+Resolve SDL as one complete stack, not one library at a time. A build may use:
 
-1. Prefer existing CMake package targets when the build environment provides
-   SDL3, SDL3_ttf, SDL3_image, or SDL3_mixer.
-2. Fall back to pkg-config on Unix-like developer machines.
-3. If dependencies are still missing, fetch pinned SDL source releases with
-   CMake `FetchContent`.
+1. Parent-provided CMake targets for SDL3, SDL3_ttf, SDL3_image, and SDL3_mixer.
+2. System/package-manager SDL3, SDL3_ttf, SDL3_image, and SDL3_mixer.
+3. Pinned fetched SDL3, SDL3_ttf, SDL3_image, and SDL3_mixer source releases.
 
-The `GUB_FETCH_DEPS` CMake option exists for this fallback path. It should stay
-enabled by default for normal source builds so a clean machine can build Gubsy
-without a global SDL3 install.
+Do not mix a fetched SDL3 core with system SDL3 add-ons, or system SDL3 core
+with fetched SDL3 add-ons. Gubsy exposes `GUB_SDL_DEPS=auto|system|fetch`;
+Splonks exposes `SPLONKS_SDL_DEPS=auto|system|fetch`. The normal presets use
+`fetch` for reproducible clean-clone builds. `system` is available for local
+package-manager development, but it must find the full SDL stack or fail.
+
+The `GUB_FETCH_DEPS` and `SPLONKS_FETCH_DEPS` CMake options gate the pinned
+FetchContent path. They should stay enabled by default for normal source builds
+so a clean machine can build without a global SDL3 install.
 
 Release packaging and CI builds should pin exact dependency revisions. Prefer
 source archives with hashes, submodules, lockable dependency mirrors, or exact
@@ -278,6 +282,9 @@ engine and game targets.
 - Gubsy and Splonks `FetchContent` fallbacks pin SDL3, SDL3_ttf, SDL3_image,
   and SDL3_mixer to exact upstream release commit SHAs instead of mutable tag
   names. Splonks also pins its imgui fallback to an exact release commit SHA.
+- Gubsy and Splonks resolve SDL atomically. The default presets use the pinned
+  fetched SDL stack, while `GUB_SDL_DEPS=system` and `SPLONKS_SDL_DEPS=system`
+  require all SDL libraries to come from the system/package-manager stack.
 - Both repos expose Linux package presets and `scripts/package_linux.sh`.
 - The Linux package scripts build release package presets, create local
   `dist/` bundles, copy SDL-related shared libraries from the linked binaries,

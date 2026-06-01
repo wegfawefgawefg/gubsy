@@ -10,9 +10,11 @@ Requirements
 - Native window/audio development headers for the platform
 - Optional system SDL3, SDL3_image, SDL3_ttf, and SDL3_mixer packages
 
-Gubsy standardizes on SDL3. By default, the build prefers system SDL3 CMake or
-pkg-config packages when present, then falls back to pinned SDL3 source builds
-through CMake `FetchContent`.
+Gubsy standardizes on SDL3. The normal presets use a pinned fetched SDL3 stack
+so clean clones do not depend on globally installed SDL packages. If you want to
+use package-manager SDL locally, configure with `GUB_SDL_DEPS=system`; that mode
+requires SDL3, SDL3_image, SDL3_ttf, and SDL3_mixer to all come from the system
+stack.
 
 Gubsy is code-first library/tooling infrastructure. The shipped game release
 pipeline belongs to downstream games such as Splonks. Use Gubsy package scripts
