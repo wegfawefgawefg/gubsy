@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -14,6 +16,82 @@ struct SmokeState {
     bool validate_remote_called{false};
     bool apply_remote_called{false};
     bool join_called{false};
+};
+
+class SmokeMatchmaking final : public IMatchmaking {
+  public:
+    explicit SmokeMatchmaking(MatchmakingRoom room)
+        : room_(std::move(room)) {}
+
+    bool create_room(const std::string&,
+                     const MatchmakingRoom&,
+                     MatchmakingCreateResult&,
+                     std::string&) override {
+        return false;
+    }
+
+    bool join_room(const std::string&,
+                   const std::string&,
+                   const std::string&,
+                   const std::string&,
+                   std::string& member_id_out,
+                   std::string&) override {
+        member_id_out = "SMOKEMEM";
+        return true;
+    }
+
+    bool create_join_attempt(const std::string&,
+                             const std::string&,
+                             const std::string&,
+                             MatchmakingJoinAttemptResult& out,
+                             std::string&) override {
+        out.join_attempt_id = "ATTEMPT";
+        out.join_token = "TOKEN";
+        out.room = room_;
+        return true;
+    }
+
+    bool leave_room(const std::string&,
+                    const std::string&,
+                    const std::string&,
+                    const std::string&,
+                    std::string&) override {
+        return true;
+    }
+
+    bool remove_member(const std::string&,
+                       const std::string&,
+                       const std::string&,
+                       const std::string&,
+                       std::string&) override {
+        return true;
+    }
+
+    bool heartbeat_room(const std::string&,
+                        const std::string&,
+                        const std::string&,
+                        const std::string&,
+                        const std::string&,
+                        const MatchmakingRoom*,
+                        std::string&) override {
+        return true;
+    }
+
+    bool fetch_room(const std::string&,
+                    const std::string&,
+                    MatchmakingRoom& out,
+                    std::string&) override {
+        out = room_;
+        return true;
+    }
+
+    bool list_rooms(const std::string&, std::vector<MatchmakingRoom>& out, std::string&) override {
+        out = {room_};
+        return true;
+    }
+
+  private:
+    MatchmakingRoom room_;
 };
 
 void require(bool condition, const char* message) {
@@ -100,6 +178,8 @@ int main() {
         EngineState& engine = gubsy_runtime_engine(runtime);
 
         SmokeState state;
+        SmokeMatchmaking matchmaking(make_room());
+        gubsy_set_lobby_matchmaking_backend(runtime, &matchmaking);
         install_smoke_hooks(runtime, state);
         std::string message;
         MatchmakingRoom full_room = make_room();

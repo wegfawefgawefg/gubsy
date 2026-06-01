@@ -187,15 +187,39 @@ bool RoomServerMatchmaking::create_room(const std::string& server_url,
 bool RoomServerMatchmaking::join_room(const std::string& server_url,
                                       const std::string& room_code,
                                       const std::string& display_name,
+                                      const std::string& join_token,
                                       std::string& member_id_out,
                                       std::string& err) {
+    nlohmann::json body{{"display_name", display_name}};
+    if (!join_token.empty())
+        body["join_token"] = join_token;
     auto json = post_json(server_url,
                           "/rooms/" + normalized_room_code(room_code) + "/join",
-                          {{"display_name", display_name}},
+                          body,
                           err);
     if (!json)
         return false;
     member_id_out = (*json).value("member_id", "");
+    return true;
+}
+
+bool RoomServerMatchmaking::create_join_attempt(const std::string& server_url,
+                                                const std::string& room_code,
+                                                const std::string& display_name,
+                                                MatchmakingJoinAttemptResult& out,
+                                                std::string& err) {
+    auto json = post_json(server_url,
+                          "/rooms/" + normalized_room_code(room_code) + "/join_attempt",
+                          {{"display_name", display_name}},
+                          err);
+    if (!json)
+        return false;
+    out = MatchmakingJoinAttemptResult{};
+    out.join_attempt_id = (*json).value("join_attempt_id", "");
+    out.join_token = (*json).value("join_token", "");
+    auto room_it = json->find("room");
+    if (room_it != json->end())
+        (void)room_from_json(*room_it, out.room);
     return true;
 }
 

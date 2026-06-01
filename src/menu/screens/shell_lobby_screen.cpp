@@ -106,6 +106,12 @@ std::string session_detail_text(const EngineState& engine) {
             status += " | ";
         status += lobby.advertised_endpoint;
     }
+    if (!lobby.selected_transport.empty()) {
+        if (!status.empty())
+            status += " | ";
+        status += "via ";
+        status += lobby.selected_transport;
+    }
     if (!status.empty())
         status += " | ";
     status += "Players ";
@@ -131,8 +137,11 @@ std::string session_detail_text(const EngineState& engine) {
 void command_start_game(MenuContext& ctx, std::int32_t) {
     std::string message;
     if (ctx.engine.lobby.online && !ctx.engine.lobby.is_host) {
+        const bool has_connection =
+            !ctx.engine.lobby.contract.realtime_endpoint.empty() ||
+            !ctx.engine.lobby.contract.connection_candidates.empty();
         if (!session_contract_is_in_game(ctx.engine.lobby.contract) ||
-            ctx.engine.lobby.contract.realtime_endpoint.empty()) {
+            !has_connection) {
             message = "Waiting For Host To Start";
             add_alert(ctx.engine, message, AlertSeverity::Info);
             ctx.engine.lobby.status_message = message;

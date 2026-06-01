@@ -333,9 +333,11 @@ bool gubsy_start_lobby_game(GubsyRuntime& runtime, std::string& message) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     gubsy_lobby_ensure_ready(engine);
 
+    const bool has_connection =
+        !engine.lobby.contract.realtime_endpoint.empty() ||
+        !engine.lobby.contract.connection_candidates.empty();
     if (engine.lobby.online && !engine.lobby.is_host &&
-        (!session_contract_is_in_game(engine.lobby.contract) ||
-         engine.lobby.contract.realtime_endpoint.empty())) {
+        (!session_contract_is_in_game(engine.lobby.contract) || !has_connection)) {
         message = "Waiting For Host To Start";
         engine.lobby.status_message = message;
         return false;

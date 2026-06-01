@@ -383,7 +383,11 @@ std::string room_card_detail(const GubsyLobbyState& lobby, const MatchmakingRoom
     else
         detail += " | Lobby | Joinable";
     detail += " | gubsy-roomd";
-    if (!room.contract.realtime_endpoint.empty()) {
+    if (!room.contract.connection_candidates.empty()) {
+        detail += " | ";
+        detail += std::to_string(room.contract.connection_candidates.size());
+        detail += " candidates";
+    } else if (!room.contract.realtime_endpoint.empty()) {
         detail += " | ";
         detail += room.contract.realtime_endpoint;
     }
@@ -632,6 +636,11 @@ BuiltScreen build_browser_screen(MenuContext& ctx) {
     else
         st.status_text = ctx.engine.lobby.last_error.empty() ? ctx.engine.lobby.status_message
                                                              : ctx.engine.lobby.last_error;
+    if (ctx.engine.lobby.connect_phase != ConnectPhase::Idle &&
+        ctx.engine.lobby.connect_phase != ConnectPhase::Connected) {
+        st.status_text += st.status_text.empty() ? "" : " | ";
+        st.status_text += connect_phase_id(ctx.engine.lobby.connect_phase);
+    }
     if (st.status_text.empty())
         st.status_text = "Public room browser";
     widgets.push_back(

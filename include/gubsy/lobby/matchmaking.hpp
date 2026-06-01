@@ -30,6 +30,12 @@ struct MatchmakingCreateResult {
     std::string member_id;
 };
 
+struct MatchmakingJoinAttemptResult {
+    std::string join_attempt_id;
+    std::string join_token;
+    MatchmakingRoom room;
+};
+
 struct IMatchmaking {
     virtual ~IMatchmaking() = default;
     virtual bool create_room(const std::string& server_url,
@@ -39,8 +45,14 @@ struct IMatchmaking {
     virtual bool join_room(const std::string& server_url,
                            const std::string& room_code,
                            const std::string& display_name,
+                           const std::string& join_token,
                            std::string& member_id_out,
                            std::string& err) = 0;
+    virtual bool create_join_attempt(const std::string& server_url,
+                                     const std::string& room_code,
+                                     const std::string& display_name,
+                                     MatchmakingJoinAttemptResult& out,
+                                     std::string& err) = 0;
     virtual bool leave_room(const std::string& server_url,
                             const std::string& room_code,
                             const std::string& member_id,

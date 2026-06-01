@@ -35,6 +35,13 @@ int main(int argc, char** argv) {
         room.contract.net_protocol = session_contract_default_net_protocol();
         room.contract.mod_hash = "aaaabbbb";
         room.contract.required_mod_ids = {"base", "smoke_a"};
+        room.contract.authority_mode = RoomAuthorityMode::PlayerHost;
+        ConnectionCandidate smoke_candidate;
+        smoke_candidate.kind = ConnectionCandidateKind::LanDirect;
+        smoke_candidate.priority = 100;
+        smoke_candidate.endpoint = "127.0.0.1:9000";
+        smoke_candidate.label = "Smoke Direct";
+        room.contract.connection_candidates.push_back(smoke_candidate);
 
         MatchmakingCreateResult created;
         if (!matchmaking.create_room(server_url, room, created, err))
@@ -76,11 +83,26 @@ int main(int argc, char** argv) {
             throw std::runtime_error(err);
         }
 
+        MatchmakingJoinAttemptResult guest_attempt;
+        if (!matchmaking.create_join_attempt(server_url, room_code, "Guest", guest_attempt, err))
+            throw std::runtime_error(err);
+        if (guest_attempt.join_attempt_id.empty() || guest_attempt.join_token.empty())
+            throw std::runtime_error("join attempt did not return token");
+        if (guest_attempt.room.room_code != room_code)
+            throw std::runtime_error("join attempt did not return room");
+        if (guest_attempt.room.contract.connection_candidates.empty())
+            throw std::runtime_error("join attempt did not return connection candidates");
+
         std::string guest_member_id;
-        if (!matchmaking.join_room(server_url, room_code, "Guest", guest_member_id, err))
+        if (!matchmaking.join_room(server_url,
+                                   room_code,
+                                   "Guest",
+                                   guest_attempt.join_token,
+                                   guest_member_id,
+                                   err))
             throw std::runtime_error(err);
         std::string second_guest_member_id;
-        if (!matchmaking.join_room(server_url, room_code, "Guest Two", second_guest_member_id, err))
+        if (!matchmaking.join_room(server_url, room_code, "Guest Two", "", second_guest_member_id, err))
             throw std::runtime_error(err);
 
         MatchmakingRoom updated = room;
@@ -119,6 +141,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error("room realtime endpoint did not update");
         if (fetched.contract.session_phase != "in_game")
             throw std::runtime_error("room session_phase did not update");
+        if (fetched.contract.authority_mode != RoomAuthorityMode::PlayerHost)
+            throw std::runtime_error("room authority mode changed unexpectedly");
+        if (fetched.contract.connection_candidates.empty())
+            throw std::runtime_error("room connection candidates missing");
         if (fetched.members.empty() || fetched.members.front().last_seen_seconds_ago < 0)
             throw std::runtime_error("room members missing last-seen freshness");
 

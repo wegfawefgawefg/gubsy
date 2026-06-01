@@ -11,8 +11,14 @@ public:
     bool join_room(const std::string& server_url,
                    const std::string& room_code,
                    const std::string& display_name,
+                   const std::string& join_token,
                    std::string& member_id_out,
                    std::string& err) override;
+    bool create_join_attempt(const std::string& server_url,
+                             const std::string& room_code,
+                             const std::string& display_name,
+                             MatchmakingJoinAttemptResult& out,
+                             std::string& err) override;
     bool leave_room(const std::string& server_url,
                     const std::string& room_code,
                     const std::string& member_id,

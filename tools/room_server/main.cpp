@@ -27,6 +27,7 @@ constexpr auto kCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 constexpr int kRoomCodeLen = 6;
 constexpr int kMemberIdLen = 8;
 constexpr int kSecretLen = 24;
+constexpr int kJoinAttemptIdLen = 10;
 constexpr int kDefaultPort = 8788;
 
 struct RoomMember {
@@ -36,14 +37,23 @@ struct RoomMember {
     Clock::time_point last_seen{Clock::now()};
 };
 
+struct JoinAttempt {
+    std::string attempt_id;
+    std::string token;
+    std::string display_name;
+    Clock::time_point created_at{Clock::now()};
+};
+
 struct RoomRecord {
     std::string room_code;
     std::string host_secret;
     std::string session_name;
     std::string host_name;
     std::string session_phase{"lobby"};
+    std::string authority_mode{"player_host"};
     std::string net_protocol{"gubsy-sync-1"};
     std::string realtime_endpoint;
+    nlohmann::json connection_candidates = nlohmann::json::array();
     std::string game_version;
     std::string mod_hash;
     std::vector<std::string> required_mod_ids;
@@ -54,6 +64,7 @@ struct RoomRecord {
     bool in_game{false};
     nlohmann::json game_config;
     std::vector<RoomMember> members;
+    std::unordered_map<std::string, JoinAttempt> join_attempts;
     Clock::time_point created_at{Clock::now()};
     Clock::time_point updated_at{Clock::now()};
 };
@@ -151,8 +162,12 @@ nlohmann::json room_to_json(const RoomRecord& room) {
         {"session_name", room.session_name},
         {"host_name", room.host_name},
         {"session_phase", room.session_phase},
+        {"authority_mode", room.authority_mode},
         {"net_protocol", room.net_protocol},
         {"realtime_endpoint", room.realtime_endpoint},
+        {"connection_candidates", room.connection_candidates.is_array()
+                                      ? room.connection_candidates
+                                      : nlohmann::json::array()},
         {"game_version", room.game_version},
         {"mod_hash", room.mod_hash},
         {"required_mod_ids", room.required_mod_ids},
@@ -218,6 +233,13 @@ std::vector<std::string> json_string_array(const nlohmann::json& body, const cha
     std::sort(out.begin(), out.end());
     out.erase(std::unique(out.begin(), out.end()), out.end());
     return out;
+}
+
+nlohmann::json json_array_or_empty(const nlohmann::json& body, const char* key) {
+    auto it = body.find(key);
+    if (it != body.end() && it->is_array())
+        return *it;
+    return nlohmann::json::array();
 }
 
 bool body_member_access(RoomRecord& room, const nlohmann::json& body, RoomMember*& member_out,
@@ -365,8 +387,9 @@ const char* dashboard_html() {
       const players = `${text(room.current_players, 0)}/${text(room.max_players, '?')} players`;
       const host = `hosted by ${text(room.host_name, 'Host')}`;
       const phase = text(room.session_phase, 'lobby');
-      const endpoint = text(room.realtime_endpoint, 'no endpoint');
-      meta.textContent = `${players} - ${host} - ${phase} - ${endpoint}`;
+      const authority = text(room.authority_mode, 'player_host');
+      const candidates = Array.isArray(room.connection_candidates) ? room.connection_candidates.length : 0;
+      meta.textContent = `${players} - ${host} - ${phase} - ${authority} - ${candidates} candidates`;
       body.append(title, meta);
 
       const code = document.createElement('div');
@@ -495,8 +518,10 @@ int main(int argc, char** argv) {
         room.host_name = json_string(body, "host_name", "Host");
         room.session_phase = json_string(body, "session_phase",
                                          json_bool(body, "in_game", false) ? "in_game" : "lobby");
+        room.authority_mode = json_string(body, "authority_mode", "player_host");
         room.net_protocol = json_string(body, "net_protocol", "gubsy-sync-1");
         room.realtime_endpoint = json_string(body, "realtime_endpoint");
+        room.connection_candidates = json_array_or_empty(body, "connection_candidates");
         room.game_version = json_string(body, "game_version");
         room.mod_hash = json_string(body, "mod_hash");
         room.required_mod_ids = json_string_array(body, "required_mod_ids");
@@ -525,6 +550,10 @@ int main(int argc, char** argv) {
                                      {"room_code", room_code},
                                      {"privacy", privacy},
                                      {"realtime_endpoint", endpoint},
+                                     {"authority_mode", g_registry.rooms.at(room_code).authority_mode},
+                                     {"connection_candidates",
+                                      static_cast<int>(g_registry.rooms.at(room_code)
+                                                           .connection_candidates.size())},
                                  });
         res.set_content(
             nlohmann::json{
@@ -535,6 +564,51 @@ int main(int argc, char** argv) {
                 .dump(),
             "application/json");
     });
+
+    server.Post(
+        R"(/rooms/([A-Z0-9]+)/join_attempt)",
+        [](const httplib::Request& req, httplib::Response& res) {
+            nlohmann::json body;
+            if (!read_body_json(req, body, res))
+                return;
+            std::lock_guard<std::mutex> lock(g_registry.mutex);
+            g_registry.cleanup_expired_locked();
+
+            auto it = g_registry.rooms.find(req.matches[1].str());
+            if (it == g_registry.rooms.end()) {
+                res.status = 404;
+                res.set_content("room not found", "text/plain");
+                return;
+            }
+            RoomRecord& room = it->second;
+            if (static_cast<int>(room.members.size()) >= room.max_players) {
+                res.status = 409;
+                res.set_content("room is full", "text/plain");
+                return;
+            }
+
+            JoinAttempt attempt;
+            attempt.attempt_id = g_registry.random_token(kJoinAttemptIdLen);
+            attempt.token = g_registry.random_token(kSecretLen);
+            attempt.display_name = json_string(body, "display_name", "Guest");
+            const std::string attempt_id = attempt.attempt_id;
+            const std::string token = attempt.token;
+            room.join_attempts.emplace(token, std::move(attempt));
+            room.updated_at = Clock::now();
+
+            log_event("room_join_attempt", {
+                                               {"room_code", room.room_code},
+                                               {"join_attempt_id", attempt_id},
+                                           });
+            res.set_content(
+                nlohmann::json{
+                    {"join_attempt_id", attempt_id},
+                    {"join_token", token},
+                    {"room", room_to_json(room)},
+                }
+                    .dump(),
+                "application/json");
+        });
 
     server.Post(
         R"(/rooms/([A-Z0-9]+)/join)", [](const httplib::Request& req, httplib::Response& res) {
@@ -555,6 +629,17 @@ int main(int argc, char** argv) {
                 res.status = 409;
                 res.set_content("room is full", "text/plain");
                 return;
+            }
+
+            const std::string join_token = json_string(body, "join_token");
+            if (!join_token.empty()) {
+                auto attempt_it = room.join_attempts.find(join_token);
+                if (attempt_it == room.join_attempts.end()) {
+                    res.status = 403;
+                    res.set_content("join token rejected", "text/plain");
+                    return;
+                }
+                room.join_attempts.erase(attempt_it);
             }
 
             RoomMember member;
@@ -610,9 +695,13 @@ int main(int argc, char** argv) {
             room.host_name = json_string(*room_it, "host_name", room.host_name.c_str());
             room.session_phase = json_string(*room_it, "session_phase",
                                              room.in_game ? "in_game" : room.session_phase.c_str());
+            room.authority_mode =
+                json_string(*room_it, "authority_mode", room.authority_mode.c_str());
             room.net_protocol = json_string(*room_it, "net_protocol", room.net_protocol.c_str());
             room.realtime_endpoint =
                 json_string(*room_it, "realtime_endpoint", room.realtime_endpoint.c_str());
+            if (room_it->contains("connection_candidates"))
+                room.connection_candidates = json_array_or_empty(*room_it, "connection_candidates");
             room.game_version = json_string(*room_it, "game_version", room.game_version.c_str());
             room.mod_hash = json_string(*room_it, "mod_hash", room.mod_hash.c_str());
             room.required_mod_ids = json_string_array(*room_it, "required_mod_ids");

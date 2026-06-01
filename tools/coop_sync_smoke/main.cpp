@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
         const std::string host_member_id = created.member_id;
 
         std::string guest_member_id;
-        require(matchmaking.join_room(server_url, room_code, "Guest", guest_member_id, err), err);
+        require(matchmaking.join_room(server_url, room_code, "Guest", "", guest_member_id, err), err);
 
         require(host_transport.ensure_host(room_code, err), err);
         room.room_code = room_code;

@@ -365,6 +365,7 @@ bool lobby_online_join_room(LobbySession& lobby, const std::string& room_code, s
     if (!g_matchmaking.join_room(lobby.online.server_url,
                                  room_code,
                                  lobby_local_player_name(),
+                                 "",
                                  member_id,
                                  err)) {
         return false;
