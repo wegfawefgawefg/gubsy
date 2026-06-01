@@ -134,21 +134,59 @@ response:
 For local development, clients may derive UDP port `HTTP_PORT + 1` only as a
 fallback. Production clients should prefer explicit capabilities.
 
+## Chosen Defaults
+
+These decisions are the working defaults for the first implementation.
+
+1. Use JSON rendezvous control packets first, with strict packet-size limits.
+   The game payload is still the game's own binary UDP stream; Realnet
+   rendezvous only negotiates endpoints and verifies punch probes. Binary
+   rendezvous packets can come later if profiling says this matters.
+2. Advertise the UDP rendezvous endpoint explicitly through HTTP
+   health/capabilities. `HTTP_PORT + 1` is allowed only as a local-development
+   fallback.
+3. Send host rendezvous hellos lightly while public hosting, with a slower idle
+   interval and a faster interval while join attempts are active.
+4. Try LAN/direct candidates quickly, but treat NAT punch as the normal public
+   internet path for player-hosted rooms. Do not make players rely on port
+   forwarding.
+5. Build toward a real game-facing transport abstraction. A temporary adapter
+   may bridge to an existing game UDP socket during migration, but the Gubsy API
+   should not become a pile of verified-endpoint special cases.
+6. Do not add manual host approval in the first NAT punch implementation.
+   Existing room policy, join tokens, capacity, compatibility, and future
+   kick/ban controls are enough for now.
+7. Use a `30s` join-attempt TTL and `3s` punch window as first defaults, with
+   config knobs and diagnostics so we can tune for high-latency regions.
+8. Defer explicit IPv6 NAT-punch support. Direct IPv6 can be a candidate later,
+   but IPv4 NAT traversal is the first target.
+9. Enable NAT punch by default for public player-hosted rooms. Dedicated-server
+   rooms can prefer direct public server endpoints and opt out.
+10. Validate first with a VPS roomd plus desktop/laptop on different networks
+    where possible. Local simulation and same-LAN smoke tests are necessary but
+    not sufficient.
+
 ## Wire Format
 
-Use a compact binary UDP format. Keep it versioned and small enough to fit
-comfortably under common MTUs.
+Use JSON UDP control packets for the first implementation. Keep them versioned,
+small, and bounded by `max_udp_packet_bytes`. These packets are only for
+rendezvous and punch verification; game traffic remains opaque to Gubsy.
 
-All packets:
+Logical packet envelope:
 
-```text
-magic          4 bytes  "GUBR"
-version        u8       1
-kind           u8
-flags          u16
-payload_len    u16
-payload        payload_len bytes
-mac            16 or 32 bytes
+```json
+{
+  "magic": "GUBR",
+  "version": 1,
+  "kind": "joiner_hello",
+  "room_code": "ROOM42",
+  "join_attempt_id": "ABC123",
+  "sender_role": "joiner",
+  "sender_member_id": "MEMBER1",
+  "nonce": "random-base64",
+  "payload": {},
+  "mac": "truncated-hmac-base64"
+}
 ```
 
 Packet kinds:
@@ -163,9 +201,7 @@ Packet kinds:
 7 error
 ```
 
-Encoding can be either hand-packed binary or length-prefixed JSON for the first
-implementation. The production target is binary, but JSON is acceptable for the
-first smoke if the parser enforces maximum packet sizes.
+Binary can replace the envelope later without changing the room/cascade model.
 
 ## Authentication
 
@@ -207,7 +243,8 @@ When a player hosts a public room:
 2. Publish room with `lan_direct` and `nat_punch` candidates.
 3. Send periodic `host_hello` packets to the roomd UDP endpoint.
 4. Include room code, host member id, host update token, and local UDP port.
-5. Keep sending `host_hello` while the room is alive.
+5. Keep sending low-rate `host_hello` packets while the public room is alive.
+   Increase to the active interval while roomd reports active join attempts.
 6. When `endpoint_hint` arrives for a joiner, send `punch_probe` packets to
    the joiner's observed endpoint for the punch window.
 7. When a verified probe/ack is received from the joiner, promote that endpoint
@@ -304,8 +341,9 @@ struct ConnectionAttemptEvent {
 ```
 
 The final game-facing API should return a packet transport. The intermediate
-implementation can still return a verified endpoint to Splonks' existing UDP
-transport, but the boundary should be kept narrow.
+implementation may include an adapter that feeds verified endpoints into
+Splonks' existing UDP transport, but that adapter should sit behind the
+Realnet transport boundary and should not define the public Gubsy API.
 
 ## Splonks Integration
 
@@ -397,25 +435,24 @@ First implementation should include:
 
 ## Decisions Needed
 
-These are the ambiguities that should be resolved before starting code:
+Resolved for the first pass:
 
-1. Should the first UDP packet format be binary immediately, or JSON with strict
-   packet-size limits for speed of implementation?
-2. Should `gubsy-roomd` derive UDP port from HTTP port by default, or require
-   explicit advertised UDP rendezvous capabilities?
-3. Should host `host_hello` run continuously while public hosting, or only when
-   there are active join attempts?
-4. Should NAT punch be attempted after LAN direct fails, or in parallel with
-   direct candidates to reduce join time?
-5. Should the first implementation return a verified endpoint to the existing
-   game UDP transport, or should it introduce the full `PacketTransport`
-   abstraction now?
-6. Should the host be able to explicitly approve/reject a join attempt before
-   roomd releases endpoint hints?
-7. How long should punch attempts last before falling through to relay/failure?
-8. Do we need IPv6 support in the first NAT punch implementation?
-9. Should `nat_punch` be enabled by default for public rooms, or require a game
-   config flag?
-10. What is the minimum VPS validation target: two LANs, mobile hotspot, or a
-    controlled NAT lab?
+1. JSON rendezvous control packets, bounded and HMAC-authenticated.
+2. Explicit advertised UDP rendezvous capability.
+3. Low-rate host hello while public; faster with active attempts.
+4. LAN/direct quick attempt, then NAT punch as normal public player-host path.
+5. Real transport abstraction as the API target, with migration adapters allowed.
+6. No manual host approval before endpoint hints in the first pass.
+7. `30s` join-attempt TTL and `3s` punch window, both configurable.
+8. IPv4 NAT punch first; IPv6 deferred.
+9. NAT punch default-on for public player-hosted rooms.
+10. VPS roomd plus two real client networks is the first meaningful public proof.
 
+Still open:
+
+1. Exact rate limits per IP and per room.
+2. Exact HMAC library/dependency choice.
+3. Whether the first public validation uses a laptop hotspot, phone hotspot, or
+   a second fixed network.
+4. How much roomd diagnostic data should be exposed through HTTP admin/debug
+   endpoints versus logs only.
