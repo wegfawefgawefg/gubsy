@@ -430,6 +430,7 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(room_smoke
     tools/room_smoke/main.cpp
+    src/connection_cascade.cpp
     src/room_matchmaking.cpp
     src/session_contract.cpp
   )

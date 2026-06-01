@@ -113,6 +113,12 @@ Examples:
 The engine should try candidates through the Realnet connection cascade. The
 game should not treat a public room as one raw `ip:port`.
 
+Current direct-candidate selection lives in
+`include/gubsy/lobby/connection_cascade.hpp`. That API sorts candidates by
+priority, maps candidate kinds to connection phases, preserves the
+`realtime_endpoint` fallback for older rooms, and returns the selected direct
+endpoint for the game transport callback.
+
 ### `realtime_endpoint`
 
 The direct endpoint for simple explicit direct joins and compatibility with

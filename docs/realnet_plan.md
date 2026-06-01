@@ -410,6 +410,10 @@ public endpoint claimed by the client.
 4. Return a packet transport to the game.
 5. Report clean failure reasons.
 
+Foundation status: `include/gubsy/lobby/connection_cascade.hpp` now owns the
+reusable direct-candidate ordering and selection path used by the browser join
+flow. NAT punch, relay, and packet-transport return are later milestones.
+
 ### Milestone 5: Splonks Integration
 
 1. Route Splonks browser joins through the Realnet cascade.

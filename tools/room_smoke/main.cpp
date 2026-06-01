@@ -14,6 +14,8 @@
 #include <string>
 #include <thread>
 
+#include "gubsy/lobby/connection_cascade.hpp"
+
 #include "src/matchmaking.hpp"
 #include "src/room_matchmaking.hpp"
 #include "src/session_contract.hpp"
@@ -92,6 +94,15 @@ int main(int argc, char** argv) {
             throw std::runtime_error("join attempt did not return room");
         if (guest_attempt.room.contract.connection_candidates.empty())
             throw std::runtime_error("join attempt did not return connection candidates");
+        auto selected_candidate = gubsy_first_direct_connection_candidate(guest_attempt.room);
+        if (!selected_candidate.has_value())
+            throw std::runtime_error("connection cascade did not select direct candidate");
+        if (selected_candidate->host != "127.0.0.1" || selected_candidate->port != 9000)
+            throw std::runtime_error("connection cascade selected wrong endpoint");
+        if (gubsy_connect_phase_for_candidate(selected_candidate->candidate.kind) !=
+            ConnectPhase::TryingLanDirect) {
+            throw std::runtime_error("connection cascade selected wrong phase");
+        }
 
         std::string guest_member_id;
         if (!matchmaking.join_room(server_url,

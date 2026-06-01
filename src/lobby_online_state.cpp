@@ -1,3 +1,5 @@
+#include "gubsy/lobby/connection_cascade.hpp"
+
 #include "src/alerts.hpp"
 #include "src/engine_state.hpp"
 #include "src/lobby_state.hpp"
@@ -7,7 +9,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <optional>
-#include <string_view>
 
 namespace {
 
@@ -109,79 +110,6 @@ MatchmakingRoom build_room_metadata(EngineState& engine) {
     return room;
 }
 
-bool parse_endpoint(std::string_view endpoint, std::string& host, std::uint16_t& port) {
-    std::size_t colon = endpoint.rfind(':');
-    if (colon == std::string_view::npos || colon + 1 >= endpoint.size())
-        return false;
-    host = std::string(endpoint.substr(0, colon));
-    if (host.empty())
-        return false;
-    try {
-        int parsed = std::stoi(std::string(endpoint.substr(colon + 1)));
-        if (parsed <= 0 || parsed > 65535)
-            return false;
-        port = static_cast<std::uint16_t>(parsed);
-        return true;
-    } catch (...) {
-        return false;
-    }
-}
-
-ConnectPhase connect_phase_for_candidate(ConnectionCandidateKind kind) {
-    switch (kind) {
-        case ConnectionCandidateKind::Loopback:
-            return ConnectPhase::TryingLoopback;
-        case ConnectionCandidateKind::LanDirect:
-            return ConnectPhase::TryingLanDirect;
-        case ConnectionCandidateKind::PublicDirect:
-            return ConnectPhase::TryingPublicDirect;
-        case ConnectionCandidateKind::NatPunch:
-            return ConnectPhase::TryingNatPunch;
-        case ConnectionCandidateKind::Relay:
-            return ConnectPhase::TryingRelay;
-        case ConnectionCandidateKind::Steam:
-            return ConnectPhase::TryingSteam;
-    }
-    return ConnectPhase::TryingLanDirect;
-}
-
-std::vector<ConnectionCandidate> sorted_connection_candidates(const MatchmakingRoom& room) {
-    std::vector<ConnectionCandidate> candidates = room.contract.connection_candidates;
-    if (candidates.empty() && !room.contract.realtime_endpoint.empty()) {
-        ConnectionCandidate candidate;
-        candidate.kind = ConnectionCandidateKind::LanDirect;
-        candidate.priority = 100;
-        candidate.endpoint = room.contract.realtime_endpoint;
-        candidate.label = "Direct UDP";
-        candidates.push_back(std::move(candidate));
-    }
-    std::stable_sort(candidates.begin(), candidates.end(),
-                     [](const ConnectionCandidate& a, const ConnectionCandidate& b) {
-                         return a.priority < b.priority;
-                     });
-    return candidates;
-}
-
-std::optional<ConnectionCandidate> first_direct_candidate(const MatchmakingRoom& room,
-                                                          std::string& host,
-                                                          std::uint16_t& port) {
-    for (const ConnectionCandidate& candidate : sorted_connection_candidates(room)) {
-        switch (candidate.kind) {
-            case ConnectionCandidateKind::Loopback:
-            case ConnectionCandidateKind::LanDirect:
-            case ConnectionCandidateKind::PublicDirect:
-                if (parse_endpoint(candidate.endpoint, host, port))
-                    return candidate;
-                break;
-            case ConnectionCandidateKind::NatPunch:
-            case ConnectionCandidateKind::Relay:
-            case ConnectionCandidateKind::Steam:
-                break;
-        }
-    }
-    return std::nullopt;
-}
-
 void apply_room_to_lobby(EngineState& engine, const MatchmakingRoom& room) {
     engine.lobby.room_code = room.room_code;
     engine.lobby.lobby_name =
@@ -192,7 +120,7 @@ void apply_room_to_lobby(EngineState& engine, const MatchmakingRoom& room) {
     engine.lobby.room_current_players = std::max(0, room.current_players);
     engine.lobby.advertised_endpoint = room.contract.realtime_endpoint;
     if (engine.lobby.advertised_endpoint.empty()) {
-        for (const ConnectionCandidate& candidate : sorted_connection_candidates(room)) {
+        for (const ConnectionCandidate& candidate : gubsy_sorted_connection_candidates(room)) {
             if (!candidate.endpoint.empty()) {
                 engine.lobby.advertised_endpoint = candidate.endpoint;
                 break;
@@ -670,9 +598,8 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     if (!validate_room_contract(engine, room, message))
         return false;
 
-    std::string host;
-    std::uint16_t port = 0;
-    std::optional<ConnectionCandidate> selected_candidate = first_direct_candidate(room, host, port);
+    std::optional<DirectConnectionCandidate> selected_candidate =
+        gubsy_first_direct_connection_candidate(room);
     if (!selected_candidate.has_value()) {
         engine.lobby.connect_phase = ConnectPhase::Failed;
         message = "Room has no supported connection candidate";
@@ -709,7 +636,7 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         return false;
     if (!validate_room_contract(engine, room_for_join, message))
         return false;
-    selected_candidate = first_direct_candidate(room_for_join, host, port);
+    selected_candidate = gubsy_first_direct_connection_candidate(room_for_join);
     if (!selected_candidate.has_value()) {
         engine.lobby.connect_phase = ConnectPhase::Failed;
         message = "Room has no supported connection candidate";
@@ -717,10 +644,14 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         return false;
     }
 
-    engine.lobby.connect_phase = connect_phase_for_candidate(selected_candidate->kind);
-    engine.lobby.selected_transport = connection_candidate_kind_id(selected_candidate->kind);
+    engine.lobby.connect_phase = gubsy_connect_phase_for_candidate(selected_candidate->candidate.kind);
+    engine.lobby.selected_transport =
+        connection_candidate_kind_id(selected_candidate->candidate.kind);
     GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
-        engine.lobby_commands.join_user_data, engine.lobby, host.c_str(), port);
+        engine.lobby_commands.join_user_data,
+        engine.lobby,
+        selected_candidate->host.c_str(),
+        selected_candidate->port);
     if (!join_result.ok) {
         engine.lobby.connect_phase = ConnectPhase::Failed;
         message = join_result.status.empty() ? "Cannot join room: failed to reach host transport"
@@ -729,11 +660,11 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         return false;
     }
 
-    engine.lobby.join_host = host;
-    engine.lobby.network_port = static_cast<int>(port);
-    engine.lobby.advertised_endpoint = selected_candidate->endpoint.empty()
+    engine.lobby.join_host = selected_candidate->host;
+    engine.lobby.network_port = static_cast<int>(selected_candidate->port);
+    engine.lobby.advertised_endpoint = selected_candidate->candidate.endpoint.empty()
                                            ? room_for_join.contract.realtime_endpoint
-                                           : selected_candidate->endpoint;
+                                           : selected_candidate->candidate.endpoint;
     engine.lobby.contract = room_for_join.contract;
     if (join_result.pending) {
         engine.lobby.online = false;
