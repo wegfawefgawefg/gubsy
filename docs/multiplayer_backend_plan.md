@@ -3,6 +3,10 @@
 This is the target plan for Gubsy multiplayer discovery, hosting, joining, and
 Steam integration.
 
+The next concrete phase of this work is Realnet. See `realnet_plan.md` for the
+internet connectivity plan covering room candidates, UDP rendezvous/NAT
+punch-through, relay fallback, authority modes, and Steam as a future backend.
+
 The goal is one user-facing lobby flow that can use multiple backends:
 
 1. Direct IP and port.

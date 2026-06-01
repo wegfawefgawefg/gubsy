@@ -24,6 +24,7 @@ It exists so the engine can answer:
 - `content_revision`
 - `allow_live_mod_reload`
 - `realtime_endpoint`
+- `connection_candidates`
 - `game_config`
 
 ## Field Meaning
@@ -96,12 +97,30 @@ This does not guarantee perfect cleanup.
 
 It means “prefer resync and keep going” rather than “disconnect everyone.”
 
+### `connection_candidates`
+
+The ordered set of possible ways to connect to the room authority.
+
+Examples:
+
+- loopback endpoint
+- LAN endpoint
+- observed public endpoint
+- NAT rendezvous attempt
+- relay candidate
+- Steam lobby or Steam identity
+
+The engine should try candidates through the Realnet connection cascade. The
+game should not treat a public room as one raw `ip:port`.
+
 ### `realtime_endpoint`
 
-The transport bootstrap endpoint for the real-time sync path.
+The direct endpoint for simple explicit direct joins and compatibility with
+games that only expose one known runtime endpoint.
 
-The room/directory service can advertise this without carrying the actual
-runtime traffic itself.
+Public internet room joins should use `connection_candidates` so Gubsy can try
+loopback, LAN, observed public endpoints, NAT traversal, relay, or Steam through
+one clean connection cascade.
 
 ### `game_config`
 
