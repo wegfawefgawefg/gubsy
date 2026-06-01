@@ -655,6 +655,10 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     engine.lobby.connect_phase = gubsy_connect_phase_for_candidate(selected_candidate->candidate.kind);
     engine.lobby.selected_transport =
         connection_candidate_kind_id(selected_candidate->candidate.kind);
+    engine.lobby.pending_join_attempt_id = join_attempt.join_attempt_id;
+    engine.lobby.pending_join_token = join_attempt.join_token;
+    engine.lobby.pending_punch_secret = join_attempt.punch_secret;
+    engine.lobby.pending_join_room = room_for_join;
     GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
         engine.lobby_commands.join_user_data,
         engine.lobby,
@@ -687,10 +691,6 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         engine.lobby.direct_join_pending = true;
         engine.lobby.room_join_pending = true;
         engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
-        engine.lobby.pending_join_attempt_id = join_attempt.join_attempt_id;
-        engine.lobby.pending_join_token = join_attempt.join_token;
-        engine.lobby.pending_punch_secret = join_attempt.punch_secret;
-        engine.lobby.pending_join_room = room_for_join;
         clear_lobby_error(engine, join_result.status.empty() ? "Joining room " + room_for_join.room_code
                                                              : join_result.status);
         message = engine.lobby.status_message;
