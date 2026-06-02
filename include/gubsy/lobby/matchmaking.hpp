@@ -34,6 +34,8 @@ struct MatchmakingJoinAttemptResult {
     std::string join_attempt_id;
     std::string join_token;
     std::string punch_secret;
+    std::string relay_allocation_id;
+    std::string relay_secret;
     MatchmakingRoom room;
 };
 

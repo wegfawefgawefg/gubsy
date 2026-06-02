@@ -8,6 +8,7 @@
 #endif
 
 #include "gubsy/realnet/rendezvous.hpp"
+#include "gubsy/realnet/relay.hpp"
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -48,9 +49,12 @@ constexpr int kRoomCodeLen = 6;
 constexpr int kMemberIdLen = 8;
 constexpr int kSecretLen = 24;
 constexpr int kJoinAttemptIdLen = 10;
+constexpr int kRelayAllocationIdLen = 10;
 constexpr int kDefaultPort = 8788;
 constexpr int kDefaultRendezvousPortOffset = 1;
+constexpr int kDefaultRelayPortOffset = 2;
 constexpr auto kJoinAttemptTimeout = std::chrono::seconds(30);
+constexpr auto kRelayAllocationTimeout = std::chrono::seconds(30);
 
 #if defined(_WIN32)
 using SocketHandle = SOCKET;
@@ -81,12 +85,33 @@ struct JoinAttempt {
     std::string attempt_id;
     std::string token;
     std::string punch_secret;
+    std::string relay_allocation_id;
+    std::string relay_secret;
     std::string display_name;
     std::string joiner_observed_endpoint;
     sockaddr_storage joiner_sockaddr{};
     socklen_t joiner_sockaddr_len{0};
     bool has_joiner_endpoint{false};
     Clock::time_point created_at{Clock::now()};
+    Clock::time_point joiner_seen_at{};
+};
+
+struct RelayAllocation {
+    std::string allocation_id;
+    std::string join_attempt_id;
+    std::string relay_secret;
+    std::string display_name;
+    std::string joiner_observed_endpoint;
+    sockaddr_storage joiner_sockaddr{};
+    socklen_t joiner_sockaddr_len{0};
+    bool has_joiner_endpoint{false};
+    bool ready{false};
+    std::uint64_t packets_from_host{0};
+    std::uint64_t packets_from_joiner{0};
+    std::uint64_t bytes_from_host{0};
+    std::uint64_t bytes_from_joiner{0};
+    Clock::time_point created_at{Clock::now()};
+    Clock::time_point last_seen{Clock::now()};
     Clock::time_point joiner_seen_at{};
 };
 
@@ -111,10 +136,15 @@ struct RoomRecord {
     nlohmann::json game_config;
     std::vector<RoomMember> members;
     std::unordered_map<std::string, JoinAttempt> join_attempts;
+    std::unordered_map<std::string, RelayAllocation> relay_allocations;
     std::string host_observed_endpoint;
     sockaddr_storage host_sockaddr{};
     socklen_t host_sockaddr_len{0};
     bool has_host_rendezvous_endpoint{false};
+    std::string host_relay_observed_endpoint;
+    sockaddr_storage host_relay_sockaddr{};
+    socklen_t host_relay_sockaddr_len{0};
+    bool has_host_relay_endpoint{false};
     Clock::time_point created_at{Clock::now()};
     Clock::time_point updated_at{Clock::now()};
     Clock::time_point host_rendezvous_seen_at{};
@@ -155,10 +185,22 @@ struct RoomRegistry {
         for (auto& [room_code, room] : rooms) {
             for (auto it = room.join_attempts.begin(); it != room.join_attempts.end();) {
                 if (now - it->second.created_at > kJoinAttemptTimeout) {
-                    log_event("punch_attempt_expire",
+                    log_event("join_attempt_expire",
                               {{"room_code", room_code},
                                {"join_attempt_id", it->second.attempt_id}});
                     it = room.join_attempts.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            for (auto it = room.relay_allocations.begin(); it != room.relay_allocations.end();) {
+                if (now - it->second.created_at > kRelayAllocationTimeout &&
+                    !it->second.ready) {
+                    log_event("relay_allocation_expire",
+                              {{"room_code", room_code},
+                               {"join_attempt_id", it->second.join_attempt_id},
+                               {"relay_allocation_id", it->second.allocation_id}});
+                    it = room.relay_allocations.erase(it);
                 } else {
                     ++it;
                 }
@@ -343,6 +385,22 @@ void ensure_nat_punch_candidate(RoomRecord& room) {
         {"kind", "nat_punch"},
         {"priority", 200},
         {"label", "NAT traversal"},
+    });
+}
+
+void ensure_relay_candidate(RoomRecord& room) {
+    if (!room_is_public(room))
+        return;
+    if (!room.connection_candidates.is_array())
+        room.connection_candidates = nlohmann::json::array();
+    for (const auto& candidate : room.connection_candidates) {
+        if (candidate.is_object() && candidate.value("kind", "") == "relay")
+            return;
+    }
+    room.connection_candidates.push_back({
+        {"kind", "relay"},
+        {"priority", 300},
+        {"label", "Relay"},
     });
 }
 
@@ -765,13 +823,312 @@ private:
     realnet::TokenBucketRateLimiter room_limiter_{{200.0, 400.0}};
 };
 
+class RelayUdpServer {
+public:
+    ~RelayUdpServer() { stop(); }
+
+    bool start(const std::string& bind_host, int port, std::string& err) {
+#if defined(_WIN32)
+        WSADATA data{};
+        const int wsa_rc = WSAStartup(MAKEWORD(2, 2), &data);
+        if (wsa_rc != 0) {
+            err = "WSAStartup failed";
+            return false;
+        }
+#endif
+        port_ = port;
+        socket_ = open_bound_socket(bind_host, port, err);
+        if (socket_ == kInvalidSocket)
+            return false;
+        running_.store(true);
+        thread_ = std::thread([this]() { run(); });
+        return true;
+    }
+
+    void stop() {
+        running_.store(false);
+        close_socket(socket_);
+        socket_ = kInvalidSocket;
+        if (thread_.joinable())
+            thread_.join();
+#if defined(_WIN32)
+        WSACleanup();
+#endif
+    }
+
+    int port() const { return port_; }
+
+private:
+    SocketHandle open_bound_socket(const std::string& bind_host, int port, std::string& err) {
+        addrinfo hints{};
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        hints.ai_flags = AI_PASSIVE;
+        addrinfo* result = nullptr;
+        const std::string port_text = std::to_string(port);
+        const char* host_arg = bind_host.empty() || bind_host == "0.0.0.0" ? nullptr : bind_host.c_str();
+        const int gai = getaddrinfo(host_arg, port_text.c_str(), &hints, &result);
+        if (gai != 0 || !result) {
+            err = "could not resolve UDP relay bind endpoint";
+            return kInvalidSocket;
+        }
+
+        SocketHandle out = kInvalidSocket;
+        for (addrinfo* it = result; it; it = it->ai_next) {
+            out = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
+            if (out == kInvalidSocket)
+                continue;
+            if (bind(out, it->ai_addr, static_cast<int>(it->ai_addrlen)) == 0)
+                break;
+            close_socket(out);
+            out = kInvalidSocket;
+        }
+        freeaddrinfo(result);
+        if (out == kInvalidSocket)
+            err = "could not bind UDP relay socket";
+        return out;
+    }
+
+    void run() {
+        std::array<char, realnet::kMaxRelayPacketBytes + 1> buffer{};
+        while (running_.load()) {
+            sockaddr_storage from{};
+            socklen_t from_len = sizeof(from);
+            const int received = recvfrom(socket_, buffer.data(),
+                                          static_cast<int>(realnet::kMaxRelayPacketBytes), 0,
+                                          reinterpret_cast<sockaddr*>(&from), &from_len);
+            if (received <= 0)
+                continue;
+            handle_datagram(std::string(buffer.data(), static_cast<std::size_t>(received)), from,
+                            from_len);
+        }
+    }
+
+    void send_packet(const sockaddr_storage& to,
+                     socklen_t to_len,
+                     realnet::RelayPacket packet,
+                     const std::string& key) {
+        if (socket_ == kInvalidSocket)
+            return;
+        if (packet.ts_ms == 0)
+            packet.ts_ms = realnet::unix_time_ms();
+        realnet::sign_relay_packet(packet, key);
+        const std::string bytes = realnet::encode_relay_packet(packet);
+        if (bytes.empty())
+            return;
+        sendto(socket_, bytes.data(), static_cast<int>(bytes.size()), 0,
+               reinterpret_cast<const sockaddr*>(&to), to_len);
+    }
+
+    void maybe_send_ready(RoomRecord& room, RelayAllocation& allocation) {
+        if (!room.has_host_relay_endpoint || !allocation.has_joiner_endpoint)
+            return;
+
+        allocation.ready = true;
+        allocation.last_seen = Clock::now();
+
+        realnet::RelayPacket host_ready;
+        host_ready.kind = realnet::RelayPacketKind::Ready;
+        host_ready.role = realnet::RelayRole::Host;
+        host_ready.room_code = room.room_code;
+        host_ready.allocation_id = allocation.allocation_id;
+        host_ready.join_attempt_id = allocation.join_attempt_id;
+        send_packet(room.host_relay_sockaddr, room.host_relay_sockaddr_len, host_ready,
+                    room.host_secret);
+
+        realnet::RelayPacket joiner_ready;
+        joiner_ready.kind = realnet::RelayPacketKind::Ready;
+        joiner_ready.role = realnet::RelayRole::Joiner;
+        joiner_ready.room_code = room.room_code;
+        joiner_ready.allocation_id = allocation.allocation_id;
+        joiner_ready.join_attempt_id = allocation.join_attempt_id;
+        send_packet(allocation.joiner_sockaddr, allocation.joiner_sockaddr_len, joiner_ready,
+                    allocation.relay_secret);
+
+        log_event("relay_ready",
+                  {{"room_code", room.room_code},
+                   {"join_attempt_id", allocation.join_attempt_id},
+                   {"relay_allocation_id", allocation.allocation_id},
+                   {"host_endpoint", room.host_relay_observed_endpoint},
+                   {"joiner_endpoint", allocation.joiner_observed_endpoint}});
+    }
+
+    void forward_data_to_joiner(RoomRecord& room,
+                                RelayAllocation& allocation,
+                                const realnet::RelayPacket& packet) {
+        if (!allocation.has_joiner_endpoint)
+            return;
+        realnet::RelayPacket forwarded;
+        forwarded.kind = realnet::RelayPacketKind::Data;
+        forwarded.role = realnet::RelayRole::Host;
+        forwarded.room_code = room.room_code;
+        forwarded.allocation_id = allocation.allocation_id;
+        forwarded.join_attempt_id = allocation.join_attempt_id;
+        forwarded.seq = packet.seq;
+        forwarded.payload = packet.payload;
+        send_packet(allocation.joiner_sockaddr, allocation.joiner_sockaddr_len, forwarded,
+                    allocation.relay_secret);
+        allocation.packets_from_host += 1;
+        allocation.bytes_from_host += packet.payload.size();
+        allocation.last_seen = Clock::now();
+    }
+
+    void forward_data_to_host(RoomRecord& room,
+                              RelayAllocation& allocation,
+                              const realnet::RelayPacket& packet) {
+        if (!room.has_host_relay_endpoint)
+            return;
+        realnet::RelayPacket forwarded;
+        forwarded.kind = realnet::RelayPacketKind::Data;
+        forwarded.role = realnet::RelayRole::Joiner;
+        forwarded.room_code = room.room_code;
+        forwarded.allocation_id = allocation.allocation_id;
+        forwarded.join_attempt_id = allocation.join_attempt_id;
+        forwarded.seq = packet.seq;
+        forwarded.payload = packet.payload;
+        send_packet(room.host_relay_sockaddr, room.host_relay_sockaddr_len, forwarded,
+                    room.host_secret);
+        allocation.packets_from_joiner += 1;
+        allocation.bytes_from_joiner += packet.payload.size();
+        allocation.last_seen = Clock::now();
+    }
+
+    void handle_datagram(const std::string& bytes, const sockaddr_storage& from, socklen_t from_len) {
+        const auto now = Clock::now();
+        const std::string source = sockaddr_to_endpoint(from, from_len);
+        if (!ip_limiter_.allow(source, now)) {
+            log_event("relay_rate_limit", {{"scope", "ip"}, {"source", source}});
+            return;
+        }
+
+        realnet::RelayPacket packet;
+        std::string err;
+        if (!realnet::decode_relay_packet(bytes, packet, err)) {
+            log_event("relay_packet_reject", {{"source", source}, {"reason", err}});
+            return;
+        }
+        if (!room_limiter_.allow(packet.room_code, now)) {
+            log_event("relay_rate_limit", {{"scope", "room"}, {"room_code", packet.room_code}});
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+        auto room_it = g_registry.rooms.find(packet.room_code);
+        if (room_it == g_registry.rooms.end()) {
+            log_event("relay_packet_reject",
+                      {{"source", source},
+                       {"room_code", packet.room_code},
+                       {"reason", "room_not_found_or_expired"}});
+            return;
+        }
+        RoomRecord& room = room_it->second;
+
+        if (packet.role == realnet::RelayRole::Host) {
+            if (!realnet::verify_relay_packet(packet, room.host_secret)) {
+                log_event("relay_packet_reject", {{"source", source},
+                                                   {"room_code", room.room_code},
+                                                   {"reason", "host_mac"}});
+                return;
+            }
+            room.host_relay_sockaddr = from;
+            room.host_relay_sockaddr_len = from_len;
+            room.host_relay_observed_endpoint = source;
+            room.has_host_relay_endpoint = true;
+            if (packet.kind == realnet::RelayPacketKind::Hello) {
+                log_event("relay_host_hello",
+                          {{"room_code", room.room_code}, {"observed_endpoint", source}});
+                for (auto& [_, allocation] : room.relay_allocations)
+                    maybe_send_ready(room, allocation);
+                return;
+            }
+            if (packet.kind == realnet::RelayPacketKind::Data) {
+                auto allocation_it = room.relay_allocations.find(packet.allocation_id);
+                if (allocation_it == room.relay_allocations.end()) {
+                    log_event("relay_packet_reject",
+                              {{"source", source},
+                               {"room_code", room.room_code},
+                               {"relay_allocation_id", packet.allocation_id},
+                               {"reason", "allocation_not_found"}});
+                    return;
+                }
+                forward_data_to_joiner(room, allocation_it->second, packet);
+                return;
+            }
+        }
+
+        if (packet.role == realnet::RelayRole::Joiner) {
+            auto allocation_it = room.relay_allocations.find(packet.allocation_id);
+            if (allocation_it == room.relay_allocations.end()) {
+                log_event("relay_packet_reject",
+                          {{"source", source},
+                           {"room_code", room.room_code},
+                           {"relay_allocation_id", packet.allocation_id},
+                           {"reason", "allocation_not_found"}});
+                return;
+            }
+            RelayAllocation& allocation = allocation_it->second;
+            if (!realnet::verify_relay_packet(packet, allocation.relay_secret)) {
+                log_event("relay_packet_reject", {{"source", source},
+                                                   {"room_code", room.room_code},
+                                                   {"relay_allocation_id", allocation.allocation_id},
+                                                   {"reason", "joiner_mac"}});
+                return;
+            }
+            allocation.joiner_sockaddr = from;
+            allocation.joiner_sockaddr_len = from_len;
+            allocation.joiner_observed_endpoint = source;
+            allocation.has_joiner_endpoint = true;
+            allocation.joiner_seen_at = now;
+            allocation.last_seen = now;
+            if (packet.kind == realnet::RelayPacketKind::Hello) {
+                log_event("relay_joiner_hello",
+                          {{"room_code", room.room_code},
+                           {"join_attempt_id", allocation.join_attempt_id},
+                           {"relay_allocation_id", allocation.allocation_id},
+                           {"observed_endpoint", source}});
+                maybe_send_ready(room, allocation);
+                return;
+            }
+            if (packet.kind == realnet::RelayPacketKind::Data) {
+                forward_data_to_host(room, allocation, packet);
+                return;
+            }
+        }
+
+        if (packet.kind == realnet::RelayPacketKind::Keepalive ||
+            packet.kind == realnet::RelayPacketKind::Close) {
+            log_event("relay_control",
+                      {{"room_code", room.room_code},
+                       {"relay_allocation_id", packet.allocation_id},
+                       {"kind", realnet::relay_packet_kind_name(packet.kind)},
+                       {"role", realnet::relay_role_name(packet.role)}});
+            return;
+        }
+
+        log_event("relay_packet_reject", {{"source", source},
+                                           {"room_code", room.room_code},
+                                           {"reason", "unexpected_kind"},
+                                           {"kind", realnet::relay_packet_kind_name(packet.kind)}});
+    }
+
+    SocketHandle socket_{kInvalidSocket};
+    std::atomic<bool> running_{false};
+    std::thread thread_;
+    int port_{0};
+    realnet::TokenBucketRateLimiter ip_limiter_{{200.0, 400.0}};
+    realnet::TokenBucketRateLimiter room_limiter_{{500.0, 1000.0}};
+};
+
 } // namespace
 
 int main(int argc, char** argv) {
     std::string bind_host = "127.0.0.1";
     int port = kDefaultPort;
     int punch_port = 0;
+    int relay_port = 0;
     bool punch_enabled = true;
+    bool relay_enabled = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--port=", 0) == 0) {
@@ -804,9 +1161,28 @@ int main(int argc, char** argv) {
             }
         } else if (arg == "--no-punch") {
             punch_enabled = false;
+        } else if (arg.rfind("--relay-port=", 0) == 0) {
+            try {
+                relay_port = std::stoi(arg.substr(13));
+                relay_enabled = true;
+            } catch (...) {
+                relay_port = 0;
+            }
+        } else if (arg == "--relay-port" && i + 1 < argc) {
+            try {
+                relay_port = std::stoi(argv[++i]);
+                relay_enabled = true;
+            } catch (...) {
+                relay_port = 0;
+            }
+        } else if (arg == "--relay") {
+            relay_enabled = true;
+        } else if (arg == "--no-relay") {
+            relay_enabled = false;
         } else if (arg == "--help") {
             std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n"
-                         "                    [--punch-port=<udp-port>] [--no-punch]\n";
+                         "                    [--punch-port=<udp-port>] [--no-punch]\n"
+                         "                    [--relay-port=<udp-port>] [--relay] [--no-relay]\n";
             return 0;
         }
     }
@@ -816,15 +1192,26 @@ int main(int argc, char** argv) {
         port = kDefaultPort;
     if (punch_port <= 0 || punch_port > 65535)
         punch_port = port + kDefaultRendezvousPortOffset;
+    if (relay_port <= 0 || relay_port > 65535)
+        relay_port = port + kDefaultRelayPortOffset;
 
     httplib::Server server;
     RendezvousUdpServer rendezvous;
+    RelayUdpServer relay;
     if (punch_enabled) {
         std::string udp_err;
         if (!rendezvous.start(bind_host, punch_port, udp_err)) {
             log_event("punch_rendezvous_start_failed",
                       {{"host", bind_host}, {"port", punch_port}, {"error", udp_err}});
             punch_enabled = false;
+        }
+    }
+    if (relay_enabled) {
+        std::string relay_err;
+        if (!relay.start(bind_host, relay_port, relay_err)) {
+            log_event("relay_start_failed",
+                      {{"host", bind_host}, {"port", relay_port}, {"error", relay_err}});
+            relay_enabled = false;
         }
     }
 
@@ -837,16 +1224,16 @@ int main(int argc, char** argv) {
                                           {"host", bind_host},
                                           {"port", punch_enabled ? rendezvous.port() : 0},
                                           {"protocol", "gubsy-punch-v1"}};
+        const nlohmann::json relay_udp = {{"enabled", relay_enabled},
+                                          {"host", bind_host},
+                                          {"port", relay_enabled ? relay.port() : 0},
+                                          {"protocol", "gubsy-relay-v1"}};
         nlohmann::json capabilities = {
             {"ok", true},
             {"realnet",
              {{"room_directory", {{"enabled", true}, {"protocol", "gubsy-roomd-v1"}}},
               {"punch_udp", punch_udp},
-              {"relay_udp",
-               {{"enabled", false},
-                {"host", ""},
-                {"port", 0},
-                {"protocol", "gubsy-relay-v1"}}}}},
+              {"relay_udp", relay_udp}}},
         };
         res.set_content(capabilities.dump(), "application/json");
     });
@@ -861,16 +1248,24 @@ int main(int argc, char** argv) {
         g_registry.cleanup_expired_locked();
         nlohmann::json rooms = nlohmann::json::array();
         int attempts = 0;
+        int relay_allocations = 0;
         for (const auto& [_, room] : g_registry.rooms) {
             attempts += static_cast<int>(room.join_attempts.size());
+            relay_allocations += static_cast<int>(room.relay_allocations.size());
             rooms.push_back({
                 {"room_code", room.room_code},
                 {"has_host_endpoint", room.has_host_rendezvous_endpoint},
                 {"host_observed_endpoint", room.host_observed_endpoint},
+                {"has_host_relay_endpoint", room.has_host_relay_endpoint},
+                {"host_relay_observed_endpoint", room.host_relay_observed_endpoint},
                 {"join_attempts", static_cast<int>(room.join_attempts.size())},
+                {"relay_allocations", static_cast<int>(room.relay_allocations.size())},
             });
         }
-        res.set_content(nlohmann::json{{"rooms", rooms}, {"join_attempts", attempts}}.dump(),
+        res.set_content(nlohmann::json{{"rooms", rooms},
+                                        {"join_attempts", attempts},
+                                        {"relay_allocations", relay_allocations}}
+                            .dump(),
                         "application/json");
     });
 
@@ -894,9 +1289,25 @@ int main(int argc, char** argv) {
                    for (const auto& [_, attempt] : room.join_attempts) {
                        attempts.push_back({
                            {"join_attempt_id", attempt.attempt_id},
+                           {"relay_allocation_id", attempt.relay_allocation_id},
                            {"display_name", attempt.display_name},
                            {"has_joiner_endpoint", attempt.has_joiner_endpoint},
                            {"joiner_observed_endpoint", attempt.joiner_observed_endpoint},
+                       });
+                   }
+                   nlohmann::json relay_allocations = nlohmann::json::array();
+                   for (const auto& [_, allocation] : room.relay_allocations) {
+                       relay_allocations.push_back({
+                           {"relay_allocation_id", allocation.allocation_id},
+                           {"join_attempt_id", allocation.join_attempt_id},
+                           {"display_name", allocation.display_name},
+                           {"ready", allocation.ready},
+                           {"has_joiner_endpoint", allocation.has_joiner_endpoint},
+                           {"joiner_observed_endpoint", allocation.joiner_observed_endpoint},
+                           {"packets_from_host", allocation.packets_from_host},
+                           {"packets_from_joiner", allocation.packets_from_joiner},
+                           {"bytes_from_host", allocation.bytes_from_host},
+                           {"bytes_from_joiner", allocation.bytes_from_joiner},
                        });
                    }
                    res.set_content(nlohmann::json{{"room_code", room.room_code},
@@ -904,7 +1315,12 @@ int main(int argc, char** argv) {
                                                    room.has_host_rendezvous_endpoint},
                                                   {"host_observed_endpoint",
                                                    room.host_observed_endpoint},
-                                                  {"join_attempts", attempts}}
+                                                  {"has_host_relay_endpoint",
+                                                   room.has_host_relay_endpoint},
+                                                  {"host_relay_observed_endpoint",
+                                                   room.host_relay_observed_endpoint},
+                                                  {"join_attempts", attempts},
+                                                  {"relay_allocations", relay_allocations}}
                                        .dump(),
                                    "application/json");
                });
@@ -925,10 +1341,16 @@ int main(int argc, char** argv) {
                            res.set_content(nlohmann::json{{"room_code", room.room_code},
                                                           {"join_attempt_id",
                                                            attempt.attempt_id},
+                                                          {"relay_allocation_id",
+                                                           attempt.relay_allocation_id},
                                                           {"has_host_endpoint",
                                                            room.has_host_rendezvous_endpoint},
                                                           {"host_observed_endpoint",
                                                            room.host_observed_endpoint},
+                                                          {"has_host_relay_endpoint",
+                                                           room.has_host_relay_endpoint},
+                                                          {"host_relay_observed_endpoint",
+                                                           room.host_relay_observed_endpoint},
                                                           {"has_joiner_endpoint",
                                                            attempt.has_joiner_endpoint},
                                                           {"joiner_observed_endpoint",
@@ -975,7 +1397,7 @@ int main(int argc, char** argv) {
                         "application/json");
     });
 
-    server.Post("/rooms/create", [](const httplib::Request& req, httplib::Response& res) {
+    server.Post("/rooms/create", [&](const httplib::Request& req, httplib::Response& res) {
         nlohmann::json body;
         if (!read_body_json(req, body, res))
             return;
@@ -1002,6 +1424,8 @@ int main(int argc, char** argv) {
         room.max_players = std::max(1, json_int(body, "max_players", 4));
         room.in_game = room.session_phase == "in_game" || json_bool(body, "in_game", false);
         ensure_nat_punch_candidate(room);
+        if (relay_enabled)
+            ensure_relay_candidate(room);
         auto game_config_it = body.find("game_config");
         if (game_config_it != body.end() && game_config_it->is_object())
             room.game_config = *game_config_it;
@@ -1039,7 +1463,7 @@ int main(int argc, char** argv) {
 
     server.Post(
         R"(/rooms/([A-Z0-9]+)/join_attempt)",
-        [](const httplib::Request& req, httplib::Response& res) {
+        [&](const httplib::Request& req, httplib::Response& res) {
             nlohmann::json body;
             if (!read_body_json(req, body, res))
                 return;
@@ -1063,10 +1487,24 @@ int main(int argc, char** argv) {
             attempt.attempt_id = g_registry.random_token(kJoinAttemptIdLen);
             attempt.token = g_registry.random_token(kSecretLen);
             attempt.punch_secret = g_registry.random_token(kSecretLen);
+            if (relay_enabled) {
+                attempt.relay_allocation_id = g_registry.random_token(kRelayAllocationIdLen);
+                attempt.relay_secret = g_registry.random_token(kSecretLen);
+            }
             attempt.display_name = json_string(body, "display_name", "Guest");
             const std::string attempt_id = attempt.attempt_id;
             const std::string token = attempt.token;
             const std::string punch_secret = attempt.punch_secret;
+            const std::string relay_allocation_id = attempt.relay_allocation_id;
+            const std::string relay_secret = attempt.relay_secret;
+            if (relay_enabled) {
+                RelayAllocation allocation;
+                allocation.allocation_id = relay_allocation_id;
+                allocation.join_attempt_id = attempt_id;
+                allocation.relay_secret = relay_secret;
+                allocation.display_name = attempt.display_name;
+                room.relay_allocations.emplace(allocation.allocation_id, std::move(allocation));
+            }
             room.join_attempts.emplace(token, std::move(attempt));
             room.updated_at = Clock::now();
 
@@ -1076,11 +1514,19 @@ int main(int argc, char** argv) {
                                            });
             log_event("punch_attempt_create",
                       {{"room_code", room.room_code}, {"join_attempt_id", attempt_id}});
+            if (relay_enabled) {
+                log_event("relay_allocation_create",
+                          {{"room_code", room.room_code},
+                           {"join_attempt_id", attempt_id},
+                           {"relay_allocation_id", relay_allocation_id}});
+            }
             res.set_content(
                 nlohmann::json{
                     {"join_attempt_id", attempt_id},
                     {"join_token", token},
                     {"punch_secret", punch_secret},
+                    {"relay_allocation_id", relay_allocation_id},
+                    {"relay_secret", relay_secret},
                     {"room", room_to_json(room)},
                 }
                     .dump(),
@@ -1139,7 +1585,7 @@ int main(int argc, char** argv) {
                 "application/json");
         });
 
-    server.Post(R"(/rooms/([A-Z0-9]+)/heartbeat)", [](const httplib::Request& req,
+    server.Post(R"(/rooms/([A-Z0-9]+)/heartbeat)", [&](const httplib::Request& req,
                                                       httplib::Response& res) {
         nlohmann::json body;
         if (!read_body_json(req, body, res))
@@ -1191,6 +1637,8 @@ int main(int argc, char** argv) {
             room.in_game =
                 room.session_phase == "in_game" || json_bool(*room_it, "in_game", room.in_game);
             ensure_nat_punch_candidate(room);
+            if (relay_enabled)
+                ensure_relay_candidate(room);
             auto game_config_it = room_it->find("game_config");
             if (game_config_it != room_it->end() && game_config_it->is_object())
                 room.game_config = *game_config_it;

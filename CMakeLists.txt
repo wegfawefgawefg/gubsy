@@ -508,6 +508,10 @@ if (GUB_BUILD_TOOLS)
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/room_punch_smoke.sh"
     )
     add_test(
+      NAME room_relay_smoke
+      COMMAND bash "${GUB_SOURCE_DIR}/scripts/room_relay_smoke.sh"
+    )
+    add_test(
       NAME consumption_boundary
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/check_consumption_boundary.sh"
     )
@@ -594,6 +598,18 @@ if (GUB_BUILD_TOOLS)
   target_link_libraries(room_punch_smoke PRIVATE gubsy_engine)
   if (WIN32)
     target_link_libraries(room_punch_smoke PRIVATE ws2_32)
+  endif()
+
+  add_executable(room_relay_smoke
+    tools/room_relay_smoke/main.cpp
+  )
+  target_include_directories(room_relay_smoke PRIVATE
+    ${GUB_SOURCE_DIR}
+    ${GUB_SOURCE_DIR}/third_party
+  )
+  target_link_libraries(room_relay_smoke PRIVATE gubsy_engine)
+  if (WIN32)
+    target_link_libraries(room_relay_smoke PRIVATE ws2_32)
   endif()
 
   add_executable(realnet_connection_plan_smoke
