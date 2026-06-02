@@ -67,6 +67,7 @@ struct ConnectionPlanInput {
     bool relay_supported{false};
     bool steam_supported{false};
     bool force_nat_punch{false};
+    bool force_relay{false};
     LocalNetworkInfo local_network;
 };
 

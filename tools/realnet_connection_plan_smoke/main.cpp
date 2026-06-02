@@ -81,6 +81,23 @@ int main() {
         return fail("forced NAT punch was not ordered first");
     }
 
+    input.force_nat_punch = false;
+    input.force_relay = true;
+    input.relay_supported = true;
+    const realnet::ConnectionPlan forced_relay_plan = realnet::build_connection_plan(input);
+    if (forced_relay_plan.candidates.empty() ||
+        forced_relay_plan.candidates[0].candidate.kind != ConnectionCandidateKind::Relay ||
+        forced_relay_plan.candidates[0].decision != realnet::CandidateDecision::Try) {
+        return fail("forced relay was not ordered first and available");
+    }
+
+    input.force_nat_punch = true;
+    const realnet::ConnectionPlan relay_precedence_plan = realnet::build_connection_plan(input);
+    if (relay_precedence_plan.candidates.empty() ||
+        relay_precedence_plan.candidates[0].candidate.kind != ConnectionCandidateKind::Relay) {
+        return fail("forced relay should take precedence over forced NAT punch");
+    }
+
     std::cout << "realnet_connection_plan_smoke: ok\n";
     return 0;
 }

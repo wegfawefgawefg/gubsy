@@ -191,6 +191,14 @@ bool local_private_ipv4_reachable(const std::string& host,
     return false;
 }
 
+ConnectionCandidateKind forced_candidate_kind(const ConnectionPlanInput& input) {
+    if (input.force_relay)
+        return ConnectionCandidateKind::Relay;
+    if (input.force_nat_punch)
+        return ConnectionCandidateKind::NatPunch;
+    return ConnectionCandidateKind::LanDirect;
+}
+
 PlannedConnectionCandidate plan_candidate(const ConnectionPlanInput& input,
                                           const ConnectionCandidate& candidate) {
     PlannedConnectionCandidate planned;
@@ -414,16 +422,17 @@ ConnectionPlan build_connection_plan(const ConnectionPlanInput& input) {
         plan.candidates.push_back(plan_candidate(input, candidate));
     }
 
-    if (input.force_nat_punch) {
+    if (input.force_nat_punch || input.force_relay) {
+        const ConnectionCandidateKind forced_kind = forced_candidate_kind(input);
         std::stable_sort(plan.candidates.begin(), plan.candidates.end(),
-                         [](const PlannedConnectionCandidate& a,
-                            const PlannedConnectionCandidate& b) {
-                             if (a.candidate.kind == ConnectionCandidateKind::NatPunch &&
-                                 b.candidate.kind != ConnectionCandidateKind::NatPunch) {
+                         [forced_kind](const PlannedConnectionCandidate& a,
+                                       const PlannedConnectionCandidate& b) {
+                             if (a.candidate.kind == forced_kind &&
+                                 b.candidate.kind != forced_kind) {
                                  return true;
                              }
-                             if (b.candidate.kind == ConnectionCandidateKind::NatPunch &&
-                                 a.candidate.kind != ConnectionCandidateKind::NatPunch) {
+                             if (b.candidate.kind == forced_kind &&
+                                 a.candidate.kind != forced_kind) {
                                  return false;
                              }
                              return a.candidate.priority < b.candidate.priority;
