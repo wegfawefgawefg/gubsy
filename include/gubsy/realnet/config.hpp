@@ -20,6 +20,10 @@ struct RelayTimingConfig {
 
 struct RelayServiceConfig {
     std::uint64_t max_packet_bytes{1400};
+    std::uint64_t max_active_allocations{4096};
+    std::uint64_t max_room_allocations{64};
+    std::uint64_t auth_failure_ban_threshold{16};
+    std::uint64_t auth_failure_ban_ms{30000};
     double ip_packet_rate_per_sec{2000.0};
     double ip_packet_burst{4000.0};
     double room_packet_rate_per_sec{8000.0};

@@ -10,7 +10,10 @@ RELAY_PORT="${RELAY_PORT:-8794}"
 "${BUILD_DIR}/gubsy-roomd" \
   --port="${HTTP_PORT}" \
   --punch-port="${PUNCH_PORT}" \
-  --relay-port="${RELAY_PORT}" >/tmp/gubsy-room-relay-smoke.log 2>&1 &
+  --relay-port="${RELAY_PORT}" \
+  --relay-max-room-allocations=1 \
+  --relay-auth-ban-threshold=2 \
+  --relay-auth-ban-ms=1000 >/tmp/gubsy-room-relay-smoke.log 2>&1 &
 server_pid=$!
 trap 'kill "${server_pid}" 2>/dev/null || true' EXIT
 

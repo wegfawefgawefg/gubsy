@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -198,6 +199,41 @@ bool wait_for_packet(SocketHandle socket,
     return false;
 }
 
+std::uint64_t relay_counter(const nlohmann::json& debug, const std::string& name) {
+    const auto counters = debug.value("relay_counters", nlohmann::json::object());
+    return counters.value(name, std::uint64_t{0});
+}
+
+bool wait_for_counter_at_least(const HttpEndpoint& endpoint,
+                               const std::string& name,
+                               std::uint64_t value,
+                               std::string& err) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < deadline) {
+        const auto debug = get_json(endpoint, "/debug/realnet", err);
+        if (debug && relay_counter(*debug, name) >= value)
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    return false;
+}
+
+bool wait_for_room_allocations(const HttpEndpoint& endpoint,
+                               const std::string& room_code,
+                               std::size_t count,
+                               std::string& err) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (std::chrono::steady_clock::now() < deadline) {
+        const auto debug = get_json(endpoint, "/debug/realnet/rooms/" + room_code, err);
+        if (debug &&
+            debug->value("relay_allocations", nlohmann::json::array()).size() == count) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    return false;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -250,14 +286,32 @@ int main(int argc, char** argv) {
     if (attempt_id.empty() || allocation_id.empty() || relay_secret.empty())
         return fail("join attempt did not return relay credentials");
 
+    const auto capped_attempt = post_json(*endpoint,
+                                          "/rooms/" + room_code + "/join_attempt",
+                                          {{"display_name", "Capped Joiner"}},
+                                          err);
+    if (!capped_attempt)
+        return fail(err);
+    if (!capped_attempt->value("relay_allocation_id", "").empty() ||
+        !capped_attempt->value("relay_secret", "").empty()) {
+        return fail("relay allocation cap did not suppress relay credentials");
+    }
+    if (!wait_for_counter_at_least(*endpoint, "allocations_rejected", 1, err))
+        return fail("relay allocation rejection counter did not increment");
+
     UdpSocket host_socket = open_udp_socket();
     UdpSocket joiner_socket = open_udp_socket();
-    if (host_socket.handle == kInvalidSocket || joiner_socket.handle == kInvalidSocket)
+    UdpSocket changed_joiner_socket = open_udp_socket();
+    UdpSocket bad_auth_socket = open_udp_socket();
+    if (host_socket.handle == kInvalidSocket || joiner_socket.handle == kInvalidSocket ||
+        changed_joiner_socket.handle == kInvalidSocket || bad_auth_socket.handle == kInvalidSocket) {
         return fail("could not open UDP sockets");
+    }
 
     realnet::RelayPacket host_hello;
     host_hello.kind = realnet::RelayPacketKind::Hello;
     host_hello.role = realnet::RelayRole::Host;
+    host_hello.seq = 1;
     host_hello.room_code = room_code;
     if (!send_relay_packet(host_socket.handle, endpoint->host, relay_port, host_hello, host_secret))
         return fail("could not send host relay hello");
@@ -265,6 +319,7 @@ int main(int argc, char** argv) {
     realnet::RelayPacket joiner_hello;
     joiner_hello.kind = realnet::RelayPacketKind::Hello;
     joiner_hello.role = realnet::RelayRole::Joiner;
+    joiner_hello.seq = 1;
     joiner_hello.room_code = room_code;
     joiner_hello.allocation_id = allocation_id;
     joiner_hello.join_attempt_id = attempt_id;
@@ -332,12 +387,89 @@ int main(int argc, char** argv) {
     if (relayed_to_joiner.payload != host_data.payload)
         return fail("joiner received wrong relayed payload");
 
+    realnet::RelayPacket replayed_keepalive;
+    replayed_keepalive.kind = realnet::RelayPacketKind::Keepalive;
+    replayed_keepalive.role = realnet::RelayRole::Joiner;
+    replayed_keepalive.seq = 2;
+    replayed_keepalive.room_code = room_code;
+    replayed_keepalive.allocation_id = allocation_id;
+    replayed_keepalive.join_attempt_id = attempt_id;
+    if (!send_relay_packet(joiner_socket.handle,
+                           endpoint->host,
+                           relay_port,
+                           replayed_keepalive,
+                           relay_secret)) {
+        return fail("could not send relay keepalive");
+    }
+    if (!send_relay_packet(joiner_socket.handle,
+                           endpoint->host,
+                           relay_port,
+                           replayed_keepalive,
+                           relay_secret)) {
+        return fail("could not send replayed relay keepalive");
+    }
+    if (!wait_for_counter_at_least(*endpoint, "replayed_control_packets", 1, err))
+        return fail("relay replay counter did not increment");
+
+    realnet::RelayPacket changed_endpoint_data;
+    changed_endpoint_data.kind = realnet::RelayPacketKind::Data;
+    changed_endpoint_data.role = realnet::RelayRole::Joiner;
+    changed_endpoint_data.room_code = room_code;
+    changed_endpoint_data.allocation_id = allocation_id;
+    changed_endpoint_data.join_attempt_id = attempt_id;
+    changed_endpoint_data.payload = {0x09};
+    if (!send_relay_packet(changed_joiner_socket.handle,
+                           endpoint->host,
+                           relay_port,
+                           changed_endpoint_data,
+                           relay_secret)) {
+        return fail("could not send changed-endpoint relay data");
+    }
+    if (!wait_for_counter_at_least(*endpoint, "endpoint_mismatches", 1, err))
+        return fail("relay endpoint mismatch counter did not increment");
+
+    realnet::RelayPacket bad_auth;
+    bad_auth.kind = realnet::RelayPacketKind::Hello;
+    bad_auth.role = realnet::RelayRole::Joiner;
+    bad_auth.seq = 1;
+    bad_auth.room_code = room_code;
+    bad_auth.allocation_id = allocation_id;
+    bad_auth.join_attempt_id = attempt_id;
+    if (!send_relay_packet(bad_auth_socket.handle,
+                           endpoint->host,
+                           relay_port,
+                           bad_auth,
+                           "wrong-relay-secret") ||
+        !send_relay_packet(bad_auth_socket.handle,
+                           endpoint->host,
+                           relay_port,
+                           bad_auth,
+                           "wrong-relay-secret")) {
+        return fail("could not send bad-auth relay packets");
+    }
+    if (!wait_for_counter_at_least(*endpoint, "auth_bans", 1, err))
+        return fail("relay auth ban counter did not increment");
+
     const auto debug = get_json(*endpoint, "/debug/realnet/rooms/" + room_code, err);
     if (!debug)
         return fail(err);
     const auto allocations = debug->value("relay_allocations", nlohmann::json::array());
     if (allocations.empty() || !allocations.front().value("ready", false))
         return fail("relay allocation debug state was not ready");
+
+    realnet::RelayPacket close;
+    close.kind = realnet::RelayPacketKind::Close;
+    close.role = realnet::RelayRole::Joiner;
+    close.seq = 3;
+    close.room_code = room_code;
+    close.allocation_id = allocation_id;
+    close.join_attempt_id = attempt_id;
+    if (!send_relay_packet(joiner_socket.handle, endpoint->host, relay_port, close, relay_secret))
+        return fail("could not send relay close");
+    if (!wait_for_room_allocations(*endpoint, room_code, 0, err))
+        return fail("relay allocation did not close");
+    if (!wait_for_counter_at_least(*endpoint, "allocations_closed", 1, err))
+        return fail("relay close counter did not increment");
 
     std::cout << "room_relay_smoke: ok\n";
 #if defined(_WIN32)

@@ -101,6 +101,7 @@ struct JoinAttempt {
 struct RelayAllocation {
     std::string allocation_id;
     std::string join_attempt_id;
+    std::string member_id;
     std::string relay_secret;
     std::string display_name;
     std::string joiner_observed_endpoint;
@@ -112,18 +113,24 @@ struct RelayAllocation {
     std::uint64_t packets_from_joiner{0};
     std::uint64_t bytes_from_host{0};
     std::uint64_t bytes_from_joiner{0};
+    std::uint64_t joiner_last_control_seq{0};
     Clock::time_point created_at{Clock::now()};
     Clock::time_point last_seen{Clock::now()};
     Clock::time_point joiner_seen_at{};
+    bool joiner_has_control_seq{false};
 };
 
 struct RelayCounters {
     std::uint64_t allocations_created{0};
     std::uint64_t allocations_expired{0};
     std::uint64_t allocations_closed{0};
+    std::uint64_t allocations_rejected{0};
     std::uint64_t auth_failures{0};
+    std::uint64_t auth_bans{0};
+    std::uint64_t endpoint_mismatches{0};
     std::uint64_t packets_dropped{0};
     std::uint64_t rate_limited_packets{0};
+    std::uint64_t replayed_control_packets{0};
 };
 
 struct RoomRecord {
@@ -156,9 +163,16 @@ struct RoomRecord {
     sockaddr_storage host_relay_sockaddr{};
     socklen_t host_relay_sockaddr_len{0};
     bool has_host_relay_endpoint{false};
+    std::uint64_t host_relay_last_control_seq{0};
     Clock::time_point created_at{Clock::now()};
     Clock::time_point updated_at{Clock::now()};
     Clock::time_point host_rendezvous_seen_at{};
+    bool host_relay_has_control_seq{false};
+};
+
+struct RelaySourceAuthState {
+    std::uint64_t failures{0};
+    Clock::time_point banned_until{};
 };
 
 bool room_is_public(const RoomRecord& room) {
@@ -166,11 +180,14 @@ bool room_is_public(const RoomRecord& room) {
 }
 
 void log_event(const char* event, const nlohmann::json& fields = nlohmann::json::object());
+void close_room_relay_allocations_locked(RoomRecord& room, const char* reason);
 
 struct RoomRegistry {
     std::mutex mutex;
     std::unordered_map<std::string, RoomRecord> rooms;
+    std::unordered_map<std::string, RelaySourceAuthState> relay_auth_sources;
     std::mt19937_64 rng{std::random_device{}()};
+    realnet::RelayServiceConfig relay_config{realnet::default_config().relay};
     realnet::RelayTimingConfig relay_timing{realnet::default_config().relay.timing};
     RelayCounters relay_counters;
 
@@ -247,8 +264,13 @@ struct RoomRegistry {
             if (room.members.empty() || host_it == room.members.end())
                 dead_rooms.push_back(room_code);
         }
-        for (const auto& room_code : dead_rooms)
-            rooms.erase(room_code);
+        for (const auto& room_code : dead_rooms) {
+            auto room_it = rooms.find(room_code);
+            if (room_it != rooms.end()) {
+                close_room_relay_allocations_locked(room_it->second, "room_expired");
+                rooms.erase(room_it);
+            }
+        }
     }
 };
 
@@ -269,6 +291,153 @@ void count_relay_drop_locked(bool auth_failure = false, bool rate_limited = fals
         g_registry.relay_counters.auth_failures += 1;
     if (rate_limited)
         g_registry.relay_counters.rate_limited_packets += 1;
+}
+
+bool relay_packet_is_control(realnet::RelayPacketKind kind) {
+    return kind != realnet::RelayPacketKind::Data;
+}
+
+std::size_t active_relay_allocations_locked() {
+    std::size_t count = 0;
+    for (const auto& [_, room] : g_registry.rooms)
+        count += room.relay_allocations.size();
+    return count;
+}
+
+bool relay_source_is_banned_locked(const std::string& source, Clock::time_point now) {
+    auto it = g_registry.relay_auth_sources.find(source);
+    if (it == g_registry.relay_auth_sources.end())
+        return false;
+    if (it->second.banned_until == Clock::time_point{} || now < it->second.banned_until)
+        return it->second.banned_until != Clock::time_point{};
+    it->second.failures = 0;
+    it->second.banned_until = Clock::time_point{};
+    return false;
+}
+
+void record_relay_auth_failure_locked(const std::string& source,
+                                      const std::string& room_code,
+                                      const std::string& allocation_id,
+                                      const char* reason,
+                                      Clock::time_point now) {
+    count_relay_drop_locked(true);
+    RelaySourceAuthState& auth = g_registry.relay_auth_sources[source];
+    auth.failures += 1;
+    const std::uint64_t threshold = g_registry.relay_config.auth_failure_ban_threshold;
+    if (threshold > 0 && auth.failures >= threshold) {
+        const std::uint64_t ban_ms = g_registry.relay_config.auth_failure_ban_ms > 0
+            ? g_registry.relay_config.auth_failure_ban_ms
+            : realnet::default_config().relay.auth_failure_ban_ms;
+        auth.banned_until = now + std::chrono::milliseconds(ban_ms);
+        auth.failures = 0;
+        g_registry.relay_counters.auth_bans += 1;
+        log_event("relay_auth_ban",
+                  {{"source", source},
+                   {"room_code", room_code},
+                   {"relay_allocation_id", allocation_id},
+                   {"reason", reason},
+                   {"ban_ms", ban_ms}});
+    }
+    log_event("relay_packet_reject",
+              {{"source", source},
+               {"room_code", room_code},
+               {"relay_allocation_id", allocation_id},
+               {"reason", reason}});
+}
+
+void reject_relay_endpoint_change_locked(const std::string& source,
+                                         const std::string& room_code,
+                                         const std::string& allocation_id,
+                                         const std::string& old_endpoint,
+                                         const char* role) {
+    count_relay_drop_locked();
+    g_registry.relay_counters.endpoint_mismatches += 1;
+    log_event("relay_endpoint_changed",
+              {{"source", source},
+               {"room_code", room_code},
+               {"relay_allocation_id", allocation_id},
+               {"role", role},
+               {"old_endpoint", old_endpoint},
+               {"new_endpoint", source}});
+}
+
+bool relay_control_sequence_accepted_locked(std::uint64_t seq,
+                                            bool& has_seq,
+                                            std::uint64_t& last_seq,
+                                            const std::string& source,
+                                            const std::string& room_code,
+                                            const std::string& allocation_id,
+                                            const char* role,
+                                            const char* kind) {
+    if (!has_seq) {
+        has_seq = true;
+        last_seq = seq;
+        return true;
+    }
+    if (seq > last_seq) {
+        last_seq = seq;
+        return true;
+    }
+    count_relay_drop_locked();
+    g_registry.relay_counters.replayed_control_packets += 1;
+    log_event("relay_control_replay",
+              {{"source", source},
+               {"room_code", room_code},
+               {"relay_allocation_id", allocation_id},
+               {"role", role},
+               {"kind", kind},
+               {"seq", seq},
+               {"last_seq", last_seq}});
+    return false;
+}
+
+bool relay_allocation_allowed_locked(const RoomRecord& room, std::string& reason) {
+    if (g_registry.relay_config.max_active_allocations > 0 &&
+        active_relay_allocations_locked() >=
+            static_cast<std::size_t>(g_registry.relay_config.max_active_allocations)) {
+        reason = "relay_max_active_allocations";
+        return false;
+    }
+    if (g_registry.relay_config.max_room_allocations > 0 &&
+        room.relay_allocations.size() >=
+            static_cast<std::size_t>(g_registry.relay_config.max_room_allocations)) {
+        reason = "relay_max_room_allocations";
+        return false;
+    }
+    return true;
+}
+
+void close_room_relay_allocations_locked(RoomRecord& room, const char* reason) {
+    if (room.relay_allocations.empty())
+        return;
+    for (const auto& [_, allocation] : room.relay_allocations) {
+        log_event("relay_allocation_close",
+                  {{"room_code", room.room_code},
+                   {"join_attempt_id", allocation.join_attempt_id},
+                   {"relay_allocation_id", allocation.allocation_id},
+                   {"reason", reason}});
+    }
+    g_registry.relay_counters.allocations_closed += room.relay_allocations.size();
+    room.relay_allocations.clear();
+}
+
+void close_member_relay_allocations_locked(RoomRecord& room,
+                                           const std::string& member_id,
+                                           const char* reason) {
+    for (auto it = room.relay_allocations.begin(); it != room.relay_allocations.end();) {
+        if (it->second.member_id != member_id) {
+            ++it;
+            continue;
+        }
+        log_event("relay_allocation_close",
+                  {{"room_code", room.room_code},
+                   {"join_attempt_id", it->second.join_attempt_id},
+                   {"relay_allocation_id", it->second.allocation_id},
+                   {"member_id", member_id},
+                   {"reason", reason}});
+        g_registry.relay_counters.allocations_closed += 1;
+        it = room.relay_allocations.erase(it);
+    }
 }
 
 std::string sockaddr_to_endpoint(const sockaddr_storage& storage, socklen_t len) {
@@ -964,6 +1133,15 @@ void handle_relay_datagram(room_server::RelayUdpServer& relay,
                            const room_server::RelayDatagram& datagram) {
     const realnet::RelayPacket& packet = datagram.packet;
     std::lock_guard<std::mutex> lock(g_registry.mutex);
+    if (relay_source_is_banned_locked(datagram.source, datagram.now)) {
+        count_relay_drop_locked(true);
+        log_event("relay_packet_reject",
+                  {{"source", datagram.source},
+                   {"room_code", packet.room_code},
+                   {"relay_allocation_id", packet.allocation_id},
+                   {"reason", "relay_source_banned"}});
+        return;
+    }
     g_registry.cleanup_expired_locked();
     auto room_it = g_registry.rooms.find(packet.room_code);
     if (room_it == g_registry.rooms.end()) {
@@ -978,10 +1156,32 @@ void handle_relay_datagram(room_server::RelayUdpServer& relay,
 
     if (packet.role == realnet::RelayRole::Host) {
         if (!realnet::verify_relay_packet(packet, room.host_secret)) {
-            count_relay_drop_locked(true);
-            log_event("relay_packet_reject", {{"source", datagram.source},
-                                               {"room_code", room.room_code},
-                                               {"reason", "host_mac"}});
+            record_relay_auth_failure_locked(datagram.source,
+                                             room.room_code,
+                                             packet.allocation_id,
+                                             "host_mac",
+                                             datagram.now);
+            return;
+        }
+        if (room.has_host_relay_endpoint &&
+            room.host_relay_observed_endpoint != datagram.source) {
+            reject_relay_endpoint_change_locked(datagram.source,
+                                                room.room_code,
+                                                packet.allocation_id,
+                                                room.host_relay_observed_endpoint,
+                                                "host");
+            return;
+        }
+        if (relay_packet_is_control(packet.kind) &&
+            !relay_control_sequence_accepted_locked(packet.seq,
+                                                    room.host_relay_has_control_seq,
+                                                    room.host_relay_last_control_seq,
+                                                    datagram.source,
+                                                    room.room_code,
+                                                    packet.allocation_id,
+                                                    "host",
+                                                    realnet::relay_packet_kind_name(packet.kind)
+                                                        .c_str())) {
             return;
         }
         room.host_relay_sockaddr = datagram.from;
@@ -1025,11 +1225,32 @@ void handle_relay_datagram(room_server::RelayUdpServer& relay,
         }
         RelayAllocation& allocation = allocation_it->second;
         if (!realnet::verify_relay_packet(packet, allocation.relay_secret)) {
-            count_relay_drop_locked(true);
-            log_event("relay_packet_reject", {{"source", datagram.source},
-                                               {"room_code", room.room_code},
-                                               {"relay_allocation_id", allocation.allocation_id},
-                                               {"reason", "joiner_mac"}});
+            record_relay_auth_failure_locked(datagram.source,
+                                             room.room_code,
+                                             allocation.allocation_id,
+                                             "joiner_mac",
+                                             datagram.now);
+            return;
+        }
+        if (allocation.has_joiner_endpoint &&
+            allocation.joiner_observed_endpoint != datagram.source) {
+            reject_relay_endpoint_change_locked(datagram.source,
+                                                room.room_code,
+                                                allocation.allocation_id,
+                                                allocation.joiner_observed_endpoint,
+                                                "joiner");
+            return;
+        }
+        if (relay_packet_is_control(packet.kind) &&
+            !relay_control_sequence_accepted_locked(packet.seq,
+                                                    allocation.joiner_has_control_seq,
+                                                    allocation.joiner_last_control_seq,
+                                                    datagram.source,
+                                                    room.room_code,
+                                                    allocation.allocation_id,
+                                                    "joiner",
+                                                    realnet::relay_packet_kind_name(packet.kind)
+                                                        .c_str())) {
             return;
         }
         allocation.joiner_sockaddr = datagram.from;
@@ -1154,6 +1375,70 @@ int main(int argc, char** argv) {
                 relay_config.max_packet_bytes =
                     realnet::default_config().relay.max_packet_bytes;
             }
+        } else if (arg.rfind("--relay-max-active-allocations=", 0) == 0) {
+            try {
+                relay_config.max_active_allocations =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(31)));
+            } catch (...) {
+                relay_config.max_active_allocations =
+                    realnet::default_config().relay.max_active_allocations;
+            }
+        } else if (arg == "--relay-max-active-allocations" && i + 1 < argc) {
+            try {
+                relay_config.max_active_allocations =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.max_active_allocations =
+                    realnet::default_config().relay.max_active_allocations;
+            }
+        } else if (arg.rfind("--relay-max-room-allocations=", 0) == 0) {
+            try {
+                relay_config.max_room_allocations =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(29)));
+            } catch (...) {
+                relay_config.max_room_allocations =
+                    realnet::default_config().relay.max_room_allocations;
+            }
+        } else if (arg == "--relay-max-room-allocations" && i + 1 < argc) {
+            try {
+                relay_config.max_room_allocations =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.max_room_allocations =
+                    realnet::default_config().relay.max_room_allocations;
+            }
+        } else if (arg.rfind("--relay-auth-ban-threshold=", 0) == 0) {
+            try {
+                relay_config.auth_failure_ban_threshold =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(27)));
+            } catch (...) {
+                relay_config.auth_failure_ban_threshold =
+                    realnet::default_config().relay.auth_failure_ban_threshold;
+            }
+        } else if (arg == "--relay-auth-ban-threshold" && i + 1 < argc) {
+            try {
+                relay_config.auth_failure_ban_threshold =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.auth_failure_ban_threshold =
+                    realnet::default_config().relay.auth_failure_ban_threshold;
+            }
+        } else if (arg.rfind("--relay-auth-ban-ms=", 0) == 0) {
+            try {
+                relay_config.auth_failure_ban_ms =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(20)));
+            } catch (...) {
+                relay_config.auth_failure_ban_ms =
+                    realnet::default_config().relay.auth_failure_ban_ms;
+            }
+        } else if (arg == "--relay-auth-ban-ms" && i + 1 < argc) {
+            try {
+                relay_config.auth_failure_ban_ms =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.auth_failure_ban_ms =
+                    realnet::default_config().relay.auth_failure_ban_ms;
+            }
         } else if (arg.rfind("--relay-ip-rate=", 0) == 0) {
             try {
                 relay_config.ip_packet_rate_per_sec = std::stod(arg.substr(16));
@@ -1247,6 +1532,10 @@ int main(int argc, char** argv) {
                          "                    [--punch-port=<udp-port>] [--no-punch]\n"
                          "                    [--relay-port=<udp-port>] [--relay] [--no-relay]\n"
                          "                    [--relay-max-packet-bytes=<bytes>]\n"
+                         "                    [--relay-max-active-allocations=<count>]\n"
+                         "                    [--relay-max-room-allocations=<count>]\n"
+                         "                    [--relay-auth-ban-threshold=<failures>]\n"
+                         "                    [--relay-auth-ban-ms=<ms>]\n"
                          "                    [--relay-ip-rate=<packets/sec>]\n"
                          "                    [--relay-ip-burst=<packets>]\n"
                          "                    [--relay-room-rate=<packets/sec>]\n"
@@ -1268,6 +1557,14 @@ int main(int argc, char** argv) {
         relay_config.max_packet_bytes > realnet::kMaxRelayPacketBytes) {
         relay_config.max_packet_bytes = realnet::default_config().relay.max_packet_bytes;
     }
+    if (relay_config.max_active_allocations == 0)
+        relay_config.max_active_allocations =
+            realnet::default_config().relay.max_active_allocations;
+    if (relay_config.max_room_allocations == 0)
+        relay_config.max_room_allocations = realnet::default_config().relay.max_room_allocations;
+    if (relay_config.auth_failure_ban_ms == 0)
+        relay_config.auth_failure_ban_ms =
+            realnet::default_config().relay.auth_failure_ban_ms;
     if (relay_config.ip_packet_rate_per_sec <= 0.0)
         relay_config.ip_packet_rate_per_sec =
             realnet::default_config().relay.ip_packet_rate_per_sec;
@@ -1287,6 +1584,7 @@ int main(int argc, char** argv) {
 
     {
         std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.relay_config = relay_config;
         g_registry.relay_timing = relay_config.timing;
     }
 
@@ -1340,6 +1638,14 @@ int main(int argc, char** argv) {
                                           {"limits",
                                            {{"max_packet_bytes",
                                              active_relay_config.max_packet_bytes},
+                                            {"max_active_allocations",
+                                             active_relay_config.max_active_allocations},
+                                            {"max_room_allocations",
+                                             active_relay_config.max_room_allocations},
+                                            {"auth_failure_ban_threshold",
+                                             active_relay_config.auth_failure_ban_threshold},
+                                            {"auth_failure_ban_ms",
+                                             active_relay_config.auth_failure_ban_ms},
                                             {"ip_packet_rate_per_sec",
                                              active_relay_config.ip_packet_rate_per_sec},
                                             {"ip_packet_burst",
@@ -1397,12 +1703,20 @@ int main(int argc, char** argv) {
                                            g_registry.relay_counters.allocations_expired},
                                           {"allocations_closed",
                                            g_registry.relay_counters.allocations_closed},
+                                          {"allocations_rejected",
+                                           g_registry.relay_counters.allocations_rejected},
                                           {"auth_failures",
                                            g_registry.relay_counters.auth_failures},
+                                          {"auth_bans",
+                                           g_registry.relay_counters.auth_bans},
+                                          {"endpoint_mismatches",
+                                           g_registry.relay_counters.endpoint_mismatches},
                                           {"packets_dropped",
                                            g_registry.relay_counters.packets_dropped},
                                           {"rate_limited_packets",
-                                           g_registry.relay_counters.rate_limited_packets}}}}
+                                           g_registry.relay_counters.rate_limited_packets},
+                                          {"replayed_control_packets",
+                                           g_registry.relay_counters.replayed_control_packets}}}}
                             .dump(),
                         "application/json");
     });
@@ -1423,6 +1737,7 @@ int main(int argc, char** argv) {
                     {"room_code", room.room_code},
                     {"relay_allocation_id", allocation.allocation_id},
                     {"join_attempt_id", allocation.join_attempt_id},
+                    {"member_id", allocation.member_id},
                     {"display_name", allocation.display_name},
                     {"ready", allocation.ready},
                     {"has_host_endpoint", room.has_host_relay_endpoint},
@@ -1448,12 +1763,20 @@ int main(int argc, char** argv) {
                                            g_registry.relay_counters.allocations_expired},
                                           {"allocations_closed",
                                            g_registry.relay_counters.allocations_closed},
+                                          {"allocations_rejected",
+                                           g_registry.relay_counters.allocations_rejected},
                                           {"auth_failures",
                                            g_registry.relay_counters.auth_failures},
+                                          {"auth_bans",
+                                           g_registry.relay_counters.auth_bans},
+                                          {"endpoint_mismatches",
+                                           g_registry.relay_counters.endpoint_mismatches},
                                           {"packets_dropped",
                                            g_registry.relay_counters.packets_dropped},
                                           {"rate_limited_packets",
-                                           g_registry.relay_counters.rate_limited_packets}}}}
+                                           g_registry.relay_counters.rate_limited_packets},
+                                          {"replayed_control_packets",
+                                           g_registry.relay_counters.replayed_control_packets}}}}
                             .dump(),
                         "application/json");
     });
@@ -1478,6 +1801,7 @@ int main(int argc, char** argv) {
                                            {"room_code", room.room_code},
                                            {"relay_allocation_id", allocation.allocation_id},
                                            {"join_attempt_id", allocation.join_attempt_id},
+                                           {"member_id", allocation.member_id},
                                            {"display_name", allocation.display_name},
                                            {"ready", allocation.ready},
                                            {"has_host_endpoint",
@@ -1538,6 +1862,7 @@ int main(int argc, char** argv) {
                        relay_allocations.push_back({
                            {"relay_allocation_id", allocation.allocation_id},
                            {"join_attempt_id", allocation.join_attempt_id},
+                           {"member_id", allocation.member_id},
                            {"display_name", allocation.display_name},
                            {"ready", allocation.ready},
                            {"has_joiner_endpoint", allocation.has_joiner_endpoint},
@@ -1727,9 +2052,21 @@ int main(int argc, char** argv) {
             attempt.attempt_id = g_registry.random_token(kJoinAttemptIdLen);
             attempt.token = g_registry.random_token(kSecretLen);
             attempt.punch_secret = g_registry.random_token(kSecretLen);
-            if (relay_enabled) {
+            std::string relay_reject_reason;
+            const bool allocate_relay =
+                relay_enabled && relay_allocation_allowed_locked(room, relay_reject_reason);
+            if (allocate_relay) {
                 attempt.relay_allocation_id = g_registry.random_token(kRelayAllocationIdLen);
                 attempt.relay_secret = g_registry.random_token(kSecretLen);
+            } else if (relay_enabled) {
+                g_registry.relay_counters.allocations_rejected += 1;
+                log_event("relay_allocation_reject",
+                          {{"room_code", room.room_code},
+                           {"reason", relay_reject_reason},
+                           {"active_allocations",
+                            static_cast<int>(active_relay_allocations_locked())},
+                           {"room_allocations",
+                            static_cast<int>(room.relay_allocations.size())}});
             }
             attempt.display_name = json_string(body, "display_name", "Guest");
             const std::string attempt_id = attempt.attempt_id;
@@ -1737,7 +2074,7 @@ int main(int argc, char** argv) {
             const std::string punch_secret = attempt.punch_secret;
             const std::string relay_allocation_id = attempt.relay_allocation_id;
             const std::string relay_secret = attempt.relay_secret;
-            if (relay_enabled) {
+            if (allocate_relay) {
                 RelayAllocation allocation;
                 allocation.allocation_id = relay_allocation_id;
                 allocation.join_attempt_id = attempt_id;
@@ -1755,7 +2092,7 @@ int main(int argc, char** argv) {
                                            });
             log_event("punch_attempt_create",
                       {{"room_code", room.room_code}, {"join_attempt_id", attempt_id}});
-            if (relay_enabled) {
+            if (allocate_relay) {
                 log_event("relay_allocation_create",
                           {{"room_code", room.room_code},
                            {"join_attempt_id", attempt_id},
@@ -1796,6 +2133,7 @@ int main(int argc, char** argv) {
             }
 
             const std::string join_token = json_string(body, "join_token");
+            std::string joined_relay_allocation_id;
             if (!join_token.empty()) {
                 auto attempt_it = room.join_attempts.find(join_token);
                 if (attempt_it == room.join_attempts.end()) {
@@ -1803,23 +2141,30 @@ int main(int argc, char** argv) {
                     res.set_content("join token rejected", "text/plain");
                     return;
                 }
+                joined_relay_allocation_id = attempt_it->second.relay_allocation_id;
                 room.join_attempts.erase(attempt_it);
             }
 
             RoomMember member;
             member.member_id = g_registry.random_token(kMemberIdLen);
             member.display_name = json_string(body, "display_name", "Guest");
+            const std::string member_id = member.member_id;
             room.members.push_back(member);
+            if (!joined_relay_allocation_id.empty()) {
+                auto allocation_it = room.relay_allocations.find(joined_relay_allocation_id);
+                if (allocation_it != room.relay_allocations.end())
+                    allocation_it->second.member_id = member_id;
+            }
             room.updated_at = Clock::now();
 
             log_event("room_join", {
                                        {"room_code", room.room_code},
-                                       {"member_id", member.member_id},
+                                       {"member_id", member_id},
                                        {"current_players", static_cast<int>(room.members.size())},
                                    });
             res.set_content(
                 nlohmann::json{
-                    {"member_id", member.member_id},
+                    {"member_id", member_id},
                     {"room", room_to_json(room)},
                 }
                     .dump(),
@@ -1925,8 +2270,11 @@ int main(int argc, char** argv) {
                                         {"current_players", static_cast<int>(room.members.size())},
                                     });
             if (is_host || host_secret == room.host_secret) {
+                close_room_relay_allocations_locked(room, "host_left");
                 log_event("room_delete", {{"room_code", room.room_code}});
                 g_registry.rooms.erase(it);
+            } else {
+                close_member_relay_allocations_locked(room, member_id, "member_left");
             }
         }
         res.set_content(R"({"ok":true})", "application/json");
@@ -1969,6 +2317,7 @@ int main(int argc, char** argv) {
         }
 
         room.members.erase(member_it);
+        close_member_relay_allocations_locked(room, member_id, "member_removed");
         room.updated_at = Clock::now();
         log_event("room_remove_member",
                   {
