@@ -171,6 +171,27 @@ bool room_from_json(const nlohmann::json& json, MatchmakingRoom& out) {
 
 } // namespace
 
+bool RoomServerMatchmaking::fetch_capabilities(const std::string& server_url,
+                                               RoomServerCapabilities& out,
+                                               std::string& err) {
+    auto json = get_json(server_url, "/health", err);
+    if (!json)
+        return false;
+    out = RoomServerCapabilities{};
+    out.ok = (*json).value("ok", false);
+    const auto realnet_it = json->find("realnet");
+    if (realnet_it != json->end() && realnet_it->is_object()) {
+        const auto rendezvous_it = realnet_it->find("rendezvous_udp");
+        if (rendezvous_it != realnet_it->end() && rendezvous_it->is_object()) {
+            out.rendezvous_udp.enabled = rendezvous_it->value("enabled", false);
+            out.rendezvous_udp.host = rendezvous_it->value("host", "");
+            out.rendezvous_udp.port = rendezvous_it->value("port", 0);
+            out.rendezvous_udp.protocol = rendezvous_it->value("protocol", "");
+        }
+    }
+    return out.ok;
+}
+
 bool RoomServerMatchmaking::create_room(const std::string& server_url,
                                         const MatchmakingRoom& room,
                                         MatchmakingCreateResult& out,
