@@ -497,7 +497,7 @@ if (GUB_BUILD_TOOLS)
     add_test(NAME lobby_config_smoke COMMAND lobby_config_smoke)
     add_test(NAME lobby_input_smoke COMMAND lobby_input_smoke)
     add_test(NAME realnet_connection_plan_smoke COMMAND realnet_connection_plan_smoke)
-    add_test(NAME room_rendezvous_smoke COMMAND room_rendezvous_smoke)
+    add_test(NAME room_punch_packet_smoke COMMAND room_punch_packet_smoke)
     add_test(
       NAME lobby_online_smoke
       COMMAND bash "${GUB_SOURCE_DIR}/scripts/lobby_online_smoke.sh"
@@ -565,14 +565,14 @@ if (GUB_BUILD_TOOLS)
     target_link_libraries(room_smoke PRIVATE ws2_32)
   endif()
 
-  add_executable(room_rendezvous_smoke
-    tools/room_rendezvous_smoke/main.cpp
+  add_executable(room_punch_packet_smoke
+    tools/room_punch_packet_smoke/main.cpp
   )
-  target_include_directories(room_rendezvous_smoke PRIVATE
+  target_include_directories(room_punch_packet_smoke PRIVATE
     ${GUB_SOURCE_DIR}
     ${GUB_SOURCE_DIR}/third_party
   )
-  target_link_libraries(room_rendezvous_smoke PRIVATE gubsy_engine)
+  target_link_libraries(room_punch_packet_smoke PRIVATE gubsy_engine)
 
   add_executable(room_punch_smoke
     tools/room_punch_smoke/main.cpp

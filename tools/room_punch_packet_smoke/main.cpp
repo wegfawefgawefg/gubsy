@@ -6,7 +6,7 @@
 namespace {
 
 int fail(const char* message) {
-    std::cerr << "room_rendezvous_smoke: " << message << '\n';
+    std::cerr << "room_punch_packet_smoke: " << message << '\n';
     return 1;
 }
 
@@ -46,6 +46,6 @@ int main() {
     if (!limiter.allow("ip", start + std::chrono::seconds(1)))
         return fail("rate limiter did not refill");
 
-    std::cout << "room_rendezvous_smoke: ok\n";
+    std::cout << "room_punch_packet_smoke: ok\n";
     return 0;
 }

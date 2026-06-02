@@ -497,7 +497,7 @@ The first roomd rendezvous foundation is implemented in `gubsy-roomd`:
 - Per-source and per-room token-bucket rate limits protect the UDP path.
 - Localhost-only `/debug/realnet`, `/debug/realnet/rooms/:room_code`, and
   `/debug/realnet/attempts/:join_attempt_id` expose current rendezvous state.
-- `room_rendezvous_smoke` covers packet signing, tamper rejection, and rate
+- `room_punch_packet_smoke` covers packet signing, tamper rejection, and rate
   limiter behavior.
 - `room_punch_smoke.sh` starts a local `gubsy-roomd`, creates a public room,
   creates a join attempt, sends signed host/joiner UDP hellos, verifies both
