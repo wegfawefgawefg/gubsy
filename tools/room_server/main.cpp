@@ -7,6 +7,8 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include "relay_udp_server.hpp"
+
 #include "gubsy/realnet/rendezvous.hpp"
 #include "gubsy/realnet/config.hpp"
 #include "gubsy/realnet/relay.hpp"
@@ -875,342 +877,206 @@ private:
     realnet::TokenBucketRateLimiter room_limiter_{{200.0, 400.0}};
 };
 
-class RelayUdpServer {
-public:
-    ~RelayUdpServer() { stop(); }
+void maybe_send_relay_ready(room_server::RelayUdpServer& relay,
+                            RoomRecord& room,
+                            RelayAllocation& allocation) {
+    if (!room.has_host_relay_endpoint || !allocation.has_joiner_endpoint)
+        return;
 
-    bool start(const std::string& bind_host, int port, realnet::RelayServiceConfig config,
-               std::string& err) {
-#if defined(_WIN32)
-        WSADATA data{};
-        const int wsa_rc = WSAStartup(MAKEWORD(2, 2), &data);
-        if (wsa_rc != 0) {
-            err = "WSAStartup failed";
-            return false;
-        }
-#endif
-        config_ = config;
-        ip_limiter_ = realnet::TokenBucketRateLimiter(
-            {config_.ip_packet_rate_per_sec, config_.ip_packet_burst}
-        );
-        room_limiter_ = realnet::TokenBucketRateLimiter(
-            {config_.room_packet_rate_per_sec, config_.room_packet_burst}
-        );
-        port_ = port;
-        socket_ = open_bound_socket(bind_host, port, err);
-        if (socket_ == kInvalidSocket)
-            return false;
-        running_.store(true);
-        thread_ = std::thread([this]() { run(); });
-        return true;
-    }
+    allocation.ready = true;
+    allocation.last_seen = Clock::now();
 
-    void stop() {
-        running_.store(false);
-        close_socket(socket_);
-        socket_ = kInvalidSocket;
-        if (thread_.joinable())
-            thread_.join();
-#if defined(_WIN32)
-        WSACleanup();
-#endif
-    }
+    realnet::RelayPacket host_ready;
+    host_ready.kind = realnet::RelayPacketKind::Ready;
+    host_ready.role = realnet::RelayRole::Host;
+    host_ready.room_code = room.room_code;
+    host_ready.allocation_id = allocation.allocation_id;
+    host_ready.join_attempt_id = allocation.join_attempt_id;
+    relay.send_packet(room.host_relay_sockaddr, room.host_relay_sockaddr_len, host_ready,
+                      room.host_secret);
 
-    int port() const { return port_; }
-    const realnet::RelayServiceConfig& config() const { return config_; }
+    realnet::RelayPacket joiner_ready;
+    joiner_ready.kind = realnet::RelayPacketKind::Ready;
+    joiner_ready.role = realnet::RelayRole::Joiner;
+    joiner_ready.room_code = room.room_code;
+    joiner_ready.allocation_id = allocation.allocation_id;
+    joiner_ready.join_attempt_id = allocation.join_attempt_id;
+    relay.send_packet(allocation.joiner_sockaddr,
+                      allocation.joiner_sockaddr_len,
+                      joiner_ready,
+                      allocation.relay_secret);
 
-private:
-    SocketHandle open_bound_socket(const std::string& bind_host, int port, std::string& err) {
-        addrinfo hints{};
-        hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_DGRAM;
-        hints.ai_flags = AI_PASSIVE;
-        addrinfo* result = nullptr;
-        const std::string port_text = std::to_string(port);
-        const char* host_arg = bind_host.empty() || bind_host == "0.0.0.0" ? nullptr : bind_host.c_str();
-        const int gai = getaddrinfo(host_arg, port_text.c_str(), &hints, &result);
-        if (gai != 0 || !result) {
-            err = "could not resolve UDP relay bind endpoint";
-            return kInvalidSocket;
-        }
+    log_event("relay_ready",
+              {{"room_code", room.room_code},
+               {"join_attempt_id", allocation.join_attempt_id},
+               {"relay_allocation_id", allocation.allocation_id},
+               {"host_endpoint", room.host_relay_observed_endpoint},
+               {"joiner_endpoint", allocation.joiner_observed_endpoint}});
+}
 
-        SocketHandle out = kInvalidSocket;
-        for (addrinfo* it = result; it; it = it->ai_next) {
-            out = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
-            if (out == kInvalidSocket)
-                continue;
-            if (bind(out, it->ai_addr, static_cast<int>(it->ai_addrlen)) == 0)
-                break;
-            close_socket(out);
-            out = kInvalidSocket;
-        }
-        freeaddrinfo(result);
-        if (out == kInvalidSocket)
-            err = "could not bind UDP relay socket";
-        return out;
-    }
+void forward_relay_data_to_joiner(room_server::RelayUdpServer& relay,
+                                  RoomRecord& room,
+                                  RelayAllocation& allocation,
+                                  const realnet::RelayPacket& packet) {
+    if (!allocation.has_joiner_endpoint)
+        return;
+    realnet::RelayPacket forwarded;
+    forwarded.kind = realnet::RelayPacketKind::Data;
+    forwarded.role = realnet::RelayRole::Host;
+    forwarded.room_code = room.room_code;
+    forwarded.allocation_id = allocation.allocation_id;
+    forwarded.join_attempt_id = allocation.join_attempt_id;
+    forwarded.seq = packet.seq;
+    forwarded.payload = packet.payload;
+    relay.send_packet(allocation.joiner_sockaddr,
+                      allocation.joiner_sockaddr_len,
+                      forwarded,
+                      allocation.relay_secret);
+    allocation.packets_from_host += 1;
+    allocation.bytes_from_host += packet.payload.size();
+    allocation.last_seen = Clock::now();
+}
 
-    void run() {
-        std::array<char, realnet::kMaxRelayPacketBytes + 1> buffer{};
-        while (running_.load()) {
-            sockaddr_storage from{};
-            socklen_t from_len = sizeof(from);
-            const int received = recvfrom(socket_, buffer.data(),
-                                          static_cast<int>(realnet::kMaxRelayPacketBytes), 0,
-                                          reinterpret_cast<sockaddr*>(&from), &from_len);
-            if (received <= 0)
-                continue;
-            handle_datagram(std::string(buffer.data(), static_cast<std::size_t>(received)), from,
-                            from_len);
-        }
-    }
-
-    void send_packet(const sockaddr_storage& to,
-                     socklen_t to_len,
-                     realnet::RelayPacket packet,
-                     const std::string& key) {
-        if (socket_ == kInvalidSocket)
-            return;
-        if (packet.ts_ms == 0)
-            packet.ts_ms = realnet::unix_time_ms();
-        realnet::sign_relay_packet(packet, key);
-        const std::string bytes = realnet::encode_relay_packet(packet);
-        if (bytes.empty())
-            return;
-        sendto(socket_, bytes.data(), static_cast<int>(bytes.size()), 0,
-               reinterpret_cast<const sockaddr*>(&to), to_len);
-    }
-
-    void maybe_send_ready(RoomRecord& room, RelayAllocation& allocation) {
-        if (!room.has_host_relay_endpoint || !allocation.has_joiner_endpoint)
-            return;
-
-        allocation.ready = true;
-        allocation.last_seen = Clock::now();
-
-        realnet::RelayPacket host_ready;
-        host_ready.kind = realnet::RelayPacketKind::Ready;
-        host_ready.role = realnet::RelayRole::Host;
-        host_ready.room_code = room.room_code;
-        host_ready.allocation_id = allocation.allocation_id;
-        host_ready.join_attempt_id = allocation.join_attempt_id;
-        send_packet(room.host_relay_sockaddr, room.host_relay_sockaddr_len, host_ready,
-                    room.host_secret);
-
-        realnet::RelayPacket joiner_ready;
-        joiner_ready.kind = realnet::RelayPacketKind::Ready;
-        joiner_ready.role = realnet::RelayRole::Joiner;
-        joiner_ready.room_code = room.room_code;
-        joiner_ready.allocation_id = allocation.allocation_id;
-        joiner_ready.join_attempt_id = allocation.join_attempt_id;
-        send_packet(allocation.joiner_sockaddr, allocation.joiner_sockaddr_len, joiner_ready,
-                    allocation.relay_secret);
-
-        log_event("relay_ready",
-                  {{"room_code", room.room_code},
-                   {"join_attempt_id", allocation.join_attempt_id},
-                   {"relay_allocation_id", allocation.allocation_id},
-                   {"host_endpoint", room.host_relay_observed_endpoint},
-                   {"joiner_endpoint", allocation.joiner_observed_endpoint}});
-    }
-
-    void forward_data_to_joiner(RoomRecord& room,
+void forward_relay_data_to_host(room_server::RelayUdpServer& relay,
+                                RoomRecord& room,
                                 RelayAllocation& allocation,
                                 const realnet::RelayPacket& packet) {
-        if (!allocation.has_joiner_endpoint)
-            return;
-        realnet::RelayPacket forwarded;
-        forwarded.kind = realnet::RelayPacketKind::Data;
-        forwarded.role = realnet::RelayRole::Host;
-        forwarded.room_code = room.room_code;
-        forwarded.allocation_id = allocation.allocation_id;
-        forwarded.join_attempt_id = allocation.join_attempt_id;
-        forwarded.seq = packet.seq;
-        forwarded.payload = packet.payload;
-        send_packet(allocation.joiner_sockaddr, allocation.joiner_sockaddr_len, forwarded,
-                    allocation.relay_secret);
-        allocation.packets_from_host += 1;
-        allocation.bytes_from_host += packet.payload.size();
-        allocation.last_seen = Clock::now();
+    if (!room.has_host_relay_endpoint)
+        return;
+    realnet::RelayPacket forwarded;
+    forwarded.kind = realnet::RelayPacketKind::Data;
+    forwarded.role = realnet::RelayRole::Joiner;
+    forwarded.room_code = room.room_code;
+    forwarded.allocation_id = allocation.allocation_id;
+    forwarded.join_attempt_id = allocation.join_attempt_id;
+    forwarded.seq = packet.seq;
+    forwarded.payload = packet.payload;
+    relay.send_packet(room.host_relay_sockaddr,
+                      room.host_relay_sockaddr_len,
+                      forwarded,
+                      room.host_secret);
+    allocation.packets_from_joiner += 1;
+    allocation.bytes_from_joiner += packet.payload.size();
+    allocation.last_seen = Clock::now();
+}
+
+void handle_relay_datagram(room_server::RelayUdpServer& relay,
+                           const room_server::RelayDatagram& datagram) {
+    const realnet::RelayPacket& packet = datagram.packet;
+    std::lock_guard<std::mutex> lock(g_registry.mutex);
+    g_registry.cleanup_expired_locked();
+    auto room_it = g_registry.rooms.find(packet.room_code);
+    if (room_it == g_registry.rooms.end()) {
+        count_relay_drop_locked();
+        log_event("relay_packet_reject",
+                  {{"source", datagram.source},
+                   {"room_code", packet.room_code},
+                   {"reason", "room_not_found_or_expired"}});
+        return;
     }
+    RoomRecord& room = room_it->second;
 
-    void forward_data_to_host(RoomRecord& room,
-                              RelayAllocation& allocation,
-                              const realnet::RelayPacket& packet) {
-        if (!room.has_host_relay_endpoint)
-            return;
-        realnet::RelayPacket forwarded;
-        forwarded.kind = realnet::RelayPacketKind::Data;
-        forwarded.role = realnet::RelayRole::Joiner;
-        forwarded.room_code = room.room_code;
-        forwarded.allocation_id = allocation.allocation_id;
-        forwarded.join_attempt_id = allocation.join_attempt_id;
-        forwarded.seq = packet.seq;
-        forwarded.payload = packet.payload;
-        send_packet(room.host_relay_sockaddr, room.host_relay_sockaddr_len, forwarded,
-                    room.host_secret);
-        allocation.packets_from_joiner += 1;
-        allocation.bytes_from_joiner += packet.payload.size();
-        allocation.last_seen = Clock::now();
-    }
-
-    void handle_datagram(const std::string& bytes, const sockaddr_storage& from, socklen_t from_len) {
-        const auto now = Clock::now();
-        const std::string source = sockaddr_to_endpoint(from, from_len);
-        if (!ip_limiter_.allow(source, now)) {
-            count_relay_drop(false, true);
-            log_event("relay_rate_limit", {{"scope", "ip"}, {"source", source}});
+    if (packet.role == realnet::RelayRole::Host) {
+        if (!realnet::verify_relay_packet(packet, room.host_secret)) {
+            count_relay_drop_locked(true);
+            log_event("relay_packet_reject", {{"source", datagram.source},
+                                               {"room_code", room.room_code},
+                                               {"reason", "host_mac"}});
             return;
         }
-        if (bytes.size() > config_.max_packet_bytes) {
-            count_relay_drop();
-            log_event("relay_packet_reject",
-                      {{"source", source},
-                       {"reason", "relay_packet_too_large"},
-                       {"bytes", static_cast<int>(bytes.size())},
-                       {"max_packet_bytes", config_.max_packet_bytes}});
+        room.host_relay_sockaddr = datagram.from;
+        room.host_relay_sockaddr_len = datagram.from_len;
+        room.host_relay_observed_endpoint = datagram.source;
+        room.has_host_relay_endpoint = true;
+        if (packet.kind == realnet::RelayPacketKind::Hello) {
+            log_event("relay_host_hello",
+                      {{"room_code", room.room_code},
+                       {"observed_endpoint", datagram.source}});
+            for (auto& [_, allocation] : room.relay_allocations)
+                maybe_send_relay_ready(relay, room, allocation);
             return;
         }
-
-        realnet::RelayPacket packet;
-        std::string err;
-        if (!realnet::decode_relay_packet(bytes, packet, err)) {
-            count_relay_drop();
-            log_event("relay_packet_reject", {{"source", source}, {"reason", err}});
-            return;
-        }
-        if (!room_limiter_.allow(packet.room_code, now)) {
-            count_relay_drop(false, true);
-            log_event("relay_rate_limit", {{"scope", "room"}, {"room_code", packet.room_code}});
-            return;
-        }
-
-        std::lock_guard<std::mutex> lock(g_registry.mutex);
-        g_registry.cleanup_expired_locked();
-        auto room_it = g_registry.rooms.find(packet.room_code);
-        if (room_it == g_registry.rooms.end()) {
-            count_relay_drop_locked();
-            log_event("relay_packet_reject",
-                      {{"source", source},
-                       {"room_code", packet.room_code},
-                       {"reason", "room_not_found_or_expired"}});
-            return;
-        }
-        RoomRecord& room = room_it->second;
-
-        if (packet.role == realnet::RelayRole::Host) {
-            if (!realnet::verify_relay_packet(packet, room.host_secret)) {
-                count_relay_drop_locked(true);
-                log_event("relay_packet_reject", {{"source", source},
-                                                   {"room_code", room.room_code},
-                                                   {"reason", "host_mac"}});
-                return;
-            }
-            room.host_relay_sockaddr = from;
-            room.host_relay_sockaddr_len = from_len;
-            room.host_relay_observed_endpoint = source;
-            room.has_host_relay_endpoint = true;
-            if (packet.kind == realnet::RelayPacketKind::Hello) {
-                log_event("relay_host_hello",
-                          {{"room_code", room.room_code}, {"observed_endpoint", source}});
-                for (auto& [_, allocation] : room.relay_allocations)
-                    maybe_send_ready(room, allocation);
-                return;
-            }
-            if (packet.kind == realnet::RelayPacketKind::Data) {
-                auto allocation_it = room.relay_allocations.find(packet.allocation_id);
-                if (allocation_it == room.relay_allocations.end()) {
-                    count_relay_drop_locked();
-                    log_event("relay_packet_reject",
-                              {{"source", source},
-                               {"room_code", room.room_code},
-                               {"relay_allocation_id", packet.allocation_id},
-                               {"reason", "allocation_not_found"}});
-                    return;
-                }
-                forward_data_to_joiner(room, allocation_it->second, packet);
-                return;
-            }
-        }
-
-        if (packet.role == realnet::RelayRole::Joiner) {
+        if (packet.kind == realnet::RelayPacketKind::Data) {
             auto allocation_it = room.relay_allocations.find(packet.allocation_id);
             if (allocation_it == room.relay_allocations.end()) {
                 count_relay_drop_locked();
                 log_event("relay_packet_reject",
-                          {{"source", source},
+                          {{"source", datagram.source},
                            {"room_code", room.room_code},
                            {"relay_allocation_id", packet.allocation_id},
                            {"reason", "allocation_not_found"}});
                 return;
             }
-            RelayAllocation& allocation = allocation_it->second;
-            if (!realnet::verify_relay_packet(packet, allocation.relay_secret)) {
-                count_relay_drop_locked(true);
-                log_event("relay_packet_reject", {{"source", source},
-                                                   {"room_code", room.room_code},
-                                                   {"relay_allocation_id", allocation.allocation_id},
-                                                   {"reason", "joiner_mac"}});
-                return;
-            }
-            allocation.joiner_sockaddr = from;
-            allocation.joiner_sockaddr_len = from_len;
-            allocation.joiner_observed_endpoint = source;
-            allocation.has_joiner_endpoint = true;
-            allocation.joiner_seen_at = now;
-            allocation.last_seen = now;
-            if (packet.kind == realnet::RelayPacketKind::Hello) {
-                log_event("relay_joiner_hello",
-                          {{"room_code", room.room_code},
-                           {"join_attempt_id", allocation.join_attempt_id},
-                           {"relay_allocation_id", allocation.allocation_id},
-                           {"observed_endpoint", source}});
-                maybe_send_ready(room, allocation);
-                return;
-            }
-            if (packet.kind == realnet::RelayPacketKind::Data) {
-                forward_data_to_host(room, allocation, packet);
-                return;
-            }
-        }
-
-        if (packet.kind == realnet::RelayPacketKind::Keepalive ||
-            packet.kind == realnet::RelayPacketKind::Close) {
-            auto allocation_it = room.relay_allocations.find(packet.allocation_id);
-            if (allocation_it != room.relay_allocations.end()) {
-                allocation_it->second.last_seen = now;
-                if (packet.kind == realnet::RelayPacketKind::Close) {
-                    g_registry.relay_counters.allocations_closed += 1;
-                    room.relay_allocations.erase(allocation_it);
-                }
-            }
-            log_event("relay_control",
-                      {{"room_code", room.room_code},
-                       {"relay_allocation_id", packet.allocation_id},
-                       {"kind", realnet::relay_packet_kind_name(packet.kind)},
-                       {"role", realnet::relay_role_name(packet.role)}});
+            forward_relay_data_to_joiner(relay, room, allocation_it->second, packet);
             return;
         }
-
-        count_relay_drop_locked();
-        log_event("relay_packet_reject", {{"source", source},
-                                           {"room_code", room.room_code},
-                                           {"reason", "unexpected_kind"},
-                                           {"kind", realnet::relay_packet_kind_name(packet.kind)}});
     }
 
-    SocketHandle socket_{kInvalidSocket};
-    std::atomic<bool> running_{false};
-    std::thread thread_;
-    int port_{0};
-    realnet::RelayServiceConfig config_{realnet::default_config().relay};
-    realnet::TokenBucketRateLimiter ip_limiter_{
-        {config_.ip_packet_rate_per_sec, config_.ip_packet_burst}
-    };
-    realnet::TokenBucketRateLimiter room_limiter_{
-        {config_.room_packet_rate_per_sec, config_.room_packet_burst}
-    };
-};
+    if (packet.role == realnet::RelayRole::Joiner) {
+        auto allocation_it = room.relay_allocations.find(packet.allocation_id);
+        if (allocation_it == room.relay_allocations.end()) {
+            count_relay_drop_locked();
+            log_event("relay_packet_reject",
+                      {{"source", datagram.source},
+                       {"room_code", room.room_code},
+                       {"relay_allocation_id", packet.allocation_id},
+                       {"reason", "allocation_not_found"}});
+            return;
+        }
+        RelayAllocation& allocation = allocation_it->second;
+        if (!realnet::verify_relay_packet(packet, allocation.relay_secret)) {
+            count_relay_drop_locked(true);
+            log_event("relay_packet_reject", {{"source", datagram.source},
+                                               {"room_code", room.room_code},
+                                               {"relay_allocation_id", allocation.allocation_id},
+                                               {"reason", "joiner_mac"}});
+            return;
+        }
+        allocation.joiner_sockaddr = datagram.from;
+        allocation.joiner_sockaddr_len = datagram.from_len;
+        allocation.joiner_observed_endpoint = datagram.source;
+        allocation.has_joiner_endpoint = true;
+        allocation.joiner_seen_at = datagram.now;
+        allocation.last_seen = datagram.now;
+        if (packet.kind == realnet::RelayPacketKind::Hello) {
+            log_event("relay_joiner_hello",
+                      {{"room_code", room.room_code},
+                       {"join_attempt_id", allocation.join_attempt_id},
+                       {"relay_allocation_id", allocation.allocation_id},
+                       {"observed_endpoint", datagram.source}});
+            maybe_send_relay_ready(relay, room, allocation);
+            return;
+        }
+        if (packet.kind == realnet::RelayPacketKind::Data) {
+            forward_relay_data_to_host(relay, room, allocation, packet);
+            return;
+        }
+    }
+
+    if (packet.kind == realnet::RelayPacketKind::Keepalive ||
+        packet.kind == realnet::RelayPacketKind::Close) {
+        auto allocation_it = room.relay_allocations.find(packet.allocation_id);
+        if (allocation_it != room.relay_allocations.end()) {
+            allocation_it->second.last_seen = datagram.now;
+            if (packet.kind == realnet::RelayPacketKind::Close) {
+                g_registry.relay_counters.allocations_closed += 1;
+                room.relay_allocations.erase(allocation_it);
+            }
+        }
+        log_event("relay_control",
+                  {{"room_code", room.room_code},
+                   {"relay_allocation_id", packet.allocation_id},
+                   {"kind", realnet::relay_packet_kind_name(packet.kind)},
+                   {"role", realnet::relay_role_name(packet.role)}});
+        return;
+    }
+
+    count_relay_drop_locked();
+    log_event("relay_packet_reject", {{"source", datagram.source},
+                                       {"room_code", room.room_code},
+                                       {"reason", "unexpected_kind"},
+                                       {"kind", realnet::relay_packet_kind_name(packet.kind)}});
+}
 
 } // namespace
 
@@ -1426,7 +1292,7 @@ int main(int argc, char** argv) {
 
     httplib::Server server;
     RendezvousUdpServer rendezvous;
-    RelayUdpServer relay;
+    room_server::RelayUdpServer relay;
     if (punch_enabled) {
         std::string udp_err;
         if (!rendezvous.start(bind_host, punch_port, udp_err)) {
@@ -1437,7 +1303,19 @@ int main(int argc, char** argv) {
     }
     if (relay_enabled) {
         std::string relay_err;
-        if (!relay.start(bind_host, relay_port, relay_config, relay_err)) {
+        if (!relay.start(bind_host,
+                         relay_port,
+                         relay_config,
+                         [&](const room_server::RelayDatagram& datagram) {
+                             handle_relay_datagram(relay, datagram);
+                         },
+                         [](bool auth_failure, bool rate_limited) {
+                             count_relay_drop(auth_failure, rate_limited);
+                         },
+                         [](const char* event, const nlohmann::json& fields) {
+                             log_event(event, fields);
+                         },
+                         relay_err)) {
             log_event("relay_start_failed",
                       {{"host", bind_host}, {"port", relay_port}, {"error", relay_err}});
             relay_enabled = false;

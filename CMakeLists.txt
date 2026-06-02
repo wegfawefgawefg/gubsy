@@ -538,6 +538,7 @@ if (GUB_BUILD_TOOLS)
 
   add_executable(gubsy_roomd
     tools/room_server/main.cpp
+    tools/room_server/relay_udp_server.cpp
   )
   set_target_properties(gubsy_roomd PROPERTIES OUTPUT_NAME gubsy-roomd)
   target_include_directories(gubsy_roomd PRIVATE
