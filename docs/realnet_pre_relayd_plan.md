@@ -484,6 +484,8 @@ This phase is complete when the following are true:
 9. Commit and push the pre-relayd cleanup.
 10. Start relayd implementation.
 
+The relay implementation plan now lives in `realnet_relayd_plan.md`.
+
 ## Non-Goals
 
 This phase does not:

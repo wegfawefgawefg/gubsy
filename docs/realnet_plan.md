@@ -435,6 +435,8 @@ flow. NAT punch, relay, and packet-transport return are later milestones.
 3. Add relay fallback after direct/punch failure.
 4. Add basic bandwidth/rate diagnostics.
 
+Use `realnet_relayd_plan.md` as the code-facing checklist for this milestone.
+
 ### Milestone 7: Steam
 
 1. Map Steam lobby metadata to the same room/session contract.
@@ -453,6 +455,5 @@ flow. NAT punch, relay, and packet-transport return are later milestones.
 
 ## Immediate Next Step
 
-Resolve the decisions listed in `realnet_nat_punch_plan.md`, then implement the
-UDP rendezvous milestone in `gubsy-roomd` with a standalone punch smoke before
-full Splonks UI wiring.
+The NAT punch milestone is implemented and validated. The next transport
+milestone is relay; use `realnet_relayd_plan.md` as the implementation plan.
