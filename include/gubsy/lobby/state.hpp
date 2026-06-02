@@ -50,6 +50,8 @@ struct GubsyLobbyState {
     std::string pending_join_attempt_id;
     std::string pending_join_token;
     std::string pending_punch_secret;
+    std::string pending_relay_allocation_id;
+    std::string pending_relay_secret;
     ConnectPhase connect_phase{ConnectPhase::Idle};
     std::string selected_transport;
     MatchmakingRoom pending_join_room;

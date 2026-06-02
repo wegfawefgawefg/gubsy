@@ -67,6 +67,8 @@ void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.pending_join_attempt_id.clear();
     engine.lobby.pending_join_token.clear();
     engine.lobby.pending_punch_secret.clear();
+    engine.lobby.pending_relay_allocation_id.clear();
+    engine.lobby.pending_relay_secret.clear();
     engine.lobby.connect_phase = ConnectPhase::Idle;
     engine.lobby.selected_transport.clear();
     engine.lobby.pending_join_room = MatchmakingRoom{};
@@ -658,6 +660,8 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     engine.lobby.pending_join_attempt_id = join_attempt.join_attempt_id;
     engine.lobby.pending_join_token = join_attempt.join_token;
     engine.lobby.pending_punch_secret = join_attempt.punch_secret;
+    engine.lobby.pending_relay_allocation_id = join_attempt.relay_allocation_id;
+    engine.lobby.pending_relay_secret = join_attempt.relay_secret;
     engine.lobby.pending_join_room = room_for_join;
     GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
         engine.lobby_commands.join_user_data,
