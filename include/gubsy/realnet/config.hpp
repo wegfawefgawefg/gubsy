@@ -20,6 +20,10 @@ struct RelayTimingConfig {
 
 struct RelayServiceConfig {
     std::uint64_t max_packet_bytes{1400};
+    double ip_packet_rate_per_sec{2000.0};
+    double ip_packet_burst{4000.0};
+    double room_packet_rate_per_sec{8000.0};
+    double room_packet_burst{16000.0};
     RelayTimingConfig timing;
 };
 

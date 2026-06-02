@@ -8,6 +8,7 @@
 #endif
 
 #include "gubsy/realnet/rendezvous.hpp"
+#include "gubsy/realnet/config.hpp"
 #include "gubsy/realnet/relay.hpp"
 
 #if defined(_WIN32)
@@ -827,7 +828,8 @@ class RelayUdpServer {
 public:
     ~RelayUdpServer() { stop(); }
 
-    bool start(const std::string& bind_host, int port, std::string& err) {
+    bool start(const std::string& bind_host, int port, realnet::RelayServiceConfig config,
+               std::string& err) {
 #if defined(_WIN32)
         WSADATA data{};
         const int wsa_rc = WSAStartup(MAKEWORD(2, 2), &data);
@@ -836,6 +838,13 @@ public:
             return false;
         }
 #endif
+        config_ = config;
+        ip_limiter_ = realnet::TokenBucketRateLimiter(
+            {config_.ip_packet_rate_per_sec, config_.ip_packet_burst}
+        );
+        room_limiter_ = realnet::TokenBucketRateLimiter(
+            {config_.room_packet_rate_per_sec, config_.room_packet_burst}
+        );
         port_ = port;
         socket_ = open_bound_socket(bind_host, port, err);
         if (socket_ == kInvalidSocket)
@@ -857,6 +866,7 @@ public:
     }
 
     int port() const { return port_; }
+    const realnet::RelayServiceConfig& config() const { return config_; }
 
 private:
     SocketHandle open_bound_socket(const std::string& bind_host, int port, std::string& err) {
@@ -1116,8 +1126,13 @@ private:
     std::atomic<bool> running_{false};
     std::thread thread_;
     int port_{0};
-    realnet::TokenBucketRateLimiter ip_limiter_{{200.0, 400.0}};
-    realnet::TokenBucketRateLimiter room_limiter_{{500.0, 1000.0}};
+    realnet::RelayServiceConfig config_{realnet::default_config().relay};
+    realnet::TokenBucketRateLimiter ip_limiter_{
+        {config_.ip_packet_rate_per_sec, config_.ip_packet_burst}
+    };
+    realnet::TokenBucketRateLimiter room_limiter_{
+        {config_.room_packet_rate_per_sec, config_.room_packet_burst}
+    };
 };
 
 } // namespace
@@ -1129,6 +1144,7 @@ int main(int argc, char** argv) {
     int relay_port = 0;
     bool punch_enabled = true;
     bool relay_enabled = false;
+    realnet::RelayServiceConfig relay_config = realnet::default_config().relay;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--port=", 0) == 0) {
@@ -1179,10 +1195,70 @@ int main(int argc, char** argv) {
             relay_enabled = true;
         } else if (arg == "--no-relay") {
             relay_enabled = false;
+        } else if (arg.rfind("--relay-ip-rate=", 0) == 0) {
+            try {
+                relay_config.ip_packet_rate_per_sec = std::stod(arg.substr(16));
+            } catch (...) {
+                relay_config.ip_packet_rate_per_sec =
+                    realnet::default_config().relay.ip_packet_rate_per_sec;
+            }
+        } else if (arg == "--relay-ip-rate" && i + 1 < argc) {
+            try {
+                relay_config.ip_packet_rate_per_sec = std::stod(argv[++i]);
+            } catch (...) {
+                relay_config.ip_packet_rate_per_sec =
+                    realnet::default_config().relay.ip_packet_rate_per_sec;
+            }
+        } else if (arg.rfind("--relay-ip-burst=", 0) == 0) {
+            try {
+                relay_config.ip_packet_burst = std::stod(arg.substr(17));
+            } catch (...) {
+                relay_config.ip_packet_burst =
+                    realnet::default_config().relay.ip_packet_burst;
+            }
+        } else if (arg == "--relay-ip-burst" && i + 1 < argc) {
+            try {
+                relay_config.ip_packet_burst = std::stod(argv[++i]);
+            } catch (...) {
+                relay_config.ip_packet_burst =
+                    realnet::default_config().relay.ip_packet_burst;
+            }
+        } else if (arg.rfind("--relay-room-rate=", 0) == 0) {
+            try {
+                relay_config.room_packet_rate_per_sec = std::stod(arg.substr(18));
+            } catch (...) {
+                relay_config.room_packet_rate_per_sec =
+                    realnet::default_config().relay.room_packet_rate_per_sec;
+            }
+        } else if (arg == "--relay-room-rate" && i + 1 < argc) {
+            try {
+                relay_config.room_packet_rate_per_sec = std::stod(argv[++i]);
+            } catch (...) {
+                relay_config.room_packet_rate_per_sec =
+                    realnet::default_config().relay.room_packet_rate_per_sec;
+            }
+        } else if (arg.rfind("--relay-room-burst=", 0) == 0) {
+            try {
+                relay_config.room_packet_burst = std::stod(arg.substr(19));
+            } catch (...) {
+                relay_config.room_packet_burst =
+                    realnet::default_config().relay.room_packet_burst;
+            }
+        } else if (arg == "--relay-room-burst" && i + 1 < argc) {
+            try {
+                relay_config.room_packet_burst = std::stod(argv[++i]);
+            } catch (...) {
+                relay_config.room_packet_burst =
+                    realnet::default_config().relay.room_packet_burst;
+            }
         } else if (arg == "--help") {
             std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n"
                          "                    [--punch-port=<udp-port>] [--no-punch]\n"
-                         "                    [--relay-port=<udp-port>] [--relay] [--no-relay]\n";
+                         "                    [--relay-port=<udp-port>] [--relay] [--no-relay]\n"
+                         "                    [--relay-ip-rate=<packets/sec>]\n"
+                         "                    [--relay-ip-burst=<packets>]\n"
+                         "                    [--relay-room-rate=<packets/sec>]\n"
+                         "                    [--relay-room-burst=<packets>]\n";
             return 0;
         }
     }
@@ -1194,6 +1270,16 @@ int main(int argc, char** argv) {
         punch_port = port + kDefaultRendezvousPortOffset;
     if (relay_port <= 0 || relay_port > 65535)
         relay_port = port + kDefaultRelayPortOffset;
+    if (relay_config.ip_packet_rate_per_sec <= 0.0)
+        relay_config.ip_packet_rate_per_sec =
+            realnet::default_config().relay.ip_packet_rate_per_sec;
+    if (relay_config.ip_packet_burst <= 0.0)
+        relay_config.ip_packet_burst = realnet::default_config().relay.ip_packet_burst;
+    if (relay_config.room_packet_rate_per_sec <= 0.0)
+        relay_config.room_packet_rate_per_sec =
+            realnet::default_config().relay.room_packet_rate_per_sec;
+    if (relay_config.room_packet_burst <= 0.0)
+        relay_config.room_packet_burst = realnet::default_config().relay.room_packet_burst;
 
     httplib::Server server;
     RendezvousUdpServer rendezvous;
@@ -1208,7 +1294,7 @@ int main(int argc, char** argv) {
     }
     if (relay_enabled) {
         std::string relay_err;
-        if (!relay.start(bind_host, relay_port, relay_err)) {
+        if (!relay.start(bind_host, relay_port, relay_config, relay_err)) {
             log_event("relay_start_failed",
                       {{"host", bind_host}, {"port", relay_port}, {"error", relay_err}});
             relay_enabled = false;
@@ -1224,10 +1310,23 @@ int main(int argc, char** argv) {
                                           {"host", bind_host},
                                           {"port", punch_enabled ? rendezvous.port() : 0},
                                           {"protocol", "gubsy-punch-v1"}};
+        const realnet::RelayServiceConfig active_relay_config =
+            relay_enabled ? relay.config() : relay_config;
         const nlohmann::json relay_udp = {{"enabled", relay_enabled},
                                           {"host", bind_host},
                                           {"port", relay_enabled ? relay.port() : 0},
-                                          {"protocol", "gubsy-relay-v1"}};
+                                          {"protocol", "gubsy-relay-v1"},
+                                          {"limits",
+                                           {{"max_packet_bytes",
+                                             active_relay_config.max_packet_bytes},
+                                            {"ip_packet_rate_per_sec",
+                                             active_relay_config.ip_packet_rate_per_sec},
+                                            {"ip_packet_burst",
+                                             active_relay_config.ip_packet_burst},
+                                            {"room_packet_rate_per_sec",
+                                             active_relay_config.room_packet_rate_per_sec},
+                                            {"room_packet_burst",
+                                             active_relay_config.room_packet_burst}}}};
         nlohmann::json capabilities = {
             {"ok", true},
             {"realnet",
