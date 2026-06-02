@@ -831,10 +831,21 @@ int main(int argc, char** argv) {
     });
 
     server.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
+        const nlohmann::json punch_udp = {{"enabled", rendezvous_enabled},
+                                          {"host", bind_host},
+                                          {"port", rendezvous_enabled ? rendezvous.port() : 0},
+                                          {"protocol", "gubsy-punch-v1"}};
         nlohmann::json capabilities = {
             {"ok", true},
             {"realnet",
-             {{"rendezvous_udp",
+             {{"room_directory", {{"enabled", true}, {"protocol", "gubsy-roomd-v1"}}},
+              {"punch_udp", punch_udp},
+              {"relay_udp",
+               {{"enabled", false},
+                {"host", ""},
+                {"port", 0},
+                {"protocol", "gubsy-relay-v1"}}},
+              {"rendezvous_udp",
                {{"enabled", rendezvous_enabled},
                 {"host", bind_host},
                 {"port", rendezvous_enabled ? rendezvous.port() : 0},

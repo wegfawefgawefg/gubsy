@@ -181,12 +181,41 @@ bool RoomServerMatchmaking::fetch_capabilities(const std::string& server_url,
     out.ok = (*json).value("ok", false);
     const auto realnet_it = json->find("realnet");
     if (realnet_it != json->end() && realnet_it->is_object()) {
+        const auto room_directory_it = realnet_it->find("room_directory");
+        if (room_directory_it != realnet_it->end() && room_directory_it->is_object()) {
+            out.room_directory.enabled = room_directory_it->value("enabled", false);
+            out.room_directory.protocol = room_directory_it->value("protocol", "");
+        }
+        const auto punch_it = realnet_it->find("punch_udp");
+        if (punch_it != realnet_it->end() && punch_it->is_object()) {
+            out.punch_udp.enabled = punch_it->value("enabled", false);
+            out.punch_udp.host = punch_it->value("host", "");
+            out.punch_udp.port = punch_it->value("port", 0);
+            out.punch_udp.protocol = punch_it->value("protocol", "");
+        }
+        const auto relay_it = realnet_it->find("relay_udp");
+        if (relay_it != realnet_it->end() && relay_it->is_object()) {
+            out.relay_udp.enabled = relay_it->value("enabled", false);
+            out.relay_udp.host = relay_it->value("host", "");
+            out.relay_udp.port = relay_it->value("port", 0);
+            out.relay_udp.protocol = relay_it->value("protocol", "");
+        }
         const auto rendezvous_it = realnet_it->find("rendezvous_udp");
         if (rendezvous_it != realnet_it->end() && rendezvous_it->is_object()) {
             out.rendezvous_udp.enabled = rendezvous_it->value("enabled", false);
             out.rendezvous_udp.host = rendezvous_it->value("host", "");
             out.rendezvous_udp.port = rendezvous_it->value("port", 0);
             out.rendezvous_udp.protocol = rendezvous_it->value("protocol", "");
+        }
+        if (!out.punch_udp.enabled && out.rendezvous_udp.enabled) {
+            out.punch_udp = out.rendezvous_udp;
+            if (out.punch_udp.protocol == "gubsy-rendezvous-v1")
+                out.punch_udp.protocol = "gubsy-punch-v1";
+        }
+        if (!out.rendezvous_udp.enabled && out.punch_udp.enabled) {
+            out.rendezvous_udp = out.punch_udp;
+            if (out.rendezvous_udp.protocol == "gubsy-punch-v1")
+                out.rendezvous_udp.protocol = "gubsy-rendezvous-v1";
         }
     }
     return out.ok;

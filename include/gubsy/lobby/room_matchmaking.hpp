@@ -2,16 +2,24 @@
 
 #include "gubsy/lobby/matchmaking.hpp"
 
-struct RoomServerRendezvousUdpCapabilities {
+struct RoomServerUdpServiceCapabilities {
     bool enabled{false};
     std::string host;
     int port{0};
     std::string protocol;
 };
 
+struct RoomServerDirectoryCapabilities {
+    bool enabled{false};
+    std::string protocol;
+};
+
 struct RoomServerCapabilities {
     bool ok{false};
-    RoomServerRendezvousUdpCapabilities rendezvous_udp;
+    RoomServerDirectoryCapabilities room_directory;
+    RoomServerUdpServiceCapabilities punch_udp;
+    RoomServerUdpServiceCapabilities relay_udp;
+    RoomServerUdpServiceCapabilities rendezvous_udp;
 };
 
 class RoomServerMatchmaking final : public IMatchmaking {
