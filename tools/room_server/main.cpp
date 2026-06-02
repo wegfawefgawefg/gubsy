@@ -606,7 +606,7 @@ private:
         }
         freeaddrinfo(result);
         if (out == kInvalidSocket)
-            err = "could not bind UDP rendezvous socket";
+            err = "could not bind UDP punch socket";
         return out;
     }
 
@@ -680,7 +680,9 @@ private:
         auto room_it = g_registry.rooms.find(packet.room_code);
         if (room_it == g_registry.rooms.end()) {
             log_event("punch_packet_reject",
-                      {{"source", source}, {"room_code", packet.room_code}, {"reason", "room"}});
+                      {{"source", source},
+                       {"room_code", packet.room_code},
+                       {"reason", "room_not_found_or_expired"}});
             return;
         }
         RoomRecord& room = room_it->second;
@@ -710,7 +712,7 @@ private:
                 log_event("punch_packet_reject", {{"source", source},
                                                    {"room_code", room.room_code},
                                                    {"join_attempt_id", packet.join_attempt_id},
-                                                   {"reason", "attempt"}});
+                                                   {"reason", "join_attempt_not_found_or_expired"}});
                 return;
             }
             if (!realnet::verify_packet(packet, attempt->punch_secret)) {
