@@ -200,23 +200,6 @@ bool RoomServerMatchmaking::fetch_capabilities(const std::string& server_url,
             out.relay_udp.port = relay_it->value("port", 0);
             out.relay_udp.protocol = relay_it->value("protocol", "");
         }
-        const auto rendezvous_it = realnet_it->find("rendezvous_udp");
-        if (rendezvous_it != realnet_it->end() && rendezvous_it->is_object()) {
-            out.rendezvous_udp.enabled = rendezvous_it->value("enabled", false);
-            out.rendezvous_udp.host = rendezvous_it->value("host", "");
-            out.rendezvous_udp.port = rendezvous_it->value("port", 0);
-            out.rendezvous_udp.protocol = rendezvous_it->value("protocol", "");
-        }
-        if (!out.punch_udp.enabled && out.rendezvous_udp.enabled) {
-            out.punch_udp = out.rendezvous_udp;
-            if (out.punch_udp.protocol == "gubsy-rendezvous-v1")
-                out.punch_udp.protocol = "gubsy-punch-v1";
-        }
-        if (!out.rendezvous_udp.enabled && out.punch_udp.enabled) {
-            out.rendezvous_udp = out.punch_udp;
-            if (out.rendezvous_udp.protocol == "gubsy-punch-v1")
-                out.rendezvous_udp.protocol = "gubsy-rendezvous-v1";
-        }
     }
     return out.ok;
 }

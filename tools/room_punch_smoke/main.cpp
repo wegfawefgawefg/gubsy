@@ -196,9 +196,9 @@ int main(int argc, char** argv) {
     if (!health)
         return fail(err);
     const int rendezvous_port =
-        (*health)["realnet"]["rendezvous_udp"].value("port", 0);
+        (*health)["realnet"]["punch_udp"].value("port", 0);
     if (rendezvous_port <= 0)
-        return fail("rendezvous UDP not advertised");
+        return fail("punch UDP not advertised");
 
     const auto created = post_json(
         *endpoint,

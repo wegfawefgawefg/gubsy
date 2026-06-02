@@ -8,8 +8,12 @@
 #include <utility>
 
 #if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <iphlpapi.h>
 #else
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -86,6 +90,26 @@ int ipv4_prefix_from_mask(const sockaddr* netmask) {
     return prefix;
 }
 
+int ipv6_prefix_from_mask(const sockaddr* netmask) {
+    if (netmask == nullptr || netmask->sa_family != AF_INET6)
+        return -1;
+    const auto* mask = reinterpret_cast<const sockaddr_in6*>(netmask);
+    int prefix = 0;
+    bool saw_zero = false;
+    for (unsigned char byte : mask->sin6_addr.s6_addr) {
+        for (int bit = 7; bit >= 0; --bit) {
+            const bool set = (byte & (1U << static_cast<unsigned>(bit))) != 0;
+            if (set && saw_zero)
+                return -1;
+            if (set)
+                prefix += 1;
+            else
+                saw_zero = true;
+        }
+    }
+    return prefix;
+}
+
 std::uint32_t ipv4_prefix_mask(int prefix) {
     if (prefix <= 0)
         return 0;
@@ -136,6 +160,19 @@ bool direct_candidate_kind(ConnectionCandidateKind kind) {
     return kind == ConnectionCandidateKind::Loopback ||
            kind == ConnectionCandidateKind::LanDirect ||
            kind == ConnectionCandidateKind::PublicDirect;
+}
+
+AttemptTimelineEvent make_timeline_event(const PlannedConnectionCandidate& candidate) {
+    return AttemptTimelineEvent{
+        .event = candidate.decision == CandidateDecision::Try
+                     ? "candidate_try"
+                     : "candidate_skip",
+        .candidate_kind = candidate.candidate.kind,
+        .decision = candidate.decision,
+        .phase = candidate.phase,
+        .endpoint = candidate.candidate.endpoint,
+        .reason = candidate.reason,
+    };
 }
 
 bool local_private_ipv4_reachable(const std::string& host,
@@ -294,6 +331,52 @@ AddressScope classify_address_scope(const std::string& host) {
 LocalNetworkInfo detect_local_network_info() {
     LocalNetworkInfo info;
 #if defined(_WIN32)
+    ULONG buffer_size = 15000;
+    std::vector<unsigned char> buffer(buffer_size);
+    IP_ADAPTER_ADDRESSES* addresses =
+        reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data());
+    ULONG result = GetAdaptersAddresses(
+        AF_UNSPEC,
+        GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+        nullptr,
+        addresses,
+        &buffer_size
+    );
+    if (result == ERROR_BUFFER_OVERFLOW) {
+        buffer.resize(buffer_size);
+        addresses = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data());
+        result = GetAdaptersAddresses(
+            AF_UNSPEC,
+            GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+            nullptr,
+            addresses,
+            &buffer_size
+        );
+    }
+    if (result != NO_ERROR)
+        return info;
+
+    for (IP_ADAPTER_ADDRESSES* adapter = addresses; adapter != nullptr;
+         adapter = adapter->Next) {
+        if (adapter->OperStatus != IfOperStatusUp)
+            continue;
+        for (IP_ADAPTER_UNICAST_ADDRESS* unicast = adapter->FirstUnicastAddress;
+             unicast != nullptr;
+             unicast = unicast->Next) {
+            if (unicast->Address.lpSockaddr == nullptr)
+                continue;
+            const int family = unicast->Address.lpSockaddr->sa_family;
+            if (family != AF_INET && family != AF_INET6)
+                continue;
+            LocalInterfaceAddress address;
+            address.address = sockaddr_to_string(unicast->Address.lpSockaddr);
+            address.family = family == AF_INET ? AddressFamily::Ipv4 : AddressFamily::Ipv6;
+            address.scope = classify_address_scope(address.address);
+            address.prefix_length = static_cast<int>(unicast->OnLinkPrefixLength);
+            if (!address.address.empty())
+                info.interfaces.push_back(std::move(address));
+        }
+    }
     return info;
 #else
     ifaddrs* interfaces = nullptr;
@@ -311,7 +394,9 @@ LocalNetworkInfo detect_local_network_info() {
         address.address = sockaddr_to_string(it->ifa_addr);
         address.family = family == AF_INET ? AddressFamily::Ipv4 : AddressFamily::Ipv6;
         address.scope = classify_address_scope(address.address);
-        address.prefix_length = family == AF_INET ? ipv4_prefix_from_mask(it->ifa_netmask) : -1;
+        address.prefix_length = family == AF_INET
+                                    ? ipv4_prefix_from_mask(it->ifa_netmask)
+                                    : ipv6_prefix_from_mask(it->ifa_netmask);
         if (!address.address.empty())
             info.interfaces.push_back(std::move(address));
     }
@@ -344,6 +429,18 @@ ConnectionPlan build_connection_plan(const ConnectionPlanInput& input) {
                              return a.candidate.priority < b.candidate.priority;
                          });
     }
+    plan.timeline.push_back(AttemptTimelineEvent{
+        .event = "room_selected",
+        .candidate_kind = ConnectionCandidateKind::LanDirect,
+        .decision = CandidateDecision::Try,
+        .phase = ConnectPhase::ResolvingRoom,
+        .endpoint = {},
+        .reason = input.room.room_code.empty()
+                      ? "Room selected without a room code."
+                      : "Room " + input.room.room_code + " selected.",
+    });
+    for (const PlannedConnectionCandidate& candidate : plan.candidates)
+        plan.timeline.push_back(make_timeline_event(candidate));
     return plan;
 }
 

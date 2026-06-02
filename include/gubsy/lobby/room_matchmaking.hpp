@@ -19,7 +19,6 @@ struct RoomServerCapabilities {
     RoomServerDirectoryCapabilities room_directory;
     RoomServerUdpServiceCapabilities punch_udp;
     RoomServerUdpServiceCapabilities relay_udp;
-    RoomServerUdpServiceCapabilities rendezvous_udp;
 };
 
 class RoomServerMatchmaking final : public IMatchmaking {

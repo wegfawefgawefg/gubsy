@@ -768,8 +768,8 @@ private:
 int main(int argc, char** argv) {
     std::string bind_host = "127.0.0.1";
     int port = kDefaultPort;
-    int rendezvous_port = 0;
-    bool rendezvous_enabled = true;
+    int punch_port = 0;
+    bool punch_enabled = true;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg.rfind("--port=", 0) == 0) {
@@ -788,23 +788,23 @@ int main(int argc, char** argv) {
             bind_host = arg.substr(7);
         } else if (arg == "--host" && i + 1 < argc) {
             bind_host = argv[++i];
-        } else if (arg.rfind("--rendezvous-port=", 0) == 0) {
+        } else if (arg.rfind("--punch-port=", 0) == 0) {
             try {
-                rendezvous_port = std::stoi(arg.substr(18));
+                punch_port = std::stoi(arg.substr(13));
             } catch (...) {
-                rendezvous_port = 0;
+                punch_port = 0;
             }
-        } else if (arg == "--rendezvous-port" && i + 1 < argc) {
+        } else if (arg == "--punch-port" && i + 1 < argc) {
             try {
-                rendezvous_port = std::stoi(argv[++i]);
+                punch_port = std::stoi(argv[++i]);
             } catch (...) {
-                rendezvous_port = 0;
+                punch_port = 0;
             }
-        } else if (arg == "--no-rendezvous") {
-            rendezvous_enabled = false;
+        } else if (arg == "--no-punch") {
+            punch_enabled = false;
         } else if (arg == "--help") {
             std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n"
-                         "                    [--rendezvous-port=<udp-port>] [--no-rendezvous]\n";
+                         "                    [--punch-port=<udp-port>] [--no-punch]\n";
             return 0;
         }
     }
@@ -812,17 +812,17 @@ int main(int argc, char** argv) {
         bind_host = "127.0.0.1";
     if (port <= 0 || port > 65535)
         port = kDefaultPort;
-    if (rendezvous_port <= 0 || rendezvous_port > 65535)
-        rendezvous_port = port + kDefaultRendezvousPortOffset;
+    if (punch_port <= 0 || punch_port > 65535)
+        punch_port = port + kDefaultRendezvousPortOffset;
 
     httplib::Server server;
     RendezvousUdpServer rendezvous;
-    if (rendezvous_enabled) {
+    if (punch_enabled) {
         std::string udp_err;
-        if (!rendezvous.start(bind_host, rendezvous_port, udp_err)) {
+        if (!rendezvous.start(bind_host, punch_port, udp_err)) {
             log_event("punch_rendezvous_start_failed",
-                      {{"host", bind_host}, {"port", rendezvous_port}, {"error", udp_err}});
-            rendezvous_enabled = false;
+                      {{"host", bind_host}, {"port", punch_port}, {"error", udp_err}});
+            punch_enabled = false;
         }
     }
 
@@ -831,9 +831,9 @@ int main(int argc, char** argv) {
     });
 
     server.Get("/health", [&](const httplib::Request&, httplib::Response& res) {
-        const nlohmann::json punch_udp = {{"enabled", rendezvous_enabled},
+        const nlohmann::json punch_udp = {{"enabled", punch_enabled},
                                           {"host", bind_host},
-                                          {"port", rendezvous_enabled ? rendezvous.port() : 0},
+                                          {"port", punch_enabled ? rendezvous.port() : 0},
                                           {"protocol", "gubsy-punch-v1"}};
         nlohmann::json capabilities = {
             {"ok", true},
@@ -844,12 +844,7 @@ int main(int argc, char** argv) {
                {{"enabled", false},
                 {"host", ""},
                 {"port", 0},
-                {"protocol", "gubsy-relay-v1"}}},
-              {"rendezvous_udp",
-               {{"enabled", rendezvous_enabled},
-                {"host", bind_host},
-                {"port", rendezvous_enabled ? rendezvous.port() : 0},
-                {"protocol", "gubsy-rendezvous-v1"}}}}},
+                {"protocol", "gubsy-relay-v1"}}}}},
         };
         res.set_content(capabilities.dump(), "application/json");
     });

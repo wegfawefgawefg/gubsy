@@ -9,7 +9,7 @@ UDP_PORT="${GUB_ROOM_PUNCH_SMOKE_UDP_PORT:-19789}"
 "${BUILD_DIR}/gubsy-roomd" \
   --host=127.0.0.1 \
   --port="${HTTP_PORT}" \
-  --rendezvous-port="${UDP_PORT}" >/tmp/gubsy-room-punch-smoke.log 2>&1 &
+  --punch-port="${UDP_PORT}" >/tmp/gubsy-room-punch-smoke.log 2>&1 &
 ROOMD_PID=$!
 
 cleanup() {

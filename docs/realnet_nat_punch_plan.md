@@ -48,12 +48,12 @@ Use `gubsy-roomd` as the initial deployable binary, but split the code internall
 gubsy-roomd
   room_directory     HTTP room create/list/fetch/update
   join_authority     HTTP join attempts and short-lived tokens
-  rendezvous_udp     UDP endpoint observation and punch coordination
+  punch_udp          UDP endpoint observation and punch coordination
   diagnostics        structured logs and attempt timelines
 ```
 
 This avoids a second service while we are still learning the production shape.
-The `rendezvous_udp` module should be written so it can move into a separate
+The `punch_udp` module should be written so it can move into a separate
 `gubsy-punchd` binary later without changing the game-facing API.
 
 ## Core Model
@@ -124,17 +124,18 @@ GUBSY_ROOMD_UDP_HOST=0.0.0.0
 GUBSY_ROOMD_UDP_PORT=8789
 ```
 
-The HTTP roomd URL can advertise the UDP rendezvous endpoint in a health/capability
+The HTTP roomd URL can advertise the UDP punch endpoint in a health/capability
 response:
 
 ```json
 {
   "ok": true,
-  "capabilities": {
-    "rendezvous_udp": {
+  "realnet": {
+    "punch_udp": {
+      "enabled": true,
       "host": "roomd.example.com",
       "port": 8789,
-      "protocol": "gubsy-rendezvous-v1"
+      "protocol": "gubsy-punch-v1"
     }
   }
 }
@@ -151,10 +152,10 @@ These decisions are the working defaults for the first implementation.
    The game payload is still the game's own binary UDP stream; Realnet
    rendezvous only negotiates endpoints and verifies punch probes. Binary
    rendezvous packets can come later if profiling says this matters.
-2. Advertise the UDP rendezvous endpoint explicitly through HTTP
+2. Advertise the UDP punch endpoint explicitly through HTTP
    health/capabilities. `HTTP_PORT + 1` is allowed only as a local-development
    fallback.
-3. Send host rendezvous hellos lightly while public hosting, with a slower idle
+3. Send host punch hellos lightly while public hosting, with a slower idle
    interval and a faster interval while join attempts are active.
 4. Try LAN/direct candidates quickly, but treat NAT punch as the normal public
    internet path for player-hosted rooms. Do not make players rely on port
@@ -482,10 +483,10 @@ First implementation should include:
 
 The first roomd rendezvous foundation is implemented in `gubsy-roomd`:
 
-- `--rendezvous-port=<udp-port>` binds a UDP rendezvous socket.
-- `--no-rendezvous` disables the UDP socket for debugging.
-- `/health` advertises `realnet.rendezvous_udp` with the configured endpoint
-  and `gubsy-rendezvous-v1` protocol name.
+- `--punch-port=<udp-port>` binds the UDP punch socket.
+- `--no-punch` disables the UDP socket for debugging.
+- `/health` advertises `realnet.punch_udp` with the configured endpoint
+  and `gubsy-punch-v1` protocol name.
 - Join attempts now receive a per-attempt `punch_secret`.
 - UDP `host_hello` packets are HMAC-authenticated with the room host secret.
 - UDP `joiner_hello` packets are HMAC-authenticated with the join attempt

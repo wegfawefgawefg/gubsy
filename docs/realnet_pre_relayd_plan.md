@@ -184,7 +184,7 @@ Target:
   - room selected
   - candidates generated
   - direct candidate skipped/tried/failed
-  - rendezvous endpoint observed
+  - punch endpoint observed
   - endpoint hints sent
   - punch probes/acks observed
   - game transport accepted
@@ -338,8 +338,8 @@ GUBSY_RELAYD_UDP_HOST
 GUBSY_RELAYD_UDP_PORT
 ```
 
-Compatibility aliases are acceptable, but docs should prefer the explicit
-service names.
+There are no external consumers yet, so compatibility aliases should not be
+carried. Docs and code should prefer the explicit service names.
 
 ### Step 3: Capability Shape
 
@@ -369,8 +369,8 @@ Expose services as separate capabilities:
 }
 ```
 
-The current `rendezvous_udp` name can be supported during migration, but the
-future name should be `punch_udp` so the service responsibility is clear.
+The old `rendezvous_udp` health name should not be supported. The clean name is
+`punch_udp` so the service responsibility is clear.
 
 ## Candidate Classification Rules
 

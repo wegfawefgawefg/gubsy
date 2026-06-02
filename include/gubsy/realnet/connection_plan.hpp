@@ -50,6 +50,15 @@ struct PlannedConnectionCandidate {
     std::string reason;
 };
 
+struct AttemptTimelineEvent {
+    std::string event;
+    ConnectionCandidateKind candidate_kind{ConnectionCandidateKind::LanDirect};
+    CandidateDecision decision{CandidateDecision::Try};
+    ConnectPhase phase{ConnectPhase::Idle};
+    std::string endpoint;
+    std::string reason;
+};
+
 struct ConnectionPlanInput {
     MatchmakingRoom room;
     std::string join_attempt_id;
@@ -65,6 +74,7 @@ struct ConnectionPlan {
     std::string room_code;
     std::string join_attempt_id;
     std::vector<PlannedConnectionCandidate> candidates;
+    std::vector<AttemptTimelineEvent> timeline;
 };
 
 const char* address_family_id(AddressFamily family);
