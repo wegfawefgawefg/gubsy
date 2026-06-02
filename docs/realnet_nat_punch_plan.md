@@ -36,7 +36,9 @@ limits per source and room, and exposes localhost-only debug state. Splonks uses
 those helpers from its gameplay UDP socket so the punch path and game packet path
 share the same NAT mapping.
 
-Relay remains the fallback after this phase.
+Relay remains the fallback after this phase. Before adding relayd, use
+`realnet_pre_relayd_plan.md` to move candidate/cascade policy into Gubsy and
+make the roomd/punchd/relayd service boundaries explicit.
 
 ## Architecture Decision
 

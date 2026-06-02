@@ -248,7 +248,10 @@ attempt. Room update tokens and join tokens must be separate.
 ## UDP Punch-Through
 
 NAT traversal needs a UDP rendezvous path. HTTP room listing is not enough.
-The detailed implementation plan lives in `realnet_nat_punch_plan.md`.
+The detailed NAT punch implementation plan lives in `realnet_nat_punch_plan.md`.
+Before implementing relayd, use `realnet_pre_relayd_plan.md` to clean up the
+candidate/cascade policy and service boundaries so relay becomes a reusable
+Realnet candidate instead of a game-specific branch.
 
 Rendezvous responsibilities:
 
