@@ -163,10 +163,20 @@ bool direct_candidate_kind(ConnectionCandidateKind kind) {
 }
 
 AttemptTimelineEvent make_timeline_event(const PlannedConnectionCandidate& candidate) {
+    std::string event = candidate.decision == CandidateDecision::Try
+                            ? "candidate_try"
+                            : "candidate_skip";
+    if (candidate.candidate.kind == ConnectionCandidateKind::Relay) {
+        event = candidate.decision == CandidateDecision::Try
+                    ? "relay_candidate_try"
+                    : "relay_candidate_skip";
+    } else if (candidate.candidate.kind == ConnectionCandidateKind::NatPunch) {
+        event = candidate.decision == CandidateDecision::Try
+                    ? "nat_punch_candidate_try"
+                    : "nat_punch_candidate_skip";
+    }
     return AttemptTimelineEvent{
-        .event = candidate.decision == CandidateDecision::Try
-                     ? "candidate_try"
-                     : "candidate_skip",
+        .event = std::move(event),
         .candidate_kind = candidate.candidate.kind,
         .decision = candidate.decision,
         .phase = candidate.phase,

@@ -68,6 +68,16 @@ int main() {
     }
     if (plan.candidates[2].decision != realnet::CandidateDecision::SkipDisabled)
         return fail("relay candidate should be disabled");
+    bool saw_relay_skip = false;
+    for (const realnet::AttemptTimelineEvent& event : plan.timeline) {
+        if (event.event == "relay_candidate_skip" &&
+            event.candidate_kind == ConnectionCandidateKind::Relay &&
+            event.decision == realnet::CandidateDecision::SkipDisabled) {
+            saw_relay_skip = true;
+        }
+    }
+    if (!saw_relay_skip)
+        return fail("relay skip was not recorded in the connection timeline");
 
     input.local_network.interfaces.front().address = "192.168.11.23";
     const realnet::ConnectionPlan local_plan = realnet::build_connection_plan(input);
@@ -90,6 +100,16 @@ int main() {
         forced_relay_plan.candidates[0].decision != realnet::CandidateDecision::Try) {
         return fail("forced relay was not ordered first and available");
     }
+    bool saw_relay_try = false;
+    for (const realnet::AttemptTimelineEvent& event : forced_relay_plan.timeline) {
+        if (event.event == "relay_candidate_try" &&
+            event.candidate_kind == ConnectionCandidateKind::Relay &&
+            event.decision == realnet::CandidateDecision::Try) {
+            saw_relay_try = true;
+        }
+    }
+    if (!saw_relay_try)
+        return fail("relay try was not recorded in the connection timeline");
 
     input.force_nat_punch = true;
     const realnet::ConnectionPlan relay_precedence_plan = realnet::build_connection_plan(input);

@@ -55,7 +55,6 @@ constexpr int kDefaultPort = 8788;
 constexpr int kDefaultRendezvousPortOffset = 1;
 constexpr int kDefaultRelayPortOffset = 2;
 constexpr auto kJoinAttemptTimeout = std::chrono::seconds(30);
-constexpr auto kRelayAllocationTimeout = std::chrono::seconds(30);
 
 #if defined(_WIN32)
 using SocketHandle = SOCKET;
@@ -116,6 +115,15 @@ struct RelayAllocation {
     Clock::time_point joiner_seen_at{};
 };
 
+struct RelayCounters {
+    std::uint64_t allocations_created{0};
+    std::uint64_t allocations_expired{0};
+    std::uint64_t allocations_closed{0};
+    std::uint64_t auth_failures{0};
+    std::uint64_t packets_dropped{0};
+    std::uint64_t rate_limited_packets{0};
+};
+
 struct RoomRecord {
     std::string room_code;
     std::string host_secret;
@@ -161,6 +169,8 @@ struct RoomRegistry {
     std::mutex mutex;
     std::unordered_map<std::string, RoomRecord> rooms;
     std::mt19937_64 rng{std::random_device{}()};
+    realnet::RelayTimingConfig relay_timing{realnet::default_config().relay.timing};
+    RelayCounters relay_counters;
 
     std::string random_token(int len) {
         std::uniform_int_distribution<std::size_t> dist(
@@ -182,6 +192,16 @@ struct RoomRegistry {
 
     void cleanup_expired_locked() {
         const auto now = Clock::now();
+        const auto relay_allocation_ttl = std::chrono::milliseconds(
+            relay_timing.allocation_ttl_ms > 0
+                ? relay_timing.allocation_ttl_ms
+                : realnet::default_config().relay.timing.allocation_ttl_ms
+        );
+        const auto relay_idle_timeout = std::chrono::milliseconds(
+            relay_timing.idle_timeout_ms > 0
+                ? relay_timing.idle_timeout_ms
+                : realnet::default_config().relay.timing.idle_timeout_ms
+        );
         std::vector<std::string> dead_rooms;
         for (auto& [room_code, room] : rooms) {
             for (auto it = room.join_attempts.begin(); it != room.join_attempts.end();) {
@@ -195,12 +215,18 @@ struct RoomRegistry {
                 }
             }
             for (auto it = room.relay_allocations.begin(); it != room.relay_allocations.end();) {
-                if (now - it->second.created_at > kRelayAllocationTimeout &&
-                    !it->second.ready) {
+                const bool setup_expired =
+                    !it->second.ready && now - it->second.created_at > relay_allocation_ttl;
+                const bool idle_expired =
+                    it->second.ready && now - it->second.last_seen > relay_idle_timeout;
+                if (setup_expired || idle_expired) {
                     log_event("relay_allocation_expire",
                               {{"room_code", room_code},
                                {"join_attempt_id", it->second.join_attempt_id},
-                               {"relay_allocation_id", it->second.allocation_id}});
+                               {"relay_allocation_id", it->second.allocation_id},
+                               {"reason", setup_expired ? "relay_allocation_expired"
+                                                        : "relay_idle_timeout"}});
+                    relay_counters.allocations_expired += 1;
                     it = room.relay_allocations.erase(it);
                 } else {
                     ++it;
@@ -225,6 +251,23 @@ struct RoomRegistry {
 };
 
 RoomRegistry g_registry;
+
+void count_relay_drop(bool auth_failure = false, bool rate_limited = false) {
+    std::lock_guard<std::mutex> lock(g_registry.mutex);
+    g_registry.relay_counters.packets_dropped += 1;
+    if (auth_failure)
+        g_registry.relay_counters.auth_failures += 1;
+    if (rate_limited)
+        g_registry.relay_counters.rate_limited_packets += 1;
+}
+
+void count_relay_drop_locked(bool auth_failure = false, bool rate_limited = false) {
+    g_registry.relay_counters.packets_dropped += 1;
+    if (auth_failure)
+        g_registry.relay_counters.auth_failures += 1;
+    if (rate_limited)
+        g_registry.relay_counters.rate_limited_packets += 1;
+}
 
 std::string sockaddr_to_endpoint(const sockaddr_storage& storage, socklen_t len) {
     char host[NI_MAXHOST]{};
@@ -255,6 +298,14 @@ std::uint64_t ms_since_epoch() {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
                                           std::chrono::system_clock::now().time_since_epoch())
                                           .count());
+}
+
+std::uint64_t age_ms(Clock::time_point now, Clock::time_point value) {
+    if (value == Clock::time_point{} || now < value)
+        return 0;
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - value).count()
+    );
 }
 
 void log_event(const char* event, const nlohmann::json& fields) {
@@ -1007,17 +1058,29 @@ private:
         const auto now = Clock::now();
         const std::string source = sockaddr_to_endpoint(from, from_len);
         if (!ip_limiter_.allow(source, now)) {
+            count_relay_drop(false, true);
             log_event("relay_rate_limit", {{"scope", "ip"}, {"source", source}});
+            return;
+        }
+        if (bytes.size() > config_.max_packet_bytes) {
+            count_relay_drop();
+            log_event("relay_packet_reject",
+                      {{"source", source},
+                       {"reason", "relay_packet_too_large"},
+                       {"bytes", static_cast<int>(bytes.size())},
+                       {"max_packet_bytes", config_.max_packet_bytes}});
             return;
         }
 
         realnet::RelayPacket packet;
         std::string err;
         if (!realnet::decode_relay_packet(bytes, packet, err)) {
+            count_relay_drop();
             log_event("relay_packet_reject", {{"source", source}, {"reason", err}});
             return;
         }
         if (!room_limiter_.allow(packet.room_code, now)) {
+            count_relay_drop(false, true);
             log_event("relay_rate_limit", {{"scope", "room"}, {"room_code", packet.room_code}});
             return;
         }
@@ -1026,6 +1089,7 @@ private:
         g_registry.cleanup_expired_locked();
         auto room_it = g_registry.rooms.find(packet.room_code);
         if (room_it == g_registry.rooms.end()) {
+            count_relay_drop_locked();
             log_event("relay_packet_reject",
                       {{"source", source},
                        {"room_code", packet.room_code},
@@ -1036,6 +1100,7 @@ private:
 
         if (packet.role == realnet::RelayRole::Host) {
             if (!realnet::verify_relay_packet(packet, room.host_secret)) {
+                count_relay_drop_locked(true);
                 log_event("relay_packet_reject", {{"source", source},
                                                    {"room_code", room.room_code},
                                                    {"reason", "host_mac"}});
@@ -1055,6 +1120,7 @@ private:
             if (packet.kind == realnet::RelayPacketKind::Data) {
                 auto allocation_it = room.relay_allocations.find(packet.allocation_id);
                 if (allocation_it == room.relay_allocations.end()) {
+                    count_relay_drop_locked();
                     log_event("relay_packet_reject",
                               {{"source", source},
                                {"room_code", room.room_code},
@@ -1070,6 +1136,7 @@ private:
         if (packet.role == realnet::RelayRole::Joiner) {
             auto allocation_it = room.relay_allocations.find(packet.allocation_id);
             if (allocation_it == room.relay_allocations.end()) {
+                count_relay_drop_locked();
                 log_event("relay_packet_reject",
                           {{"source", source},
                            {"room_code", room.room_code},
@@ -1079,6 +1146,7 @@ private:
             }
             RelayAllocation& allocation = allocation_it->second;
             if (!realnet::verify_relay_packet(packet, allocation.relay_secret)) {
+                count_relay_drop_locked(true);
                 log_event("relay_packet_reject", {{"source", source},
                                                    {"room_code", room.room_code},
                                                    {"relay_allocation_id", allocation.allocation_id},
@@ -1108,6 +1176,14 @@ private:
 
         if (packet.kind == realnet::RelayPacketKind::Keepalive ||
             packet.kind == realnet::RelayPacketKind::Close) {
+            auto allocation_it = room.relay_allocations.find(packet.allocation_id);
+            if (allocation_it != room.relay_allocations.end()) {
+                allocation_it->second.last_seen = now;
+                if (packet.kind == realnet::RelayPacketKind::Close) {
+                    g_registry.relay_counters.allocations_closed += 1;
+                    room.relay_allocations.erase(allocation_it);
+                }
+            }
             log_event("relay_control",
                       {{"room_code", room.room_code},
                        {"relay_allocation_id", packet.allocation_id},
@@ -1116,6 +1192,7 @@ private:
             return;
         }
 
+        count_relay_drop_locked();
         log_event("relay_packet_reject", {{"source", source},
                                            {"room_code", room.room_code},
                                            {"reason", "unexpected_kind"},
@@ -1195,6 +1272,22 @@ int main(int argc, char** argv) {
             relay_enabled = true;
         } else if (arg == "--no-relay") {
             relay_enabled = false;
+        } else if (arg.rfind("--relay-max-packet-bytes=", 0) == 0) {
+            try {
+                relay_config.max_packet_bytes =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(25)));
+            } catch (...) {
+                relay_config.max_packet_bytes =
+                    realnet::default_config().relay.max_packet_bytes;
+            }
+        } else if (arg == "--relay-max-packet-bytes" && i + 1 < argc) {
+            try {
+                relay_config.max_packet_bytes =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.max_packet_bytes =
+                    realnet::default_config().relay.max_packet_bytes;
+            }
         } else if (arg.rfind("--relay-ip-rate=", 0) == 0) {
             try {
                 relay_config.ip_packet_rate_per_sec = std::stod(arg.substr(16));
@@ -1251,14 +1344,49 @@ int main(int argc, char** argv) {
                 relay_config.room_packet_burst =
                     realnet::default_config().relay.room_packet_burst;
             }
+        } else if (arg.rfind("--relay-allocation-ttl-ms=", 0) == 0) {
+            try {
+                relay_config.timing.allocation_ttl_ms =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(26)));
+            } catch (...) {
+                relay_config.timing.allocation_ttl_ms =
+                    realnet::default_config().relay.timing.allocation_ttl_ms;
+            }
+        } else if (arg == "--relay-allocation-ttl-ms" && i + 1 < argc) {
+            try {
+                relay_config.timing.allocation_ttl_ms =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.timing.allocation_ttl_ms =
+                    realnet::default_config().relay.timing.allocation_ttl_ms;
+            }
+        } else if (arg.rfind("--relay-idle-timeout-ms=", 0) == 0) {
+            try {
+                relay_config.timing.idle_timeout_ms =
+                    static_cast<std::uint64_t>(std::stoull(arg.substr(24)));
+            } catch (...) {
+                relay_config.timing.idle_timeout_ms =
+                    realnet::default_config().relay.timing.idle_timeout_ms;
+            }
+        } else if (arg == "--relay-idle-timeout-ms" && i + 1 < argc) {
+            try {
+                relay_config.timing.idle_timeout_ms =
+                    static_cast<std::uint64_t>(std::stoull(argv[++i]));
+            } catch (...) {
+                relay_config.timing.idle_timeout_ms =
+                    realnet::default_config().relay.timing.idle_timeout_ms;
+            }
         } else if (arg == "--help") {
             std::cout << "Usage: gubsy-roomd [--host=<bind-host>] [--port=<port>]\n"
                          "                    [--punch-port=<udp-port>] [--no-punch]\n"
                          "                    [--relay-port=<udp-port>] [--relay] [--no-relay]\n"
+                         "                    [--relay-max-packet-bytes=<bytes>]\n"
                          "                    [--relay-ip-rate=<packets/sec>]\n"
                          "                    [--relay-ip-burst=<packets>]\n"
                          "                    [--relay-room-rate=<packets/sec>]\n"
-                         "                    [--relay-room-burst=<packets>]\n";
+                         "                    [--relay-room-burst=<packets>]\n"
+                         "                    [--relay-allocation-ttl-ms=<ms>]\n"
+                         "                    [--relay-idle-timeout-ms=<ms>]\n";
             return 0;
         }
     }
@@ -1270,6 +1398,10 @@ int main(int argc, char** argv) {
         punch_port = port + kDefaultRendezvousPortOffset;
     if (relay_port <= 0 || relay_port > 65535)
         relay_port = port + kDefaultRelayPortOffset;
+    if (relay_config.max_packet_bytes == 0 ||
+        relay_config.max_packet_bytes > realnet::kMaxRelayPacketBytes) {
+        relay_config.max_packet_bytes = realnet::default_config().relay.max_packet_bytes;
+    }
     if (relay_config.ip_packet_rate_per_sec <= 0.0)
         relay_config.ip_packet_rate_per_sec =
             realnet::default_config().relay.ip_packet_rate_per_sec;
@@ -1280,6 +1412,17 @@ int main(int argc, char** argv) {
             realnet::default_config().relay.room_packet_rate_per_sec;
     if (relay_config.room_packet_burst <= 0.0)
         relay_config.room_packet_burst = realnet::default_config().relay.room_packet_burst;
+    if (relay_config.timing.allocation_ttl_ms == 0)
+        relay_config.timing.allocation_ttl_ms =
+            realnet::default_config().relay.timing.allocation_ttl_ms;
+    if (relay_config.timing.idle_timeout_ms == 0)
+        relay_config.timing.idle_timeout_ms =
+            realnet::default_config().relay.timing.idle_timeout_ms;
+
+    {
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.relay_timing = relay_config.timing;
+    }
 
     httplib::Server server;
     RendezvousUdpServer rendezvous;
@@ -1326,7 +1469,11 @@ int main(int argc, char** argv) {
                                             {"room_packet_rate_per_sec",
                                              active_relay_config.room_packet_rate_per_sec},
                                             {"room_packet_burst",
-                                             active_relay_config.room_packet_burst}}}};
+                                             active_relay_config.room_packet_burst},
+                                            {"allocation_ttl_ms",
+                                             active_relay_config.timing.allocation_ttl_ms},
+                                            {"idle_timeout_ms",
+                                             active_relay_config.timing.idle_timeout_ms}}}};
         nlohmann::json capabilities = {
             {"ok", true},
             {"realnet",
@@ -1363,10 +1510,123 @@ int main(int argc, char** argv) {
         }
         res.set_content(nlohmann::json{{"rooms", rooms},
                                         {"join_attempts", attempts},
-                                        {"relay_allocations", relay_allocations}}
+                                        {"relay_allocations", relay_allocations},
+                                        {"relay_counters",
+                                         {{"active_allocations", relay_allocations},
+                                          {"allocations_created",
+                                           g_registry.relay_counters.allocations_created},
+                                          {"allocations_expired",
+                                           g_registry.relay_counters.allocations_expired},
+                                          {"allocations_closed",
+                                           g_registry.relay_counters.allocations_closed},
+                                          {"auth_failures",
+                                           g_registry.relay_counters.auth_failures},
+                                          {"packets_dropped",
+                                           g_registry.relay_counters.packets_dropped},
+                                          {"rate_limited_packets",
+                                           g_registry.relay_counters.rate_limited_packets}}}}
                             .dump(),
                         "application/json");
     });
+
+    server.Get("/debug/realnet/relays", [](const httplib::Request& req, httplib::Response& res) {
+        if (req.remote_addr != "127.0.0.1" && req.remote_addr != "::1") {
+            res.status = 403;
+            res.set_content("debug endpoints are localhost-only", "text/plain");
+            return;
+        }
+        std::lock_guard<std::mutex> lock(g_registry.mutex);
+        g_registry.cleanup_expired_locked();
+        const auto now = Clock::now();
+        nlohmann::json allocations = nlohmann::json::array();
+        for (const auto& [_, room] : g_registry.rooms) {
+            for (const auto& [__, allocation] : room.relay_allocations) {
+                allocations.push_back({
+                    {"room_code", room.room_code},
+                    {"relay_allocation_id", allocation.allocation_id},
+                    {"join_attempt_id", allocation.join_attempt_id},
+                    {"display_name", allocation.display_name},
+                    {"ready", allocation.ready},
+                    {"has_host_endpoint", room.has_host_relay_endpoint},
+                    {"host_observed_endpoint", room.host_relay_observed_endpoint},
+                    {"has_joiner_endpoint", allocation.has_joiner_endpoint},
+                    {"joiner_observed_endpoint", allocation.joiner_observed_endpoint},
+                    {"age_ms", age_ms(now, allocation.created_at)},
+                    {"idle_ms", age_ms(now, allocation.last_seen)},
+                    {"packets_from_host", allocation.packets_from_host},
+                    {"packets_from_joiner", allocation.packets_from_joiner},
+                    {"bytes_from_host", allocation.bytes_from_host},
+                    {"bytes_from_joiner", allocation.bytes_from_joiner},
+                });
+            }
+        }
+        res.set_content(nlohmann::json{{"relay_allocations", allocations},
+                                        {"relay_counters",
+                                         {{"active_allocations",
+                                           static_cast<int>(allocations.size())},
+                                          {"allocations_created",
+                                           g_registry.relay_counters.allocations_created},
+                                          {"allocations_expired",
+                                           g_registry.relay_counters.allocations_expired},
+                                          {"allocations_closed",
+                                           g_registry.relay_counters.allocations_closed},
+                                          {"auth_failures",
+                                           g_registry.relay_counters.auth_failures},
+                                          {"packets_dropped",
+                                           g_registry.relay_counters.packets_dropped},
+                                          {"rate_limited_packets",
+                                           g_registry.relay_counters.rate_limited_packets}}}}
+                            .dump(),
+                        "application/json");
+    });
+
+    server.Get(R"(/debug/realnet/relays/([A-Z0-9]+))",
+               [](const httplib::Request& req, httplib::Response& res) {
+                   if (req.remote_addr != "127.0.0.1" && req.remote_addr != "::1") {
+                       res.status = 403;
+                       res.set_content("debug endpoints are localhost-only", "text/plain");
+                       return;
+                   }
+                   std::lock_guard<std::mutex> lock(g_registry.mutex);
+                   g_registry.cleanup_expired_locked();
+                   const auto now = Clock::now();
+                   const std::string allocation_id = req.matches[1].str();
+                   for (const auto& [_, room] : g_registry.rooms) {
+                       auto allocation_it = room.relay_allocations.find(allocation_id);
+                       if (allocation_it == room.relay_allocations.end())
+                           continue;
+                       const RelayAllocation& allocation = allocation_it->second;
+                       res.set_content(nlohmann::json{
+                                           {"room_code", room.room_code},
+                                           {"relay_allocation_id", allocation.allocation_id},
+                                           {"join_attempt_id", allocation.join_attempt_id},
+                                           {"display_name", allocation.display_name},
+                                           {"ready", allocation.ready},
+                                           {"has_host_endpoint",
+                                            room.has_host_relay_endpoint},
+                                           {"host_observed_endpoint",
+                                            room.host_relay_observed_endpoint},
+                                           {"has_joiner_endpoint",
+                                            allocation.has_joiner_endpoint},
+                                           {"joiner_observed_endpoint",
+                                            allocation.joiner_observed_endpoint},
+                                           {"age_ms", age_ms(now, allocation.created_at)},
+                                           {"idle_ms", age_ms(now, allocation.last_seen)},
+                                           {"packets_from_host",
+                                            allocation.packets_from_host},
+                                           {"packets_from_joiner",
+                                            allocation.packets_from_joiner},
+                                           {"bytes_from_host", allocation.bytes_from_host},
+                                           {"bytes_from_joiner",
+                                            allocation.bytes_from_joiner},
+                                       }
+                                           .dump(),
+                                       "application/json");
+                       return;
+                   }
+                   res.status = 404;
+                   res.set_content("relay allocation not found", "text/plain");
+               });
 
     server.Get(R"(/debug/realnet/rooms/([A-Z0-9]+))",
                [](const httplib::Request& req, httplib::Response& res) {
@@ -1384,6 +1644,7 @@ int main(int argc, char** argv) {
                        return;
                    }
                    const RoomRecord& room = it->second;
+                   const auto now = Clock::now();
                    nlohmann::json attempts = nlohmann::json::array();
                    for (const auto& [_, attempt] : room.join_attempts) {
                        attempts.push_back({
@@ -1403,6 +1664,8 @@ int main(int argc, char** argv) {
                            {"ready", allocation.ready},
                            {"has_joiner_endpoint", allocation.has_joiner_endpoint},
                            {"joiner_observed_endpoint", allocation.joiner_observed_endpoint},
+                           {"age_ms", age_ms(now, allocation.created_at)},
+                           {"idle_ms", age_ms(now, allocation.last_seen)},
                            {"packets_from_host", allocation.packets_from_host},
                            {"packets_from_joiner", allocation.packets_from_joiner},
                            {"bytes_from_host", allocation.bytes_from_host},
@@ -1603,6 +1866,7 @@ int main(int argc, char** argv) {
                 allocation.relay_secret = relay_secret;
                 allocation.display_name = attempt.display_name;
                 room.relay_allocations.emplace(allocation.allocation_id, std::move(allocation));
+                g_registry.relay_counters.allocations_created += 1;
             }
             room.join_attempts.emplace(token, std::move(attempt));
             room.updated_at = Clock::now();
