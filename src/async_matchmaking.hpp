@@ -26,6 +26,18 @@ struct AsyncHeartbeatResult {
     MatchmakingRoom room;
 };
 
+struct AsyncRoomListRequest {
+    std::uint64_t request_id{0};
+    std::string server_url;
+};
+
+struct AsyncRoomListResult {
+    std::uint64_t request_id{0};
+    bool ok{false};
+    std::string err;
+    std::vector<MatchmakingRoom> rooms;
+};
+
 class AsyncMatchmakingClient {
 public:
     AsyncMatchmakingClient();
@@ -36,6 +48,8 @@ public:
 
     void enqueue_heartbeat(AsyncHeartbeatRequest request);
     std::vector<AsyncHeartbeatResult> drain_heartbeat_results();
+    void enqueue_room_list(AsyncRoomListRequest request);
+    std::vector<AsyncRoomListResult> drain_room_list_results();
     void shutdown();
 
 private:

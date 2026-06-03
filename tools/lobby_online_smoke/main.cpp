@@ -56,6 +56,19 @@ void pump_online_until(EngineState& engine, Predicate predicate, const char* mes
     require(predicate(), message);
 }
 
+template <typename Predicate>
+void pump_room_refresh_until(EngineState& engine, Predicate predicate, const char* message) {
+    for (int attempt = 0; attempt < 120; ++attempt) {
+        if (predicate())
+            return;
+        std::string ignored;
+        (void)gubsy_lobby_refresh_rooms(engine, false, ignored);
+        engine.now += 0.016;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    require(predicate(), message);
+}
+
 const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slot) {
     const auto& menu = menu_system_internal::runtime_state(engine);
     auto it = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
@@ -495,6 +508,9 @@ void verify_own_room_browser_card(GubsyRuntime& runtime) {
     EngineState& engine = gubsy_runtime_engine(runtime);
     require(gubsy_push_menu_screen(runtime, MenuScreenID::LOBBY_SERVER_BROWSER),
             "failed to push browser screen");
+    gubsy_update_menu(runtime, 0.016f, 1280, 720);
+    pump_room_refresh_until(engine, [&]() { return !engine.lobby.room_refresh_in_flight; },
+                            "browser room refresh did not complete");
     gubsy_update_menu(runtime, 0.016f, 1280, 720);
 
     const auto& menu = menu_system_internal::runtime_state(engine);
@@ -962,6 +978,9 @@ int main(int argc, char** argv) {
                 "direct host advertised endpoint mismatch");
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "guest direct/private room refresh failed");
+        pump_room_refresh_until(guest_engine,
+                                [&]() { return !guest_engine.lobby.room_refresh_in_flight; },
+                                "guest direct/private room refresh did not complete");
         require(guest_engine.lobby.discovered_rooms.empty(),
                 "direct/private host should not create a public room listing");
 
@@ -1086,6 +1105,9 @@ int main(int argc, char** argv) {
 
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "guest public room refresh failed");
+        pump_room_refresh_until(guest_engine,
+                                [&]() { return !guest_engine.lobby.room_refresh_in_flight; },
+                                "guest public room refresh did not complete");
         if (old_room_code != host_engine.lobby.room_code) {
             auto old_listed = std::find_if(
                 guest_engine.lobby.discovered_rooms.begin(),
@@ -1183,6 +1205,9 @@ int main(int argc, char** argv) {
 
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
                 "multi-host room refresh failed");
+        pump_room_refresh_until(guest_engine,
+                                [&]() { return !guest_engine.lobby.room_refresh_in_flight; },
+                                "multi-host room refresh did not complete");
         auto room_listed = [&](const std::string& room_code) {
             return std::any_of(
                 guest_engine.lobby.discovered_rooms.begin(),

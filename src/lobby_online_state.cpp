@@ -289,6 +289,21 @@ void apply_heartbeat_fetch_error(EngineState& engine, const std::string& err) {
         engine.lobby.last_error = err;
 }
 
+void apply_room_list(EngineState& engine, std::vector<MatchmakingRoom> rooms) {
+    engine.lobby.discovered_rooms = std::move(rooms);
+    engine.lobby.browse_room_codes.clear();
+    for (const MatchmakingRoom& room : engine.lobby.discovered_rooms)
+        engine.lobby.browse_room_codes.push_back(room.room_code);
+    clear_lobby_error(engine,
+                      std::to_string(engine.lobby.discovered_rooms.size()) + " rooms visible");
+}
+
+void apply_room_list_failure(EngineState& engine, const std::string& err) {
+    const std::string message = err.empty() ? "Cannot refresh rooms: failed to list rooms"
+                                            : with_prefix("Cannot refresh rooms", err);
+    set_lobby_error(engine, message);
+}
+
 void ensure_room_defaults(EngineState& engine) {
     if (engine.lobby.room_server_url.empty())
         engine.lobby.room_server_url = default_room_server_url();
@@ -834,26 +849,48 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
 bool gubsy_lobby_refresh_rooms(EngineState& engine, bool force, std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
+    if (engine.async_matchmaking) {
+        for (const AsyncRoomListResult& result :
+             engine.async_matchmaking->drain_room_list_results()) {
+            if (result.request_id != engine.lobby.room_refresh_request_id)
+                continue;
+            engine.lobby.room_refresh_in_flight = false;
+            if (result.ok)
+                apply_room_list(engine, result.rooms);
+            else
+                apply_room_list_failure(engine, result.err);
+        }
+    }
     if (!force && engine.now < engine.lobby.next_room_refresh_at) {
         message = engine.lobby.status_message;
+        return true;
+    }
+    if (engine.lobby.room_refresh_in_flight) {
+        message = engine.lobby.status_message;
+        return true;
+    }
+
+    if (engine.lobby_matchmaking == nullptr) {
+        AsyncRoomListRequest request;
+        request.request_id = ++engine.lobby.room_refresh_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        engine.lobby.room_refresh_in_flight = true;
+        engine.lobby.next_room_refresh_at = engine.now + kRoomRefreshIntervalSec;
+        clear_lobby_error(engine, "Refreshing rooms...");
+        message = engine.lobby.status_message;
+        async_matchmaking(engine).enqueue_room_list(std::move(request));
         return true;
     }
 
     std::vector<MatchmakingRoom> rooms;
     std::string err;
     if (!matchmaking(engine).list_rooms(engine.lobby.room_server_url, rooms, err)) {
-        message = err.empty() ? "Cannot refresh rooms: failed to list rooms"
-                              : with_prefix("Cannot refresh rooms", err);
-        set_lobby_error(engine, message);
+        apply_room_list_failure(engine, err);
+        message = engine.lobby.status_message;
         return false;
     }
 
-    engine.lobby.discovered_rooms = std::move(rooms);
-    engine.lobby.browse_room_codes.clear();
-    for (const MatchmakingRoom& room : engine.lobby.discovered_rooms)
-        engine.lobby.browse_room_codes.push_back(room.room_code);
-    clear_lobby_error(engine,
-                      std::to_string(engine.lobby.discovered_rooms.size()) + " rooms visible");
+    apply_room_list(engine, std::move(rooms));
     engine.lobby.next_room_refresh_at = engine.now + kRoomRefreshIntervalSec;
     message = engine.lobby.status_message;
     return true;

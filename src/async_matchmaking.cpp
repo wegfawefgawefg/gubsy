@@ -9,11 +9,27 @@
 #include <thread>
 #include <utility>
 
+namespace {
+
+struct AsyncMatchmakingWorkItem {
+    enum class Kind {
+        Heartbeat,
+        RoomList,
+    };
+
+    Kind kind{Kind::Heartbeat};
+    AsyncHeartbeatRequest heartbeat;
+    AsyncRoomListRequest room_list;
+};
+
+} // namespace
+
 struct AsyncMatchmakingClient::Impl {
     std::mutex mutex;
     std::condition_variable cv;
-    std::deque<AsyncHeartbeatRequest> heartbeat_requests;
+    std::deque<AsyncMatchmakingWorkItem> requests;
     std::vector<AsyncHeartbeatResult> heartbeat_results;
+    std::vector<AsyncRoomListResult> room_list_results;
     bool stopping{false};
     std::thread worker;
     RoomServerMatchmaking matchmaking;
@@ -43,28 +59,41 @@ AsyncHeartbeatResult process_heartbeat(RoomServerMatchmaking& matchmaking,
     return result;
 }
 
+AsyncRoomListResult process_room_list(RoomServerMatchmaking& matchmaking,
+                                      const AsyncRoomListRequest& request) {
+    AsyncRoomListResult result;
+    result.request_id = request.request_id;
+    result.ok = matchmaking.list_rooms(request.server_url, result.rooms, result.err);
+    return result;
+}
+
 } // namespace
 
 AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>()) {
     impl_->worker = std::thread([impl = impl_.get()]() {
         while (true) {
-            AsyncHeartbeatRequest request;
+            AsyncMatchmakingWorkItem request;
             {
                 std::unique_lock<std::mutex> lock(impl->mutex);
                 impl->cv.wait(lock, [&]() {
-                    return impl->stopping || !impl->heartbeat_requests.empty();
+                    return impl->stopping || !impl->requests.empty();
                 });
                 if (impl->stopping)
                     break;
-                request = std::move(impl->heartbeat_requests.front());
-                impl->heartbeat_requests.pop_front();
+                request = std::move(impl->requests.front());
+                impl->requests.pop_front();
             }
 
-            AsyncHeartbeatResult result = process_heartbeat(impl->matchmaking, request);
-
-            {
+            if (request.kind == AsyncMatchmakingWorkItem::Kind::Heartbeat) {
+                AsyncHeartbeatResult result = process_heartbeat(impl->matchmaking,
+                                                                request.heartbeat);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->heartbeat_results.push_back(std::move(result));
+            } else {
+                AsyncRoomListResult result = process_room_list(impl->matchmaking,
+                                                               request.room_list);
+                std::lock_guard<std::mutex> lock(impl->mutex);
+                impl->room_list_results.push_back(std::move(result));
             }
         }
     });
@@ -81,7 +110,10 @@ void AsyncMatchmakingClient::enqueue_heartbeat(AsyncHeartbeatRequest request) {
         std::lock_guard<std::mutex> lock(impl_->mutex);
         if (impl_->stopping)
             return;
-        impl_->heartbeat_requests.push_back(std::move(request));
+        AsyncMatchmakingWorkItem item;
+        item.kind = AsyncMatchmakingWorkItem::Kind::Heartbeat;
+        item.heartbeat = std::move(request);
+        impl_->requests.push_back(std::move(item));
     }
     impl_->cv.notify_one();
 }
@@ -95,13 +127,37 @@ std::vector<AsyncHeartbeatResult> AsyncMatchmakingClient::drain_heartbeat_result
     return results;
 }
 
+void AsyncMatchmakingClient::enqueue_room_list(AsyncRoomListRequest request) {
+    if (!impl_)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->stopping)
+            return;
+        AsyncMatchmakingWorkItem item;
+        item.kind = AsyncMatchmakingWorkItem::Kind::RoomList;
+        item.room_list = std::move(request);
+        impl_->requests.push_back(std::move(item));
+    }
+    impl_->cv.notify_one();
+}
+
+std::vector<AsyncRoomListResult> AsyncMatchmakingClient::drain_room_list_results() {
+    std::vector<AsyncRoomListResult> results;
+    if (!impl_)
+        return results;
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    results.swap(impl_->room_list_results);
+    return results;
+}
+
 void AsyncMatchmakingClient::shutdown() {
     if (!impl_)
         return;
     {
         std::lock_guard<std::mutex> lock(impl_->mutex);
         impl_->stopping = true;
-        impl_->heartbeat_requests.clear();
+        impl_->requests.clear();
     }
     impl_->cv.notify_all();
     if (impl_->worker.joinable())
