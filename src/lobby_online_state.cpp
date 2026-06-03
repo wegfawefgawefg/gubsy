@@ -72,8 +72,11 @@ void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.direct_join_pending = false;
     engine.lobby.room_join_pending = false;
     engine.lobby.room_publish_in_flight = false;
+    engine.lobby.room_lookup_in_flight = false;
     engine.lobby.join_attempt_in_flight = false;
+    engine.lobby.room_join_finalize_in_flight = false;
     engine.lobby.room_remove_in_flight = false;
+    engine.lobby.pending_room_code.clear();
     engine.lobby.pending_direct_join_endpoint.clear();
     engine.lobby.pending_join_attempt_id.clear();
     engine.lobby.pending_join_token.clear();
@@ -408,6 +411,57 @@ bool apply_remote_room_config(EngineState& engine, const MatchmakingRoom& room,
     return false;
 }
 
+bool queue_or_complete_room_join(EngineState& engine,
+                                 const MatchmakingRoom& room_for_join,
+                                 const std::string& join_token,
+                                 std::string& message) {
+    if (engine.lobby_matchmaking == nullptr) {
+        AsyncJoinRoomRequest request;
+        request.request_id = ++engine.lobby.room_join_finalize_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        request.room_code = room_for_join.room_code;
+        request.display_name = local_player_name(engine);
+        request.join_token = join_token;
+        engine.lobby.pending_join_room = room_for_join;
+        engine.lobby.room_join_finalize_in_flight = true;
+        engine.lobby.room_join_pending = true;
+        clear_lobby_error(engine, "Joining room " + room_for_join.room_code);
+        message = engine.lobby.status_message;
+        async_matchmaking(engine).enqueue_join_room(std::move(request));
+        return true;
+    }
+
+    std::string member_id;
+    std::string err;
+    if (!matchmaking(engine).join_room(engine.lobby.room_server_url,
+                                       room_for_join.room_code,
+                                       local_player_name(engine),
+                                       join_token,
+                                       member_id,
+                                       err)) {
+        disconnect_game_transport(engine);
+        engine.lobby.connect_phase = ConnectPhase::Failed;
+        message = err.empty() ? "Cannot join room: room service rejected join"
+                              : with_prefix("Cannot join room", err);
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    apply_room_to_lobby(engine, room_for_join);
+    engine.lobby.online = true;
+    engine.lobby.is_host = false;
+    engine.lobby.member_id = member_id;
+    engine.lobby.host_secret.clear();
+    if (auto current_room = fetch_current_room(engine, err))
+        apply_room_to_lobby(engine, *current_room);
+    engine.lobby.connect_phase = ConnectPhase::Connected;
+    clear_direct_join_pending(engine);
+    clear_lobby_error(engine, "Joined room " + room_for_join.room_code);
+    engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+    message = engine.lobby.status_message;
+    return true;
+}
+
 bool validate_room_joinable(EngineState& engine, const MatchmakingRoom& room,
                             std::string& message) {
     if (engine.lobby.online && engine.lobby.is_host && !engine.lobby.room_code.empty() &&
@@ -513,34 +567,7 @@ bool continue_room_join_after_attempt(EngineState& engine,
         return true;
     }
 
-    std::string member_id;
-    std::string err;
-    if (!matchmaking(engine).join_room(engine.lobby.room_server_url,
-                                       room_for_join.room_code,
-                                       local_player_name(engine),
-                                       join_attempt.join_token,
-                                       member_id,
-                                       err)) {
-        disconnect_game_transport(engine);
-        engine.lobby.connect_phase = ConnectPhase::Failed;
-        message = err.empty() ? "Cannot join room: room service rejected join"
-                              : with_prefix("Cannot join room", err);
-        set_lobby_error(engine, message);
-        return false;
-    }
-
-    apply_room_to_lobby(engine, room_for_join);
-    engine.lobby.online = true;
-    engine.lobby.is_host = false;
-    engine.lobby.member_id = member_id;
-    engine.lobby.host_secret.clear();
-    if (auto current_room = fetch_current_room(engine, err))
-        apply_room_to_lobby(engine, *current_room);
-    engine.lobby.connect_phase = ConnectPhase::Connected;
-    clear_lobby_error(engine, "Joined room " + room_for_join.room_code);
-    engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
-    message = engine.lobby.status_message;
-    return true;
+    return queue_or_complete_room_join(engine, room_for_join, join_attempt.join_token, message);
 }
 
 } // namespace
@@ -736,36 +763,15 @@ void gubsy_lobby_confirm_direct_join(EngineState& engine, const std::string& mes
         return;
 
     if (engine.lobby.room_join_pending) {
-        const MatchmakingRoom room = engine.lobby.pending_join_room;
-        std::string member_id;
-        std::string err;
-        if (!matchmaking(engine).join_room(engine.lobby.room_server_url, room.room_code,
-                                           local_player_name(engine),
-                                           engine.lobby.pending_join_token,
-                                           member_id,
-                                           err)) {
-            disconnect_game_transport(engine);
-            clear_direct_join_pending(engine);
-            engine.lobby.connect_phase = ConnectPhase::Failed;
-            set_lobby_error(engine, err.empty() ? "Cannot join room: room service rejected join"
-                                                : with_prefix("Cannot join room", err));
-            add_alert(engine, engine.lobby.status_message, AlertSeverity::Error);
+        if (engine.lobby.room_join_finalize_in_flight)
             return;
-        }
-
-        apply_room_to_lobby(engine, room);
-        engine.lobby.online = true;
-        engine.lobby.is_host = false;
-        engine.lobby.member_id = member_id;
-        engine.lobby.host_secret.clear();
-        if (auto current_room = fetch_current_room(engine, err))
-            apply_room_to_lobby(engine, *current_room);
-        clear_direct_join_pending(engine);
-        engine.lobby.connect_phase = ConnectPhase::Connected;
+        const MatchmakingRoom room = engine.lobby.pending_join_room;
         (void)message;
-        clear_lobby_error(engine, "Joined room " + room.room_code);
-        engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
-        add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
+        std::string join_message;
+        if (!queue_or_complete_room_join(engine, room, engine.lobby.pending_join_token,
+                                         join_message)) {
+            add_alert(engine, join_message, AlertSeverity::Error);
+        }
         return;
     }
 
@@ -831,6 +837,8 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
     if (!apply_remote_room_config(engine, room, message))
         return false;
 
+    engine.lobby.room_lookup_in_flight = false;
+    engine.lobby.pending_room_code.clear();
     engine.lobby.connect_phase = ConnectPhase::ResolvingRoom;
     engine.lobby.pending_join_room = room;
     if (engine.lobby_matchmaking == nullptr) {
@@ -866,6 +874,20 @@ bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_cod
                                 std::string& message) {
     gubsy_lobby_ensure_ready(engine);
     ensure_room_defaults(engine);
+    if (engine.lobby_matchmaking == nullptr) {
+        AsyncFetchRoomRequest request;
+        request.request_id = ++engine.lobby.room_lookup_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        request.room_code = room_code;
+        engine.lobby.pending_room_code = room_code;
+        engine.lobby.room_lookup_in_flight = true;
+        engine.lobby.connect_phase = ConnectPhase::ResolvingRoom;
+        clear_lobby_error(engine, "Resolving room " + room_code);
+        message = engine.lobby.status_message;
+        async_matchmaking(engine).enqueue_fetch_room(std::move(request));
+        return true;
+    }
+
     MatchmakingRoom room;
     std::string err;
     if (!matchmaking(engine).fetch_room(engine.lobby.room_server_url, room_code, room, err)) {
@@ -1141,6 +1163,33 @@ void apply_async_create_room_results(EngineState& engine) {
     }
 }
 
+void apply_async_fetch_room_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncFetchRoomResult& result : engine.async_matchmaking->drain_fetch_room_results()) {
+        if (result.request_id != engine.lobby.room_lookup_request_id)
+            continue;
+        if (!engine.lobby.room_lookup_in_flight)
+            continue;
+        engine.lobby.room_lookup_in_flight = false;
+        if (!result.ok) {
+            engine.lobby.connect_phase = ConnectPhase::Failed;
+            const std::string message =
+                result.err.empty() ? "Cannot join room: room code not found"
+                                   : with_prefix("Cannot join room", result.err);
+            set_lobby_error(engine, message);
+            add_alert(engine, message, AlertSeverity::Error);
+            continue;
+        }
+        std::string message;
+        if (gubsy_lobby_join_room(engine, result.room, message)) {
+            add_alert(engine, message, AlertSeverity::Info);
+        } else {
+            add_alert(engine, message, AlertSeverity::Error);
+        }
+    }
+}
+
 void apply_async_join_attempt_results(EngineState& engine) {
     if (!engine.async_matchmaking)
         return;
@@ -1170,6 +1219,43 @@ void apply_async_join_attempt_results(EngineState& engine) {
         } else {
             add_alert(engine, message, AlertSeverity::Error);
         }
+    }
+}
+
+void apply_async_join_room_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncJoinRoomResult& result : engine.async_matchmaking->drain_join_room_results()) {
+        if (result.request_id != engine.lobby.room_join_finalize_request_id)
+            continue;
+        if (!engine.lobby.room_join_finalize_in_flight)
+            continue;
+        engine.lobby.room_join_finalize_in_flight = false;
+        if (!result.ok) {
+            disconnect_game_transport(engine);
+            clear_direct_join_pending(engine);
+            engine.lobby.room_join_pending = false;
+            engine.lobby.connect_phase = ConnectPhase::Failed;
+            const std::string message =
+                result.err.empty() ? "Cannot join room: room service rejected join"
+                                   : with_prefix("Cannot join room", result.err);
+            set_lobby_error(engine, message);
+            add_alert(engine, message, AlertSeverity::Error);
+            continue;
+        }
+
+        const MatchmakingRoom room =
+            result.has_room ? result.room : engine.lobby.pending_join_room;
+        apply_room_to_lobby(engine, room);
+        engine.lobby.online = true;
+        engine.lobby.is_host = false;
+        engine.lobby.member_id = result.member_id;
+        engine.lobby.host_secret.clear();
+        clear_direct_join_pending(engine);
+        engine.lobby.connect_phase = ConnectPhase::Connected;
+        clear_lobby_error(engine, "Joined room " + room.room_code);
+        engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+        add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
     }
 }
 
@@ -1237,7 +1323,9 @@ void enqueue_async_heartbeat(EngineState& engine) {
 void gubsy_lobby_tick_online(EngineState& engine) {
     ensure_room_defaults(engine);
     apply_async_create_room_results(engine);
+    apply_async_fetch_room_results(engine);
     apply_async_join_attempt_results(engine);
+    apply_async_join_room_results(engine);
     apply_async_leave_room_results(engine);
     apply_async_remove_member_results(engine);
     apply_async_heartbeat_results(engine);

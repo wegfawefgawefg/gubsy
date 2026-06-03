@@ -64,10 +64,15 @@ struct GubsyLobbyState {
     std::uint64_t heartbeat_request_id{0};
     bool room_refresh_in_flight{false};
     std::uint64_t room_refresh_request_id{0};
+    bool room_lookup_in_flight{false};
+    std::uint64_t room_lookup_request_id{0};
+    std::string pending_room_code;
     bool room_publish_in_flight{false};
     std::uint64_t room_publish_request_id{0};
     bool join_attempt_in_flight{false};
     std::uint64_t join_attempt_request_id{0};
+    bool room_join_finalize_in_flight{false};
+    std::uint64_t room_join_finalize_request_id{0};
     std::uint64_t room_leave_request_id{0};
     bool room_remove_in_flight{false};
     std::uint64_t room_remove_request_id{0};

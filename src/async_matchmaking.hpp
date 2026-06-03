@@ -38,6 +38,19 @@ struct AsyncRoomListResult {
     std::vector<MatchmakingRoom> rooms;
 };
 
+struct AsyncFetchRoomRequest {
+    std::uint64_t request_id{0};
+    std::string server_url;
+    std::string room_code;
+};
+
+struct AsyncFetchRoomResult {
+    std::uint64_t request_id{0};
+    bool ok{false};
+    std::string err;
+    MatchmakingRoom room;
+};
+
 struct AsyncCreateRoomRequest {
     std::uint64_t request_id{0};
     std::string server_url;
@@ -65,6 +78,23 @@ struct AsyncCreateJoinAttemptResult {
     bool ok{false};
     std::string err;
     MatchmakingJoinAttemptResult join_attempt;
+};
+
+struct AsyncJoinRoomRequest {
+    std::uint64_t request_id{0};
+    std::string server_url;
+    std::string room_code;
+    std::string display_name;
+    std::string join_token;
+};
+
+struct AsyncJoinRoomResult {
+    std::uint64_t request_id{0};
+    bool ok{false};
+    std::string err;
+    std::string member_id;
+    bool has_room{false};
+    MatchmakingRoom room;
 };
 
 struct AsyncLeaveRoomRequest {
@@ -111,10 +141,14 @@ public:
     std::vector<AsyncHeartbeatResult> drain_heartbeat_results();
     void enqueue_room_list(AsyncRoomListRequest request);
     std::vector<AsyncRoomListResult> drain_room_list_results();
+    void enqueue_fetch_room(AsyncFetchRoomRequest request);
+    std::vector<AsyncFetchRoomResult> drain_fetch_room_results();
     void enqueue_create_room(AsyncCreateRoomRequest request);
     std::vector<AsyncCreateRoomResult> drain_create_room_results();
     void enqueue_create_join_attempt(AsyncCreateJoinAttemptRequest request);
     std::vector<AsyncCreateJoinAttemptResult> drain_create_join_attempt_results();
+    void enqueue_join_room(AsyncJoinRoomRequest request);
+    std::vector<AsyncJoinRoomResult> drain_join_room_results();
     void enqueue_leave_room(AsyncLeaveRoomRequest request);
     std::vector<AsyncLeaveRoomResult> drain_leave_room_results();
     void enqueue_remove_member(AsyncRemoveMemberRequest request);

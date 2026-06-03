@@ -1177,14 +1177,16 @@ int main(int argc, char** argv) {
 
         require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
                 "guest join by room code failed");
-        require(guest_state.validate_remote_called, "guest did not validate remote config");
-        require(guest_state.apply_remote_called, "guest did not apply remote config");
         pump_join_attempt_until(guest_engine,
                                 [&]() {
-                                    return !guest_engine.lobby.join_attempt_in_flight &&
-                                           guest_state.join_called;
+                                    return !guest_engine.lobby.room_lookup_in_flight &&
+                                           !guest_engine.lobby.join_attempt_in_flight &&
+                                           !guest_engine.lobby.room_join_finalize_in_flight &&
+                                           guest_state.join_called && guest_engine.lobby.online;
                                 },
-                                "guest join attempt did not call transport");
+                                "guest room-code join did not complete");
+        require(guest_state.validate_remote_called, "guest did not validate remote config");
+        require(guest_state.apply_remote_called, "guest did not apply remote config");
         require(guest_state.join_called, "guest transport was not called");
         require(guest_engine.lobby.online, "guest lobby is not online");
         require(!guest_engine.lobby.is_host, "guest lobby is marked as host");
@@ -1218,10 +1220,12 @@ int main(int argc, char** argv) {
                 "guest rejoin by room code failed");
         pump_join_attempt_until(guest_engine,
                                 [&]() {
-                                    return !guest_engine.lobby.join_attempt_in_flight &&
-                                           guest_state.join_called;
+                                    return !guest_engine.lobby.room_lookup_in_flight &&
+                                           !guest_engine.lobby.join_attempt_in_flight &&
+                                           !guest_engine.lobby.room_join_finalize_in_flight &&
+                                           guest_state.join_called && guest_engine.lobby.online;
                                 },
-                                "guest rejoin attempt did not call transport");
+                                "guest room-code rejoin did not complete");
         require(guest_state.join_called, "guest rejoin transport was not called");
         pump_online_until(host_engine,
                           [&]() { return host_engine.lobby.room_members.size() == 2; },
@@ -1295,9 +1299,10 @@ int main(int argc, char** argv) {
         pump_join_attempt_until(host_engine,
                                 [&]() {
                                     return !host_engine.lobby.join_attempt_in_flight &&
-                                           host_state.join_called;
+                                           !host_engine.lobby.room_join_finalize_in_flight &&
+                                           host_state.join_called && host_engine.lobby.online;
                                 },
-                                "host browser join attempt did not call transport");
+                                "host browser join did not complete");
         require(host_state.join_called, "host-then-browser-join did not call join transport");
         require(host_engine.lobby.online, "host-then-browser-join did not leave runtime online");
         require(!host_engine.lobby.is_host, "host-then-browser-join should become a client");
