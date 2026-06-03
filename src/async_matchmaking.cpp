@@ -17,6 +17,8 @@ struct AsyncMatchmakingWorkItem {
         RoomList,
         CreateRoom,
         CreateJoinAttempt,
+        LeaveRoom,
+        RemoveMember,
     };
 
     Kind kind{Kind::Heartbeat};
@@ -24,6 +26,8 @@ struct AsyncMatchmakingWorkItem {
     AsyncRoomListRequest room_list;
     AsyncCreateRoomRequest create_room;
     AsyncCreateJoinAttemptRequest create_join_attempt;
+    AsyncLeaveRoomRequest leave_room;
+    AsyncRemoveMemberRequest remove_member;
 };
 
 } // namespace
@@ -36,6 +40,8 @@ struct AsyncMatchmakingClient::Impl {
     std::vector<AsyncRoomListResult> room_list_results;
     std::vector<AsyncCreateRoomResult> create_room_results;
     std::vector<AsyncCreateJoinAttemptResult> create_join_attempt_results;
+    std::vector<AsyncLeaveRoomResult> leave_room_results;
+    std::vector<AsyncRemoveMemberResult> remove_member_results;
     bool stopping{false};
     std::thread worker;
     RoomServerMatchmaking matchmaking;
@@ -99,6 +105,37 @@ AsyncCreateJoinAttemptResult process_create_join_attempt(
     return result;
 }
 
+AsyncLeaveRoomResult process_leave_room(RoomServerMatchmaking& matchmaking,
+                                        const AsyncLeaveRoomRequest& request) {
+    AsyncLeaveRoomResult result;
+    result.request_id = request.request_id;
+    result.ok = matchmaking.leave_room(request.server_url,
+                                       request.room_code,
+                                       request.member_id,
+                                       request.host_secret,
+                                       result.err);
+    return result;
+}
+
+AsyncRemoveMemberResult process_remove_member(RoomServerMatchmaking& matchmaking,
+                                              const AsyncRemoveMemberRequest& request) {
+    AsyncRemoveMemberResult result;
+    result.request_id = request.request_id;
+    result.target_name = request.target_name;
+    result.ok = matchmaking.remove_member(request.server_url,
+                                          request.room_code,
+                                          request.host_secret,
+                                          request.target_member_id,
+                                          result.err);
+    if (!result.ok)
+        return result;
+    result.has_room = matchmaking.fetch_room(request.server_url,
+                                            request.room_code,
+                                            result.room,
+                                            result.err);
+    return result;
+}
+
 } // namespace
 
 AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>()) {
@@ -131,11 +168,21 @@ AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>(
                                                                    request.create_room);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->create_room_results.push_back(std::move(result));
-            } else {
+            } else if (request.kind == AsyncMatchmakingWorkItem::Kind::CreateJoinAttempt) {
                 AsyncCreateJoinAttemptResult result =
                     process_create_join_attempt(impl->matchmaking, request.create_join_attempt);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->create_join_attempt_results.push_back(std::move(result));
+            } else if (request.kind == AsyncMatchmakingWorkItem::Kind::LeaveRoom) {
+                AsyncLeaveRoomResult result = process_leave_room(impl->matchmaking,
+                                                                 request.leave_room);
+                std::lock_guard<std::mutex> lock(impl->mutex);
+                impl->leave_room_results.push_back(std::move(result));
+            } else {
+                AsyncRemoveMemberResult result = process_remove_member(impl->matchmaking,
+                                                                       request.remove_member);
+                std::lock_guard<std::mutex> lock(impl->mutex);
+                impl->remove_member_results.push_back(std::move(result));
             }
         }
     });
@@ -240,6 +287,54 @@ AsyncMatchmakingClient::drain_create_join_attempt_results() {
         return results;
     std::lock_guard<std::mutex> lock(impl_->mutex);
     results.swap(impl_->create_join_attempt_results);
+    return results;
+}
+
+void AsyncMatchmakingClient::enqueue_leave_room(AsyncLeaveRoomRequest request) {
+    if (!impl_)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->stopping)
+            return;
+        AsyncMatchmakingWorkItem item;
+        item.kind = AsyncMatchmakingWorkItem::Kind::LeaveRoom;
+        item.leave_room = std::move(request);
+        impl_->requests.push_back(std::move(item));
+    }
+    impl_->cv.notify_one();
+}
+
+std::vector<AsyncLeaveRoomResult> AsyncMatchmakingClient::drain_leave_room_results() {
+    std::vector<AsyncLeaveRoomResult> results;
+    if (!impl_)
+        return results;
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    results.swap(impl_->leave_room_results);
+    return results;
+}
+
+void AsyncMatchmakingClient::enqueue_remove_member(AsyncRemoveMemberRequest request) {
+    if (!impl_)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->stopping)
+            return;
+        AsyncMatchmakingWorkItem item;
+        item.kind = AsyncMatchmakingWorkItem::Kind::RemoveMember;
+        item.remove_member = std::move(request);
+        impl_->requests.push_back(std::move(item));
+    }
+    impl_->cv.notify_one();
+}
+
+std::vector<AsyncRemoveMemberResult> AsyncMatchmakingClient::drain_remove_member_results() {
+    std::vector<AsyncRemoveMemberResult> results;
+    if (!impl_)
+        return results;
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    results.swap(impl_->remove_member_results);
     return results;
 }
 

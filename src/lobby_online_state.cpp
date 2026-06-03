@@ -73,6 +73,7 @@ void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.room_join_pending = false;
     engine.lobby.room_publish_in_flight = false;
     engine.lobby.join_attempt_in_flight = false;
+    engine.lobby.room_remove_in_flight = false;
     engine.lobby.pending_direct_join_endpoint.clear();
     engine.lobby.pending_join_attempt_id.clear();
     engine.lobby.pending_join_token.clear();
@@ -899,23 +900,29 @@ bool gubsy_lobby_leave_room(EngineState& engine, std::string& message) {
         message = engine.lobby.status_message;
         return true;
     }
-    std::string err;
-    if (!matchmaking(engine).leave_room(engine.lobby.room_server_url, engine.lobby.room_code,
-                                        engine.lobby.member_id, engine.lobby.host_secret, err)) {
-        message = err.empty() ? "Cannot leave room: room service rejected leave"
-                              : with_prefix("Cannot leave room", err);
-        set_lobby_error(engine, message);
-        return false;
+    if (engine.lobby_matchmaking != nullptr) {
+        std::string err;
+        if (!matchmaking(engine).leave_room(engine.lobby.room_server_url, engine.lobby.room_code,
+                                            engine.lobby.member_id, engine.lobby.host_secret, err)) {
+            message = err.empty() ? "Cannot leave room: room service rejected leave"
+                                  : with_prefix("Cannot leave room", err);
+            set_lobby_error(engine, message);
+            return false;
+        }
+    } else {
+        AsyncLeaveRoomRequest request;
+        request.request_id = ++engine.lobby.room_leave_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        request.room_code = engine.lobby.room_code;
+        request.member_id = engine.lobby.member_id;
+        request.host_secret = engine.lobby.host_secret;
+        async_matchmaking(engine).enqueue_leave_room(std::move(request));
     }
     disconnect_game_transport(engine);
 
     engine.lobby.online = false;
     engine.lobby.is_host = false;
-    engine.lobby.room_code.clear();
-    engine.lobby.member_id.clear();
-    engine.lobby.host_secret.clear();
-    engine.lobby.room_current_players = 0;
-    engine.lobby.room_members.clear();
+    clear_online_room_identity(engine);
     engine.lobby.game_members.clear();
     engine.lobby.game_members_authoritative = false;
     clear_direct_join_pending(engine);
@@ -992,6 +999,21 @@ bool gubsy_lobby_remove_room_member(EngineState& engine, const std::string& memb
 
     const MatchmakingMember* target = find_member_by_id(engine.lobby.room_members, member_id);
     const std::string target_name = target ? member_name(*target) : member_id;
+
+    if (engine.lobby_matchmaking == nullptr) {
+        AsyncRemoveMemberRequest request;
+        request.request_id = ++engine.lobby.room_remove_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        request.room_code = engine.lobby.room_code;
+        request.host_secret = engine.lobby.host_secret;
+        request.target_member_id = member_id;
+        request.target_name = target_name;
+        engine.lobby.room_remove_in_flight = true;
+        message = "Removing " + target_name;
+        clear_lobby_error(engine, message);
+        async_matchmaking(engine).enqueue_remove_member(std::move(request));
+        return true;
+    }
 
     std::string err;
     if (!matchmaking(engine).remove_member(engine.lobby.room_server_url, engine.lobby.room_code,
@@ -1151,6 +1173,51 @@ void apply_async_join_attempt_results(EngineState& engine) {
     }
 }
 
+void apply_async_leave_room_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncLeaveRoomResult& result :
+         engine.async_matchmaking->drain_leave_room_results()) {
+        if (result.request_id != engine.lobby.room_leave_request_id)
+            continue;
+        if (!result.ok) {
+            const std::string message = result.err.empty()
+                                            ? "Room leave cleanup failed"
+                                            : with_prefix("Room leave cleanup failed", result.err);
+            engine.lobby.last_error = message;
+            add_alert(engine, message, AlertSeverity::Warning);
+        }
+    }
+}
+
+void apply_async_remove_member_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncRemoveMemberResult& result :
+         engine.async_matchmaking->drain_remove_member_results()) {
+        if (result.request_id != engine.lobby.room_remove_request_id)
+            continue;
+        engine.lobby.room_remove_in_flight = false;
+        if (!result.ok) {
+            const std::string message =
+                result.err.empty() ? "Cannot kick player: room service rejected removal"
+                                   : with_prefix("Cannot kick player", result.err);
+            set_lobby_error(engine, message);
+            add_alert(engine, message, AlertSeverity::Error);
+            continue;
+        }
+        if (result.has_room) {
+            engine.lobby.room_current_players = std::max(0, result.room.current_players);
+            update_room_members(engine, result.room.members, false);
+        } else if (!result.err.empty()) {
+            engine.lobby.last_error = result.err;
+        }
+        const std::string message = "Kicked " + result.target_name;
+        clear_lobby_error(engine, message);
+        add_alert(engine, message);
+    }
+}
+
 void enqueue_async_heartbeat(EngineState& engine) {
     MatchmakingRoom room_update = build_room_metadata(engine);
     AsyncHeartbeatRequest request;
@@ -1171,6 +1238,8 @@ void gubsy_lobby_tick_online(EngineState& engine) {
     ensure_room_defaults(engine);
     apply_async_create_room_results(engine);
     apply_async_join_attempt_results(engine);
+    apply_async_leave_room_results(engine);
+    apply_async_remove_member_results(engine);
     apply_async_heartbeat_results(engine);
     if (!engine.lobby.online || engine.lobby.room_code.empty()) {
         engine.lobby.heartbeat_in_flight = false;

@@ -67,6 +67,38 @@ struct AsyncCreateJoinAttemptResult {
     MatchmakingJoinAttemptResult join_attempt;
 };
 
+struct AsyncLeaveRoomRequest {
+    std::uint64_t request_id{0};
+    std::string server_url;
+    std::string room_code;
+    std::string member_id;
+    std::string host_secret;
+};
+
+struct AsyncLeaveRoomResult {
+    std::uint64_t request_id{0};
+    bool ok{false};
+    std::string err;
+};
+
+struct AsyncRemoveMemberRequest {
+    std::uint64_t request_id{0};
+    std::string server_url;
+    std::string room_code;
+    std::string host_secret;
+    std::string target_member_id;
+    std::string target_name;
+};
+
+struct AsyncRemoveMemberResult {
+    std::uint64_t request_id{0};
+    bool ok{false};
+    std::string err;
+    std::string target_name;
+    bool has_room{false};
+    MatchmakingRoom room;
+};
+
 class AsyncMatchmakingClient {
 public:
     AsyncMatchmakingClient();
@@ -83,6 +115,10 @@ public:
     std::vector<AsyncCreateRoomResult> drain_create_room_results();
     void enqueue_create_join_attempt(AsyncCreateJoinAttemptRequest request);
     std::vector<AsyncCreateJoinAttemptResult> drain_create_join_attempt_results();
+    void enqueue_leave_room(AsyncLeaveRoomRequest request);
+    std::vector<AsyncLeaveRoomResult> drain_leave_room_results();
+    void enqueue_remove_member(AsyncRemoveMemberRequest request);
+    std::vector<AsyncRemoveMemberResult> drain_remove_member_results();
     void shutdown();
 
 private:

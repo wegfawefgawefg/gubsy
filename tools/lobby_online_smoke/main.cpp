@@ -1232,6 +1232,12 @@ int main(int argc, char** argv) {
 
         require(gubsy_lobby_remove_room_member(host_engine, guest_engine.lobby.member_id, message),
                 "host kick failed");
+        pump_online_until(host_engine,
+                          [&]() {
+                              return !host_engine.lobby.room_remove_in_flight &&
+                                     host_engine.lobby.room_members.size() == 1;
+                          },
+                          "host kick removal did not complete");
         require(host_engine.lobby.room_members.size() == 1,
                 "host did not refresh kicked room membership");
         require(host_engine.lobby.room_current_players == 1,
