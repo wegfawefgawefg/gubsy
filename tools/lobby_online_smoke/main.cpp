@@ -6,12 +6,14 @@
 #include "src/menu_layout_ids.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <glayout/layout.hpp>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -37,6 +39,21 @@ bool has_alert_containing(const EngineState& engine, const std::string& needle) 
     return std::any_of(engine.alerts.begin(), engine.alerts.end(), [&](const Alert& alert) {
         return alert.text.find(needle) != std::string::npos;
     });
+}
+
+template <typename Predicate>
+void pump_online_until(EngineState& engine, Predicate predicate, const char* message) {
+    for (int attempt = 0; attempt < 120; ++attempt) {
+        if (predicate())
+            return;
+        if (!engine.lobby.heartbeat_in_flight && engine.now < engine.lobby.next_heartbeat_at)
+            engine.now = engine.lobby.next_heartbeat_at + 0.1;
+        else
+            engine.now += 0.016;
+        gubsy_lobby_tick_online(engine);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    require(predicate(), message);
 }
 
 const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slot) {
@@ -1115,20 +1132,18 @@ int main(int argc, char** argv) {
                 "guest did not cache joined room player count");
         verify_joined_shell_lobby_context(guest_runtime);
 
-        host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
-        gubsy_lobby_tick_online(host_engine);
-        require(host_engine.lobby.room_members.size() == 2,
-                "host did not refresh joined room membership");
+        pump_online_until(host_engine,
+                          [&]() { return host_engine.lobby.room_members.size() == 2; },
+                          "host did not refresh joined room membership");
         require(host_engine.lobby.room_current_players == 2,
                 "host did not refresh joined room player count");
         require(has_alert_containing(host_engine, "joined"), "host did not alert member join");
 
         require(gubsy_lobby_leave_room(guest_engine, message), "guest leave failed");
         require(guest_state.leave_called, "guest leave transport was not called");
-        host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
-        gubsy_lobby_tick_online(host_engine);
-        require(host_engine.lobby.room_members.size() == 1,
-                "host did not refresh left room membership");
+        pump_online_until(host_engine,
+                          [&]() { return host_engine.lobby.room_members.size() == 1; },
+                          "host did not refresh left room membership");
         require(host_engine.lobby.room_current_players == 1,
                 "host did not refresh left room player count");
         require(has_alert_containing(host_engine, "left"), "host did not alert member leave");
@@ -1138,10 +1153,9 @@ int main(int argc, char** argv) {
         require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
                 "guest rejoin by room code failed");
         require(guest_state.join_called, "guest rejoin transport was not called");
-        host_engine.now = host_engine.lobby.next_heartbeat_at + 0.1;
-        gubsy_lobby_tick_online(host_engine);
-        require(host_engine.lobby.room_members.size() == 2,
-                "host did not refresh rejoined room membership");
+        pump_online_until(host_engine,
+                          [&]() { return host_engine.lobby.room_members.size() == 2; },
+                          "host did not refresh rejoined room membership");
         require(host_engine.lobby.room_current_players == 2,
                 "host did not refresh rejoined room player count");
         verify_players_remote_detail(host_runtime, guest_engine.lobby.member_id);
@@ -1154,9 +1168,8 @@ int main(int argc, char** argv) {
                 "host did not refresh kicked room player count");
         require(has_alert_containing(host_engine, "Kicked"), "host did not alert member kick");
         guest_state.leave_called = false;
-        guest_engine.now = guest_engine.lobby.next_heartbeat_at + 0.1;
-        gubsy_lobby_tick_online(guest_engine);
-        require(guest_state.leave_called, "kicked guest did not disconnect transport");
+        pump_online_until(guest_engine, [&]() { return guest_state.leave_called; },
+                          "kicked guest did not disconnect transport");
         require(!guest_engine.lobby.online, "kicked guest stayed online");
         require(guest_engine.lobby.room_code.empty(), "kicked guest kept room code");
         require(has_alert_containing(guest_engine, "Removed from online room"),

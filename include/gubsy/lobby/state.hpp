@@ -5,6 +5,7 @@
 #include "gubsy/lobby/matchmaking.hpp"
 #include "gubsy/lobby/session_contract.hpp"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,8 @@ struct GubsyLobbyState {
     bool is_host{false};
     bool direct_join_pending{false};
     bool room_join_pending{false};
+    bool heartbeat_in_flight{false};
+    std::uint64_t heartbeat_request_id{0};
     double next_heartbeat_at{0.0};
     double next_room_refresh_at{0.0};
     int room_current_players{0};

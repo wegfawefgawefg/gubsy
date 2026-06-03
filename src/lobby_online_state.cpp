@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <memory>
 #include <optional>
+#include <utility>
 
 namespace {
 
@@ -21,6 +23,12 @@ IMatchmaking& matchmaking(EngineState& engine) {
     if (engine.lobby_matchmaking != nullptr)
         return *engine.lobby_matchmaking;
     return g_matchmaking;
+}
+
+AsyncMatchmakingClient& async_matchmaking(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        engine.async_matchmaking = std::make_unique<AsyncMatchmakingClient>();
+    return *engine.async_matchmaking;
 }
 
 std::string default_room_server_url() {
@@ -249,6 +257,36 @@ std::optional<MatchmakingRoom> fetch_current_room(EngineState& engine, std::stri
                                         err))
         return std::nullopt;
     return room;
+}
+
+void force_leave_online_session(EngineState& engine, const std::string& status);
+
+void apply_heartbeat_room_result(EngineState& engine, const MatchmakingRoom& room) {
+    if (!engine.lobby.is_host && !engine.lobby.member_id.empty() &&
+        !find_member_by_id(room.members, engine.lobby.member_id)) {
+        force_leave_online_session(engine, "Removed from online room");
+        engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+        return;
+    }
+    engine.lobby.max_players = std::max(1, room.max_players);
+    engine.lobby.contract = room.contract;
+    engine.lobby.advertised_endpoint = room.contract.realtime_endpoint;
+    engine.lobby.room_current_players = std::max(0, room.current_players);
+    update_room_members(engine, room.members, true);
+}
+
+void apply_heartbeat_failure(EngineState& engine, const std::string& err) {
+    if (!engine.lobby.is_host && err.find("member not found") != std::string::npos) {
+        force_leave_online_session(engine, "Removed from online room");
+        engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+        return;
+    }
+    engine.lobby.last_error = err.empty() ? "Room heartbeat failed" : err;
+}
+
+void apply_heartbeat_fetch_error(EngineState& engine, const std::string& err) {
+    if (!err.empty())
+        engine.lobby.last_error = err;
 }
 
 void ensure_room_defaults(EngineState& engine) {
@@ -910,47 +948,82 @@ void gubsy_lobby_set_direct_members(EngineState& engine,
         static_cast<int>(engine.lobby.local_players.size() + engine.lobby.game_members.size());
 }
 
-void gubsy_lobby_tick_online(EngineState& engine) {
-    ensure_room_defaults(engine);
-    if (!engine.lobby.online || engine.lobby.room_code.empty())
-        return;
-    if (engine.now < engine.lobby.next_heartbeat_at)
-        return;
-
+void run_sync_heartbeat(EngineState& engine) {
     MatchmakingRoom room_update = build_room_metadata(engine);
     MatchmakingRoom* update_ptr = engine.lobby.is_host ? &room_update : nullptr;
     std::string err;
     if (!matchmaking(engine).heartbeat_room(engine.lobby.room_server_url, engine.lobby.room_code,
                                             engine.lobby.member_id, local_player_name(engine),
                                             engine.lobby.host_secret, update_ptr, err)) {
-        if (!engine.lobby.is_host && err.find("member not found") != std::string::npos) {
-            force_leave_online_session(engine, "Removed from online room");
-            engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
-            return;
-        }
-        engine.lobby.last_error = err.empty() ? "Room heartbeat failed" : err;
+        apply_heartbeat_failure(engine, err);
     } else {
         engine.lobby.last_error.clear();
-        if (auto current_room = fetch_current_room(engine, err)) {
-            if (!engine.lobby.is_host && !engine.lobby.member_id.empty() &&
-                !find_member_by_id(current_room->members, engine.lobby.member_id)) {
-                force_leave_online_session(engine, "Removed from online room");
-                engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
-                return;
-            }
-            engine.lobby.max_players = std::max(1, current_room->max_players);
-            engine.lobby.contract = current_room->contract;
-            engine.lobby.advertised_endpoint = current_room->contract.realtime_endpoint;
-            engine.lobby.room_current_players = std::max(0, current_room->current_players);
-            update_room_members(engine, current_room->members, true);
-        } else if (!err.empty()) {
-            engine.lobby.last_error = err;
-        }
+        if (auto current_room = fetch_current_room(engine, err))
+            apply_heartbeat_room_result(engine, *current_room);
+        else
+            apply_heartbeat_fetch_error(engine, err);
     }
     engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
 }
 
+void apply_async_heartbeat_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncHeartbeatResult& result :
+         engine.async_matchmaking->drain_heartbeat_results()) {
+        if (result.request_id != engine.lobby.heartbeat_request_id)
+            continue;
+        engine.lobby.heartbeat_in_flight = false;
+        if (!engine.lobby.online || engine.lobby.room_code.empty())
+            continue;
+        if (!result.ok) {
+            apply_heartbeat_failure(engine, result.err);
+            continue;
+        }
+        engine.lobby.last_error.clear();
+        if (result.has_room)
+            apply_heartbeat_room_result(engine, result.room);
+        else
+            apply_heartbeat_fetch_error(engine, result.err);
+    }
+}
+
+void enqueue_async_heartbeat(EngineState& engine) {
+    MatchmakingRoom room_update = build_room_metadata(engine);
+    AsyncHeartbeatRequest request;
+    request.request_id = ++engine.lobby.heartbeat_request_id;
+    request.server_url = engine.lobby.room_server_url;
+    request.room_code = engine.lobby.room_code;
+    request.member_id = engine.lobby.member_id;
+    request.display_name = local_player_name(engine);
+    request.host_secret = engine.lobby.host_secret;
+    if (engine.lobby.is_host)
+        request.room_update = std::move(room_update);
+    engine.lobby.heartbeat_in_flight = true;
+    engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+    async_matchmaking(engine).enqueue_heartbeat(std::move(request));
+}
+
+void gubsy_lobby_tick_online(EngineState& engine) {
+    ensure_room_defaults(engine);
+    apply_async_heartbeat_results(engine);
+    if (!engine.lobby.online || engine.lobby.room_code.empty()) {
+        engine.lobby.heartbeat_in_flight = false;
+        return;
+    }
+    if (engine.now < engine.lobby.next_heartbeat_at || engine.lobby.heartbeat_in_flight)
+        return;
+
+    if (engine.lobby_matchmaking != nullptr) {
+        run_sync_heartbeat(engine);
+        return;
+    }
+    enqueue_async_heartbeat(engine);
+}
+
 void gubsy_lobby_force_online_tick(EngineState& engine) {
     engine.lobby.next_heartbeat_at = 0.0;
+    if (engine.lobby_matchmaking == nullptr)
+        engine.lobby.heartbeat_in_flight = false;
     gubsy_lobby_tick_online(engine);
 }

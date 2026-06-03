@@ -8,6 +8,7 @@
 #include "mode_registry.hpp"
 #include "player.hpp"
 #include "src/alerts.hpp"
+#include "src/async_matchmaking.hpp"
 #include "src/binds_profiles.hpp"
 #include "src/device_state.hpp"
 #include "src/game_settings.hpp"
@@ -26,6 +27,7 @@
 #include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -44,6 +46,7 @@ struct EngineState {
     GubsyLobbyCommands lobby_commands{};
     GubsyLobbyConfigProvider lobby_config_provider{};
     IMatchmaking* lobby_matchmaking{nullptr};
+    std::unique_ptr<AsyncMatchmakingClient> async_matchmaking{};
 
     double now{0.0};
     float dt{0.0f};

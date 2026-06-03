@@ -132,6 +132,7 @@ bool init_engine_state(EngineState& engine, const GubsyAppConfig& config) {
 }
 
 void cleanup_engine_state(EngineState& engine) {
+    engine.async_matchmaking.reset();
     if (engine.mod_manager) {
         delete engine.mod_manager;
         engine.mod_manager = nullptr;
