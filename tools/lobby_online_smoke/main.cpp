@@ -752,6 +752,69 @@ GubsyLobbyKickResult kick_direct_member(void* user_data, const GubsyLobbyState&,
     return result;
 }
 
+struct RecordingMatchmaking final : IMatchmaking {
+    std::string create_url;
+    std::string fetch_url;
+    MatchmakingRoom room;
+
+    bool create_room(const std::string& server_url, const MatchmakingRoom& new_room,
+                     MatchmakingCreateResult& out, std::string&) override {
+        create_url = server_url;
+        room = new_room;
+        room.room_code = "ENV123";
+        out.room_code = room.room_code;
+        out.host_secret = "env-host-secret";
+        out.member_id = "env-host-member";
+        MatchmakingMember host;
+        host.member_id = out.member_id;
+        host.display_name = room.host_name;
+        host.client_label = "Host";
+        host.is_host = true;
+        room.members = {host};
+        return true;
+    }
+
+    bool join_room(const std::string&, const std::string&, const std::string&, const std::string&,
+                   std::string&, std::string&) override {
+        return false;
+    }
+
+    bool create_join_attempt(const std::string&, const std::string&, const std::string&,
+                             MatchmakingJoinAttemptResult&, std::string&) override {
+        return false;
+    }
+
+    bool leave_room(const std::string&, const std::string&, const std::string&, const std::string&,
+                    std::string&) override {
+        return true;
+    }
+
+    bool remove_member(const std::string&, const std::string&, const std::string&,
+                       const std::string&, std::string&) override {
+        return true;
+    }
+
+    bool heartbeat_room(const std::string&, const std::string&, const std::string&,
+                        const std::string&, const std::string&, const MatchmakingRoom*,
+                        std::string&) override {
+        return true;
+    }
+
+    bool fetch_room(const std::string& server_url, const std::string& room_code,
+                    MatchmakingRoom& out, std::string&) override {
+        fetch_url = server_url;
+        if (room_code != room.room_code)
+            return false;
+        out = room;
+        return true;
+    }
+
+    bool list_rooms(const std::string&, std::vector<MatchmakingRoom>& out, std::string&) override {
+        out = {room};
+        return true;
+    }
+};
+
 void install_smoke_hooks(GubsyRuntime& runtime, SmokeState& state) {
     GubsyLobbyConfigProvider provider;
     provider.user_data = &state;
@@ -781,10 +844,60 @@ void init_runtime(GubsyRuntime& runtime, const char* data_dir) {
     require(init_gubsy_runtime(runtime, config), "failed to init runtime");
 }
 
+void set_env_var(const char* name, const char* value) {
+#if defined(_WIN32)
+    require(_putenv_s(name, value) == 0, "failed to set environment variable");
+#else
+    require(setenv(name, value, 1) == 0, "failed to set environment variable");
+#endif
+}
+
+void unset_env_var(const char* name) {
+#if defined(_WIN32)
+    require(_putenv_s(name, "") == 0, "failed to unset environment variable");
+#else
+    require(unsetenv(name) == 0, "failed to unset environment variable");
+#endif
+}
+
+void verify_room_server_env_default() {
+    constexpr const char* env_name = "GUB_ROOM_SERVER_URL";
+    constexpr const char* expected = "http://example.invalid:9876";
+
+    const char* previous = std::getenv(env_name);
+    const bool had_previous = previous != nullptr;
+    const std::string previous_value = had_previous ? previous : "";
+
+    set_env_var(env_name, expected);
+
+    GubsyRuntime runtime;
+    init_runtime(runtime, "lobby_online_smoke_env_data");
+    SmokeState state;
+    install_smoke_hooks(runtime, state);
+    RecordingMatchmaking matchmaking;
+    gubsy_set_lobby_matchmaking_backend(runtime, &matchmaking);
+
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    std::string message;
+    require(gubsy_lobby_host_room(engine, 35355, message),
+            "host room should use env room server URL");
+    require(matchmaking.create_url == expected,
+            "host room should pass GUB_ROOM_SERVER_URL to matchmaking");
+    require(matchmaking.fetch_url == expected,
+            "host room fetch should pass GUB_ROOM_SERVER_URL to matchmaking");
+
+    if (had_previous)
+        set_env_var(env_name, previous_value.c_str());
+    else
+        unset_env_var(env_name);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     try {
+        verify_room_server_env_default();
+
         std::string server_url = "http://127.0.0.1:8788";
         if (argc > 1)
             server_url = argv[1];

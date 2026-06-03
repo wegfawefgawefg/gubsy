@@ -37,7 +37,7 @@ struct GubsyLobbyState {
     int selected_player_index{0};
     std::vector<GubsyLobbyPlayer> local_players;
 
-    std::string room_server_url{"http://127.0.0.1:8788"};
+    std::string room_server_url;
     std::string join_host{"127.0.0.1"};
     int network_port{35355};
     std::string room_code;
