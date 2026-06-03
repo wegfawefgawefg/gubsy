@@ -71,6 +71,7 @@ void clear_lobby_error(EngineState& engine, const std::string& status) {
 void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.direct_join_pending = false;
     engine.lobby.room_join_pending = false;
+    engine.lobby.room_publish_in_flight = false;
     engine.lobby.pending_direct_join_endpoint.clear();
     engine.lobby.pending_join_attempt_id.clear();
     engine.lobby.pending_join_token.clear();
@@ -260,6 +261,7 @@ std::optional<MatchmakingRoom> fetch_current_room(EngineState& engine, std::stri
 }
 
 void force_leave_online_session(EngineState& engine, const std::string& status);
+void disconnect_game_transport(EngineState& engine);
 
 void apply_heartbeat_room_result(EngineState& engine, const MatchmakingRoom& room) {
     if (!engine.lobby.is_host && !engine.lobby.member_id.empty() &&
@@ -302,6 +304,42 @@ void apply_room_list_failure(EngineState& engine, const std::string& err) {
     const std::string message = err.empty() ? "Cannot refresh rooms: failed to list rooms"
                                             : with_prefix("Cannot refresh rooms", err);
     set_lobby_error(engine, message);
+}
+
+void clear_online_room_identity(EngineState& engine) {
+    engine.lobby.room_code.clear();
+    engine.lobby.member_id.clear();
+    engine.lobby.host_secret.clear();
+    engine.lobby.room_current_players = 0;
+    engine.lobby.room_members.clear();
+}
+
+void fail_pending_room_publish(EngineState& engine, const std::string& err) {
+    disconnect_game_transport(engine);
+    engine.lobby.online = false;
+    engine.lobby.is_host = false;
+    engine.lobby.room_publish_in_flight = false;
+    clear_online_room_identity(engine);
+    engine.lobby.game_members.clear();
+    engine.lobby.game_members_authoritative = false;
+    const std::string message = err.empty() ? "Cannot host room: failed to publish room"
+                                            : with_prefix("Cannot host room", err);
+    set_lobby_error(engine, message);
+    add_alert(engine, message, AlertSeverity::Error);
+}
+
+void complete_pending_room_publish(EngineState& engine, const AsyncCreateRoomResult& result) {
+    engine.lobby.room_publish_in_flight = false;
+    engine.lobby.online = true;
+    engine.lobby.is_host = true;
+    engine.lobby.room_code = result.create.room_code;
+    engine.lobby.host_secret = result.create.host_secret;
+    engine.lobby.member_id = result.create.member_id;
+    if (result.has_room)
+        apply_room_to_lobby(engine, result.room);
+    clear_lobby_error(engine, "Hosting room " + engine.lobby.room_code);
+    engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+    add_alert(engine, engine.lobby.status_message, AlertSeverity::Success);
 }
 
 void ensure_room_defaults(EngineState& engine) {
@@ -440,9 +478,27 @@ bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string&
     engine.lobby.contract.session_phase = "lobby";
     engine.lobby.contract.realtime_endpoint = engine.lobby.advertised_endpoint;
 
+    MatchmakingRoom room = build_room_metadata(engine);
+    if (engine.lobby_matchmaking == nullptr) {
+        AsyncCreateRoomRequest request;
+        request.request_id = ++engine.lobby.room_publish_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        request.room = std::move(room);
+        engine.lobby.online = true;
+        engine.lobby.is_host = true;
+        engine.lobby.visibility = GubsyLobbyVisibility::Public;
+        engine.lobby.room_publish_in_flight = true;
+        clear_online_room_identity(engine);
+        engine.lobby.game_members.clear();
+        engine.lobby.game_members_authoritative = false;
+        clear_lobby_error(engine, "Publishing room...");
+        message = engine.lobby.status_message;
+        async_matchmaking(engine).enqueue_create_room(std::move(request));
+        return true;
+    }
+
     MatchmakingCreateResult create_result;
     std::string err;
-    MatchmakingRoom room = build_room_metadata(engine);
     if (!matchmaking(engine).create_room(engine.lobby.room_server_url, room, create_result, err)) {
         disconnect_game_transport(engine);
         message = err.empty() ? "Cannot host room: failed to publish room"
@@ -1025,6 +1081,22 @@ void apply_async_heartbeat_results(EngineState& engine) {
     }
 }
 
+void apply_async_create_room_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncCreateRoomResult& result :
+         engine.async_matchmaking->drain_create_room_results()) {
+        if (result.request_id != engine.lobby.room_publish_request_id)
+            continue;
+        if (!engine.lobby.room_publish_in_flight)
+            continue;
+        if (result.ok)
+            complete_pending_room_publish(engine, result);
+        else
+            fail_pending_room_publish(engine, result.err);
+    }
+}
+
 void enqueue_async_heartbeat(EngineState& engine) {
     MatchmakingRoom room_update = build_room_metadata(engine);
     AsyncHeartbeatRequest request;
@@ -1043,6 +1115,7 @@ void enqueue_async_heartbeat(EngineState& engine) {
 
 void gubsy_lobby_tick_online(EngineState& engine) {
     ensure_room_defaults(engine);
+    apply_async_create_room_results(engine);
     apply_async_heartbeat_results(engine);
     if (!engine.lobby.online || engine.lobby.room_code.empty()) {
         engine.lobby.heartbeat_in_flight = false;

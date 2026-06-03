@@ -64,6 +64,8 @@ struct GubsyLobbyState {
     std::uint64_t heartbeat_request_id{0};
     bool room_refresh_in_flight{false};
     std::uint64_t room_refresh_request_id{0};
+    bool room_publish_in_flight{false};
+    std::uint64_t room_publish_request_id{0};
     double next_heartbeat_at{0.0};
     double next_room_refresh_at{0.0};
     int room_current_players{0};

@@ -15,11 +15,13 @@ struct AsyncMatchmakingWorkItem {
     enum class Kind {
         Heartbeat,
         RoomList,
+        CreateRoom,
     };
 
     Kind kind{Kind::Heartbeat};
     AsyncHeartbeatRequest heartbeat;
     AsyncRoomListRequest room_list;
+    AsyncCreateRoomRequest create_room;
 };
 
 } // namespace
@@ -30,6 +32,7 @@ struct AsyncMatchmakingClient::Impl {
     std::deque<AsyncMatchmakingWorkItem> requests;
     std::vector<AsyncHeartbeatResult> heartbeat_results;
     std::vector<AsyncRoomListResult> room_list_results;
+    std::vector<AsyncCreateRoomResult> create_room_results;
     bool stopping{false};
     std::thread worker;
     RoomServerMatchmaking matchmaking;
@@ -67,6 +70,20 @@ AsyncRoomListResult process_room_list(RoomServerMatchmaking& matchmaking,
     return result;
 }
 
+AsyncCreateRoomResult process_create_room(RoomServerMatchmaking& matchmaking,
+                                          const AsyncCreateRoomRequest& request) {
+    AsyncCreateRoomResult result;
+    result.request_id = request.request_id;
+    result.ok = matchmaking.create_room(request.server_url, request.room, result.create, result.err);
+    if (!result.ok)
+        return result;
+    result.has_room = matchmaking.fetch_room(request.server_url,
+                                            result.create.room_code,
+                                            result.room,
+                                            result.err);
+    return result;
+}
+
 } // namespace
 
 AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>()) {
@@ -89,11 +106,16 @@ AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>(
                                                                 request.heartbeat);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->heartbeat_results.push_back(std::move(result));
-            } else {
+            } else if (request.kind == AsyncMatchmakingWorkItem::Kind::RoomList) {
                 AsyncRoomListResult result = process_room_list(impl->matchmaking,
                                                                request.room_list);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->room_list_results.push_back(std::move(result));
+            } else {
+                AsyncCreateRoomResult result = process_create_room(impl->matchmaking,
+                                                                   request.create_room);
+                std::lock_guard<std::mutex> lock(impl->mutex);
+                impl->create_room_results.push_back(std::move(result));
             }
         }
     });
@@ -148,6 +170,30 @@ std::vector<AsyncRoomListResult> AsyncMatchmakingClient::drain_room_list_results
         return results;
     std::lock_guard<std::mutex> lock(impl_->mutex);
     results.swap(impl_->room_list_results);
+    return results;
+}
+
+void AsyncMatchmakingClient::enqueue_create_room(AsyncCreateRoomRequest request) {
+    if (!impl_)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->stopping)
+            return;
+        AsyncMatchmakingWorkItem item;
+        item.kind = AsyncMatchmakingWorkItem::Kind::CreateRoom;
+        item.create_room = std::move(request);
+        impl_->requests.push_back(std::move(item));
+    }
+    impl_->cv.notify_one();
+}
+
+std::vector<AsyncCreateRoomResult> AsyncMatchmakingClient::drain_create_room_results() {
+    std::vector<AsyncCreateRoomResult> results;
+    if (!impl_)
+        return results;
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    results.swap(impl_->create_room_results);
     return results;
 }
 

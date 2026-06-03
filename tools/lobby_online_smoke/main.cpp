@@ -69,6 +69,18 @@ void pump_room_refresh_until(EngineState& engine, Predicate predicate, const cha
     require(predicate(), message);
 }
 
+template <typename Predicate>
+void pump_room_publish_until(EngineState& engine, Predicate predicate, const char* message) {
+    for (int attempt = 0; attempt < 120; ++attempt) {
+        if (predicate())
+            return;
+        engine.now += 0.016;
+        gubsy_lobby_tick_online(engine);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    require(predicate(), message);
+}
+
 const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slot) {
     const auto& menu = menu_system_internal::runtime_state(engine);
     auto it = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
@@ -1075,6 +1087,12 @@ int main(int argc, char** argv) {
         require(gubsy_lobby_host_room(host_engine, host_state.expected_port, message),
                 "host room failed");
         require(host_state.host_called, "host transport was not called");
+        pump_room_publish_until(host_engine,
+                                [&]() {
+                                    return !host_engine.lobby.room_publish_in_flight &&
+                                           !host_engine.lobby.room_code.empty();
+                                },
+                                "host room publish did not complete");
         require(host_engine.lobby.online, "host lobby is not online");
         require(host_engine.lobby.is_host, "host lobby is not marked as host");
         require(!host_engine.lobby.room_code.empty(), "host room code missing");
@@ -1095,6 +1113,12 @@ int main(int argc, char** argv) {
                 "rehost room failed");
         require(host_state.leave_called, "rehost did not leave previous room");
         require(host_state.host_called, "rehost did not restart host transport");
+        pump_room_publish_until(host_engine,
+                                [&]() {
+                                    return !host_engine.lobby.room_publish_in_flight &&
+                                           !host_engine.lobby.room_code.empty();
+                                },
+                                "rehost room publish did not complete");
         require(host_engine.lobby.online, "rehost lobby is not online");
         require(host_engine.lobby.is_host, "rehost lobby is not marked as host");
         require(!host_engine.lobby.room_code.empty(), "rehost room code missing");
@@ -1201,6 +1225,12 @@ int main(int argc, char** argv) {
         other_host_engine.lobby.lobby_name = "Second Public Tunnel";
         require(gubsy_lobby_host_room(other_host_engine, other_host_state.expected_port, message),
                 "other host room failed");
+        pump_room_publish_until(other_host_engine,
+                                [&]() {
+                                    return !other_host_engine.lobby.room_publish_in_flight &&
+                                           !other_host_engine.lobby.room_code.empty();
+                                },
+                                "other host room publish did not complete");
         require(!other_host_engine.lobby.room_code.empty(), "other host room code missing");
 
         require(gubsy_lobby_refresh_rooms(guest_engine, true, message),
