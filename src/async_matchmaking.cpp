@@ -16,12 +16,14 @@ struct AsyncMatchmakingWorkItem {
         Heartbeat,
         RoomList,
         CreateRoom,
+        CreateJoinAttempt,
     };
 
     Kind kind{Kind::Heartbeat};
     AsyncHeartbeatRequest heartbeat;
     AsyncRoomListRequest room_list;
     AsyncCreateRoomRequest create_room;
+    AsyncCreateJoinAttemptRequest create_join_attempt;
 };
 
 } // namespace
@@ -33,6 +35,7 @@ struct AsyncMatchmakingClient::Impl {
     std::vector<AsyncHeartbeatResult> heartbeat_results;
     std::vector<AsyncRoomListResult> room_list_results;
     std::vector<AsyncCreateRoomResult> create_room_results;
+    std::vector<AsyncCreateJoinAttemptResult> create_join_attempt_results;
     bool stopping{false};
     std::thread worker;
     RoomServerMatchmaking matchmaking;
@@ -84,6 +87,18 @@ AsyncCreateRoomResult process_create_room(RoomServerMatchmaking& matchmaking,
     return result;
 }
 
+AsyncCreateJoinAttemptResult process_create_join_attempt(
+    RoomServerMatchmaking& matchmaking, const AsyncCreateJoinAttemptRequest& request) {
+    AsyncCreateJoinAttemptResult result;
+    result.request_id = request.request_id;
+    result.ok = matchmaking.create_join_attempt(request.server_url,
+                                                request.room_code,
+                                                request.display_name,
+                                                result.join_attempt,
+                                                result.err);
+    return result;
+}
+
 } // namespace
 
 AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>()) {
@@ -111,11 +126,16 @@ AsyncMatchmakingClient::AsyncMatchmakingClient() : impl_(std::make_unique<Impl>(
                                                                request.room_list);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->room_list_results.push_back(std::move(result));
-            } else {
+            } else if (request.kind == AsyncMatchmakingWorkItem::Kind::CreateRoom) {
                 AsyncCreateRoomResult result = process_create_room(impl->matchmaking,
                                                                    request.create_room);
                 std::lock_guard<std::mutex> lock(impl->mutex);
                 impl->create_room_results.push_back(std::move(result));
+            } else {
+                AsyncCreateJoinAttemptResult result =
+                    process_create_join_attempt(impl->matchmaking, request.create_join_attempt);
+                std::lock_guard<std::mutex> lock(impl->mutex);
+                impl->create_join_attempt_results.push_back(std::move(result));
             }
         }
     });
@@ -194,6 +214,32 @@ std::vector<AsyncCreateRoomResult> AsyncMatchmakingClient::drain_create_room_res
         return results;
     std::lock_guard<std::mutex> lock(impl_->mutex);
     results.swap(impl_->create_room_results);
+    return results;
+}
+
+void AsyncMatchmakingClient::enqueue_create_join_attempt(
+    AsyncCreateJoinAttemptRequest request) {
+    if (!impl_)
+        return;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        if (impl_->stopping)
+            return;
+        AsyncMatchmakingWorkItem item;
+        item.kind = AsyncMatchmakingWorkItem::Kind::CreateJoinAttempt;
+        item.create_join_attempt = std::move(request);
+        impl_->requests.push_back(std::move(item));
+    }
+    impl_->cv.notify_one();
+}
+
+std::vector<AsyncCreateJoinAttemptResult>
+AsyncMatchmakingClient::drain_create_join_attempt_results() {
+    std::vector<AsyncCreateJoinAttemptResult> results;
+    if (!impl_)
+        return results;
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    results.swap(impl_->create_join_attempt_results);
     return results;
 }
 

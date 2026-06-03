@@ -72,6 +72,7 @@ void clear_direct_join_pending(EngineState& engine) {
     engine.lobby.direct_join_pending = false;
     engine.lobby.room_join_pending = false;
     engine.lobby.room_publish_in_flight = false;
+    engine.lobby.join_attempt_in_flight = false;
     engine.lobby.pending_direct_join_endpoint.clear();
     engine.lobby.pending_join_attempt_id.clear();
     engine.lobby.pending_join_token.clear();
@@ -447,6 +448,100 @@ bool leave_existing_session_before_join(EngineState& engine, std::string& messag
     return false;
 }
 
+bool continue_room_join_after_attempt(EngineState& engine,
+                                      const MatchmakingRoom& requested_room,
+                                      const MatchmakingJoinAttemptResult& join_attempt,
+                                      std::string& message) {
+    const MatchmakingRoom room_for_join =
+        join_attempt.room.room_code.empty() ? requested_room : join_attempt.room;
+    if (!validate_room_joinable(engine, room_for_join, message))
+        return false;
+    if (!validate_room_contract(engine, room_for_join, message))
+        return false;
+    std::optional<DirectConnectionCandidate> selected_candidate =
+        gubsy_first_direct_connection_candidate(room_for_join);
+    if (!selected_candidate.has_value()) {
+        engine.lobby.connect_phase = ConnectPhase::Failed;
+        message = "Room has no supported connection candidate";
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    engine.lobby.connect_phase =
+        gubsy_connect_phase_for_candidate(selected_candidate->candidate.kind);
+    engine.lobby.selected_transport =
+        connection_candidate_kind_id(selected_candidate->candidate.kind);
+    engine.lobby.pending_join_attempt_id = join_attempt.join_attempt_id;
+    engine.lobby.pending_join_token = join_attempt.join_token;
+    engine.lobby.pending_punch_secret = join_attempt.punch_secret;
+    engine.lobby.pending_relay_allocation_id = join_attempt.relay_allocation_id;
+    engine.lobby.pending_relay_secret = join_attempt.relay_secret;
+    engine.lobby.pending_join_room = room_for_join;
+    GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
+        engine.lobby_commands.join_user_data,
+        engine.lobby,
+        selected_candidate->host.c_str(),
+        selected_candidate->port);
+    if (!join_result.ok) {
+        engine.lobby.connect_phase = ConnectPhase::Failed;
+        message = join_result.status.empty() ? "Cannot join room: failed to reach host transport"
+                                             : with_prefix("Cannot join room", join_result.status);
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    engine.lobby.join_host = selected_candidate->host;
+    engine.lobby.network_port = static_cast<int>(selected_candidate->port);
+    engine.lobby.advertised_endpoint = selected_candidate->candidate.endpoint.empty()
+                                           ? room_for_join.contract.realtime_endpoint
+                                           : selected_candidate->candidate.endpoint;
+    engine.lobby.contract = room_for_join.contract;
+    if (join_result.pending) {
+        engine.lobby.online = false;
+        engine.lobby.is_host = false;
+        clear_online_room_identity(engine);
+        engine.lobby.game_members.clear();
+        engine.lobby.game_members_authoritative = false;
+        engine.lobby.direct_join_pending = true;
+        engine.lobby.room_join_pending = true;
+        engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
+        clear_lobby_error(engine, join_result.status.empty()
+                                      ? "Joining room " + room_for_join.room_code
+                                      : join_result.status);
+        message = engine.lobby.status_message;
+        return true;
+    }
+
+    std::string member_id;
+    std::string err;
+    if (!matchmaking(engine).join_room(engine.lobby.room_server_url,
+                                       room_for_join.room_code,
+                                       local_player_name(engine),
+                                       join_attempt.join_token,
+                                       member_id,
+                                       err)) {
+        disconnect_game_transport(engine);
+        engine.lobby.connect_phase = ConnectPhase::Failed;
+        message = err.empty() ? "Cannot join room: room service rejected join"
+                              : with_prefix("Cannot join room", err);
+        set_lobby_error(engine, message);
+        return false;
+    }
+
+    apply_room_to_lobby(engine, room_for_join);
+    engine.lobby.online = true;
+    engine.lobby.is_host = false;
+    engine.lobby.member_id = member_id;
+    engine.lobby.host_secret.clear();
+    if (auto current_room = fetch_current_room(engine, err))
+        apply_room_to_lobby(engine, *current_room);
+    engine.lobby.connect_phase = ConnectPhase::Connected;
+    clear_lobby_error(engine, "Joined room " + room_for_join.room_code);
+    engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
+    message = engine.lobby.status_message;
+    return true;
+}
+
 } // namespace
 
 bool gubsy_lobby_host_room(EngineState& engine, std::uint16_t port, std::string& message) {
@@ -736,6 +831,20 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         return false;
 
     engine.lobby.connect_phase = ConnectPhase::ResolvingRoom;
+    engine.lobby.pending_join_room = room;
+    if (engine.lobby_matchmaking == nullptr) {
+        AsyncCreateJoinAttemptRequest request;
+        request.request_id = ++engine.lobby.join_attempt_request_id;
+        request.server_url = engine.lobby.room_server_url;
+        request.room_code = room.room_code;
+        request.display_name = local_player_name(engine);
+        engine.lobby.join_attempt_in_flight = true;
+        clear_lobby_error(engine, "Resolving room " + room.room_code);
+        message = engine.lobby.status_message;
+        async_matchmaking(engine).enqueue_create_join_attempt(std::move(request));
+        return true;
+    }
+
     MatchmakingJoinAttemptResult join_attempt;
     std::string err;
     if (!matchmaking(engine).create_join_attempt(engine.lobby.room_server_url,
@@ -749,94 +858,7 @@ bool gubsy_lobby_join_room(EngineState& engine, const MatchmakingRoom& room, std
         set_lobby_error(engine, message);
         return false;
     }
-    const MatchmakingRoom room_for_join =
-        join_attempt.room.room_code.empty() ? room : join_attempt.room;
-    if (!validate_room_joinable(engine, room_for_join, message))
-        return false;
-    if (!validate_room_contract(engine, room_for_join, message))
-        return false;
-    selected_candidate = gubsy_first_direct_connection_candidate(room_for_join);
-    if (!selected_candidate.has_value()) {
-        engine.lobby.connect_phase = ConnectPhase::Failed;
-        message = "Room has no supported connection candidate";
-        set_lobby_error(engine, message);
-        return false;
-    }
-
-    engine.lobby.connect_phase = gubsy_connect_phase_for_candidate(selected_candidate->candidate.kind);
-    engine.lobby.selected_transport =
-        connection_candidate_kind_id(selected_candidate->candidate.kind);
-    engine.lobby.pending_join_attempt_id = join_attempt.join_attempt_id;
-    engine.lobby.pending_join_token = join_attempt.join_token;
-    engine.lobby.pending_punch_secret = join_attempt.punch_secret;
-    engine.lobby.pending_relay_allocation_id = join_attempt.relay_allocation_id;
-    engine.lobby.pending_relay_secret = join_attempt.relay_secret;
-    engine.lobby.pending_join_room = room_for_join;
-    GubsyLobbyJoinResult join_result = engine.lobby_commands.join(
-        engine.lobby_commands.join_user_data,
-        engine.lobby,
-        selected_candidate->host.c_str(),
-        selected_candidate->port);
-    if (!join_result.ok) {
-        engine.lobby.connect_phase = ConnectPhase::Failed;
-        message = join_result.status.empty() ? "Cannot join room: failed to reach host transport"
-                                             : with_prefix("Cannot join room", join_result.status);
-        set_lobby_error(engine, message);
-        return false;
-    }
-
-    engine.lobby.join_host = selected_candidate->host;
-    engine.lobby.network_port = static_cast<int>(selected_candidate->port);
-    engine.lobby.advertised_endpoint = selected_candidate->candidate.endpoint.empty()
-                                           ? room_for_join.contract.realtime_endpoint
-                                           : selected_candidate->candidate.endpoint;
-    engine.lobby.contract = room_for_join.contract;
-    if (join_result.pending) {
-        engine.lobby.online = false;
-        engine.lobby.is_host = false;
-        engine.lobby.room_code.clear();
-        engine.lobby.member_id.clear();
-        engine.lobby.host_secret.clear();
-        engine.lobby.room_current_players = 0;
-        engine.lobby.room_members.clear();
-        engine.lobby.game_members.clear();
-        engine.lobby.game_members_authoritative = false;
-        engine.lobby.direct_join_pending = true;
-        engine.lobby.room_join_pending = true;
-        engine.lobby.pending_direct_join_endpoint = engine.lobby.advertised_endpoint;
-        clear_lobby_error(engine, join_result.status.empty() ? "Joining room " + room_for_join.room_code
-                                                             : join_result.status);
-        message = engine.lobby.status_message;
-        return true;
-    }
-
-    std::string member_id;
-    if (!matchmaking(engine).join_room(engine.lobby.room_server_url,
-                                       room_for_join.room_code,
-                                       local_player_name(engine),
-                                       join_attempt.join_token,
-                                       member_id,
-                                       err)) {
-        disconnect_game_transport(engine);
-        engine.lobby.connect_phase = ConnectPhase::Failed;
-        message = err.empty() ? "Cannot join room: room service rejected join"
-                              : with_prefix("Cannot join room", err);
-        set_lobby_error(engine, message);
-        return false;
-    }
-
-    apply_room_to_lobby(engine, room_for_join);
-    engine.lobby.online = true;
-    engine.lobby.is_host = false;
-    engine.lobby.member_id = member_id;
-    engine.lobby.host_secret.clear();
-    if (auto current_room = fetch_current_room(engine, err))
-        apply_room_to_lobby(engine, *current_room);
-    engine.lobby.connect_phase = ConnectPhase::Connected;
-    clear_lobby_error(engine, "Joined room " + room_for_join.room_code);
-    engine.lobby.next_heartbeat_at = engine.now + kRoomHeartbeatIntervalSec;
-    message = engine.lobby.status_message;
-    return true;
+    return continue_room_join_after_attempt(engine, room, join_attempt, message);
 }
 
 bool gubsy_lobby_join_room_code(EngineState& engine, const std::string& room_code,
@@ -1097,6 +1119,38 @@ void apply_async_create_room_results(EngineState& engine) {
     }
 }
 
+void apply_async_join_attempt_results(EngineState& engine) {
+    if (!engine.async_matchmaking)
+        return;
+    for (const AsyncCreateJoinAttemptResult& result :
+         engine.async_matchmaking->drain_create_join_attempt_results()) {
+        if (result.request_id != engine.lobby.join_attempt_request_id)
+            continue;
+        if (!engine.lobby.join_attempt_in_flight)
+            continue;
+        engine.lobby.join_attempt_in_flight = false;
+        if (!result.ok) {
+            engine.lobby.connect_phase = ConnectPhase::Failed;
+            const std::string message =
+                result.err.empty() ? "Cannot join room: room service rejected join attempt"
+                                   : with_prefix("Cannot join room", result.err);
+            set_lobby_error(engine, message);
+            add_alert(engine, message, AlertSeverity::Error);
+            continue;
+        }
+        std::string message;
+        if (continue_room_join_after_attempt(engine,
+                                             engine.lobby.pending_join_room,
+                                             result.join_attempt,
+                                             message)) {
+            add_alert(engine, message, engine.lobby.direct_join_pending ? AlertSeverity::Info
+                                                                        : AlertSeverity::Success);
+        } else {
+            add_alert(engine, message, AlertSeverity::Error);
+        }
+    }
+}
+
 void enqueue_async_heartbeat(EngineState& engine) {
     MatchmakingRoom room_update = build_room_metadata(engine);
     AsyncHeartbeatRequest request;
@@ -1116,6 +1170,7 @@ void enqueue_async_heartbeat(EngineState& engine) {
 void gubsy_lobby_tick_online(EngineState& engine) {
     ensure_room_defaults(engine);
     apply_async_create_room_results(engine);
+    apply_async_join_attempt_results(engine);
     apply_async_heartbeat_results(engine);
     if (!engine.lobby.online || engine.lobby.room_code.empty()) {
         engine.lobby.heartbeat_in_flight = false;

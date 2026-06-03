@@ -81,6 +81,18 @@ void pump_room_publish_until(EngineState& engine, Predicate predicate, const cha
     require(predicate(), message);
 }
 
+template <typename Predicate>
+void pump_join_attempt_until(EngineState& engine, Predicate predicate, const char* message) {
+    for (int attempt = 0; attempt < 120; ++attempt) {
+        if (predicate())
+            return;
+        engine.now += 0.016;
+        gubsy_lobby_tick_online(engine);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    require(predicate(), message);
+}
+
 const MenuWidget* widget_by_slot(const EngineState& engine, UILayoutObjectId slot) {
     const auto& menu = menu_system_internal::runtime_state(engine);
     auto it = std::find_if(menu.cache.widgets.begin(), menu.cache.widgets.end(),
@@ -1167,6 +1179,12 @@ int main(int argc, char** argv) {
                 "guest join by room code failed");
         require(guest_state.validate_remote_called, "guest did not validate remote config");
         require(guest_state.apply_remote_called, "guest did not apply remote config");
+        pump_join_attempt_until(guest_engine,
+                                [&]() {
+                                    return !guest_engine.lobby.join_attempt_in_flight &&
+                                           guest_state.join_called;
+                                },
+                                "guest join attempt did not call transport");
         require(guest_state.join_called, "guest transport was not called");
         require(guest_engine.lobby.online, "guest lobby is not online");
         require(!guest_engine.lobby.is_host, "guest lobby is marked as host");
@@ -1198,6 +1216,12 @@ int main(int argc, char** argv) {
         guest_state.leave_called = false;
         require(gubsy_lobby_join_room_code(guest_engine, host_engine.lobby.room_code, message),
                 "guest rejoin by room code failed");
+        pump_join_attempt_until(guest_engine,
+                                [&]() {
+                                    return !guest_engine.lobby.join_attempt_in_flight &&
+                                           guest_state.join_called;
+                                },
+                                "guest rejoin attempt did not call transport");
         require(guest_state.join_called, "guest rejoin transport was not called");
         pump_online_until(host_engine,
                           [&]() { return host_engine.lobby.room_members.size() == 2; },
@@ -1262,6 +1286,12 @@ int main(int argc, char** argv) {
         require(gubsy_lobby_join_room(host_engine, *other_listed_room, message),
                 "host should leave old room and join another browser-listed room");
         require(host_state.leave_called, "host-then-browser-join did not leave old hosted session");
+        pump_join_attempt_until(host_engine,
+                                [&]() {
+                                    return !host_engine.lobby.join_attempt_in_flight &&
+                                           host_state.join_called;
+                                },
+                                "host browser join attempt did not call transport");
         require(host_state.join_called, "host-then-browser-join did not call join transport");
         require(host_engine.lobby.online, "host-then-browser-join did not leave runtime online");
         require(!host_engine.lobby.is_host, "host-then-browser-join should become a client");

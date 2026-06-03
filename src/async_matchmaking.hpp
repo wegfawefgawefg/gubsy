@@ -53,6 +53,20 @@ struct AsyncCreateRoomResult {
     MatchmakingRoom room;
 };
 
+struct AsyncCreateJoinAttemptRequest {
+    std::uint64_t request_id{0};
+    std::string server_url;
+    std::string room_code;
+    std::string display_name;
+};
+
+struct AsyncCreateJoinAttemptResult {
+    std::uint64_t request_id{0};
+    bool ok{false};
+    std::string err;
+    MatchmakingJoinAttemptResult join_attempt;
+};
+
 class AsyncMatchmakingClient {
 public:
     AsyncMatchmakingClient();
@@ -67,6 +81,8 @@ public:
     std::vector<AsyncRoomListResult> drain_room_list_results();
     void enqueue_create_room(AsyncCreateRoomRequest request);
     std::vector<AsyncCreateRoomResult> drain_create_room_results();
+    void enqueue_create_join_attempt(AsyncCreateJoinAttemptRequest request);
+    std::vector<AsyncCreateJoinAttemptResult> drain_create_join_attempt_results();
     void shutdown();
 
 private:
