@@ -5,6 +5,8 @@ include(CTest)
 include(FetchContent)
 
 set(GUB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(GUB_RUNTIME_PROJECT_SOURCE_DIR "${GUB_SOURCE_DIR}" CACHE STRING
+  "Project source path exposed to the runtime")
 
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(GUB_INFERRED_MODE developer)
@@ -43,7 +45,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_definitions(GUB_PROJECT_SOURCE_DIR="${GUB_SOURCE_DIR}")
+add_compile_definitions(GUB_PROJECT_SOURCE_DIR="${GUB_RUNTIME_PROJECT_SOURCE_DIR}")
 
 # Homebrew defaults; helps find_package locate deps on macOS.
 if (APPLE)
