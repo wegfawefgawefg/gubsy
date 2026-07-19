@@ -442,10 +442,14 @@ else()
 endif()
 
 if (NOT GLM_FOUND_LOCAL)
-  find_path(GLM_INCLUDE_DIR glm/glm.hpp
-    PATHS
-      ${GUB_SOURCE_DIR}/third_party/glm_upstream
-  )
+  # Prefer the vendored headers explicitly. Cross-compilers commonly root
+  # find_path() inside their sysroot, which makes this ordinary source-tree
+  # path invisible even though the dependency is present.
+  if (EXISTS "${GUB_SOURCE_DIR}/third_party/glm_upstream/glm/glm.hpp")
+    set(GLM_INCLUDE_DIR "${GUB_SOURCE_DIR}/third_party/glm_upstream")
+  else()
+    find_path(GLM_INCLUDE_DIR glm/glm.hpp)
+  endif()
   if (GLM_INCLUDE_DIR)
     set(GLM_FOUND_LOCAL ON)
     target_include_directories(gubsy_engine SYSTEM PUBLIC ${GLM_INCLUDE_DIR})

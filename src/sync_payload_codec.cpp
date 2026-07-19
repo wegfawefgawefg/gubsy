@@ -21,7 +21,11 @@ bool sync_payload_decode_json(const std::vector<std::uint8_t>& payload,
                               std::string& err) {
     err.clear();
     try {
-        out = nlohmann::json::from_cbor(payload);
+        // Older nlohmann/json releases instantiate std::char_traits<uint8_t>
+        // for byte-vector input. libc++ correctly leaves that specialization
+        // undefined, so present the identical CBOR bytes as ordinary chars.
+        const std::vector<char> bytes(payload.begin(), payload.end());
+        out = nlohmann::json::from_cbor(bytes);
         return true;
     } catch (const std::exception& e) {
         err = e.what();

@@ -218,7 +218,7 @@ bool init_graphics(EngineState& engine) {
     (void)init_font_for_graphics(graphics, {}, 20);
     recreate_render_target(graphics, render_dims.x, render_dims.y);
     register_engine_settings_schema_entries(engine);
-    sync_graphics_from_settings(engine, true);
+    sync_graphics_from_settings(engine, engine.app_config.apply_display_settings);
     return true;
 }
 
@@ -253,7 +253,7 @@ bool attach_external_graphics(EngineState& engine, SDL_Window* window, SDL_Rende
                             static_cast<unsigned int>(std::max(window_h, 1))};
     (void)init_font_for_graphics(graphics, {}, 20);
     register_engine_settings_schema_entries(engine);
-    sync_graphics_from_settings(engine, true);
+    sync_graphics_from_settings(engine, engine.app_config.apply_display_settings);
     return true;
 }
 

@@ -27,6 +27,7 @@ struct GubsyAppConfig {
     bool utility_window{false};
     bool always_on_top{false};
     bool resizable_window{true};
+    bool apply_display_settings{true};
 };
 
 inline GubsyAppConfig normalize_gubsy_app_config(GubsyAppConfig config) {
