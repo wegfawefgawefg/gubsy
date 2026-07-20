@@ -55,14 +55,27 @@ bool detect_input_sources(EngineState& engine) {
 }
 
 void refresh_input_sources(EngineState& engine) {
-    size_t old_count = engine.open_controllers.size();
+    const size_t old_count = engine.open_controllers.size();
+    std::vector<int> old_device_ids;
+    old_device_ids.reserve(old_count);
 
     // Close all currently open game controllers
     for (auto const& [id, controller] : engine.open_controllers) {
+        old_device_ids.push_back(id);
         SDL_CloseGamepad(controller);
     }
     engine.open_controllers.clear();
     engine.gamepad_states.clear();
+
+#ifdef __EMSCRIPTEN__
+    // Browsers may hide an already connected gamepad until the user presses a
+    // button on it. Restarting only this subsystem makes SDL sample
+    // navigator.getGamepads() again when the user explicitly requests a scan.
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
+        std::fprintf(stderr, "[input] Could not restart browser gamepad input: %s\n",
+                     SDL_GetError());
+#endif
 
     // Remove all gamepads from the public list
     engine.input_sources.erase(
@@ -76,7 +89,19 @@ void refresh_input_sources(EngineState& engine) {
             on_device_added(engine, static_cast<int>(id));
     }
 
-    size_t new_count = engine.open_controllers.size();
+    // Drop assignments for devices that disappeared. Assignments whose SDL ID
+    // survived the scan stay with the same player.
+    for (const int device_id : old_device_ids) {
+        if (!engine.open_controllers.contains(device_id))
+            gubsy_lobby_remove_gamepad_device_assignments(engine, device_id);
+    }
+
+    for (const auto& [device_id, controller] : engine.open_controllers) {
+        (void)controller;
+        gubsy_lobby_assign_gamepad_to_primary_player(engine, device_id);
+    }
+
+    const size_t new_count = engine.open_controllers.size();
     if (old_count != new_count) {
         std::fprintf(stderr, "[input] Input sources refreshed: %zu -> %zu gamepads\n", old_count,
                      new_count);

@@ -61,6 +61,11 @@ struct GubsyFrame {
     int render_height{0};
 };
 
+struct GubsyGamepad {
+    int device_id{0};
+    std::string name;
+};
+
 bool init_gubsy_runtime(GubsyRuntime& runtime, const GubsyAppConfig& config = {});
 void cleanup_gubsy_runtime(GubsyRuntime& runtime);
 
@@ -124,6 +129,8 @@ void gubsy_clear_menu_stack(GubsyRuntime& runtime);
 void gubsy_set_menu_input(GubsyRuntime& runtime, const MenuInputState& input);
 void gubsy_process_sdl_event(GubsyRuntime& runtime, const SDL_Event& event);
 void gubsy_update_device_state(GubsyRuntime& runtime);
+std::vector<GubsyGamepad> gubsy_get_gamepads(GubsyRuntime& runtime);
+void gubsy_refresh_gamepads(GubsyRuntime& runtime);
 bool gubsy_menu_text_edit_active(GubsyRuntime& runtime);
 void gubsy_update_runtime(GubsyRuntime& runtime, float dt);
 void gubsy_update_menu(GubsyRuntime& runtime, float dt, int screen_width, int screen_height);

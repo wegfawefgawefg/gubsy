@@ -8,6 +8,7 @@
 #include "src/gubsy_runtime_internal.hpp"
 #include "src/imgui_debug/imgui_debug.hpp"
 #include "src/input_binding_utils.hpp"
+#include "src/input_sources.hpp"
 #include "src/input_system.hpp"
 #include "src/layout_editor/layout_editor.hpp"
 #include "src/lobby_state.hpp"
@@ -40,6 +41,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <SDL3/SDL_gamepad.h>
 
 namespace {
 
@@ -504,6 +506,23 @@ void gubsy_process_sdl_event(GubsyRuntime& runtime, const SDL_Event& event) {
 
 void gubsy_update_device_state(GubsyRuntime& runtime) {
     update_device_state_from_sdl(gubsy_runtime_engine(runtime));
+}
+
+std::vector<GubsyGamepad> gubsy_get_gamepads(GubsyRuntime& runtime) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    std::vector<GubsyGamepad> gamepads;
+    gamepads.reserve(engine.open_controllers.size());
+    for (const auto& [device_id, gamepad] : engine.open_controllers) {
+        const char* name = SDL_GetGamepadName(gamepad);
+        gamepads.push_back({.device_id = device_id,
+                            .name = name && *name ? name : "Unknown controller"});
+    }
+    std::ranges::sort(gamepads, {}, &GubsyGamepad::device_id);
+    return gamepads;
+}
+
+void gubsy_refresh_gamepads(GubsyRuntime& runtime) {
+    refresh_input_sources(gubsy_runtime_engine(runtime));
 }
 
 bool gubsy_menu_text_edit_active(GubsyRuntime& runtime) {
