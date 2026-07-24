@@ -88,6 +88,8 @@ bool gubsy_replace_binds_profile(GubsyRuntime& runtime, const BindsProfile& prof
 bool gubsy_lobby_player_action_down(GubsyRuntime& runtime, int player_index, int action_id);
 bool gubsy_lobby_player_axis_1d_down(GubsyRuntime& runtime, int player_index, int axis_1d_id,
                                      float threshold);
+ginput::Vec2 gubsy_lobby_player_axis_2d(GubsyRuntime& runtime, int player_index,
+                                        int axis_2d_id);
 int gubsy_add_lobby_local_player(GubsyRuntime& runtime);
 bool gubsy_remove_lobby_local_player(GubsyRuntime& runtime, int player_index);
 bool gubsy_select_lobby_local_player(GubsyRuntime& runtime, int player_index);

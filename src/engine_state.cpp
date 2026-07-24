@@ -290,6 +290,45 @@ bool gubsy_lobby_player_axis_1d_down(GubsyRuntime& runtime, int player_index, in
     return false;
 }
 
+ginput::Vec2 gubsy_lobby_player_axis_2d(
+    GubsyRuntime& runtime, int player_index, int axis_2d_id) {
+    EngineState& engine = gubsy_runtime_engine(runtime);
+    gubsy_lobby_ensure_ready(engine);
+
+    const GubsyLobbyPlayer* player =
+        gubsy_lobby_player(engine, player_index);
+    if (player == nullptr)
+        return {};
+
+    const BindsProfile* profile =
+        ginput::find_profile(
+            engine.binds_profiles, player->binds_profile_id);
+    if (profile == nullptr)
+        return {};
+
+    ginput::Vec2 best;
+    float best_length_squared = 0.0F;
+    const std::vector<ginput::Axis2DBind>& binds =
+        ginput::binds_for_axis_2d(*profile, axis_2d_id);
+    for (const ginput::Axis2DBind& bind : binds) {
+        const glm::vec2 sampled =
+            sample_analog_2d(engine, bind.device_stick);
+        const ginput::Vec2 value{
+            .x = ginput::apply_axis_transform(
+                sampled.x, bind.scale_x, bind.deadzone),
+            .y = ginput::apply_axis_transform(
+                sampled.y, bind.scale_y, bind.deadzone),
+        };
+        const float length_squared =
+            value.x * value.x + value.y * value.y;
+        if (length_squared > best_length_squared) {
+            best = value;
+            best_length_squared = length_squared;
+        }
+    }
+    return best;
+}
+
 int gubsy_add_lobby_local_player(GubsyRuntime& runtime) {
     return gubsy_lobby_add_local_player(gubsy_runtime_engine(runtime));
 }
