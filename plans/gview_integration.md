@@ -1,5 +1,32 @@
 # GView integration plan
 
+## Milestone status
+
+The standalone composition boundary is implemented. Gubsy now discovers sibling
+GSEXP/GLayout/GView checkouts for developer iteration and otherwise fetches
+pinned revisions. The engine links their public targets and no longer carries
+tracked duplicate layout/S-expression implementation files.
+
+Public adapters provide:
+
+- Typed model reads/writes/conditions and direct Gubsy event dispatch.
+- Conversion from the existing mapped `MenuInputState` to semantic GView
+  navigation, avoiding a second controller binding map.
+- Native pointer/text event accumulation without controller-as-mouse behavior.
+- Game, engine, data, and runtime-mod asset-root resolution.
+- Optional hosting of the standalone live authoring suite in Gubsy's existing
+  ImGui frame.
+
+The adapter smoke and full Gubsy test matrix validate the boundary. Consumer
+mode omits authoring while retaining the runtime API. The renderer remains an
+explicit game integration choice until the reviewed GView UI replaces a real
+menu: a game may link `gview::sdl3` or consume renderer-neutral paint commands
+through its existing backend without Gubsy forcing that policy into GView.
+
+The complete 18-state executable, visual evidence, controller self-test, and
+benchmarks live in `gubsy-ui-kit-trials/gview`. A different-game UI suite and
+then Splonks migration remain the next milestones, not hidden work in this one.
+
 ## Goal
 
 Package standalone GLayout and GView cleanly inside the Gubsy ecosystem while

@@ -34,6 +34,8 @@ Current Game-Kit Features
 - Menu framework with screen registration, command routing, and per-screen state
 - Player profiles, binds profiles, and game settings persistence
 - UI layout loading/editing support
+- Optional standalone GLayout/GView composition with typed model/events,
+  semantic menu input, asset roots, and reusable live authoring adapters
 - Optional Lua 5.4 mod host with runtime API registration and mod activation/reload
 - ImGui debug/editor tooling in the reusable runtime layer
 
@@ -87,6 +89,19 @@ Using Gubsy From Another Project
 add_subdirectory(path/to/gubsy)
 target_link_libraries(my_game PRIVATE gubsy::engine)
 ```
+
+GView composition is enabled by default and can be disabled with
+`GUB_ENABLE_GVIEW=OFF`. Developer workspaces discover sibling `gsexp`,
+`glayout`, and `gview` checkouts; normal consumers fetch pinned revisions.
+Games include `<gubsy/ui/gview.hpp>` to adapt their typed model/events and
+already-mapped `MenuInputState` without creating another device map. Tool builds
+also expose `<gubsy/ui/gview_authoring.hpp>`; release/consumer builds omit the
+optional ImGui authoring target.
+
+Gubsy does not vendor copied UI implementations. GSEXP, GLayout, and GView stay
+independently consumable and are composed as normal CMake targets. The full
+native reference remains in the separate `gubsy-ui-kit-trials` repository;
+final game-specific Splonks migration is intentionally later.
 
 Public headers live under `include/gubsy/`:
 
@@ -162,4 +177,5 @@ Docs
 - Steam onboarding TODO: `docs/steam_onboarding_todo.md`
 - Menu system notes: `docs/menu.md`
 - UI layout system notes: `docs/ui_layout_system.md`
+- GView integration plan: `plans/gview_integration.md`
 - Mod/API notes: `docs/mod_api_system.md`
