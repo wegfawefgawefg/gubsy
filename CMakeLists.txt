@@ -320,7 +320,7 @@ if(GUB_ENABLE_GVIEW)
     add_subdirectory("${GUB_GVIEW_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/_deps/gview")
   else()
     FetchContent_Declare(gview GIT_REPOSITORY https://github.com/wegfawefgawefg/gview.git
-      GIT_TAG c8bacbb)
+      GIT_TAG ac3fe3e)
     FetchContent_MakeAvailable(gview)
   endif()
   target_link_libraries(gubsy_engine PUBLIC gsexp::gsexp glayout::graph gview::core)
