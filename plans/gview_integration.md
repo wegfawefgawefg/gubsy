@@ -17,15 +17,25 @@ Public adapters provide:
 - Optional hosting of the standalone live authoring suite in Gubsy's existing
   ImGui frame.
 
-The adapter smoke and full Gubsy test matrix validate the boundary. Consumer
-mode omits authoring while retaining the runtime API. The renderer remains an
-explicit game integration choice until the reviewed GView UI replaces a real
-menu: a game may link `gview::sdl3` or consume renderer-neutral paint commands
-through its existing backend without Gubsy forcing that policy into GView.
+`gubsy::ui::ViewRuntime` now activates compiled GView definitions inside a real
+`GubsyRuntime`, forwards normal SDL pointer/text and mapped `MenuInputState`, and
+binds typed `ViewModel` read/write/condition/event behavior, asset domains, and
+display resolution services. The engine-lifecycle smoke and consumer build
+validate that boundary. Consumer mode omits authoring while retaining the
+runtime API. Rendering remains an explicit game integration choice: a game may
+link `gview::sdl3` or consume renderer-neutral paint commands through its
+existing backend without Gubsy forcing that policy into GView.
 
 The complete 18-state executable, visual evidence, controller self-test, and
 benchmarks live in `gubsy-ui-kit-trials/gview`. A different-game UI suite and
 then Splonks migration remain the next milestones, not hidden work in this one.
+
+The production host boundary and authoring integration are implemented and
+ready for user review. The standalone SDL3 executable remains the one complete
+18-state visual/performance reference; Gubsy validates the reusable host
+services rather than maintaining copied screen code. A full game integration
+will occur only after the multi-game suite and user acceptance, as specified in
+`../../gview/docs/AUTHORING_PRESENTATION_PLAN.md`.
 
 ## Goal
 
@@ -73,6 +83,18 @@ A single debug registration should expose:
 - Live reload and persistence.
 - Runtime timing, dirty-domain, and allocation inspection.
 
+The real game canvas is the primary editing surface. Authoring mode suspends
+normal UI/game input and overlays layout bounds, handles, grids, focus groups,
+remembered members, and directed edges on the native rendering. ImGui provides
+separate focused inspector, simulator, hierarchy, theme, and telemetry windows;
+a detached graph miniature remains optional diagnostics rather than the main
+workflow.
+
+The display simulator must recover the full preset catalog and controls in
+`src/imgui_debug/video_window.cpp`. Modern device presets add logical viewport,
+physical framebuffer, device pixel scale, orientation, and safe-area metadata.
+Device scale remains distinct from user UI/accessibility scale.
+
 The suite uses optional ImGui targets. Release consumers do not link or retain
 the tools unless explicitly enabled.
 
@@ -85,6 +107,13 @@ Gubsy supplies adapters for:
 - Gubsy input actions, local-player devices, and controller hotplug.
 - Gubsy event dispatch and settings/profile state.
 - Custom game render surfaces and render-target composition.
+
+The runtime validation uses these adapters through Gubsy's normal lifecycle and
+demonstrates mapped semantic input, opened devices, Gubsy events, asset domains,
+display metadata, and paint/focus output from the same authored model. Hot
+reload, debug registration, and native game/UI compositing are supplied by the
+optional GView authoring and renderer boundaries rather than duplicated inside
+the adapter smoke executable.
 
 Adapters do not force those policies back into standalone GLayout/GView cores.
 
