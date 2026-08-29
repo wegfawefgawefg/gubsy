@@ -6,7 +6,8 @@ namespace gubsy::ui {
 void draw_view_authoring(gview::AuthoringSession& session, gview::AuthoringUiState& state,
                          gview::AuthoringHooks& hooks, const gview::Runtime& runtime) {
 #if GUB_ENABLE_GVIEW_AUTHORING
-    gview::draw_authoring_tools(session, state, hooks, runtime.view(), runtime.geometry());
+    gview::draw_authoring_tools(session, state, hooks, runtime.view(), runtime.geometry(),
+                                &runtime.paint());
 #else
     (void)session;
     (void)state;
